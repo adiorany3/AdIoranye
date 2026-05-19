@@ -1,62 +1,61 @@
-# Asisten Pribadi AI Streamlit
+# Adioranye Streamlit Online + Telegram Bot
 
-Aplikasi Streamlit untuk menjalankan asisten pribadi memakai API OpenAI-compatible:
+Project ini menjalankan:
 
-```text
-https://api.slashai.my.id/v1/chat/completions
-```
+1. Dashboard Streamlit.
+2. Bot Telegram dari dalam Streamlit Online menggunakan background thread.
+3. API SlashAI OpenAI-compatible.
+4. Persona system prompt `adioranye`.
+5. Memory lokal sederhana.
 
-## Fitur
+## Isi Streamlit Secrets
 
-- Chat AI dengan model SlashAI/OpenAI-compatible.
-- Persona **adioranye** langsung dimasukkan ke role `system` pada setiap request API, dan tetap bisa diedit dari sidebar/secrets.
-- Memory lokal agar AI mengingat hal penting tanpa mengirim seluruh riwayat chat.
-- Perintah lokal tanpa memanggil API:
-  - `/ingat ...`
-  - `/memori`
-  - `/lupa ...`
-  - `/reset memori`
-  - `/persona ...`
-- Mode hemat token.
-- Auto fallback ke model murah.
-- Estimasi biaya dari usage API.
-- Fix untuk kasus GPT-5 kosong karena `reasoning_tokens`.
+Di Streamlit Cloud:
 
-## Cara menjalankan lokal
+`App -> Settings -> Secrets`
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## Streamlit Secrets
-
-Isi di Streamlit Community Cloud > App > Settings > Secrets:
+Isi:
 
 ```toml
-SLASHAI_API_KEY = "ISI_API_KEY_KAMU_DI_SINI"
+TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_DARI_BOTFATHER"
+SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/gpt-5-nano"
 
-ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang diberikan pengguna. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele."
+ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan pengguna. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele."
 MEMORY_FILE = "assistant_memory.json"
+
+TELEGRAM_AUTO_START = true
 ```
 
-## Persona System Default
+## Deploy ke Streamlit Online
 
-Persona sudah langsung masuk ke `role: system` lewat `BASE_SYSTEM_PERSONA` di `app.py`:
+1. Upload folder ini ke GitHub.
+2. Buka Streamlit Community Cloud.
+3. Pilih repo.
+4. Main file: `app.py`.
+5. Isi Secrets.
+6. Deploy.
+7. Buka app, klik `Start Bot` di sidebar jika belum auto start.
+8. Chat bot di Telegram dengan `/start`.
+
+## Perintah Telegram
 
 ```text
-Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang diberikan pengguna.
+/start
+/help
+/ingat nama saya Adi
+/memori
+/lupa Adi
+/reset memori
 ```
 
-Dengan alur ini, persona tidak perlu diketik ulang di chat dan tidak perlu disimpan sebagai memori biasa.
+Selain perintah itu, langsung kirim pertanyaan.
 
-## Catatan Memory
+## Catatan Penting
 
-Memory disimpan di file JSON lokal. Pada VPS, file ini relatif stabil. Pada Streamlit Community Cloud, file bisa hilang saat app restart/redeploy. Untuk memory permanen produksi, gunakan database seperti Supabase, Neon, atau Firebase.
+Streamlit Online bisa tidur saat tidak ada aktivitas. Kalau app tidur, bot Telegram juga berhenti.
+Untuk 24 jam nonstop yang benar-benar stabil, gunakan VPS + systemd.
 
-
-## Perbaikan parser respons
-
-Versi ini dapat membaca jawaban dari gateway OpenAI-compatible meskipun response JSON tidak valid sempurna/terpotong, selama field `message.content` masih terlihat di raw response. Default model diarahkan ke `slashai/gpt-5-nano` karena pada pengujian user model ini sudah mengembalikan `content`.
+Kalau muncul error `Conflict`, berarti token bot yang sama sedang dijalankan di tempat lain.
+Matikan bot lama atau deploy hanya di satu tempat.
