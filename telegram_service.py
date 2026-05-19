@@ -1,6 +1,7 @@
 import os
 import json
 import threading
+import fcntl
 import time
 from collections import deque
 from typing import Dict, Any, List, Optional, Deque, Set
@@ -51,6 +52,7 @@ class TelegramBotService:
         self._seen_set: Set[int] = set()
         self._lock_file = DEFAULT_LOCK_FILE
         self._has_file_lock = False
+        self._lock_fd = None
 
     def status(self) -> Dict[str, Any]:
         alive = self._thread is not None and self._thread.is_alive() and self._running
@@ -96,62 +98,70 @@ class TelegramBotService:
             self._release_file_lock()
 
     def _acquire_file_lock(self) -> bool:
-        now = time.time()
+        """Acquire an OS-level lock. This is stronger than only checking a file.
+
+        Streamlit can rerun the app and, in some deployments, create more than one
+        Python process. fcntl.flock prevents multiple pollers inside the same
+        container/filesystem from reading the same Telegram updates.
+        """
         try:
-            if os.path.exists(self._lock_file):
-                try:
-                    with open(self._lock_file, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    last_seen = float(data.get("last_seen", 0))
-                except Exception:
-                    last_seen = 0
-
-                if now - last_seen < LOCK_STALE_SECONDS:
-                    self._last_error = (
-                        "Bot Telegram sudah aktif di worker lain. "
-                        "Ini sengaja dicegah agar jawaban tidak dobel."
-                    )
-                    return False
-                try:
-                    os.remove(self._lock_file)
-                except OSError:
-                    pass
-
-            flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
-            fd = os.open(self._lock_file, flags)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"worker_id": self._worker_id, "pid": os.getpid(), "last_seen": now}, f)
+            lock_path = os.path.abspath(self._lock_file)
+            self._lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+            fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            os.ftruncate(self._lock_fd, 0)
+            os.write(
+                self._lock_fd,
+                json.dumps({
+                    "worker_id": self._worker_id,
+                    "pid": os.getpid(),
+                    "started_at": time.time(),
+                }).encode("utf-8"),
+            )
             self._has_file_lock = True
             return True
-        except FileExistsError:
-            self._last_error = "Bot Telegram sudah aktif. Instance baru tidak dijalankan agar tidak dobel."
+        except BlockingIOError:
+            self._last_error = (
+                "Bot Telegram sudah aktif di proses lain. Instance baru tidak dijalankan "
+                "agar jawaban tidak dobel."
+            )
             return False
         except Exception as exc:
-            # If lock cannot be created, fail safe: do not start another bot.
             self._last_error = f"Gagal membuat lock bot Telegram: {exc}"
             return False
 
     def _heartbeat_lock(self) -> None:
-        if not self._has_file_lock:
-            return
-        try:
-            with open(self._lock_file, "w", encoding="utf-8") as f:
-                json.dump(
-                    {"worker_id": self._worker_id, "pid": os.getpid(), "last_seen": time.time()},
-                    f,
-                )
-        except Exception as exc:
-            self._last_error = f"Gagal update heartbeat lock: {exc}"
+        # Lock is held by an open file descriptor; no heartbeat needed.
+        return
 
     def _release_file_lock(self) -> None:
         if not self._has_file_lock:
             return
         try:
-            if os.path.exists(self._lock_file):
-                os.remove(self._lock_file)
+            if self._lock_fd is not None:
+                fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+                os.close(self._lock_fd)
+                self._lock_fd = None
         except OSError:
             pass
         self._has_file_lock = False
+
+    def reset_telegram_session(self, config: Dict[str, Any]) -> str:
+        """Reset webhook and pending updates for this bot token.
+
+        This cannot kill old deployments that are still running elsewhere, but it
+        clears Telegram-side pending updates and helps after a redeploy/reboot.
+        """
+        token = config.get("telegram_token", "")
+        if not token:
+            return "TELEGRAM_BOT_TOKEN belum diisi."
+        self.stop()
+        try:
+            self._telegram_post(token, "deleteWebhook", {"drop_pending_updates": True}, timeout=20)
+            data = self._telegram_post(token, "getUpdates", {"offset": -1, "limit": 1, "timeout": 1}, timeout=10)
+            return "Sesi Telegram direset. Pending update dibersihkan. Jika masih double/triple, revoke token di BotFather karena masih ada instance lama di luar app ini."
+        except Exception as exc:
+            return f"Gagal reset sesi Telegram: {exc}"
+        self._lock_fd = None
 
     def _remember_update(self, update_id: int) -> bool:
         """Return True if update is new, False if duplicate."""

@@ -1,32 +1,19 @@
-# Adioranye AI - Public Chat + Protected Admin Settings
+# Adioranye AI - Streamlit Online + Telegram Bot (Safe Single Bot)
 
-Project ini berisi aplikasi Streamlit Online yang bisa digunakan untuk chat AI secara publik, sementara bagian pengaturan dilindungi password admin.
+Versi ini dibuat untuk mengurangi masalah jawaban Telegram double/triple saat dijalankan dari Streamlit Online.
 
-## Fitur
+## Prinsip penting
 
-- Halaman utama langsung bisa dipakai chat dengan AI.
-- Admin Settings diproteksi username dan password.
-- Pengaturan model, persona, token status, memory, debug, dan kontrol Telegram hanya muncul setelah login admin.
-- Bot Telegram dapat dijalankan dari Streamlit Online menggunakan background thread single-worker agar tidak menjawab dobel.
-- Semua secret disimpan dalam format TOML melalui `.streamlit/secrets.toml` atau Streamlit Cloud Secrets.
-- Memory command di chat publik dimatikan. Perintah `/ingat`, `/memori`, `/lupa`, dan `/reset memori` hanya aktif jika admin sedang login di Streamlit.
+Streamlit Online bisa rerun/restart, dan jika token Telegram yang sama masih dipakai di beberapa deploy/tab/laptop/VPS, satu pesan Telegram dapat dibalas beberapa kali. Karena itu versi ini memakai mode aman:
 
-## Jalankan lokal
+- `TELEGRAM_AUTO_START = false` secara default.
+- Bot Telegram hanya dijalankan lewat tombol admin.
+- Lock OS `fcntl.flock` mencegah lebih dari satu worker dalam container yang sama.
+- Tombol reset koneksi Telegram menghapus pending updates.
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+## Secrets Streamlit Cloud
 
-## Streamlit Cloud Secrets
-
-Masukkan ini di menu:
-
-```text
-Streamlit Cloud → App → Settings → Secrets
-```
-
-Isi:
+Masukkan di **Settings → Secrets**:
 
 ```toml
 ADMIN_USERNAME = "admin"
@@ -40,37 +27,36 @@ SLASHAI_MODEL = "slashai/gpt-5-nano"
 ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan pengguna. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele."
 MEMORY_FILE = "assistant_memory.json"
 
-TELEGRAM_AUTO_START = true
+TELEGRAM_AUTO_START = false
 TELEGRAM_DROP_PENDING_UPDATES = true
 TELEGRAM_SEND_PROCESSING_MESSAGE = false
 TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
+
 TEMPERATURE = 0.3
 MAX_COMPLETION_TOKENS = 2200
 ```
 
-## Cara pakai
+## Cara deploy aman
 
 1. Upload folder ini ke GitHub.
-2. Deploy di Streamlit Community Cloud.
-3. Main file: `app.py`.
-4. Isi Secrets di Streamlit Cloud.
-5. Buka halaman Streamlit, chat AI langsung bisa dipakai.
-6. Buka sidebar untuk login admin.
-7. Setelah login admin, kamu bisa mengatur model, persona, memory, debug, dan bot Telegram.
+2. Deploy ke Streamlit Cloud dengan main file `app.py`.
+3. Isi Secrets seperti di atas.
+4. Buka app Streamlit.
+5. Login admin di sidebar.
+6. Masuk tab Telegram.
+7. Klik **Reset koneksi Telegram / hapus pending update**.
+8. Klik **Start Bot** satu kali.
 
-## Catatan penting
+## Jika masih double/triple
 
-Streamlit Online bisa tidur ketika tidak ada pengunjung. Kalau aplikasi tidur, bot Telegram yang berjalan di background thread juga bisa berhenti. Untuk bot Telegram 24 jam nonstop, VPS tetap lebih stabil.
+Itu berarti token Telegram masih aktif di tempat lain. Lakukan ini:
 
-Jangan upload file `.streamlit/secrets.toml` yang berisi token asli ke GitHub. Gunakan Streamlit Cloud Secrets untuk produksi.
+1. Buka BotFather di Telegram.
+2. Jalankan `/revoke`.
+3. Pilih bot kamu.
+4. Ambil token baru.
+5. Ganti `TELEGRAM_BOT_TOKEN` di Streamlit Secrets.
+6. Reboot app Streamlit.
+7. Login admin → Telegram → Reset koneksi → Start Bot.
 
-
-## Tema ramah mata
-
-Versi ini sudah memakai CSS adaptif agar teks tetap terbaca pada mode light maupun dark. Komponen yang disesuaikan meliputi latar aplikasi, kartu pembuka, contoh prompt, bubble chat, input chat, sidebar, tombol, dan border. File `.streamlit/config.toml` juga ditambahkan sebagai default tema terang dengan kontras tinggi.
-
-## Fix jawaban Telegram dobel
-
-Versi ini memakai `single-worker lock` supaya Streamlit tidak menyalakan dua instance polling Telegram saat app rerun. Pesan status `Sedang diproses...` juga dimatikan secara default dan diganti dengan typing indicator, sehingga pengguna Telegram hanya menerima satu balasan akhir dari AI.
-
-Jika sebelumnya bot masih membalas dobel, pastikan tidak ada deployment lain, script lokal, atau VPS lain yang masih menjalankan token bot Telegram yang sama. Setelah update, lakukan restart/reboot app dari Streamlit Cloud.
+Tombol Stop di Streamlit hanya bisa mematikan worker di app yang sedang dibuka. Ia tidak bisa mematikan deploy lama, laptop, atau VPS lain yang masih memakai token lama.

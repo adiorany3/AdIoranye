@@ -436,7 +436,8 @@ def render_admin_settings() -> None:
         st.markdown("#### Kontrol Bot Telegram")
         format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
         format_token_status("SLASHAI_API_KEY", api_key)
-        st.info("Mode single-worker aktif: aplikasi mencegah bot berjalan dobel. Pesan 'Sedang diproses' juga dimatikan agar Telegram hanya mengirim jawaban akhir.")
+        st.warning("Mode aman aktif: TELEGRAM_AUTO_START disarankan FALSE. Jalankan bot hanya dari tombol admin agar Streamlit Online tidak membuat beberapa poller saat app rerun/restart.")
+        st.info("Lock OS aktif untuk mencegah lebih dari satu worker dalam container yang sama. Jika tetap double/triple, berarti token bot masih hidup di deployment lama/lokal/VPS lain.")
 
         status = service.status()
         st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
@@ -474,7 +475,13 @@ def render_admin_settings() -> None:
         with col_stop:
             if st.button("⏹️ Stop Bot", use_container_width=True):
                 service.stop()
-                st.warning("Bot Telegram dihentikan.")
+                st.warning("Bot Telegram dihentikan pada instance Streamlit ini.")
+
+        if st.button("🧯 Reset koneksi Telegram / hapus pending update", use_container_width=True):
+            result = service.reset_telegram_session(bot_config)
+            st.warning(result)
+
+        st.caption("Penting: tombol Stop hanya mematikan worker pada app ini. Jika ada deploy lama/laptop/VPS lain dengan token yang sama, revoke token dari BotFather lalu masukkan token baru di Secrets.")
 
         if status.get("last_update"):
             with st.expander("Update terakhir"):
@@ -530,7 +537,7 @@ ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yan
 MEMORY_FILE = "assistant_memory.json"
 
 # true = bot Telegram otomatis start saat app Streamlit dibuka/aktif
-TELEGRAM_AUTO_START = true
+TELEGRAM_AUTO_START = false
 TELEGRAM_DROP_PENDING_UPDATES = true
 TELEGRAM_SEND_PROCESSING_MESSAGE = false
 TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
