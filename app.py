@@ -106,6 +106,9 @@ telegram_token = str(get_secret("TELEGRAM_BOT_TOKEN", ""))
 memory_file = str(get_secret("MEMORY_FILE", "assistant_memory.json"))
 persona_from_secret = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
 auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", False), default=False)
+drop_pending_updates = parse_bool(get_secret("TELEGRAM_DROP_PENDING_UPDATES", True), default=True)
+send_processing_message = parse_bool(get_secret("TELEGRAM_SEND_PROCESSING_MESSAGE", False), default=False)
+telegram_lock_file = str(get_secret("TELEGRAM_LOCK_FILE", ".telegram_bot_worker.lock"))
 admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
 admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
 
@@ -319,6 +322,9 @@ def start_telegram_if_needed() -> None:
                 "temperature": cfg["temperature"],
                 "max_completion_tokens": cfg["max_completion_tokens"],
                 "timeout": 60,
+                "drop_pending_updates": drop_pending_updates,
+                "send_processing_message": send_processing_message,
+                "lock_file": telegram_lock_file,
             }
         )
 
@@ -430,12 +436,16 @@ def render_admin_settings() -> None:
         st.markdown("#### Kontrol Bot Telegram")
         format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
         format_token_status("SLASHAI_API_KEY", api_key)
+        st.info("Mode single-worker aktif: aplikasi mencegah bot berjalan dobel. Pesan 'Sedang diproses' juga dimatikan agar Telegram hanya mengirim jawaban akhir.")
 
         status = service.status()
         st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
         st.caption(f"Pesan diproses: {status.get('processed', 0)}")
         if status.get("started_at"):
             st.caption(f"Mulai: {status['started_at']}")
+        if status.get("worker_id"):
+            st.caption(f"Worker: {status['worker_id']}")
+        st.caption(f"Duplikat dicegah: {status.get('duplicates_skipped', 0)}")
 
         bot_config = {
             "telegram_token": telegram_token,
@@ -448,6 +458,9 @@ def render_admin_settings() -> None:
             "temperature": float(st.session_state.active_temperature),
             "max_completion_tokens": int(st.session_state.active_max_tokens),
             "timeout": 60,
+            "drop_pending_updates": drop_pending_updates,
+            "send_processing_message": send_processing_message,
+            "lock_file": telegram_lock_file,
         }
 
         col_start, col_stop = st.columns(2)
@@ -518,6 +531,9 @@ MEMORY_FILE = "assistant_memory.json"
 
 # true = bot Telegram otomatis start saat app Streamlit dibuka/aktif
 TELEGRAM_AUTO_START = true
+TELEGRAM_DROP_PENDING_UPDATES = true
+TELEGRAM_SEND_PROCESSING_MESSAGE = false
+TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
 
 # Opsional
 TEMPERATURE = 0.3
