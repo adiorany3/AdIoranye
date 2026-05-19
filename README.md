@@ -1,24 +1,36 @@
-# Adioranye Streamlit Online + Telegram Bot
+# Adioranye AI - Public Chat + Protected Admin Settings
 
-Project ini menjalankan:
+Project ini berisi aplikasi Streamlit Online yang bisa digunakan untuk chat AI secara publik, sementara bagian pengaturan dilindungi password admin.
 
-1. Dashboard Streamlit.
-2. Bot Telegram dari dalam Streamlit Online menggunakan background thread.
-3. API SlashAI OpenAI-compatible.
-4. Persona system prompt `adioranye`.
-5. Memory lokal sederhana.
+## Fitur
 
-## Isi Streamlit Secrets
+- Halaman utama langsung bisa dipakai chat dengan AI.
+- Admin Settings diproteksi username dan password.
+- Pengaturan model, persona, token status, memory, debug, dan kontrol Telegram hanya muncul setelah login admin.
+- Bot Telegram dapat dijalankan dari Streamlit Online menggunakan background thread.
+- Semua secret disimpan dalam format TOML melalui `.streamlit/secrets.toml` atau Streamlit Cloud Secrets.
+- Memory command di chat publik dimatikan. Perintah `/ingat`, `/memori`, `/lupa`, dan `/reset memori` hanya aktif jika admin sedang login di Streamlit.
 
-Di Streamlit Cloud:
+## Jalankan lokal
 
-`App -> Settings -> Secrets`
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Streamlit Cloud Secrets
+
+Masukkan ini di menu:
+
+```text
+Streamlit Cloud → App → Settings → Secrets
+```
 
 Isi:
 
 ```toml
 ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "Admin"
+ADMIN_PASSWORD = "GANTI_PASSWORD_ADMIN_YANG_KUAT"
 
 TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_DARI_BOTFATHER"
 SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
@@ -29,49 +41,22 @@ ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yan
 MEMORY_FILE = "assistant_memory.json"
 
 TELEGRAM_AUTO_START = true
+TEMPERATURE = 0.3
+MAX_COMPLETION_TOKENS = 2200
 ```
 
-## Proteksi Admin
-
-Dashboard Streamlit, setting model, persona, memory, tes AI, dan kontrol Bot Telegram hanya bisa dibuka setelah login admin.
-
-Default login pada contoh secrets:
-
-```text
-Username: admin
-Password: Admin
-```
-
-Sebaiknya ganti `ADMIN_PASSWORD` dengan password yang lebih kuat sebelum deploy publik.
-
-## Deploy ke Streamlit Online
+## Cara pakai
 
 1. Upload folder ini ke GitHub.
-2. Buka Streamlit Community Cloud.
-3. Pilih repo.
-4. Main file: `app.py`.
-5. Isi Secrets.
-6. Deploy.
-7. Buka app, klik `Start Bot` di sidebar jika belum auto start.
-8. Chat bot di Telegram dengan `/start`.
+2. Deploy di Streamlit Community Cloud.
+3. Main file: `app.py`.
+4. Isi Secrets di Streamlit Cloud.
+5. Buka halaman Streamlit, chat AI langsung bisa dipakai.
+6. Buka sidebar untuk login admin.
+7. Setelah login admin, kamu bisa mengatur model, persona, memory, debug, dan bot Telegram.
 
-## Perintah Telegram
+## Catatan penting
 
-```text
-/start
-/help
-/ingat nama saya Adi
-/memori
-/lupa Adi
-/reset memori
-```
+Streamlit Online bisa tidur ketika tidak ada pengunjung. Kalau aplikasi tidur, bot Telegram yang berjalan di background thread juga bisa berhenti. Untuk bot Telegram 24 jam nonstop, VPS tetap lebih stabil.
 
-Selain perintah itu, langsung kirim pertanyaan.
-
-## Catatan Penting
-
-Streamlit Online bisa tidur saat tidak ada aktivitas. Kalau app tidur, bot Telegram juga berhenti.
-Untuk 24 jam nonstop yang benar-benar stabil, gunakan VPS + systemd.
-
-Kalau muncul error `Conflict`, berarti token bot yang sama sedang dijalankan di tempat lain.
-Matikan bot lama atau deploy hanya di satu tempat.
+Jangan upload file `.streamlit/secrets.toml` yang berisi token asli ke GitHub. Gunakan Streamlit Cloud Secrets untuk produksi.

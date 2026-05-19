@@ -1,6 +1,6 @@
 import hmac
 import time
-from typing import Any
+from typing import Any, Dict
 
 import streamlit as st
 
@@ -9,8 +9,17 @@ from memory_store import MemoryStore, handle_local_memory_command
 from telegram_service import get_telegram_service
 
 
-st.set_page_config(page_title="Adioranye AI + Telegram", page_icon="🤖", layout="wide")
+st.set_page_config(
+    page_title="Adioranye AI",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
+
+# =========================
+# Helpers
+# =========================
 
 def get_secret(name: str, default: Any = "") -> Any:
     try:
@@ -31,38 +40,33 @@ def safe_compare(left: Any, right: Any) -> bool:
     return hmac.compare_digest(str(left or ""), str(right or ""))
 
 
-def require_admin_login(admin_username: str, admin_password: str) -> None:
-    """Stop rendering the dashboard until the admin enters the correct password."""
-    if not admin_password:
-        st.error("ADMIN_PASSWORD belum diisi di Streamlit Secrets.")
-        st.info("Tambahkan ADMIN_PASSWORD di Settings → Secrets agar dashboard terlindungi.")
-        st.stop()
+def format_token_status(label: str, value: str) -> None:
+    if value:
+        st.success(f"{label} terdeteksi")
+    else:
+        st.error(f"{label} belum diisi")
 
-    if st.session_state.get("admin_authenticated"):
-        return
 
-    st.title("🔐 Login Admin")
-    st.write("Masukkan password admin untuk membuka dashboard, setting, memory, dan kontrol Bot Telegram.")
+def init_state() -> None:
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    if "admin_authenticated" not in st.session_state:
+        st.session_state.admin_authenticated = False
+    if "active_model" not in st.session_state:
+        st.session_state.active_model = str(get_secret("SLASHAI_MODEL", "slashai/gpt-5-nano"))
+    if "active_persona" not in st.session_state:
+        st.session_state.active_persona = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
+    if "active_temperature" not in st.session_state:
+        st.session_state.active_temperature = float(get_secret("TEMPERATURE", 0.3) or 0.3)
+    if "active_max_tokens" not in st.session_state:
+        st.session_state.active_max_tokens = int(get_secret("MAX_COMPLETION_TOKENS", 2200) or 2200)
+    if "show_debug" not in st.session_state:
+        st.session_state.show_debug = False
 
-    with st.form("admin_login_form", clear_on_submit=False):
-        username_input = st.text_input("Username", value="", placeholder="admin")
-        password_input = st.text_input("Password Admin", type="password", placeholder="Masukkan password admin")
-        submitted = st.form_submit_button("Masuk", use_container_width=True)
 
-    if submitted:
-        username_ok = safe_compare(username_input.strip(), admin_username)
-        password_ok = safe_compare(password_input, admin_password)
-
-        if username_ok and password_ok:
-            st.session_state.admin_authenticated = True
-            st.session_state.admin_username = admin_username
-            st.rerun()
-        else:
-            st.error("Username atau password admin salah.")
-
-    st.caption("Semua konfigurasi rahasia dibaca dari Streamlit Secrets/TOML.")
-    st.stop()
-
+# =========================
+# Defaults
+# =========================
 
 DEFAULT_PERSONA = (
     "Nama kamu adalah adioranye. "
@@ -79,252 +83,311 @@ MODEL_OPTIONS = [
     "slashai/MiniMax-M2.5",
     "slashai/gpt-5.4-nano",
     "slashai/gpt-5.5-instant",
+    "slashai/claude-haiku-4.5",
+    "slashai/deepseek-v4-flash",
 ]
 
-api_key = get_secret("SLASHAI_API_KEY", "")
-api_url = get_secret("SLASHAI_API_URL", "https://api.slashai.my.id/v1/chat/completions")
-default_model = get_secret("SLASHAI_MODEL", "slashai/gpt-5-nano")
-telegram_token = get_secret("TELEGRAM_BOT_TOKEN", "")
-memory_file = get_secret("MEMORY_FILE", "assistant_memory.json")
-persona_from_secret = get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA)
+CHEAP_MODEL_OPTIONS = [
+    "slashai/gpt-5-nano",
+    "slashai/gpt-5-mini",
+    "slashai/gemini-3-flash",
+    "slashai/mimo-v2-flash",
+    "slashai/Step-3.5-Flash",
+    "slashai/MiniMax-M2.5",
+    "slashai/gpt-5.4-nano",
+    "slashai/gpt-5.5-instant",
+]
+
+# Secrets
+api_key = str(get_secret("SLASHAI_API_KEY", ""))
+api_url = str(get_secret("SLASHAI_API_URL", "https://api.slashai.my.id/v1/chat/completions"))
+default_model = str(get_secret("SLASHAI_MODEL", "slashai/gpt-5-nano"))
+telegram_token = str(get_secret("TELEGRAM_BOT_TOKEN", ""))
+memory_file = str(get_secret("MEMORY_FILE", "assistant_memory.json"))
+persona_from_secret = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
 auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", False), default=False)
 admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
 admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
 
-require_admin_login(admin_username, admin_password)
-
+init_state()
 memory = MemoryStore(memory_file)
-
-if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = []
-
-if "persona" not in st.session_state:
-    st.session_state.persona = persona_from_secret
+service = get_telegram_service()
 
 
-with st.sidebar:
-    st.title("⚙️ Adioranye")
-    st.success(f"Login sebagai: {st.session_state.get('admin_username', 'admin')}")
-    if st.button("🚪 Logout Admin", use_container_width=True):
-        st.session_state.admin_authenticated = False
-        st.session_state.admin_username = ""
-        st.rerun()
+# =========================
+# Styling
+# =========================
+st.markdown(
+    """
+    <style>
+    .main .block-container {
+        max-width: 920px;
+        padding-top: 1.4rem;
+        padding-bottom: 4rem;
+    }
+    div[data-testid="stSidebar"] {
+        min-width: 320px;
+    }
+    .chat-hero {
+        border: 1px solid rgba(49, 51, 63, 0.12);
+        border-radius: 22px;
+        padding: 20px 22px;
+        margin-bottom: 18px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245,247,255,0.95));
+    }
+    .chat-hero h1 {
+        font-size: 2.0rem;
+        margin-bottom: 0.25rem;
+    }
+    .chat-hero p {
+        margin-bottom: 0;
+        opacity: 0.78;
+    }
+    .status-pill {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: rgba(49, 51, 63, 0.08);
+        font-size: 0.85rem;
+        margin-right: 6px;
+        margin-bottom: 6px;
+    }
+    .quick-card {
+        border: 1px solid rgba(49, 51, 63, 0.12);
+        border-radius: 16px;
+        padding: 12px 14px;
+        min-height: 86px;
+        background: rgba(255,255,255,0.75);
+    }
+    .small-note {
+        opacity: 0.72;
+        font-size: 0.88rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-    st.subheader("Model AI")
-    selected_model = st.selectbox(
-        "Model default",
-        MODEL_OPTIONS,
-        index=MODEL_OPTIONS.index(default_model) if default_model in MODEL_OPTIONS else 0,
-    )
 
-    temperature = st.slider("Temperature", 0.0, 1.0, 0.3, 0.1)
-    max_completion_tokens = st.slider("Max output tokens", 600, 4000, 1800, 100)
-
-    st.subheader("Persona")
-    st.session_state.persona = st.text_area("System persona", value=st.session_state.persona, height=140)
-
-    st.subheader("Telegram Bot")
-    service = get_telegram_service()
-    status = service.status()
-
-    if telegram_token:
-        st.success("TELEGRAM_BOT_TOKEN terdeteksi.")
-    else:
-        st.error("TELEGRAM_BOT_TOKEN belum diisi di Streamlit Secrets.")
-
-    if api_key:
-        st.success("SLASHAI_API_KEY terdeteksi.")
-    else:
-        st.error("SLASHAI_API_KEY belum diisi di Streamlit Secrets.")
-
-    st.write("Status:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
-    st.caption(f"Processed: {status['processed']}")
-    if status.get("started_at"):
-        st.caption(f"Started: {status['started_at']}")
-
-    col_start, col_stop = st.columns(2)
-
-    bot_config = {
-        "telegram_token": telegram_token,
-        "slashai_api_key": api_key,
-        "slashai_api_url": api_url,
-        "slashai_model": selected_model,
-        "persona": st.session_state.persona,
+# =========================
+# Runtime config
+# =========================
+def get_runtime_config() -> Dict[str, Any]:
+    return {
+        "api_url": api_url,
+        "api_key": api_key,
+        "model": st.session_state.active_model or default_model,
+        "persona": st.session_state.active_persona or persona_from_secret,
+        "temperature": float(st.session_state.active_temperature),
+        "max_completion_tokens": int(st.session_state.active_max_tokens),
         "memory_file": memory_file,
-        "fallback_models": DEFAULT_FALLBACK_MODELS,
-        "temperature": temperature,
-        "max_completion_tokens": max_completion_tokens,
-        "timeout": 60,
+        "telegram_token": telegram_token,
     }
 
-    with col_start:
-        if st.button("▶️ Start Bot", use_container_width=True):
-            started = service.start(bot_config)
-            if started:
-                st.success("Bot Telegram dijalankan.")
-            else:
-                st.info("Bot sudah berjalan.")
 
-    with col_stop:
-        if st.button("⏹️ Stop Bot", use_container_width=True):
-            service.stop()
-            st.warning("Bot Telegram dihentikan.")
-
-    if status.get("last_update"):
-        st.caption("Update terakhir:")
-        st.code(status["last_update"])
-
-    if status.get("last_error"):
-        st.caption("Error terakhir:")
-        st.code(status["last_error"][:1500])
-
-    st.divider()
-
-    if st.button("🧪 Tes AI", use_container_width=True):
-        try:
-            answer, meta = generate_answer(
-                api_url=api_url,
-                api_key=api_key,
-                model=selected_model,
-                system_prompt=st.session_state.persona,
-                user_text="Jawab singkat: apakah kamu aktif?",
-                memory_text=memory.as_prompt_text(limit=10),
-                recent_messages=[],
-                fallback_models=DEFAULT_FALLBACK_MODELS,
-                temperature=temperature,
-                max_completion_tokens=max_completion_tokens,
-                timeout=60,
-            )
-            st.success(answer)
-            st.caption(f"Model: {meta.get('model') or meta.get('model_requested')}")
-        except Exception as exc:
-            st.error(str(exc))
+def start_telegram_if_needed() -> None:
+    cfg = get_runtime_config()
+    if auto_start and telegram_token and api_key and not service.status()["running"]:
+        service.start(
+            {
+                "telegram_token": telegram_token,
+                "slashai_api_key": api_key,
+                "slashai_api_url": api_url,
+                "slashai_model": cfg["model"],
+                "persona": cfg["persona"],
+                "memory_file": memory_file,
+                "fallback_models": DEFAULT_FALLBACK_MODELS,
+                "temperature": cfg["temperature"],
+                "max_completion_tokens": cfg["max_completion_tokens"],
+                "timeout": 60,
+            }
+        )
 
 
-if auto_start:
-    service = get_telegram_service()
-    if not service.status()["running"] and telegram_token and api_key:
-        service.start({
-            "telegram_token": telegram_token,
-            "slashai_api_key": api_key,
-            "slashai_api_url": api_url,
-            "slashai_model": selected_model,
-            "persona": st.session_state.persona,
-            "memory_file": memory_file,
-            "fallback_models": DEFAULT_FALLBACK_MODELS,
-            "temperature": temperature,
-            "max_completion_tokens": max_completion_tokens,
-            "timeout": 60,
-        })
+start_telegram_if_needed()
 
 
-st.title("🤖 Adioranye AI")
-st.write("Dashboard Streamlit Online + Bot Telegram dalam satu aplikasi.")
+# =========================
+# Admin settings UI
+# =========================
+def render_admin_login() -> None:
+    st.subheader("🔐 Admin Settings")
+    st.caption("Chat AI bisa dipakai tanpa login. Login hanya untuk membuka setting, memory, debug, dan kontrol Bot Telegram.")
 
-tab_chat, tab_memory, tab_setup = st.tabs(["Chat Test", "Memory", "Setup Streamlit Online"])
+    if not admin_password:
+        st.error("ADMIN_PASSWORD belum diisi di Streamlit Secrets.")
+        return
 
+    with st.form("admin_login_form", clear_on_submit=False):
+        username_input = st.text_input("Username", value="", placeholder="admin")
+        password_input = st.text_input("Password", type="password", placeholder="Password admin")
+        submitted = st.form_submit_button("Masuk Admin", use_container_width=True)
 
-with tab_chat:
-    st.subheader("Tes Chat di Streamlit")
-
-    for msg in st.session_state.chat_messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    user_input = st.chat_input("Tulis pertanyaan untuk Adioranye...")
-
-    if user_input:
-        with st.chat_message("user"):
-            st.markdown(user_input)
-
-        st.session_state.chat_messages.append({"role": "user", "content": user_input})
-        local_reply = handle_local_memory_command(user_input, memory)
-
-        if local_reply:
-            answer = local_reply
-            meta = {}
+    if submitted:
+        username_ok = safe_compare(username_input.strip(), admin_username)
+        password_ok = safe_compare(password_input, admin_password)
+        if username_ok and password_ok:
+            st.session_state.admin_authenticated = True
+            st.success("Login admin berhasil.")
+            st.rerun()
         else:
-            try:
-                with st.spinner("Memproses jawaban..."):
+            st.error("Username atau password salah.")
+
+
+def render_admin_settings() -> None:
+    st.subheader("⚙️ Admin Settings")
+    st.success(f"Login sebagai: {admin_username}")
+
+    if st.button("🚪 Logout Admin", use_container_width=True):
+        st.session_state.admin_authenticated = False
+        st.rerun()
+
+    tab_ai, tab_bot, tab_memory, tab_setup = st.tabs(["AI", "Telegram", "Memory", "Setup"])
+
+    with tab_ai:
+        st.markdown("#### Model & Persona")
+        model_list = CHEAP_MODEL_OPTIONS if st.toggle("Tampilkan model hemat saja", value=True) else MODEL_OPTIONS
+        current_model = st.session_state.active_model if st.session_state.active_model in model_list else default_model
+        if current_model not in model_list:
+            current_model = model_list[0]
+
+        st.session_state.active_model = st.selectbox(
+            "Model aktif",
+            model_list,
+            index=model_list.index(current_model),
+        )
+        st.session_state.active_temperature = st.slider(
+            "Temperature",
+            0.0,
+            1.0,
+            float(st.session_state.active_temperature),
+            0.1,
+        )
+        st.session_state.active_max_tokens = st.slider(
+            "Max output tokens",
+            800,
+            5000,
+            int(st.session_state.active_max_tokens),
+            100,
+        )
+        st.session_state.active_persona = st.text_area(
+            "System persona",
+            value=st.session_state.active_persona,
+            height=170,
+        )
+        st.session_state.show_debug = st.toggle("Tampilkan debug respons di chat", value=st.session_state.show_debug)
+
+        col_test, col_reset = st.columns(2)
+        with col_test:
+            if st.button("🧪 Tes AI", use_container_width=True):
+                try:
                     answer, meta = generate_answer(
                         api_url=api_url,
                         api_key=api_key,
-                        model=selected_model,
-                        system_prompt=st.session_state.persona,
-                        user_text=user_input,
-                        memory_text=memory.as_prompt_text(limit=20),
-                        recent_messages=st.session_state.chat_messages[-8:],
+                        model=st.session_state.active_model,
+                        system_prompt=st.session_state.active_persona,
+                        user_text="Jawab singkat: apakah kamu aktif?",
+                        memory_text=memory.as_prompt_text(limit=10),
+                        recent_messages=[],
                         fallback_models=DEFAULT_FALLBACK_MODELS,
-                        temperature=temperature,
-                        max_completion_tokens=max_completion_tokens,
+                        temperature=float(st.session_state.active_temperature),
+                        max_completion_tokens=int(st.session_state.active_max_tokens),
                         timeout=60,
                     )
-            except Exception as exc:
-                answer = "Maaf, AI belum bisa menjawab.\n\nDetail:\n" + str(exc)
-                meta = {}
+                    st.success(answer)
+                    st.caption(f"Model: {meta.get('model') or meta.get('model_requested')}")
+                except Exception as exc:
+                    st.error(str(exc))
+        with col_reset:
+            if st.button("↩️ Reset dari Secrets", use_container_width=True):
+                st.session_state.active_model = default_model
+                st.session_state.active_persona = persona_from_secret
+                st.session_state.active_temperature = 0.3
+                st.session_state.active_max_tokens = 2200
+                st.session_state.show_debug = False
+                st.rerun()
 
-        with st.chat_message("assistant"):
-            st.markdown(answer)
+    with tab_bot:
+        st.markdown("#### Kontrol Bot Telegram")
+        format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
+        format_token_status("SLASHAI_API_KEY", api_key)
 
-        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+        status = service.status()
+        st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
+        st.caption(f"Pesan diproses: {status.get('processed', 0)}")
+        if status.get("started_at"):
+            st.caption(f"Mulai: {status['started_at']}")
 
-        if meta:
-            with st.expander("Debug response"):
-                st.json(meta)
+        bot_config = {
+            "telegram_token": telegram_token,
+            "slashai_api_key": api_key,
+            "slashai_api_url": api_url,
+            "slashai_model": st.session_state.active_model,
+            "persona": st.session_state.active_persona,
+            "memory_file": memory_file,
+            "fallback_models": DEFAULT_FALLBACK_MODELS,
+            "temperature": float(st.session_state.active_temperature),
+            "max_completion_tokens": int(st.session_state.active_max_tokens),
+            "timeout": 60,
+        }
 
-    col_clear, col_remember = st.columns(2)
+        col_start, col_stop = st.columns(2)
+        with col_start:
+            if st.button("▶️ Start Bot", use_container_width=True):
+                started = service.start(bot_config)
+                if started:
+                    st.success("Bot Telegram dijalankan.")
+                else:
+                    st.info("Bot sudah berjalan.")
+        with col_stop:
+            if st.button("⏹️ Stop Bot", use_container_width=True):
+                service.stop()
+                st.warning("Bot Telegram dihentikan.")
 
-    with col_clear:
-        if st.button("Hapus chat test"):
-            st.session_state.chat_messages = []
-            st.rerun()
+        if status.get("last_update"):
+            with st.expander("Update terakhir"):
+                st.code(status["last_update"])
+        if status.get("last_error"):
+            with st.expander("Error terakhir"):
+                st.code(status["last_error"][:2000])
 
-    with col_remember:
-        if st.button("Simpan info: pengguna memakai Streamlit Online"):
-            memory.add("Pengguna menjalankan Adioranye di Streamlit Online.", source="button")
-            st.success("Memori disimpan.")
+    with tab_memory:
+        st.markdown("#### Memory Lokal")
+        st.info(
+            "Memory ini dipakai sebagai konteks tambahan. Di Streamlit Online, file lokal bisa hilang saat app restart/redeploy."
+        )
+        current_memory = memory.list_text(limit=80)
+        if current_memory:
+            st.code(current_memory)
+        else:
+            st.write("Belum ada memori.")
 
+        new_memory = st.text_input("Tambah memori")
+        if st.button("Simpan memori", use_container_width=True):
+            if new_memory.strip():
+                memory.add(new_memory.strip(), source="streamlit-admin")
+                st.success("Memori disimpan.")
+                st.rerun()
 
-with tab_memory:
-    st.subheader("Memory Lokal")
-    st.info(
-        "Di Streamlit Online, file memory bisa hilang saat app restart/redeploy. "
-        "Untuk memory permanen 24 jam, gunakan database eksternal seperti Supabase/Firebase."
-    )
+        forget_keyword = st.text_input("Hapus memori yang mengandung kata")
+        col_forget, col_reset_memory = st.columns(2)
+        with col_forget:
+            if st.button("Hapus berdasarkan kata", use_container_width=True):
+                count = memory.forget_contains(forget_keyword)
+                st.warning(f"{count} memori dihapus.")
+                st.rerun()
+        with col_reset_memory:
+            if st.button("Reset semua memori", use_container_width=True):
+                memory.reset()
+                st.warning("Semua memori dihapus.")
+                st.rerun()
 
-    current_memory = memory.list_text(limit=50)
-    if current_memory:
-        st.code(current_memory)
-    else:
-        st.write("Belum ada memori.")
-
-    new_memory = st.text_input("Tambah memori")
-    if st.button("Simpan memori"):
-        if new_memory.strip():
-            memory.add(new_memory.strip(), source="streamlit")
-            st.success("Memori disimpan.")
-            st.rerun()
-
-    forget_keyword = st.text_input("Hapus memori yang mengandung kata")
-    if st.button("Hapus berdasarkan kata"):
-        count = memory.forget_contains(forget_keyword)
-        st.warning(f"{count} memori dihapus.")
-        st.rerun()
-
-    if st.button("Reset semua memori"):
-        memory.reset()
-        st.warning("Semua memori dihapus.")
-        st.rerun()
-
-
-with tab_setup:
-    st.subheader("Secrets untuk Streamlit Community Cloud")
-    st.write("Masukkan ini di menu:")
-    st.code("Streamlit Cloud → App → Settings → Secrets", language="text")
-
-    secrets_text = '''
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "Admin"
+    with tab_setup:
+        st.markdown("#### Secrets Streamlit Cloud")
+        st.write("Masukkan konfigurasi berikut di menu **Streamlit Cloud → App → Settings → Secrets**.")
+        st.code(
+            '''ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "GANTI_PASSWORD_ADMIN_YANG_KUAT"
 
 TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_DARI_BOTFATHER"
 SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
@@ -334,34 +397,145 @@ SLASHAI_MODEL = "slashai/gpt-5-nano"
 ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan pengguna. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele."
 MEMORY_FILE = "assistant_memory.json"
 
-# true = bot otomatis start saat aplikasi Streamlit Online dibuka
+# true = bot Telegram otomatis start saat app Streamlit dibuka/aktif
 TELEGRAM_AUTO_START = true
-    '''.strip()
 
-    st.code(secrets_text, language="toml")
+# Opsional
+TEMPERATURE = 0.3
+MAX_COMPLETION_TOKENS = 2200''',
+            language="toml",
+        )
+        st.markdown(
+            """
+            **Catatan:** Chat AI di halaman utama tidak perlu login. Password admin hanya melindungi pengaturan, kontrol Telegram, memory, dan debug.
+            Untuk bot Telegram 24 jam nonstop, VPS tetap lebih stabil karena Streamlit Online bisa sleep saat tidak aktif.
+            """.strip()
+        )
 
-    st.subheader("Cara pakai")
+
+# =========================
+# Sidebar
+# =========================
+with st.sidebar:
+    st.title("🤖 Adioranye")
+    st.caption("Chat publik aktif. Setting hanya untuk admin.")
+
+    cfg = get_runtime_config()
+    st.markdown(f'<span class="status-pill">Model: {cfg["model"]}</span>', unsafe_allow_html=True)
     st.markdown(
-        '''
-1. Upload project ini ke GitHub.
-2. Deploy ke Streamlit Community Cloud.
-3. Isi semua Secrets di atas.
-4. Buka aplikasi Streamlit kamu.
-5. Klik **Start Bot** di sidebar, atau pakai `TELEGRAM_AUTO_START = true`.
-6. Buka Telegram, chat bot kamu dengan `/start`.
-
-**Catatan penting:** Streamlit Online bisa tidur ketika tidak ada pengunjung. Jika app tidur, bot Telegram ikut berhenti. Untuk 24 jam benar-benar nonstop, tetap lebih stabil memakai VPS.
-        '''.strip()
+        f'<span class="status-pill">Telegram: {"ON" if service.status()["running"] else "OFF"}</span>',
+        unsafe_allow_html=True,
     )
 
-    st.subheader("Troubleshooting")
-    st.markdown(
-        '''
-- Jika bot tidak membalas, klik **Tes AI** dulu.
-- Jika Telegram error `Conflict`, berarti token bot yang sama sedang polling di tempat lain. Matikan proses bot lama.
-- Jika model 403, model tersebut butuh deposit atau belum terbuka di akun API.
-- Jika jawaban kosong, gunakan `slashai/gpt-5-nano` atau naikkan Max output tokens.
-        '''.strip()
-    )
+    st.divider()
+    if st.session_state.admin_authenticated:
+        render_admin_settings()
+    else:
+        render_admin_login()
 
-time.sleep(0.05)
+
+# =========================
+# Public Chat UI
+# =========================
+cfg = get_runtime_config()
+
+st.markdown(
+    """
+    <div class="chat-hero">
+        <h1>🤖 Adioranye AI</h1>
+        <p>Asisten pribadi pintar untuk menjawab pertanyaan, membantu menulis, merangkum, membuat ide, dan memberi solusi praktis.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+if not api_key:
+    st.warning("SLASHAI_API_KEY belum diisi. Chat belum bisa digunakan sampai admin mengisi Secrets di Streamlit Cloud.")
+
+# Quick prompt cards only shown when chat is empty
+if not st.session_state.chat_messages:
+    st.markdown("**Contoh yang bisa ditanyakan:**")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown('<div class="quick-card">Buatkan caption promosi produk yang singkat dan menarik.</div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown('<div class="quick-card">Ringkas materi ini menjadi bahasa mahasiswa yang natural.</div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown('<div class="quick-card">Bantu susun jawaban presentasi agar terdengar percaya diri.</div>', unsafe_allow_html=True)
+    st.caption("Ketik pertanyaan di kolom chat paling bawah.")
+
+# Chat toolbar
+col_toolbar_1, col_toolbar_2, col_toolbar_3 = st.columns([1, 1, 3])
+with col_toolbar_1:
+    if st.button("🧹 Chat baru", use_container_width=True):
+        st.session_state.chat_messages = []
+        st.rerun()
+with col_toolbar_2:
+    st.caption(f"{len(st.session_state.chat_messages)} pesan")
+with col_toolbar_3:
+    st.caption("Memory aktif sebagai konteks ringkas. Pengaturan hanya bisa diubah admin.")
+
+st.divider()
+
+for msg in st.session_state.chat_messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+user_input = st.chat_input("Tulis pertanyaan kamu untuk Adioranye...")
+
+if user_input:
+    # Public chat: memory commands are disabled unless admin is logged in.
+    # This prevents random visitors from changing global memory.
+    with st.chat_message("user"):
+        st.markdown(user_input)
+
+    st.session_state.chat_messages.append({"role": "user", "content": user_input})
+
+    local_reply = ""
+    if st.session_state.admin_authenticated:
+        local_reply = handle_local_memory_command(user_input, memory)
+
+    if local_reply:
+        answer = local_reply
+        meta = {}
+    else:
+        try:
+            with st.chat_message("assistant"):
+                placeholder = st.empty()
+                placeholder.markdown("Sedang memproses jawaban...")
+                answer, meta = generate_answer(
+                    api_url=api_url,
+                    api_key=api_key,
+                    model=cfg["model"],
+                    system_prompt=cfg["persona"],
+                    user_text=user_input,
+                    memory_text=memory.as_prompt_text(limit=20),
+                    recent_messages=st.session_state.chat_messages[-8:],
+                    fallback_models=DEFAULT_FALLBACK_MODELS,
+                    temperature=float(cfg["temperature"]),
+                    max_completion_tokens=int(cfg["max_completion_tokens"]),
+                    timeout=60,
+                )
+                placeholder.markdown(answer)
+        except Exception as exc:
+            answer = (
+                "Maaf, Adioranye belum bisa menjawab saat ini. "
+                "Silakan coba lagi beberapa saat lagi atau hubungi admin.\n\n"
+                f"Detail ringkas: {str(exc)[:1000]}"
+            )
+            meta = {}
+            with st.chat_message("assistant"):
+                st.error(answer)
+
+    if local_reply:
+        with st.chat_message("assistant"):
+            st.markdown(answer)
+
+    st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+
+    if meta and st.session_state.admin_authenticated and st.session_state.show_debug:
+        with st.expander("Debug response admin"):
+            st.json(meta)
+
+# Tiny refresh delay for Streamlit Cloud stability
+time.sleep(0.03)
