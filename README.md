@@ -1,45 +1,47 @@
-# Asisten Pribadi AI Streamlit + SlashAI
+# Asisten Pribadi AI Streamlit
 
-Versi ini memperbaiki kasus respons kosong seperti:
+Aplikasi Streamlit untuk menjalankan asisten pribadi memakai API OpenAI-compatible:
 
-- `finish_reason: "length"`
-- `message.content: ""`
-- `completion_tokens_details.reasoning_tokens` memenuhi semua output token
+```text
+https://api.slashai.my.id/v1/chat/completions
+```
 
-Penyebabnya biasanya model GPT-5 menghabiskan batas output untuk reasoning token internal, sehingga tidak ada token tersisa untuk jawaban yang terlihat.
+## Fitur
 
-## Jalankan lokal
+- Chat AI dengan model SlashAI/OpenAI-compatible.
+- Persona asisten yang bisa diedit dari sidebar.
+- Memory lokal agar AI mengingat hal penting tanpa mengirim seluruh riwayat chat.
+- Perintah lokal tanpa memanggil API:
+  - `/ingat ...`
+  - `/memori`
+  - `/lupa ...`
+  - `/reset memori`
+  - `/persona ...`
+- Mode hemat token.
+- Auto fallback ke model murah.
+- Estimasi biaya dari usage API.
+- Fix untuk kasus GPT-5 kosong karena `reasoning_tokens`.
+
+## Cara menjalankan lokal
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Buat file `.streamlit/secrets.toml`:
+## Streamlit Secrets
+
+Isi di Streamlit Community Cloud > App > Settings > Secrets:
 
 ```toml
-SLASHAI_API_KEY = "ISI_API_KEY_KAMU"
+SLASHAI_API_KEY = "ISI_API_KEY_KAMU_DI_SINI"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/gemini-3-flash"
+
+ASSISTANT_PERSONA = "Kamu adalah asisten pribadi yang cepat, hemat token, ramah, dan to the point. Jawab dalam bahasa Indonesia yang natural."
+MEMORY_FILE = "assistant_memory.json"
 ```
 
-## Deploy Streamlit Community Cloud
+## Catatan Memory
 
-1. Upload folder ini ke GitHub.
-2. Deploy di Streamlit Community Cloud.
-3. Masuk ke App > Settings > Secrets.
-4. Paste konfigurasi TOML.
-5. Save dan rerun app.
-
-## Rekomendasi model hemat
-
-- `slashai/gemini-3-flash`
-- `slashai/gemini-3.1-pro`
-- `slashai/gpt-5-nano`
-- `slashai/gpt-5-mini`
-- `slashai/mimo-v2-flash`
-- `slashai/Step-3.5-Flash`
-
-## Catatan penting
-
-Jika memakai GPT-5 lalu jawaban kosong, pilih mode **Stabil GPT-5**. Mode ini menaikkan `max_completion_tokens` dan mengirim `reasoning_effort = "minimal"` supaya output tidak habis untuk reasoning token saja.
+Memory disimpan di file JSON lokal. Pada VPS, file ini relatif stabil. Pada Streamlit Community Cloud, file bisa hilang saat app restart/redeploy. Untuk memory permanen produksi, gunakan database seperti Supabase, Neon, atau Firebase.
