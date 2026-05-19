@@ -1,19 +1,21 @@
-# Adioranye AI - Streamlit Online + Telegram Bot (Safe Single Bot)
+# Adioranye AI - Streamlit Online + Telegram Bot + Mobile Friendly
 
-Versi ini dibuat untuk mengurangi masalah jawaban Telegram double/triple saat dijalankan dari Streamlit Online.
+Versi ini dibuat untuk tampilan handphone yang lebih nyaman, ringan, dan mudah dipakai.
 
-## Prinsip penting
+## Fitur utama
 
-Streamlit Online bisa rerun/restart, dan jika token Telegram yang sama masih dipakai di beberapa deploy/tab/laptop/VPS, satu pesan Telegram dapat dibalas beberapa kali. Karena itu versi ini memakai mode aman:
-
-- `TELEGRAM_AUTO_START = false` secara default.
-- Bot Telegram hanya dijalankan lewat tombol admin.
-- Lock OS `fcntl.flock` mencegah lebih dari satu worker dalam container yang sama.
-- Tombol reset koneksi Telegram menghapus pending updates.
+- Halaman utama dapat langsung dipakai chat AI tanpa login.
+- Admin Settings tetap diproteksi username/password.
+- Tampilan mobile friendly: tombol besar, bubble chat nyaman dibaca, input chat aman di layar kecil.
+- Tema ramah mata untuk light/dark mode.
+- Bot Telegram dapat dijalankan dari Admin Settings.
+- Persona `adioranye` langsung masuk ke system prompt.
+- Memory lokal tersedia untuk konteks ringkas.
+- Proteksi agar Telegram bot tidak mudah berjalan dobel/triple.
 
 ## Secrets Streamlit Cloud
 
-Masukkan di **Settings → Secrets**:
+Masukkan konfigurasi berikut di **Streamlit Cloud → App → Settings → Secrets**:
 
 ```toml
 ADMIN_USERNAME = "admin"
@@ -36,27 +38,14 @@ TEMPERATURE = 0.3
 MAX_COMPLETION_TOKENS = 2200
 ```
 
-## Cara deploy aman
+## Deploy
 
-1. Upload folder ini ke GitHub.
-2. Deploy ke Streamlit Cloud dengan main file `app.py`.
-3. Isi Secrets seperti di atas.
-4. Buka app Streamlit.
-5. Login admin di sidebar.
-6. Masuk tab Telegram.
-7. Klik **Reset koneksi Telegram / hapus pending update**.
-8. Klik **Start Bot** satu kali.
+1. Upload folder project ini ke GitHub.
+2. Deploy ke Streamlit Community Cloud.
+3. Pilih main file: `app.py`.
+4. Isi secrets seperti contoh di atas.
+5. Reboot app setelah mengganti secrets.
 
-## Jika masih double/triple
+## Catatan Telegram
 
-Itu berarti token Telegram masih aktif di tempat lain. Lakukan ini:
-
-1. Buka BotFather di Telegram.
-2. Jalankan `/revoke`.
-3. Pilih bot kamu.
-4. Ambil token baru.
-5. Ganti `TELEGRAM_BOT_TOKEN` di Streamlit Secrets.
-6. Reboot app Streamlit.
-7. Login admin → Telegram → Reset koneksi → Start Bot.
-
-Tombol Stop di Streamlit hanya bisa mematikan worker di app yang sedang dibuka. Ia tidak bisa mematikan deploy lama, laptop, atau VPS lain yang masih memakai token lama.
+Untuk menghindari balasan double/triple, gunakan `TELEGRAM_AUTO_START = false`, lalu start bot satu kali dari Admin Settings. Jika masih double/triple, revoke token bot lewat BotFather karena kemungkinan token lama masih berjalan di deploy/laptop/VPS lain.
