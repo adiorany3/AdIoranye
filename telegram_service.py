@@ -201,17 +201,26 @@ class TelegramBotService:
         return data
 
     def _send_message(self, token: str, chat_id: int, text: str, parse_mode: str = "") -> None:
+        """Send Telegram message as strict plain text.
+
+        IMPORTANT: this method intentionally ignores any parse_mode from
+        secrets/config. Telegram errors such as:
+        - Unsupported start tag "uses-permission"
+        - Unsupported start tag "ip-server"
+        happen when AI output contains XML/HTML-looking text and Telegram tries
+        to parse it as HTML. For an AI assistant, answers often contain code,
+        XML, HTML, AndroidManifest, nginx config, etc., so the safest behavior
+        is to never send parse_mode at all.
+        """
         safe_text = normalize_telegram_text(text)
         for chunk in split_telegram_message(safe_text):
             payload = {
                 "chat_id": chat_id,
                 "text": chunk,
                 "disable_web_page_preview": True,
+                # Do not include parse_mode under any condition.
+                # Plain text allows <ip-server>, <uses-permission>, <div>, etc.
             }
-            # Default is plain text. Only use parse_mode when explicitly enabled.
-            # Plain text prevents crashes from AI code/XML like <uses-permission>.
-            if parse_mode and parse_mode.lower() not in {"none", "plain", "off", "false"}:
-                payload["parse_mode"] = parse_mode
             self._telegram_post(token, "sendMessage", payload, timeout=20)
 
     def _send_typing(self, token: str, chat_id: int) -> None:
@@ -229,10 +238,13 @@ class TelegramBotService:
         persona = config.get("persona", "")
         memory_file = config.get("memory_file", "assistant_memory.json")
         fallback_models = config.get("fallback_models") or []
+        expensive_fallback_models = config.get("expensive_fallback_models") or []
+        allow_expensive_fallback = bool(config.get("allow_expensive_fallback", True))
+        max_expensive_models = int(config.get("max_expensive_models", 1) or 1)
         drop_pending_updates = bool(config.get("drop_pending_updates", True))
         send_processing_message = bool(config.get("send_processing_message", False))
         allow_memory_commands = bool(config.get("allow_memory_commands", False))
-        telegram_parse_mode = str(config.get("telegram_parse_mode", "") or "")
+        telegram_parse_mode = ""  # Force plain text; ignore TELEGRAM_PARSE_MODE to prevent HTML parse errors
         smart_model_router = bool(config.get("smart_model_router", True))
         return_to_primary = bool(config.get("return_to_primary", True))
         max_smart_models = int(config.get("max_smart_models", 2) or 2)
@@ -333,6 +345,9 @@ class TelegramBotService:
                                 memory_text=memory_text,
                                 recent_messages=history,
                                 fallback_models=fallback_models,
+                                expensive_fallback_models=expensive_fallback_models,
+                                allow_expensive_fallback=allow_expensive_fallback,
+                                max_expensive_models=max_expensive_models,
                                 temperature=float(config.get("temperature", 0.3)),
                                 max_completion_tokens=int(config.get("max_completion_tokens", 1800)),
                                 timeout=int(config.get("timeout", 60)),
@@ -344,7 +359,20 @@ class TelegramBotService:
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})
                             self._histories[key] = history[-8:]
-                            self._send_message(token, chat_id, answer, parse_mode=telegram_parse_mode)
+                            show_model = bool(config.get("show_model_info", True))
+                            if show_model and isinstance(meta, dict):
+                                final_model = meta.get("active_model_final") or meta.get("model_requested") or model
+                                consulted = meta.get("consulted_models") or []
+                                expensive_used = meta.get("expensive_fallback_used", False)
+                                info = f"\n\n—\nModel aktif: {final_model}"
+                                if consulted:
+                                    info += "\nKonsultasi model: " + ", ".join(consulted[:4])
+                                if expensive_used:
+                                    info += "\nModel menengah/mahal dipakai karena model hemat belum cukup."
+                                answer_to_send = answer + info
+                            else:
+                                answer_to_send = answer
+                            self._send_message(token, chat_id, answer_to_send, parse_mode=telegram_parse_mode)
 
                         except Exception as exc:
                             self._last_error = str(exc)

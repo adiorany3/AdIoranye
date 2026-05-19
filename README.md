@@ -1,72 +1,43 @@
-# Adioranye AI - Fast Accurate Router
+# Adioranye AI — Active Model + Cost-Aware Router
 
-Versi ini dibuat untuk Streamlit Online dengan halaman chat publik, Admin Settings yang terkunci password, Bot Telegram opsional, desain ramah HP, dan algoritma jawaban yang lebih cepat serta lebih akurat.
+Versi ini menambahkan:
 
-## Perbaikan algoritma
+- Chat publik Streamlit yang mobile friendly.
+- Admin Settings tetap diproteksi password.
+- Bot Telegram dari Streamlit Online dengan plain text fix.
+- Panel model aktif: model utama, model jawaban terakhir, model yang dikonsultasikan, dan status apakah model menengah/mahal dipakai.
+- Router biaya: model hemat dicoba dulu, model menengah/mahal hanya dipanggil jika jawaban dari model hemat kosong, terlalu lemah, atau mengaku tidak tahu.
 
-- **Fast-first**: model utama menjawab lebih dulu. Jika jawabannya sudah bagus, sistem langsung mengembalikan jawaban tanpa memanggil model lain.
-- **Quality scoring lokal**: jawaban dicek dari panjang, tanda tidak yakin, kesesuaian dengan tugas, sinyal langkah/solusi, dan konteks pertanyaan.
-- **Router hanya saat perlu**: model cadangan hanya dipakai jika jawaban utama kosong, error, terlalu pendek, atau terlalu tidak yakin.
-- **Parallel fallback terbatas**: maksimal 1-3 model cadangan dicoba secara paralel agar lebih cepat, bukan dicoba satu per satu terlalu lama.
-- **Kembali ke model utama**: jika fallback menemukan jawaban lebih kuat, hasilnya dikirim kembali ke model utama untuk disusun menjadi jawaban final.
-- **Konteks lebih hemat**: memory dan riwayat chat disaring agar prompt pendek, aman, dan tidak boros token.
-- **Cache jawaban**: pertanyaan yang sama dalam satu sesi bisa dijawab ulang tanpa memanggil API lagi.
-- **GPT-5 reasoning fix**: token output dinaikkan otomatis untuk GPT-5 agar jawaban tidak kosong karena habis di reasoning token.
-- **Telegram plain-text fix**: jawaban AI dikirim tanpa parse_mode HTML agar kode seperti `<uses-permission>` tidak membuat `Bad Request: can't parse entities`.
-- **Tidak bypass safety filter**: jika prompt ditolak content filter, sistem tidak memutar ke model lain untuk menghindari aturan keamanan.
+## Deploy Streamlit Cloud
 
-## Streamlit Secrets
+1. Upload folder ini ke GitHub.
+2. Di Streamlit Cloud pilih `app.py` sebagai main file.
+3. Isi `Settings -> Secrets` memakai contoh di `.streamlit/secrets.toml.example`.
+4. Klik reboot app setelah mengganti secrets.
 
-Isi di Streamlit Cloud: `App > Settings > Secrets`.
+## Alur AI
+
+1. Model utama menjawab dulu.
+2. Jawaban dinilai lokal memakai quality scoring.
+3. Jika cukup bagus, jawaban langsung ditampilkan.
+4. Jika tidak cukup, sistem konsultasi ke model hemat lain.
+5. Jika model hemat masih tidak cukup dan `ALLOW_EXPENSIVE_FALLBACK = true`, sistem baru memanggil maksimal `MAX_EXPENSIVE_MODELS` model menengah/mahal.
+6. Jika `RETURN_TO_PRIMARY_MODEL = true`, hasil referensi disusun ulang oleh model utama.
+
+## Konfigurasi penting
 
 ```toml
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "GANTI_PASSWORD_ADMIN_YANG_KUAT"
-
-TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_DARI_BOTFATHER"
-SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
-SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/gpt-5-nano"
-
-ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang aman dan bermanfaat. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele. Jika permintaan berbahaya atau melanggar aturan, tolak dengan singkat dan arahkan ke alternatif yang aman."
-MEMORY_FILE = "assistant_memory.json"
-
-TELEGRAM_AUTO_START = false
-TELEGRAM_DROP_PENDING_UPDATES = true
-TELEGRAM_SEND_PROCESSING_MESSAGE = false
-TELEGRAM_PARSE_MODE = ""
-TELEGRAM_ALLOW_MEMORY_COMMANDS = false
-TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
-
-TEMPERATURE = 0.3
-MAX_COMPLETION_TOKENS = 2600
 SMART_MODEL_ROUTER = true
 RETURN_TO_PRIMARY_MODEL = true
 MAX_SMART_MODELS = 2
-FAST_ACCURATE_ROUTER = true
+ALLOW_EXPENSIVE_FALLBACK = true
+MAX_EXPENSIVE_MODELS = 1
+TELEGRAM_SHOW_MODEL_INFO = true
 ```
 
-## Cara deploy
+## Catatan biaya
 
-1. Upload semua file ke GitHub.
-2. Deploy ke Streamlit Community Cloud.
-3. Main file: `app.py`.
-4. Isi Secrets seperti contoh di atas.
-5. Klik `Reboot app` setelah mengganti secrets.
+Model hemat default memakai harga Rp50 input / Rp200 output per 1M token. Model menengah/mahal tidak dipanggil untuk semua pertanyaan, hanya saat jawaban murah tidak memadai.
 
-## Catatan Telegram
-
-Agar bot Telegram tidak double/triple, default `TELEGRAM_AUTO_START = false`. Login admin dulu, lalu tekan tombol Start Bot satu kali dari tab Telegram.
-
-Kalau masih double/triple, revoke token dari BotFather, ganti token di Streamlit Secrets, lalu reboot app.
-
-
-## Fix Telegram can't parse entities
-
-Jika muncul error seperti `Unsupported start tag "uses-permission"`, penyebabnya adalah Telegram mencoba membaca jawaban AI sebagai HTML. Versi ini mengirim jawaban bot sebagai plain text secara default. Pastikan secrets berisi:
-
-```toml
-TELEGRAM_PARSE_MODE = ""
-```
-
-Jangan isi `HTML` kecuali semua output sudah di-escape sendiri.
+Untuk benar-benar 24 jam stabil, VPS tetap lebih aman daripada Streamlit Online karena Streamlit dapat tidur/restart.

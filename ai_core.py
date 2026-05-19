@@ -9,29 +9,138 @@ from typing import Any, Dict, List, Tuple, Optional
 import requests
 
 
-# Model cadangan disusun dari yang paling hemat/cepat dulu.
-DEFAULT_FALLBACK_MODELS = [
+# Model cadangan disusun berdasarkan biaya.
+# Jalur utama selalu memakai model hemat dulu. Model mahal hanya dipanggil jika
+# jawaban model murah kosong, terlalu lemah, atau mengaku tidak tahu.
+DEFAULT_CHEAP_FALLBACK_MODELS = [
     "slashai/gpt-5-nano",
     "slashai/gemini-3-flash",
     "slashai/mimo-v2-flash",
     "slashai/gpt-5-mini",
     "slashai/Step-3.5-Flash",
     "slashai/MiniMax-M2.5",
+    "slashai/gpt-5.4-nano",
+    "slashai/claude-haiku-4.5",
 ]
 
+# Model mahal/lebih kuat. Dipakai hanya saat model hemat tidak memberi jawaban memadai.
+# Default dibuat moderat agar tidak langsung memakai model ultra mahal.
+DEFAULT_EXPENSIVE_FALLBACK_MODELS = [
+    "slashai/Qwen3.6-Plus",
+    "slashai/claude-sonnet-4.5",
+    "slashai/deepseek-v3.2",
+    "slashai/GLM-5.1",
+    "slashai/Kimi-K2.6",
+    "slashai/gpt-5.2",
+]
+
+# Kompatibilitas dengan versi lama.
+DEFAULT_FALLBACK_MODELS = DEFAULT_CHEAP_FALLBACK_MODELS
+
+# Harga dari list SlashAI yang diberikan user. Satuan: Rupiah per 1M token.
+MODEL_PRICE_IDR: Dict[str, Dict[str, int]] = {
+    "slashai/gpt-5-nano": {"input": 50, "output": 200},
+    "slashai/gpt-5-mini": {"input": 50, "output": 200},
+    "slashai/gpt-5.4-nano": {"input": 50, "output": 200},
+    "slashai/gpt-5.5-instant": {"input": 50, "output": 200},
+    "slashai/gpt-5-codex-mini": {"input": 50, "output": 200},
+    "slashai/gpt-5.1-codex-mini": {"input": 50, "output": 200},
+    "slashai/gpt-5.3-codex-low": {"input": 50, "output": 200},
+    "slashai/gpt-5.3-codex-spark": {"input": 50, "output": 200},
+    "slashai/gemini-3-flash": {"input": 50, "output": 200},
+    "slashai/gemini-3.1-pro": {"input": 50, "output": 200},
+    "slashai/mimo-v2-flash": {"input": 50, "output": 200},
+    "slashai/MiniMax-M2.5": {"input": 50, "output": 200},
+    "slashai/MiniMax-M2.7": {"input": 50, "output": 200},
+    "slashai/minimax-m2.5": {"input": 50, "output": 200},
+    "slashai/minimax-m2.7": {"input": 50, "output": 200},
+    "slashai/Step-3.5-Flash": {"input": 50, "output": 200},
+    "slashai/claude-haiku-4.5": {"input": 50, "output": 200},
+    "slashai/Qwen3.6-Plus": {"input": 500, "output": 2000},
+    "slashai/qwen3-coder-next": {"input": 500, "output": 2000},
+    "slashai/claude-sonnet-4.5": {"input": 500, "output": 2000},
+    "slashai/claude-sonnet-4.6": {"input": 500, "output": 2000},
+    "slashai/deepseek-3.2": {"input": 500, "output": 2000},
+    "slashai/deepseek-v3.2": {"input": 500, "output": 2000},
+    "slashai/GLM-5": {"input": 500, "output": 2000},
+    "slashai/GLM-5.1": {"input": 500, "output": 2000},
+    "slashai/glm-5": {"input": 500, "output": 2000},
+    "slashai/glm-5.1": {"input": 500, "output": 2000},
+    "slashai/Kimi-K2.5": {"input": 500, "output": 2000},
+    "slashai/Kimi-K2.6": {"input": 500, "output": 2000},
+    "slashai/kimi-k2.5": {"input": 500, "output": 2000},
+    "slashai/mimo-v2-omni": {"input": 500, "output": 2000},
+    "slashai/mimo-v2-pro": {"input": 500, "output": 2000},
+    "slashai/mimo-v2.5": {"input": 500, "output": 2000},
+    "slashai/mimo-v2.5-pro": {"input": 500, "output": 2000},
+    "slashai/deepseek-v4-flash": {"input": 1500, "output": 6000},
+    "slashai/deepseek-v4-pro": {"input": 4000, "output": 18000},
+    "slashai/gpt-5.2": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.4": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.5": {"input": 5000, "output": 25000},
+    "slashai/claude-opus-4.5": {"input": 5000, "output": 25000},
+    "slashai/claude-opus-4.6": {"input": 5000, "output": 25000},
+    "slashai/claude-sonnet-4.7": {"input": 5000, "output": 15000},
+    "slashai/Qwen3.6-Max-Preview": {"input": 5000, "output": 25000},
+    "slashai/claude-opus-4.7": {"input": 250000, "output": 1250000},
+}
+
+
+def model_price(model: str) -> Dict[str, int]:
+    return MODEL_PRICE_IDR.get(model, {"input": 0, "output": 0})
+
+
+def model_cost_tier(model: str) -> str:
+    price = model_price(model)
+    inp = price.get("input", 0)
+    out = price.get("output", 0)
+    if inp == 0 and out == 0:
+        return "unknown"
+    if inp <= 50 and out <= 200:
+        return "cheap"
+    if inp <= 500 and out <= 2000:
+        return "medium"
+    if inp <= 5000 and out <= 25000:
+        return "expensive"
+    return "ultra"
+
+
+def model_price_label(model: str) -> str:
+    price = model_price(model)
+    if not price.get("input") and not price.get("output"):
+        return f"{model} | harga tidak diketahui"
+    tier = model_cost_tier(model)
+    tier_label = {"cheap": "hemat", "medium": "menengah", "expensive": "mahal", "ultra": "ultra mahal"}.get(tier, tier)
+    return f"{model} | {tier_label} | Rp{price['input']:,}/Rp{price['output']:,} per 1M".replace(",", ".")
+
+
 # Estimasi profil sederhana untuk menentukan fallback yang cepat dan kompeten.
-# speed: makin besar makin cepat, quality: makin besar makin kuat, cost: makin kecil makin hemat.
+# speed: makin besar makin cepat, quality: makin besar makin kuat, cost: relatif makin kecil makin hemat.
 MODEL_PROFILES: Dict[str, Dict[str, float]] = {
     "slashai/gpt-5-nano": {"speed": 0.92, "quality": 0.72, "cost": 1.0},
     "slashai/gpt-5-mini": {"speed": 0.82, "quality": 0.82, "cost": 1.0},
     "slashai/gpt-5.4-nano": {"speed": 0.90, "quality": 0.72, "cost": 1.0},
     "slashai/gpt-5.5-instant": {"speed": 0.88, "quality": 0.78, "cost": 1.0},
     "slashai/gemini-3-flash": {"speed": 0.95, "quality": 0.76, "cost": 1.0},
+    "slashai/gemini-3.1-pro": {"speed": 0.90, "quality": 0.82, "cost": 1.0},
     "slashai/mimo-v2-flash": {"speed": 0.94, "quality": 0.70, "cost": 1.0},
     "slashai/Step-3.5-Flash": {"speed": 0.90, "quality": 0.68, "cost": 1.0},
     "slashai/MiniMax-M2.5": {"speed": 0.88, "quality": 0.70, "cost": 1.0},
+    "slashai/MiniMax-M2.7": {"speed": 0.86, "quality": 0.72, "cost": 1.0},
     "slashai/claude-haiku-4.5": {"speed": 0.86, "quality": 0.76, "cost": 1.0},
+    "slashai/Qwen3.6-Plus": {"speed": 0.78, "quality": 0.84, "cost": 10.0},
+    "slashai/qwen3-coder-next": {"speed": 0.76, "quality": 0.84, "cost": 10.0},
+    "slashai/claude-sonnet-4.5": {"speed": 0.74, "quality": 0.88, "cost": 10.0},
+    "slashai/claude-sonnet-4.6": {"speed": 0.72, "quality": 0.89, "cost": 10.0},
+    "slashai/deepseek-v3.2": {"speed": 0.78, "quality": 0.84, "cost": 10.0},
+    "slashai/GLM-5.1": {"speed": 0.76, "quality": 0.83, "cost": 10.0},
+    "slashai/Kimi-K2.6": {"speed": 0.76, "quality": 0.84, "cost": 10.0},
     "slashai/deepseek-v4-flash": {"speed": 0.82, "quality": 0.82, "cost": 30.0},
+    "slashai/deepseek-v4-pro": {"speed": 0.70, "quality": 0.90, "cost": 80.0},
+    "slashai/gpt-5.2": {"speed": 0.64, "quality": 0.92, "cost": 100.0},
+    "slashai/gpt-5.4": {"speed": 0.62, "quality": 0.93, "cost": 100.0},
+    "slashai/gpt-5.5": {"speed": 0.62, "quality": 0.94, "cost": 100.0},
+    "slashai/claude-opus-4.5": {"speed": 0.58, "quality": 0.94, "cost": 100.0},
 }
 
 SAFE_PERSONA_SUFFIX = (
@@ -561,6 +670,35 @@ def rank_fallback_models(primary_model: str, fallback_models: Optional[List[str]
     return sorted(raw, key=score_model, reverse=True)
 
 
+
+
+def filter_models_by_tier(models: List[str], tiers: Optional[set] = None, exclude: Optional[set] = None) -> List[str]:
+    """Return models that match desired cost tiers and are not excluded."""
+    tiers = tiers or {"cheap", "medium", "expensive"}
+    exclude = exclude or set()
+    out: List[str] = []
+    for m in models:
+        if not m or m in exclude or m in out:
+            continue
+        if model_cost_tier(m) in tiers:
+            out.append(m)
+    return out
+
+
+def should_try_expensive(primary_answer: str, cheap_references: List[Dict[str, str]], user_text: str, threshold: float = 0.78) -> bool:
+    """Use expensive models only if the cheap path does not produce a competent answer."""
+    if is_safety_refusal(primary_answer):
+        return False
+    best_score = 0.0
+    if primary_answer:
+        best_score = max(best_score, answer_quality_score(primary_answer, user_text)[0])
+    for item in cheap_references:
+        try:
+            best_score = max(best_score, float(item.get("score", 0)))
+        except Exception:
+            pass
+    return best_score < threshold
+
 def should_use_cache(user_text: str, recent_messages: Optional[List[Dict[str, str]]]) -> bool:
     # Cache hanya untuk prompt yang tidak sangat bergantung pada riwayat panjang.
     task = classify_task(user_text)
@@ -682,6 +820,9 @@ def generate_answer(
     memory_text: str = "",
     recent_messages: Optional[List[Dict[str, str]]] = None,
     fallback_models: Optional[List[str]] = None,
+    expensive_fallback_models: Optional[List[str]] = None,
+    allow_expensive_fallback: bool = True,
+    max_expensive_models: int = 1,
     temperature: float = 0.3,
     max_completion_tokens: int = 1800,
     timeout: int = 45,
@@ -696,9 +837,10 @@ def generate_answer(
     1. Pakai model utama dulu dengan konteks ringkas.
     2. Skor kualitas jawaban secara lokal.
     3. Jika skor cukup, langsung return agar cepat dan hemat.
-    4. Jika kosong/tidak yakin/error, konsultasi 1-2 model cadangan secara paralel terbatas.
-    5. Jika ada referensi bagus, kembalikan ke model utama untuk menyusun jawaban akhir.
-    6. Jika model utama gagal menyusun, gunakan jawaban fallback terbaik.
+    4. Jika kosong/tidak yakin/error, konsultasi 1-2 model hemat secara paralel terbatas.
+    5. Jika model hemat masih tidak cukup, baru konsultasi model mahal/lebih kuat sesuai batas admin.
+    6. Jika ada referensi bagus, kembalikan ke model utama untuk menyusun jawaban akhir.
+    7. Jika model utama gagal menyusun, gunakan jawaban fallback terbaik.
 
     Catatan: router tidak dipakai untuk membypass content filter. Jika provider menolak prompt,
     sistem hanya melakukan retry dengan konteks bersih lalu memberi pesan aman.
@@ -732,6 +874,9 @@ def generate_answer(
 
     errors: Dict[str, str] = {}
     tried: List[str] = []
+    cheap_models_consulted: List[str] = []
+    expensive_models_consulted: List[str] = []
+    expensive_fallback_used = False
     first_content_filter: Optional[str] = None
     primary_answer = ""
     primary_meta: Dict[str, Any] = {}
@@ -756,6 +901,9 @@ def generate_answer(
         primary_meta.update(
             {
                 "primary_model": primary_model,
+                "active_model_final": primary_model,
+                "active_model_cost_tier": model_cost_tier(primary_model),
+                "active_model_price": model_price(primary_model),
                 "tried_models": tried.copy(),
                 "errors": errors,
                 "smart_model_router": smart_model_router,
@@ -804,6 +952,9 @@ def generate_answer(
                 {
                     "content_filter_safe_retry": True,
                     "primary_model": primary_model,
+                    "active_model_final": primary_model,
+                    "active_model_cost_tier": model_cost_tier(primary_model),
+                    "active_model_price": model_price(primary_model),
                     "tried_models": tried.copy(),
                     "errors": errors,
                     "quality_score": primary_score,
@@ -884,12 +1035,17 @@ def generate_answer(
         recent_messages=recent_messages,
         safe_context=safe_context,
     )
-    candidates = rank_fallback_models(primary_model, fallback_models, user_text)
+    # 2a) Jalur hemat dulu. Model mahal tidak dipanggil jika jawaban hemat sudah memadai.
+    cheap_pool = filter_models_by_tier(
+        rank_fallback_models(primary_model, fallback_models or DEFAULT_CHEAP_FALLBACK_MODELS, user_text),
+        tiers={"cheap"},
+        exclude={primary_model},
+    )
     max_parallel = max(1, min(int(max_smart_models or 1), 3))
     assistant_references, router_errors = consult_fallbacks_fast(
         api_url=api_url,
         api_key=api_key,
-        candidate_models=candidates,
+        candidate_models=cheap_pool,
         messages=probe_messages,
         user_text=user_text,
         temperature=temperature,
@@ -898,6 +1054,34 @@ def generate_answer(
         max_workers=max_parallel,
     )
     errors.update(router_errors)
+    cheap_models_consulted = [x.get("model", "") for x in assistant_references if x.get("model")]
+
+    # 2b) Jalur mahal hanya jika jalur murah belum cukup kompeten.
+    if allow_expensive_fallback and should_try_expensive(primary_answer, assistant_references, user_text):
+        expensive_pool = filter_models_by_tier(
+            rank_fallback_models(primary_model, expensive_fallback_models or DEFAULT_EXPENSIVE_FALLBACK_MODELS, user_text),
+            tiers={"medium", "expensive"},
+            exclude={primary_model, *set(cheap_pool), *set(cheap_models_consulted)},
+        )
+        expensive_pool = expensive_pool[:max(1, min(int(max_expensive_models or 1), 2))]
+        expensive_refs, expensive_errors = consult_fallbacks_fast(
+            api_url=api_url,
+            api_key=api_key,
+            candidate_models=expensive_pool,
+            messages=probe_messages,
+            user_text=user_text,
+            temperature=temperature,
+            max_completion_tokens=max(max_completion_tokens, 2600),
+            timeout=timeout,
+            max_workers=max(1, min(int(max_expensive_models or 1), 2)),
+        )
+        errors.update(expensive_errors)
+        if expensive_refs:
+            expensive_fallback_used = True
+            expensive_models_consulted = [x.get("model", "") for x in expensive_refs if x.get("model")]
+            assistant_references.extend(expensive_refs)
+            assistant_references.sort(key=lambda x: float(x.get("score", 0)), reverse=True)
+
     tried.extend([x.get("model", "") for x in assistant_references if x.get("model")])
     tried = list(dict.fromkeys([x for x in tried if x]))
 
@@ -929,6 +1113,13 @@ def generate_answer(
                         "primary_model": primary_model,
                         "returned_to_primary": True,
                         "smart_model_router_used": True,
+                        "active_model_final": primary_model,
+                        "active_model_cost_tier": model_cost_tier(primary_model),
+                        "active_model_price": model_price(primary_model),
+                        "cheap_models_consulted": cheap_models_consulted,
+                        "expensive_fallback_enabled": allow_expensive_fallback,
+                        "expensive_fallback_used": expensive_fallback_used,
+                        "expensive_models_consulted": expensive_models_consulted,
                         "consulted_models": [x["model"] for x in assistant_references],
                         "consulted_scores": {x["model"]: x.get("score") for x in assistant_references},
                         "primary_initial_score": primary_score,
@@ -953,6 +1144,13 @@ def generate_answer(
             "primary_model": primary_model,
             "returned_to_primary": False,
             "smart_model_router_used": True,
+            "active_model_final": best["model"],
+            "active_model_cost_tier": model_cost_tier(best["model"]),
+            "active_model_price": model_price(best["model"]),
+            "cheap_models_consulted": cheap_models_consulted,
+            "expensive_fallback_enabled": allow_expensive_fallback,
+            "expensive_fallback_used": expensive_fallback_used,
+            "expensive_models_consulted": expensive_models_consulted,
             "consulted_models": [x["model"] for x in assistant_references],
             "consulted_scores": {x["model"]: x.get("score") for x in assistant_references},
             "fallback_answer_used": best["model"],
@@ -976,6 +1174,13 @@ def generate_answer(
                 "tried_models": tried,
                 "errors": errors,
                 "smart_model_router_no_better_answer": True,
+                "active_model_final": primary_model,
+                "active_model_cost_tier": model_cost_tier(primary_model),
+                "active_model_price": model_price(primary_model),
+                "cheap_models_consulted": cheap_models_consulted,
+                "expensive_fallback_enabled": allow_expensive_fallback,
+                "expensive_fallback_used": expensive_fallback_used,
+                "expensive_models_consulted": expensive_models_consulted,
                 "quality_score": primary_score,
                 "quality_reasons": primary_reasons,
                 "algorithm": "fast_accurate_router_v2",
