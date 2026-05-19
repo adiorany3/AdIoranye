@@ -1,25 +1,12 @@
-# Asisten Pribadi AI Streamlit - No Empty Fix
+# Asisten Pribadi AI Streamlit + SlashAI
 
-Versi ini dibuat untuk memperbaiki masalah model tidak menjawab/hasil kosong.
+Versi ini memperbaiki kasus respons kosong seperti:
 
-## Perbaikan utama
+- `finish_reason: "length"`
+- `message.content: ""`
+- `completion_tokens_details.reasoning_tokens` memenuhi semua output token
 
-- Streaming jawaban default OFF agar kompatibel dengan API yang format streaming-nya tidak standar.
-- Parsing respons diperkuat untuk beberapa format OpenAI-compatible.
-- Jika streaming kosong, aplikasi bisa otomatis mencoba ulang non-streaming.
-- Prompt user tidak dikirim dobel ke API.
-- Ada tombol Tes koneksi API di sidebar.
-- Ada debug raw response jika provider mengembalikan format yang berbeda.
-
-## Streamlit Secrets
-
-Masukkan ini di Settings > Secrets:
-
-```toml
-SLASHAI_API_KEY = "ISI_API_KEY_KAMU"
-SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
-SLASHAI_MODEL = "slashai/gemini-3-flash"
-```
+Penyebabnya biasanya model GPT-5 menghabiskan batas output untuk reasoning token internal, sehingga tidak ada token tersisa untuk jawaban yang terlihat.
 
 ## Jalankan lokal
 
@@ -28,14 +15,31 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Model yang disarankan
+Buat file `.streamlit/secrets.toml`:
 
-Coba dari yang paling aman/murah:
+```toml
+SLASHAI_API_KEY = "ISI_API_KEY_KAMU"
+SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
+SLASHAI_MODEL = "slashai/gemini-3-flash"
+```
 
-1. `slashai/gemini-3-flash`
-2. `slashai/gpt-5-nano`
-3. `slashai/gpt-5-mini`
-4. `slashai/mimo-v2-flash`
-5. `slashai/Step-3.5-Flash`
+## Deploy Streamlit Community Cloud
 
-Jika semua tetap error 403, berarti akun API belum memiliki akses model atau perlu deposit/top up.
+1. Upload folder ini ke GitHub.
+2. Deploy di Streamlit Community Cloud.
+3. Masuk ke App > Settings > Secrets.
+4. Paste konfigurasi TOML.
+5. Save dan rerun app.
+
+## Rekomendasi model hemat
+
+- `slashai/gemini-3-flash`
+- `slashai/gemini-3.1-pro`
+- `slashai/gpt-5-nano`
+- `slashai/gpt-5-mini`
+- `slashai/mimo-v2-flash`
+- `slashai/Step-3.5-Flash`
+
+## Catatan penting
+
+Jika memakai GPT-5 lalu jawaban kosong, pilih mode **Stabil GPT-5**. Mode ini menaikkan `max_completion_tokens` dan mengirim `reasoning_effort = "minimal"` supaya output tidak habis untuk reasoning token saja.
