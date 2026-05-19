@@ -1,21 +1,32 @@
-# Asisten Pribadi AI Streamlit + SlashAI API
+# Asisten Pribadi AI Cepat - Streamlit + SlashAI
 
-Aplikasi ini menjalankan chatbot/asisten pribadi menggunakan Streamlit dan endpoint OpenAI-compatible:
+Aplikasi ini memakai Streamlit dan API kompatibel OpenAI dari SlashAI.
 
-```text
-https://api.slashai.my.id/v1/chat/completions
-```
+## Fitur efisiensi
 
-## Cara menjalankan lokal
+- Default model ringan: `slashai/deepseek-v4-flash`.
+- Streaming jawaban agar respons tampil bertahap.
+- Riwayat yang dikirim ke API dibatasi agar hemat token.
+- Fallback model dibatasi agar tidak membuang waktu mencoba terlalu banyak model.
+- Timeout API bisa diatur.
+- Profil cepat, seimbang, dan lengkap.
+
+## Jalankan lokal
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Secrets untuk Streamlit Cloud
+## Streamlit Secrets
 
-Masukkan melalui **App > Settings > Secrets**:
+Untuk lokal, buat file:
+
+```text
+.streamlit/secrets.toml
+```
+
+Isi:
 
 ```toml
 SLASHAI_API_KEY = "ISI_API_KEY_KAMU_DI_SINI"
@@ -23,12 +34,8 @@ SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/deepseek-v4-flash"
 ```
 
-## Jika muncul error 403 deposit required
+Untuk Streamlit Community Cloud, jangan upload API key ke GitHub. Masukkan isi TOML di atas ke menu **Settings > Secrets**.
 
-Itu berarti model yang dipilih terkunci/premium di akun provider kamu. Aplikasi ini sudah menyediakan:
+## Catatan 403
 
-1. Kategori **Rekomendasi Hemat / Coba Dulu**.
-2. Fitur **Auto coba model cadangan jika akses ditolak**.
-3. Daftar model cadangan yang bisa diedit dari sidebar.
-
-Jika semua model tetap 403, artinya akun API belum punya akses ke model tersebut. Solusinya adalah memilih model lain yang aktif, atau deposit/top up di provider SlashAI untuk membuka model premium.
+Jika muncul `403 access_denied` atau `deposit required`, berarti model tersebut dikunci oleh provider. Pilih model lain atau lakukan deposit/top up sesuai aturan provider.
