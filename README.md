@@ -12,6 +12,7 @@ Versi ini dibuat untuk Streamlit Online dengan halaman chat publik, Admin Settin
 - **Konteks lebih hemat**: memory dan riwayat chat disaring agar prompt pendek, aman, dan tidak boros token.
 - **Cache jawaban**: pertanyaan yang sama dalam satu sesi bisa dijawab ulang tanpa memanggil API lagi.
 - **GPT-5 reasoning fix**: token output dinaikkan otomatis untuk GPT-5 agar jawaban tidak kosong karena habis di reasoning token.
+- **Telegram plain-text fix**: jawaban AI dikirim tanpa parse_mode HTML agar kode seperti `<uses-permission>` tidak membuat `Bad Request: can't parse entities`.
 - **Tidak bypass safety filter**: jika prompt ditolak content filter, sistem tidak memutar ke model lain untuk menghindari aturan keamanan.
 
 ## Streamlit Secrets
@@ -33,6 +34,7 @@ MEMORY_FILE = "assistant_memory.json"
 TELEGRAM_AUTO_START = false
 TELEGRAM_DROP_PENDING_UPDATES = true
 TELEGRAM_SEND_PROCESSING_MESSAGE = false
+TELEGRAM_PARSE_MODE = ""
 TELEGRAM_ALLOW_MEMORY_COMMANDS = false
 TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
 
@@ -57,3 +59,14 @@ FAST_ACCURATE_ROUTER = true
 Agar bot Telegram tidak double/triple, default `TELEGRAM_AUTO_START = false`. Login admin dulu, lalu tekan tombol Start Bot satu kali dari tab Telegram.
 
 Kalau masih double/triple, revoke token dari BotFather, ganti token di Streamlit Secrets, lalu reboot app.
+
+
+## Fix Telegram can't parse entities
+
+Jika muncul error seperti `Unsupported start tag "uses-permission"`, penyebabnya adalah Telegram mencoba membaca jawaban AI sebagai HTML. Versi ini mengirim jawaban bot sebagai plain text secara default. Pastikan secrets berisi:
+
+```toml
+TELEGRAM_PARSE_MODE = ""
+```
+
+Jangan isi `HTML` kecuali semua output sudah di-escape sendiri.

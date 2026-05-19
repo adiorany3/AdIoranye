@@ -117,6 +117,7 @@ persona_from_secret = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
 auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", False), default=False)
 drop_pending_updates = parse_bool(get_secret("TELEGRAM_DROP_PENDING_UPDATES", True), default=True)
 send_processing_message = parse_bool(get_secret("TELEGRAM_SEND_PROCESSING_MESSAGE", False), default=False)
+telegram_parse_mode = str(get_secret("TELEGRAM_PARSE_MODE", "") or "")
 telegram_lock_file = str(get_secret("TELEGRAM_LOCK_FILE", ".telegram_bot_worker.lock"))
 admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
 admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
@@ -426,6 +427,7 @@ def start_telegram_if_needed() -> None:
                 "timeout": 60,
                 "drop_pending_updates": drop_pending_updates,
                 "send_processing_message": send_processing_message,
+                "telegram_parse_mode": telegram_parse_mode,
                 "lock_file": telegram_lock_file,
                 "allow_memory_commands": False,
                 "smart_model_router": cfg["smart_model_router"],
@@ -567,6 +569,7 @@ def render_admin_settings() -> None:
         format_token_status("SLASHAI_API_KEY", api_key)
         st.warning("Mode aman aktif: TELEGRAM_AUTO_START disarankan FALSE. Jalankan bot hanya dari tombol admin agar Streamlit Online tidak membuat beberapa poller saat app rerun/restart.")
         st.info("Lock OS aktif untuk mencegah lebih dari satu worker dalam container yang sama. Jika tetap double/triple, berarti token bot masih hidup di deployment lama/lokal/VPS lain.")
+        st.caption("Telegram dikirim sebagai plain text secara default agar kode/XML seperti <uses-permission> tidak dianggap tag HTML.")
 
         status = service.status()
         st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
@@ -590,6 +593,7 @@ def render_admin_settings() -> None:
             "timeout": 60,
             "drop_pending_updates": drop_pending_updates,
             "send_processing_message": send_processing_message,
+            "telegram_parse_mode": telegram_parse_mode,
             "lock_file": telegram_lock_file,
             "allow_memory_commands": False,
             "smart_model_router": bool(st.session_state.active_smart_router),

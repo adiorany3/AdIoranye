@@ -28,6 +28,19 @@ def split_telegram_message(text: str, max_len: int = 3900) -> List[str]:
     return chunks
 
 
+def normalize_telegram_text(text: str) -> str:
+    """Send AI output to Telegram as safe plain text.
+
+    AI answers may contain XML/HTML/Android tags such as <uses-permission>.
+    If Telegram receives that while parse_mode=HTML, sendMessage fails with
+    `can't parse entities`. The safest default is plain text without parse_mode.
+    This function only removes unsupported control characters and keeps < > intact.
+    """
+    text = str(text or "")
+    # Telegram can reject some ASCII control characters. Keep newlines/tabs.
+    return "".join(ch for ch in text if ch in "\n\r\t" or ord(ch) >= 32)
+
+
 class TelegramBotService:
     """Singleton polling service for Streamlit.
 
@@ -187,19 +200,19 @@ class TelegramBotService:
             raise RuntimeError(f"Telegram API error {method}: {data}")
         return data
 
-    def _send_message(self, token: str, chat_id: int, text: str) -> None:
-        for chunk in split_telegram_message(text):
-            self._telegram_post(
-                token,
-                "sendMessage",
-                {
-                    "chat_id": chat_id,
-                    "text": chunk,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                },
-                timeout=20,
-            )
+    def _send_message(self, token: str, chat_id: int, text: str, parse_mode: str = "") -> None:
+        safe_text = normalize_telegram_text(text)
+        for chunk in split_telegram_message(safe_text):
+            payload = {
+                "chat_id": chat_id,
+                "text": chunk,
+                "disable_web_page_preview": True,
+            }
+            # Default is plain text. Only use parse_mode when explicitly enabled.
+            # Plain text prevents crashes from AI code/XML like <uses-permission>.
+            if parse_mode and parse_mode.lower() not in {"none", "plain", "off", "false"}:
+                payload["parse_mode"] = parse_mode
+            self._telegram_post(token, "sendMessage", payload, timeout=20)
 
     def _send_typing(self, token: str, chat_id: int) -> None:
         try:
@@ -219,6 +232,7 @@ class TelegramBotService:
         drop_pending_updates = bool(config.get("drop_pending_updates", True))
         send_processing_message = bool(config.get("send_processing_message", False))
         allow_memory_commands = bool(config.get("allow_memory_commands", False))
+        telegram_parse_mode = str(config.get("telegram_parse_mode", "") or "")
         smart_model_router = bool(config.get("smart_model_router", True))
         return_to_primary = bool(config.get("return_to_primary", True))
         max_smart_models = int(config.get("max_smart_models", 2) or 2)
@@ -278,7 +292,8 @@ class TelegramBotService:
                             self._send_message(
                                 token,
                                 chat_id,
-                                "Halo, saya <b>adioranye</b>. Kirim pertanyaan apa saja, nanti saya bantu jawab.",
+                                "Halo, saya adioranye. Kirim pertanyaan apa saja, nanti saya bantu jawab.",
+                                parse_mode=telegram_parse_mode,
                             )
                             continue
 
@@ -289,13 +304,14 @@ class TelegramBotService:
                                 "Perintah:\n"
                                 "/start - mulai bot\n"
                                 "/help - bantuan\n\n"
-                                "Langsung kirim pertanyaan untuk dijawab AI."
+                                "Langsung kirim pertanyaan untuk dijawab AI.",
+                                parse_mode=telegram_parse_mode,
                             )
                             continue
 
                         local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
                         if local_reply:
-                            self._send_message(token, chat_id, local_reply)
+                            self._send_message(token, chat_id, local_reply, parse_mode=telegram_parse_mode)
                             continue
 
                         key = str(chat_id)
@@ -303,7 +319,7 @@ class TelegramBotService:
                         memory_text = memory.as_prompt_text(limit=20)
 
                         if send_processing_message:
-                            self._send_message(token, chat_id, "⏳ Sedang diproses...")
+                            self._send_message(token, chat_id, "⏳ Sedang diproses...", parse_mode=telegram_parse_mode)
                         else:
                             self._send_typing(token, chat_id)
 
@@ -328,7 +344,7 @@ class TelegramBotService:
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})
                             self._histories[key] = history[-8:]
-                            self._send_message(token, chat_id, answer)
+                            self._send_message(token, chat_id, answer, parse_mode=telegram_parse_mode)
 
                         except Exception as exc:
                             self._last_error = str(exc)
@@ -336,6 +352,7 @@ class TelegramBotService:
                                 token,
                                 chat_id,
                                 "Maaf, bot belum bisa menjawab.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                parse_mode=telegram_parse_mode,
                             )
 
                     if not updates:
