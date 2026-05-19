@@ -60,3 +60,8 @@ MAX_COMPLETION_TOKENS = 2200
 Streamlit Online bisa tidur ketika tidak ada pengunjung. Kalau aplikasi tidur, bot Telegram yang berjalan di background thread juga bisa berhenti. Untuk bot Telegram 24 jam nonstop, VPS tetap lebih stabil.
 
 Jangan upload file `.streamlit/secrets.toml` yang berisi token asli ke GitHub. Gunakan Streamlit Cloud Secrets untuk produksi.
+
+
+## Tema ramah mata
+
+Versi ini sudah memakai CSS adaptif agar teks tetap terbaca pada mode light maupun dark. Komponen yang disesuaikan meliputi latar aplikasi, kartu pembuka, contoh prompt, bubble chat, input chat, sidebar, tombol, dan border. File `.streamlit/config.toml` juga ditambahkan sebagai default tema terang dengan kontras tinggi.

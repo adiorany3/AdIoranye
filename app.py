@@ -115,53 +115,172 @@ service = get_telegram_service()
 
 
 # =========================
-# Styling
+# Eye-friendly adaptive styling
 # =========================
 st.markdown(
     """
     <style>
+    :root {
+        --app-bg: #f7f8fb;
+        --app-surface: #ffffff;
+        --app-surface-soft: #f1f4f8;
+        --app-text: #111827;
+        --app-muted: #4b5563;
+        --app-border: rgba(17, 24, 39, 0.14);
+        --app-primary: #2563eb;
+        --app-primary-soft: rgba(37, 99, 235, 0.10);
+        --app-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+        --user-bubble: #e8f0ff;
+        --assistant-bubble: #ffffff;
+        --input-bg: #ffffff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --app-bg: #0f172a;
+            --app-surface: #111827;
+            --app-surface-soft: #1f2937;
+            --app-text: #f8fafc;
+            --app-muted: #cbd5e1;
+            --app-border: rgba(226, 232, 240, 0.16);
+            --app-primary: #93c5fd;
+            --app-primary-soft: rgba(147, 197, 253, 0.14);
+            --app-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+            --user-bubble: #1e3a5f;
+            --assistant-bubble: #111827;
+            --input-bg: #111827;
+        }
+    }
+
+    html, body, .stApp {
+        background: var(--app-bg) !important;
+        color: var(--app-text) !important;
+    }
+
     .main .block-container {
-        max-width: 920px;
-        padding-top: 1.4rem;
-        padding-bottom: 4rem;
+        max-width: 940px;
+        padding-top: 1.2rem;
+        padding-bottom: 4.5rem;
     }
+
     div[data-testid="stSidebar"] {
-        min-width: 320px;
+        min-width: 330px;
+        background: var(--app-surface) !important;
+        border-right: 1px solid var(--app-border);
     }
+
+    div[data-testid="stSidebar"] * {
+        color: var(--app-text);
+    }
+
     .chat-hero {
-        border: 1px solid rgba(49, 51, 63, 0.12);
-        border-radius: 22px;
-        padding: 20px 22px;
+        border: 1px solid var(--app-border);
+        border-radius: 24px;
+        padding: 22px 24px;
         margin-bottom: 18px;
-        background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(245,247,255,0.95));
+        background:
+            radial-gradient(circle at top left, var(--app-primary-soft), transparent 34%),
+            var(--app-surface);
+        color: var(--app-text);
+        box-shadow: var(--app-shadow);
     }
+
     .chat-hero h1 {
-        font-size: 2.0rem;
+        font-size: 2.05rem;
         margin-bottom: 0.25rem;
+        color: var(--app-text);
+        letter-spacing: -0.02em;
     }
+
     .chat-hero p {
         margin-bottom: 0;
-        opacity: 0.78;
+        color: var(--app-muted);
+        line-height: 1.55;
     }
+
     .status-pill {
         display: inline-block;
-        padding: 5px 10px;
+        padding: 6px 11px;
         border-radius: 999px;
-        background: rgba(49, 51, 63, 0.08);
+        background: var(--app-primary-soft);
+        border: 1px solid var(--app-border);
+        color: var(--app-text) !important;
         font-size: 0.85rem;
         margin-right: 6px;
         margin-bottom: 6px;
     }
+
     .quick-card {
-        border: 1px solid rgba(49, 51, 63, 0.12);
-        border-radius: 16px;
-        padding: 12px 14px;
-        min-height: 86px;
-        background: rgba(255,255,255,0.75);
+        border: 1px solid var(--app-border);
+        border-radius: 18px;
+        padding: 14px 15px;
+        min-height: 90px;
+        background: var(--app-surface);
+        color: var(--app-text);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+        line-height: 1.45;
     }
-    .small-note {
-        opacity: 0.72;
+
+    .small-note,
+    .stCaptionContainer,
+    div[data-testid="stCaptionContainer"] {
+        color: var(--app-muted) !important;
         font-size: 0.88rem;
+    }
+
+    /* Chat bubbles: keep enough contrast in both Streamlit light and dark theme. */
+    div[data-testid="stChatMessage"] {
+        border: 1px solid var(--app-border);
+        border-radius: 18px;
+        padding: 0.35rem 0.5rem;
+        margin-bottom: 0.75rem;
+        background: var(--assistant-bubble);
+        color: var(--app-text) !important;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    div[data-testid="stChatMessage"] * {
+        color: var(--app-text) !important;
+    }
+
+    div[data-testid="stChatMessage"] p,
+    div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stMarkdownContainer"] li {
+        line-height: 1.62;
+    }
+
+    textarea,
+    input,
+    div[data-baseweb="input"] input,
+    div[data-baseweb="textarea"] textarea {
+        background: var(--input-bg) !important;
+        color: var(--app-text) !important;
+        border-color: var(--app-border) !important;
+    }
+
+    div[data-testid="stChatInput"] {
+        background: var(--app-bg) !important;
+        border-top: 1px solid var(--app-border);
+    }
+
+    button[kind="primary"],
+    div[data-testid="stFormSubmitButton"] button,
+    div[data-testid="stButton"] button {
+        border-radius: 12px !important;
+        border: 1px solid var(--app-border) !important;
+        color: var(--app-text) !important;
+    }
+
+    .stAlert {
+        border-radius: 16px;
+    }
+
+    hr {
+        border-color: var(--app-border) !important;
+    }
+
+    code, pre {
+        border-radius: 12px !important;
     }
     </style>
     """,
