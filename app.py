@@ -59,7 +59,7 @@ def init_state() -> None:
     if "active_temperature" not in st.session_state:
         st.session_state.active_temperature = float(get_secret("TEMPERATURE", 0.3) or 0.3)
     if "active_max_tokens" not in st.session_state:
-        st.session_state.active_max_tokens = int(get_secret("MAX_COMPLETION_TOKENS", 2200) or 2200)
+        st.session_state.active_max_tokens = int(get_secret("MAX_COMPLETION_TOKENS", 2600) or 2600)
     if "show_debug" not in st.session_state:
         st.session_state.show_debug = False
     if "active_smart_router" not in st.session_state:
@@ -507,17 +507,18 @@ def render_admin_settings() -> None:
             height=170,
         )
         st.session_state.show_debug = st.toggle("Tampilkan debug respons di chat", value=st.session_state.show_debug)
-        st.markdown("#### Router Model Cerdas")
+        st.markdown("#### Router Cepat & Akurat")
+        st.caption("Algoritma baru: model utama menjawab dulu. Jika skor jawaban rendah/kosong/tidak yakin, barulah 1-2 model cadangan dikonsultasikan secara paralel terbatas, lalu hasil akhir dikembalikan ke model utama.")
         st.session_state.active_smart_router = st.toggle(
-            "Aktifkan konsultasi model lain jika jawaban kurang yakin",
+            "Aktifkan router hanya jika jawaban kurang kuat",
             value=bool(st.session_state.active_smart_router),
         )
         st.session_state.active_return_to_primary = st.toggle(
-            "Setelah konsultasi, kembalikan penyusunan jawaban ke model utama",
+            "Setelah konsultasi, susun ulang jawaban dengan model utama",
             value=bool(st.session_state.active_return_to_primary),
         )
         st.session_state.active_max_smart_models = st.slider(
-            "Jumlah model cadangan untuk dikonsultasikan",
+            "Maksimal model cadangan yang dikonsultasikan",
             1,
             3,
             int(st.session_state.active_max_smart_models),
@@ -553,7 +554,7 @@ def render_admin_settings() -> None:
                 st.session_state.active_model = default_model
                 st.session_state.active_persona = persona_from_secret
                 st.session_state.active_temperature = 0.3
-                st.session_state.active_max_tokens = 2200
+                st.session_state.active_max_tokens = 2600
                 st.session_state.show_debug = False
                 st.session_state.active_smart_router = smart_model_router_default
                 st.session_state.active_return_to_primary = return_to_primary_default
@@ -676,7 +677,7 @@ TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
 
 # Opsional
 TEMPERATURE = 0.3
-MAX_COMPLETION_TOKENS = 2200
+MAX_COMPLETION_TOKENS = 2600
 SMART_MODEL_ROUTER = true
 RETURN_TO_PRIMARY_MODEL = true
 MAX_SMART_MODELS = 2''',
@@ -725,7 +726,7 @@ st.markdown(
             <span class="status-pill">💬 Chat publik</span>
             <span class="status-pill">⚙️ Setting terkunci admin</span>
             <span class="status-pill">📱 Mobile friendly</span>
-            <span class="status-pill">🧠 Smart router</span>
+            <span class="status-pill">⚡ Fast accurate router</span>
         </div>
     </div>
     """,
@@ -759,7 +760,7 @@ with col_toolbar_1:
         st.session_state.pending_prompt = ""
         st.rerun()
 with col_toolbar_2:
-    st.caption(f"{len(st.session_state.chat_messages)} pesan • Memory ringkas • Smart router {'ON' if cfg['smart_model_router'] else 'OFF'} • Setting admin")
+    st.caption(f"{len(st.session_state.chat_messages)} pesan • Memory ringkas • Fast accurate router {'ON' if cfg['smart_model_router'] else 'OFF'} • Setting admin")
 st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()

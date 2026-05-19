@@ -1,15 +1,18 @@
-# Adioranye AI - Mobile Friendly + Safe Prompt Fix
+# Adioranye AI - Fast Accurate Router
 
-Versi ini dibuat untuk Streamlit Online dengan halaman chat publik, Admin Settings yang terkunci password, Bot Telegram opsional, desain ramah HP, dan perbaikan untuk error `content_filter` dari provider API.
+Versi ini dibuat untuk Streamlit Online dengan halaman chat publik, Admin Settings yang terkunci password, Bot Telegram opsional, desain ramah HP, dan algoritma jawaban yang lebih cepat serta lebih akurat.
 
-## Perbaikan penting
+## Perbaikan algoritma
 
-- Persona dibuat lebih aman: tidak lagi memakai kalimat "menjawab semua pertanyaan" tanpa batas.
-- Memory tidak dimasukkan mentah-mentah ke prompt; memory disanitasi dan dibatasi.
-- Riwayat chat error/debug tidak ikut dikirim ke model.
-- Pertanyaan user tidak lagi terkirim dobel ke API.
-- Jika provider menolak prompt karena `content_filter`, aplikasi menampilkan pesan yang jelas, bukan error panjang.
-- Telegram memory command dimatikan default agar pengguna Telegram tidak bisa sembarang mengubah memory global.
+- **Fast-first**: model utama menjawab lebih dulu. Jika jawabannya sudah bagus, sistem langsung mengembalikan jawaban tanpa memanggil model lain.
+- **Quality scoring lokal**: jawaban dicek dari panjang, tanda tidak yakin, kesesuaian dengan tugas, sinyal langkah/solusi, dan konteks pertanyaan.
+- **Router hanya saat perlu**: model cadangan hanya dipakai jika jawaban utama kosong, error, terlalu pendek, atau terlalu tidak yakin.
+- **Parallel fallback terbatas**: maksimal 1-3 model cadangan dicoba secara paralel agar lebih cepat, bukan dicoba satu per satu terlalu lama.
+- **Kembali ke model utama**: jika fallback menemukan jawaban lebih kuat, hasilnya dikirim kembali ke model utama untuk disusun menjadi jawaban final.
+- **Konteks lebih hemat**: memory dan riwayat chat disaring agar prompt pendek, aman, dan tidak boros token.
+- **Cache jawaban**: pertanyaan yang sama dalam satu sesi bisa dijawab ulang tanpa memanggil API lagi.
+- **GPT-5 reasoning fix**: token output dinaikkan otomatis untuk GPT-5 agar jawaban tidak kosong karena habis di reasoning token.
+- **Tidak bypass safety filter**: jika prompt ditolak content filter, sistem tidak memutar ke model lain untuk menghindari aturan keamanan.
 
 ## Streamlit Secrets
 
@@ -35,6 +38,10 @@ TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
 
 TEMPERATURE = 0.3
 MAX_COMPLETION_TOKENS = 2600
+SMART_MODEL_ROUTER = true
+RETURN_TO_PRIMARY_MODEL = true
+MAX_SMART_MODELS = 2
+FAST_ACCURATE_ROUTER = true
 ```
 
 ## Cara deploy
@@ -50,21 +57,3 @@ MAX_COMPLETION_TOKENS = 2600
 Agar bot Telegram tidak double/triple, default `TELEGRAM_AUTO_START = false`. Login admin dulu, lalu tekan tombol Start Bot satu kali dari tab Telegram.
 
 Kalau masih double/triple, revoke token dari BotFather, ganti token di Streamlit Secrets, lalu reboot app.
-
-
-## Router Model Cerdas
-
-Fitur ini membuat model utama tetap menjadi pusat jawaban. Alurnya:
-
-1. Pertanyaan dijawab dulu oleh model utama dari `SLASHAI_MODEL`.
-2. Jika jawaban kosong, terlalu pendek, atau mengandung tanda tidak yakin seperti "tidak tahu" / "tidak memiliki informasi", aplikasi akan berkonsultasi ke 1-2 model cadangan.
-3. Setelah mendapat referensi, aplikasi kembali ke model utama untuk menyusun jawaban akhir.
-4. Jika model utama gagal menyusun ulang, jawaban terbaik dari model cadangan digunakan.
-
-Konfigurasi di Streamlit Secrets:
-
-```toml
-SMART_MODEL_ROUTER = true
-RETURN_TO_PRIMARY_MODEL = true
-MAX_SMART_MODELS = 2
-```
