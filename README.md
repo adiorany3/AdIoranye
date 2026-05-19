@@ -1,68 +1,34 @@
-# Asisten Pribadi AI Streamlit + SlashAI
+# Asisten Pribadi AI Streamlit + SlashAI API
 
-Sistem ini menjalankan chatbot/asisten pribadi menggunakan Streamlit dan API yang kompatibel dengan OpenAI Chat Completions.
-
-Endpoint default:
+Aplikasi ini menjalankan chatbot/asisten pribadi menggunakan Streamlit dan endpoint OpenAI-compatible:
 
 ```text
 https://api.slashai.my.id/v1/chat/completions
 ```
 
-Model sudah tersedia di sidebar, jadi kamu cukup pilih model seperti:
-
-```text
-slashai/gpt-5.5-instant
-slashai/gpt-5.5
-slashai/claude-sonnet-4.7
-slashai/gemini-3.1-pro
-slashai/deepseek-v4-pro
-```
-
-## Struktur File
-
-```text
-streamlit_personal_assistant/
-├── app.py
-├── requirements.txt
-├── .gitignore
-├── README.md
-└── .streamlit/
-    └── secrets.toml.example
-```
-
-## Menjalankan Lokal
+## Cara menjalankan lokal
 
 ```bash
 pip install -r requirements.txt
-mkdir -p .streamlit
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 streamlit run app.py
 ```
 
-Lalu isi `.streamlit/secrets.toml` dengan API key asli.
+## Secrets untuk Streamlit Cloud
 
-## Secrets untuk Streamlit Online
-
-Pada Streamlit Community Cloud, buka:
-
-```text
-App > Settings > Secrets
-```
-
-Lalu paste:
+Masukkan melalui **App > Settings > Secrets**:
 
 ```toml
 SLASHAI_API_KEY = "ISI_API_KEY_KAMU_DI_SINI"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
-SLASHAI_MODEL = "slashai/gpt-5.5-instant"
+SLASHAI_MODEL = "slashai/deepseek-v4-flash"
 ```
 
-Jangan upload `secrets.toml` asli ke GitHub.
+## Jika muncul error 403 deposit required
 
-## Catatan Penting
+Itu berarti model yang dipilih terkunci/premium di akun provider kamu. Aplikasi ini sudah menyediakan:
 
-- API key disimpan di Streamlit Secrets, bukan di kode.
-- Model dikirim melalui field `model` di body request API.
-- Jika model tertentu error, coba ganti model di sidebar.
-- Untuk model cepat dan ringan, coba `slashai/gpt-5.5-instant` atau `slashai/gpt-5.4-mini`.
-- Untuk coding, coba model Codex seperti `slashai/gpt-5.1-codex-mini-high`.
+1. Kategori **Rekomendasi Hemat / Coba Dulu**.
+2. Fitur **Auto coba model cadangan jika akses ditolak**.
+3. Daftar model cadangan yang bisa diedit dari sidebar.
+
+Jika semua model tetap 403, artinya akun API belum punya akses ke model tersebut. Solusinya adalah memilih model lain yang aktif, atau deposit/top up di provider SlashAI untuk membuka model premium.
