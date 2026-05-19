@@ -62,6 +62,12 @@ def init_state() -> None:
         st.session_state.active_max_tokens = int(get_secret("MAX_COMPLETION_TOKENS", 2200) or 2200)
     if "show_debug" not in st.session_state:
         st.session_state.show_debug = False
+    if "active_smart_router" not in st.session_state:
+        st.session_state.active_smart_router = parse_bool(get_secret("SMART_MODEL_ROUTER", True), default=True)
+    if "active_return_to_primary" not in st.session_state:
+        st.session_state.active_return_to_primary = parse_bool(get_secret("RETURN_TO_PRIMARY_MODEL", True), default=True)
+    if "active_max_smart_models" not in st.session_state:
+        st.session_state.active_max_smart_models = int(get_secret("MAX_SMART_MODELS", 2) or 2)
     if "pending_prompt" not in st.session_state:
         st.session_state.pending_prompt = ""
 
@@ -72,8 +78,9 @@ def init_state() -> None:
 
 DEFAULT_PERSONA = (
     "Nama kamu adalah adioranye. "
-    "Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan pengguna. "
-    "Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele."
+    "Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang aman dan bermanfaat. "
+    "Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele. "
+    "Jika permintaan berbahaya atau melanggar aturan, tolak dengan singkat dan arahkan ke alternatif yang aman."
 )
 
 MODEL_OPTIONS = [
@@ -113,6 +120,9 @@ send_processing_message = parse_bool(get_secret("TELEGRAM_SEND_PROCESSING_MESSAG
 telegram_lock_file = str(get_secret("TELEGRAM_LOCK_FILE", ".telegram_bot_worker.lock"))
 admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
 admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
+smart_model_router_default = parse_bool(get_secret("SMART_MODEL_ROUTER", True), default=True)
+return_to_primary_default = parse_bool(get_secret("RETURN_TO_PRIMARY_MODEL", True), default=True)
+max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 
 init_state()
 memory = MemoryStore(memory_file)
@@ -393,6 +403,9 @@ def get_runtime_config() -> Dict[str, Any]:
         "max_completion_tokens": int(st.session_state.active_max_tokens),
         "memory_file": memory_file,
         "telegram_token": telegram_token,
+        "smart_model_router": bool(st.session_state.active_smart_router),
+        "return_to_primary": bool(st.session_state.active_return_to_primary),
+        "max_smart_models": int(st.session_state.active_max_smart_models),
     }
 
 
@@ -414,6 +427,10 @@ def start_telegram_if_needed() -> None:
                 "drop_pending_updates": drop_pending_updates,
                 "send_processing_message": send_processing_message,
                 "lock_file": telegram_lock_file,
+                "allow_memory_commands": False,
+                "smart_model_router": cfg["smart_model_router"],
+                "return_to_primary": cfg["return_to_primary"],
+                "max_smart_models": cfg["max_smart_models"],
             }
         )
 
@@ -490,6 +507,22 @@ def render_admin_settings() -> None:
             height=170,
         )
         st.session_state.show_debug = st.toggle("Tampilkan debug respons di chat", value=st.session_state.show_debug)
+        st.markdown("#### Router Model Cerdas")
+        st.session_state.active_smart_router = st.toggle(
+            "Aktifkan konsultasi model lain jika jawaban kurang yakin",
+            value=bool(st.session_state.active_smart_router),
+        )
+        st.session_state.active_return_to_primary = st.toggle(
+            "Setelah konsultasi, kembalikan penyusunan jawaban ke model utama",
+            value=bool(st.session_state.active_return_to_primary),
+        )
+        st.session_state.active_max_smart_models = st.slider(
+            "Jumlah model cadangan untuk dikonsultasikan",
+            1,
+            3,
+            int(st.session_state.active_max_smart_models),
+            1,
+        )
 
         col_test, col_reset = st.columns(2)
         with col_test:
@@ -501,12 +534,15 @@ def render_admin_settings() -> None:
                         model=st.session_state.active_model,
                         system_prompt=st.session_state.active_persona,
                         user_text="Jawab singkat: apakah kamu aktif?",
-                        memory_text=memory.as_prompt_text(limit=10),
+                        memory_text=memory.as_prompt_text(limit=8),
                         recent_messages=[],
                         fallback_models=DEFAULT_FALLBACK_MODELS,
                         temperature=float(st.session_state.active_temperature),
                         max_completion_tokens=int(st.session_state.active_max_tokens),
                         timeout=60,
+                        smart_model_router=bool(st.session_state.active_smart_router),
+                        return_to_primary=bool(st.session_state.active_return_to_primary),
+                        max_smart_models=int(st.session_state.active_max_smart_models),
                     )
                     st.success(answer)
                     st.caption(f"Model: {meta.get('model') or meta.get('model_requested')}")
@@ -519,6 +555,9 @@ def render_admin_settings() -> None:
                 st.session_state.active_temperature = 0.3
                 st.session_state.active_max_tokens = 2200
                 st.session_state.show_debug = False
+                st.session_state.active_smart_router = smart_model_router_default
+                st.session_state.active_return_to_primary = return_to_primary_default
+                st.session_state.active_max_smart_models = max_smart_models_default
                 st.rerun()
 
     with tab_bot:
@@ -551,6 +590,10 @@ def render_admin_settings() -> None:
             "drop_pending_updates": drop_pending_updates,
             "send_processing_message": send_processing_message,
             "lock_file": telegram_lock_file,
+            "allow_memory_commands": False,
+            "smart_model_router": bool(st.session_state.active_smart_router),
+            "return_to_primary": bool(st.session_state.active_return_to_primary),
+            "max_smart_models": int(st.session_state.active_max_smart_models),
         }
 
         col_start, col_stop = st.columns(2)
@@ -622,7 +665,7 @@ SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/gpt-5-nano"
 
-ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan pengguna. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele."
+ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang aman dan bermanfaat. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele. Jika permintaan berbahaya atau melanggar aturan, tolak dengan singkat dan arahkan ke alternatif yang aman."
 MEMORY_FILE = "assistant_memory.json"
 
 # true = bot Telegram otomatis start saat app Streamlit dibuka/aktif
@@ -633,7 +676,10 @@ TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
 
 # Opsional
 TEMPERATURE = 0.3
-MAX_COMPLETION_TOKENS = 2200''',
+MAX_COMPLETION_TOKENS = 2200
+SMART_MODEL_ROUTER = true
+RETURN_TO_PRIMARY_MODEL = true
+MAX_SMART_MODELS = 2''',
             language="toml",
         )
         st.markdown(
@@ -679,6 +725,7 @@ st.markdown(
             <span class="status-pill">💬 Chat publik</span>
             <span class="status-pill">⚙️ Setting terkunci admin</span>
             <span class="status-pill">📱 Mobile friendly</span>
+            <span class="status-pill">🧠 Smart router</span>
         </div>
     </div>
     """,
@@ -712,7 +759,7 @@ with col_toolbar_1:
         st.session_state.pending_prompt = ""
         st.rerun()
 with col_toolbar_2:
-    st.caption(f"{len(st.session_state.chat_messages)} pesan • Memory aktif sebagai konteks ringkas • Setting hanya untuk admin")
+    st.caption(f"{len(st.session_state.chat_messages)} pesan • Memory ringkas • Smart router {'ON' if cfg['smart_model_router'] else 'OFF'} • Setting admin")
 st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
@@ -752,12 +799,15 @@ if user_input:
                     model=cfg["model"],
                     system_prompt=cfg["persona"],
                     user_text=user_input,
-                    memory_text=memory.as_prompt_text(limit=20),
-                    recent_messages=st.session_state.chat_messages[-8:],
+                    memory_text=memory.as_prompt_text(limit=12),
+                    recent_messages=st.session_state.chat_messages[:-1][-6:],
                     fallback_models=DEFAULT_FALLBACK_MODELS,
                     temperature=float(cfg["temperature"]),
                     max_completion_tokens=int(cfg["max_completion_tokens"]),
                     timeout=60,
+                    smart_model_router=bool(cfg["smart_model_router"]),
+                    return_to_primary=bool(cfg["return_to_primary"]),
+                    max_smart_models=int(cfg["max_smart_models"]),
                 )
                 placeholder.markdown(answer)
         except Exception as exc:

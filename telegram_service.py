@@ -218,6 +218,10 @@ class TelegramBotService:
         fallback_models = config.get("fallback_models") or []
         drop_pending_updates = bool(config.get("drop_pending_updates", True))
         send_processing_message = bool(config.get("send_processing_message", False))
+        allow_memory_commands = bool(config.get("allow_memory_commands", False))
+        smart_model_router = bool(config.get("smart_model_router", True))
+        return_to_primary = bool(config.get("return_to_primary", True))
+        max_smart_models = int(config.get("max_smart_models", 2) or 2)
 
         if not token:
             self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
@@ -289,7 +293,7 @@ class TelegramBotService:
                             )
                             continue
 
-                        local_reply = handle_local_memory_command(text, memory)
+                        local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
                         if local_reply:
                             self._send_message(token, chat_id, local_reply)
                             continue
@@ -316,6 +320,9 @@ class TelegramBotService:
                                 temperature=float(config.get("temperature", 0.3)),
                                 max_completion_tokens=int(config.get("max_completion_tokens", 1800)),
                                 timeout=int(config.get("timeout", 60)),
+                                smart_model_router=smart_model_router,
+                                return_to_primary=return_to_primary,
+                                max_smart_models=max_smart_models,
                             )
 
                             history.append({"role": "user", "content": text})
