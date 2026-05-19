@@ -9,7 +9,7 @@ https://api.slashai.my.id/v1/chat/completions
 ## Fitur
 
 - Chat AI dengan model SlashAI/OpenAI-compatible.
-- Persona asisten yang bisa diedit dari sidebar.
+- Persona **adioranye** langsung dimasukkan ke role `system` pada setiap request API, dan tetap bisa diedit dari sidebar/secrets.
 - Memory lokal agar AI mengingat hal penting tanpa mengirim seluruh riwayat chat.
 - Perintah lokal tanpa memanggil API:
   - `/ingat ...`
@@ -38,9 +38,19 @@ SLASHAI_API_KEY = "ISI_API_KEY_KAMU_DI_SINI"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/gpt-5-nano"
 
-ASSISTANT_PERSONA = "Kamu adalah asisten pribadi yang cepat, hemat token, ramah, dan to the point. Jawab dalam bahasa Indonesia yang natural."
+ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang diberikan pengguna. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele."
 MEMORY_FILE = "assistant_memory.json"
 ```
+
+## Persona System Default
+
+Persona sudah langsung masuk ke `role: system` lewat `BASE_SYSTEM_PERSONA` di `app.py`:
+
+```text
+Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang diberikan pengguna.
+```
+
+Dengan alur ini, persona tidak perlu diketik ulang di chat dan tidak perlu disimpan sebagai memori biasa.
 
 ## Catatan Memory
 

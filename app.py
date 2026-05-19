@@ -38,16 +38,17 @@ API_KEY = secret("SLASHAI_API_KEY", "")
 DEFAULT_MODEL = secret("SLASHAI_MODEL", "slashai/gpt-5-nano")
 MEMORY_FILE = secret("MEMORY_FILE", "assistant_memory.json")
 
-DEFAULT_PERSONA = secret(
-    "ASSISTANT_PERSONA",
-    (
-        "Kamu adalah asisten pribadi yang cepat, hemat token, ramah, dan to the point. "
-        "Jawab dalam bahasa Indonesia yang natural. "
-        "Bantu pengguna mengerjakan tugas teknis, akademik, bisnis, otomasi, coding, dan penulisan. "
-        "Jika konteks kurang, tetap beri jawaban terbaik berdasarkan informasi yang tersedia. "
-        "Jangan terlalu panjang kecuali diminta."
-    ),
+BASE_SYSTEM_PERSONA = (
+    "Nama kamu adalah adioranye. "
+    "Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang diberikan pengguna. "
+    "Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele. "
+    "Bantu pengguna dalam kebutuhan teknis, akademik, bisnis, otomasi, coding, penulisan, analisis, dan pertanyaan umum. "
+    "Jika konteks kurang lengkap, tetap berikan jawaban terbaik berdasarkan informasi yang tersedia. "
+    "Jika pengguna meminta detail, berikan langkah yang runtut dan mudah diikuti. "
+    "Jangan mengaku sebagai manusia; jelaskan bahwa kamu adalah asisten AI jika ditanya."
 )
+
+DEFAULT_PERSONA = secret("ASSISTANT_PERSONA", BASE_SYSTEM_PERSONA)
 
 CHEAP_MODELS = [
     # Urutan dibuat berdasarkan model yang murah dan biasanya lebih aman/cepat dicoba.
@@ -314,9 +315,11 @@ def build_system_prompt(user_prompt: str) -> str:
         memory_block = "\n\nMEMORI PENGGUNA YANG RELEVAN:\n" + "\n".join(f"- {m}" for m in mems)
 
     return (
+        "IDENTITAS DAN PERSONA UTAMA:\n"
         f"{persona}"
         f"{memory_block}\n\n"
         "ATURAN JAWABAN:\n"
+        "- Pertahankan identitas asisten sebagai adioranye.\n"
         "- Gunakan memori hanya jika relevan.\n"
         "- Jangan menyebutkan daftar memori kecuali pengguna meminta.\n"
         "- Jawab langsung, praktis, dan tidak bertele-tele.\n"
@@ -792,7 +795,7 @@ with st.sidebar:
         "Persona asisten",
         value=st.session_state.store.get("persona", DEFAULT_PERSONA),
         height=180,
-        help="Persona ini disimpan lokal, lalu dikirim sebagai system prompt ringkas.",
+        help="Persona ini langsung dikirim sebagai role system pada setiap request API.",
     )
     col_a, col_b = st.columns(2)
     with col_a:
@@ -839,7 +842,7 @@ with st.sidebar:
             st.rerun()
 
     st.caption(
-        "Perintah cepat di chat: `/ingat ...`, `/memori`, `/lupa ...`, `/reset memori`, `/persona ...`."
+        "Persona adioranye sudah otomatis masuk role system. Perintah cepat: `/ingat ...`, `/memori`, `/lupa ...`, `/reset memori`, `/persona ...`."
     )
 
     st.divider()
@@ -873,7 +876,7 @@ with st.sidebar:
 # =========================
 
 st.title("🤖 Asisten Pribadi AI")
-st.caption("Persona + memory lokal + parser respons kuat agar jawaban tetap terbaca walau gateway API tidak rapi.")
+st.caption("Persona adioranye langsung masuk ke system prompt + memory lokal + parser respons kuat.")
 
 info_cols = st.columns(4)
 with info_cols[0]:
