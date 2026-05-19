@@ -35,7 +35,7 @@ def secret(name: str, default: str = "") -> str:
 
 API_URL = secret("SLASHAI_API_URL", "https://api.slashai.my.id/v1/chat/completions")
 API_KEY = secret("SLASHAI_API_KEY", "")
-DEFAULT_MODEL = secret("SLASHAI_MODEL", "slashai/gemini-3-flash")
+DEFAULT_MODEL = secret("SLASHAI_MODEL", "slashai/gpt-5-nano")
 MEMORY_FILE = secret("MEMORY_FILE", "assistant_memory.json")
 
 DEFAULT_PERSONA = secret(
@@ -50,8 +50,7 @@ DEFAULT_PERSONA = secret(
 )
 
 CHEAP_MODELS = [
-    "slashai/gemini-3-flash",
-    "slashai/gemini-3.1-pro",
+    # Urutan dibuat berdasarkan model yang murah dan biasanya lebih aman/cepat dicoba.
     "slashai/gpt-5-nano",
     "slashai/gpt-5-mini",
     "slashai/gpt-5.4-nano",
@@ -67,6 +66,9 @@ CHEAP_MODELS = [
     "slashai/MiniMax-M2.5",
     "slashai/MiniMax-M2.7",
     "slashai/Step-3.5-Flash",
+    "slashai/gemini-3-flash",
+    # Model ini murah di daftar harga, tetapi pada sebagian akun bisa tetap 403.
+    "slashai/gemini-3.1-pro",
     "slashai/claude-haiku-4.5",
     "bai/claude-haiku-4.5",
     "bai/deepseek-v4-flash",
@@ -439,6 +441,93 @@ def make_payload(
     return payload
 
 
+
+def decode_json_string(value: str) -> str:
+    """Decode isi string JSON yang mungkin berisi \n, \" dan unicode escape."""
+    try:
+        return json.loads(f'"{value}"')
+    except Exception:
+        try:
+            return bytes(value, "utf-8").decode("unicode_escape")
+        except Exception:
+            return value
+
+
+def extract_content_from_raw_text(raw_text: str) -> str:
+    """
+    Fallback parser untuk gateway OpenAI-compatible yang kadang mengembalikan
+    JSON tidak valid/terpotong, padahal message.content sudah ada di teks.
+    """
+    raw_text = raw_text or ""
+    if not raw_text.strip():
+        return ""
+
+    # Jika format SSE/JSONL: data: { ... }
+    collected = []
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line or line == "data: [DONE]":
+            continue
+        if line.startswith("data:"):
+            piece = line[5:].strip()
+            try:
+                data = json.loads(piece)
+                content = parse_content(data)
+                if content:
+                    collected.append(content)
+                    continue
+                delta = (((data.get("choices") or [{}])[0]).get("delta") or {})
+                if isinstance(delta.get("content"), str):
+                    collected.append(delta["content"])
+            except Exception:
+                pass
+    if collected:
+        return "".join(collected).strip()
+
+    # Cari field message.content. Pilih hasil terpanjang agar tidak salah ambil field kecil.
+    patterns = [
+        r'"message"\s*:\s*\{.*?"content"\s*:\s*"((?:\\.|[^"\\])*)"',
+        r'"content"\s*:\s*"((?:\\.|[^"\\])*)"',
+        r'"output_text"\s*:\s*"((?:\\.|[^"\\])*)"',
+        r'"text"\s*:\s*"((?:\\.|[^"\\])*)"',
+    ]
+    candidates = []
+    for pattern in patterns:
+        for match in re.finditer(pattern, raw_text, flags=re.DOTALL):
+            decoded = decode_json_string(match.group(1)).strip()
+            if decoded and decoded.lower() not in {"assistant", "user", "system"}:
+                candidates.append(decoded)
+    if candidates:
+        return max(candidates, key=len).strip()
+
+    return ""
+
+
+def load_json_lenient(raw_text: str) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Parse JSON dengan beberapa toleransi. Return (data, warning)."""
+    raw_text = raw_text or ""
+    try:
+        data = json.loads(raw_text)
+        if isinstance(data, dict):
+            return data, ""
+    except Exception:
+        pass
+
+    # Kadang ada karakter sebelum/sesudah JSON.
+    first = raw_text.find("{")
+    last = raw_text.rfind("}")
+    if first != -1 and last != -1 and last > first:
+        candidate = raw_text[first:last + 1]
+        try:
+            data = json.loads(candidate, strict=False)
+            if isinstance(data, dict):
+                return data, "JSON valid setelah dibersihkan dari teks tambahan."
+        except Exception:
+            pass
+
+    return None, "Respons API bukan JSON valid, tetapi akan dicoba dibaca dari teks mentah."
+
+
 def parse_content(data: Dict[str, Any]) -> str:
     # Format umum chat.completion
     choices = data.get("choices") or []
@@ -518,6 +607,7 @@ def call_once(
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json",
+        "Accept": "application/json",
     }
 
     try:
@@ -539,12 +629,26 @@ def call_once(
     if r.status_code >= 400:
         raise RuntimeError(f"API mengembalikan status {r.status_code}: {r.text[:1200]}")
 
-    try:
-        data = r.json()
-    except Exception as exc:
-        raise RuntimeError(f"Respons API bukan JSON valid: {r.text[:1200]}") from exc
+    raw_text = r.text or ""
+    data, parse_warning = load_json_lenient(raw_text)
 
-    content = parse_content(data)
+    if data is not None:
+        content = parse_content(data)
+    else:
+        content = extract_content_from_raw_text(raw_text)
+        data = {
+            "_raw_text": raw_text[:8000],
+            "_parse_warning": parse_warning,
+            "model": model,
+            "usage": {},
+        }
+
+    # Jika JSON valid tetapi content kosong, tetap coba ekstraksi dari teks mentah.
+    if not content:
+        content = extract_content_from_raw_text(raw_text)
+        if content:
+            data.setdefault("_parse_warning", "Content berhasil dibaca dari raw response.")
+
     if not content:
         usage = data.get("usage") or {}
         details = usage.get("completion_tokens_details") or {}
@@ -559,9 +663,12 @@ def call_once(
         if reasoning_tokens or finish_reason == "length":
             raise RuntimeError(
                 "Respons kosong. Kemungkinan token output habis untuk reasoning_tokens. "
-                "Naikkan Max output tokens atau pakai model non-reasoning seperti gemini/mimo/minimax."
+                "Naikkan Max output tokens atau pakai model non-reasoning seperti mimo/minimax/gemini."
             )
-        raise RuntimeError("Respons API berhasil, tetapi isi jawaban kosong.")
+        raise RuntimeError(
+            "Respons API berhasil, tetapi isi jawaban kosong atau formatnya tidak dikenali. "
+            f"Raw awal: {raw_text[:1200]}"
+        )
 
     return content, data
 
@@ -766,7 +873,7 @@ with st.sidebar:
 # =========================
 
 st.title("🤖 Asisten Pribadi AI")
-st.caption("Persona + memory lokal agar konteks tetap ingat tanpa mengirim seluruh riwayat chat setiap request.")
+st.caption("Persona + memory lokal + parser respons kuat agar jawaban tetap terbaca walau gateway API tidak rapi.")
 
 info_cols = st.columns(4)
 with info_cols[0]:

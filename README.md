@@ -36,7 +36,7 @@ Isi di Streamlit Community Cloud > App > Settings > Secrets:
 ```toml
 SLASHAI_API_KEY = "ISI_API_KEY_KAMU_DI_SINI"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
-SLASHAI_MODEL = "slashai/gemini-3-flash"
+SLASHAI_MODEL = "slashai/gpt-5-nano"
 
 ASSISTANT_PERSONA = "Kamu adalah asisten pribadi yang cepat, hemat token, ramah, dan to the point. Jawab dalam bahasa Indonesia yang natural."
 MEMORY_FILE = "assistant_memory.json"
@@ -45,3 +45,8 @@ MEMORY_FILE = "assistant_memory.json"
 ## Catatan Memory
 
 Memory disimpan di file JSON lokal. Pada VPS, file ini relatif stabil. Pada Streamlit Community Cloud, file bisa hilang saat app restart/redeploy. Untuk memory permanen produksi, gunakan database seperti Supabase, Neon, atau Firebase.
+
+
+## Perbaikan parser respons
+
+Versi ini dapat membaca jawaban dari gateway OpenAI-compatible meskipun response JSON tidak valid sempurna/terpotong, selama field `message.content` masih terlihat di raw response. Default model diarahkan ke `slashai/gpt-5-nano` karena pada pengujian user model ini sudah mengembalikan `content`.
