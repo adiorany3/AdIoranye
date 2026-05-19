@@ -1,41 +1,51 @@
-# Asisten Pribadi AI Cepat - Streamlit + SlashAI
+# Streamlit Personal Assistant - Cost Aware
 
-Aplikasi ini memakai Streamlit dan API kompatibel OpenAI dari SlashAI.
+Aplikasi asisten pribadi AI berbasis Streamlit dengan API kompatibel OpenAI:
 
-## Fitur efisiensi
+`https://api.slashai.my.id/v1/chat/completions`
 
-- Default model ringan: `slashai/deepseek-v4-flash`.
-- Streaming jawaban agar respons tampil bertahap.
-- Riwayat yang dikirim ke API dibatasi agar hemat token.
-- Fallback model dibatasi agar tidak membuang waktu mencoba terlalu banyak model.
-- Timeout API bisa diatur.
-- Profil cepat, seimbang, dan lengkap.
+## Fitur
 
-## Jalankan lokal
+- Chat AI seperti ChatGPT.
+- API key aman memakai Streamlit Secrets.
+- Pilihan model berdasarkan harga.
+- Default model hemat: `slashai/gemini-3-flash`.
+- Estimasi biaya per request.
+- Mode Super Hemat, Cepat Seimbang, dan Lebih Pintar.
+- Streaming jawaban.
+- Auto fallback hanya ke model murah agar cepat.
+- Riwayat chat dibatasi agar hemat token.
+
+## Cara pakai lokal
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Streamlit Secrets
+## Secrets untuk Streamlit Online
 
-Untuk lokal, buat file:
+Masukkan di menu Streamlit Cloud:
 
-```text
-.streamlit/secrets.toml
-```
-
-Isi:
+App > Settings > Secrets
 
 ```toml
-SLASHAI_API_KEY = "ISI_API_KEY_KAMU_DI_SINI"
+SLASHAI_API_KEY = "ISI_API_KEY_KAMU"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
-SLASHAI_MODEL = "slashai/deepseek-v4-flash"
+SLASHAI_MODEL = "slashai/gemini-3-flash"
 ```
 
-Untuk Streamlit Community Cloud, jangan upload API key ke GitHub. Masukkan isi TOML di atas ke menu **Settings > Secrets**.
+## Rekomendasi model murah
 
-## Catatan 403
+Gunakan model harga Rp50 input / Rp200 output per 1M token:
 
-Jika muncul `403 access_denied` atau `deposit required`, berarti model tersebut dikunci oleh provider. Pilih model lain atau lakukan deposit/top up sesuai aturan provider.
+- `slashai/gemini-3-flash`
+- `slashai/gpt-5-nano`
+- `slashai/gpt-5-mini`
+- `slashai/mimo-v2-flash`
+- `slashai/Step-3.5-Flash`
+- `slashai/MiniMax-M2.5`
+- `bai/deepseek-v4-flash`
+- `bai/claude-haiku-4.5`
+
+Catatan penting: `slashai/deepseek-v4-flash` pada daftar harga kamu tertulis Rp1.500/Rp6.000, jadi tidak dijadikan default hemat.

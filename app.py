@@ -1,447 +1,453 @@
 import json
-from typing import Dict, Generator, List, Optional, Tuple
+import time
+from typing import Dict, List, Tuple, Optional
 
 import requests
 import streamlit as st
 
 
-# =====================================================
-# KONFIGURASI HALAMAN
-# =====================================================
-st.set_page_config(
-    page_title="Asisten Pribadi AI Cepat",
-    page_icon="⚡",
-    layout="centered",
-)
+# =========================
+# DATA MODEL + HARGA
+# =========================
 
+MODEL_PRICES: Dict[str, Dict[str, int]] = {
+    # Super hemat / murah
+    "bai/claude-haiku-4.5": {"input": 50, "output": 200},
+    "bai/deepseek-v4-flash": {"input": 50, "output": 200},
+    "cmc/MiniMaxAI/MiniMax-M2.5": {"input": 50, "output": 200},
+    "slashai/MiniMax-M2.5": {"input": 50, "output": 200},
+    "slashai/MiniMax-M2.7": {"input": 50, "output": 200},
+    "slashai/Step-3.5-Flash": {"input": 50, "output": 200},
+    "slashai/claude-haiku-4.5": {"input": 50, "output": 200},
+    "slashai/gemini-3-flash": {"input": 50, "output": 200},
+    "slashai/gemini-3.1-pro": {"input": 50, "output": 200},
+    "slashai/gpt-5-codex-mini": {"input": 50, "output": 200},
+    "slashai/gpt-5-codex-mini-review": {"input": 50, "output": 200},
+    "slashai/gpt-5-mini": {"input": 50, "output": 200},
+    "slashai/gpt-5-nano": {"input": 50, "output": 200},
+    "slashai/gpt-5.1-codex-mini": {"input": 50, "output": 200},
+    "slashai/gpt-5.1-codex-mini-high": {"input": 50, "output": 200},
+    "slashai/gpt-5.1-codex-mini-high-review": {"input": 50, "output": 200},
+    "slashai/gpt-5.1-codex-mini-review": {"input": 50, "output": 200},
+    "slashai/gpt-5.3-codex-low": {"input": 50, "output": 200},
+    "slashai/gpt-5.3-codex-low-review": {"input": 50, "output": 200},
+    "slashai/gpt-5.3-codex-spark": {"input": 50, "output": 200},
+    "slashai/gpt-5.3-codex-spark-review": {"input": 50, "output": 200},
+    "slashai/gpt-5.4-mini": {"input": 50, "output": 200},
+    "slashai/gpt-5.4-nano": {"input": 50, "output": 200},
+    "slashai/gpt-5.5-instant": {"input": 50, "output": 200},
+    "slashai/mimo-v2-flash": {"input": 50, "output": 200},
+    "slashai/minimax-m2.5": {"input": 50, "output": 200},
+    "slashai/minimax-m2.7": {"input": 50, "output": 200},
 
-# =====================================================
-# MODEL PRIORITAS CEPAT
-# =====================================================
-FAST_MODELS: List[str] = [
-    "slashai/deepseek-v4-flash",
-    "slashai/gemini-3-flash",
-    "slashai/mimo-v2-flash",
-    "slashai/Step-3.5-Flash",
-    "slashai/gpt-5-nano",
-    "slashai/gpt-5.4-nano",
-    "slashai/gpt-5-mini",
-]
+    # Menengah
+    "bai/claude-sonnet-4.5": {"input": 500, "output": 2000},
+    "bai/deepseek-v4-pro": {"input": 500, "output": 2000},
+    "bai/glm-5": {"input": 500, "output": 2000},
+    "mimo/mimo-v2-omni": {"input": 500, "output": 2000},
+    "mimo/mimo-v2.5": {"input": 500, "output": 2000},
+    "mimo/mimo-v2.5-pro": {"input": 500, "output": 2000},
+    "slashai/GLM-5": {"input": 500, "output": 2000},
+    "slashai/GLM-5.1": {"input": 500, "output": 2000},
+    "slashai/Kimi-K2.5": {"input": 500, "output": 2000},
+    "slashai/Kimi-K2.6": {"input": 500, "output": 2000},
+    "slashai/Qwen3.6-Plus": {"input": 500, "output": 2000},
+    "slashai/claude-sonnet-4.5": {"input": 500, "output": 2000},
+    "slashai/claude-sonnet-4.6": {"input": 500, "output": 2000},
+    "slashai/deepseek-3.2": {"input": 500, "output": 2000},
+    "slashai/deepseek-v3.2": {"input": 500, "output": 2000},
+    "slashai/glm-5": {"input": 500, "output": 2000},
+    "slashai/glm-5.1": {"input": 500, "output": 2000},
+    "slashai/kimi-k2.5": {"input": 500, "output": 2000},
+    "slashai/mimo-v2-omni": {"input": 500, "output": 2000},
+    "slashai/mimo-v2-pro": {"input": 500, "output": 2000},
+    "slashai/mimo-v2.5": {"input": 500, "output": 2000},
+    "slashai/mimo-v2.5-pro": {"input": 500, "output": 2000},
+    "slashai/qwen3-coder-next": {"input": 500, "output": 2000},
 
-MODEL_GROUPS: Dict[str, List[str]] = {
-    "Cepat & Hemat": FAST_MODELS,
-    "GPT / Codex": [
-        "slashai/gpt-5-codex",
-        "slashai/gpt-5-codex-mini",
-        "slashai/gpt-5-codex-mini-review",
-        "slashai/gpt-5-codex-review",
-        "slashai/gpt-5-mini",
-        "slashai/gpt-5-nano",
-        "slashai/gpt-5.1",
-        "slashai/gpt-5.1-codex",
-        "slashai/gpt-5.1-codex-max",
-        "slashai/gpt-5.1-codex-max-review",
-        "slashai/gpt-5.1-codex-mini",
-        "slashai/gpt-5.1-codex-mini-high",
-        "slashai/gpt-5.1-codex-mini-high-review",
-        "slashai/gpt-5.1-codex-mini-review",
-        "slashai/gpt-5.1-codex-review",
-        "slashai/gpt-5.1-review",
-        "slashai/gpt-5.2",
-        "slashai/gpt-5.2-codex",
-        "slashai/gpt-5.2-codex-review",
-        "slashai/gpt-5.2-review",
-        "slashai/gpt-5.3-codex",
-        "slashai/gpt-5.3-codex-high",
-        "slashai/gpt-5.3-codex-high-review",
-        "slashai/gpt-5.3-codex-low",
-        "slashai/gpt-5.3-codex-low-review",
-        "slashai/gpt-5.3-codex-none",
-        "slashai/gpt-5.3-codex-none-review",
-        "slashai/gpt-5.3-codex-review",
-        "slashai/gpt-5.3-codex-spark",
-        "slashai/gpt-5.3-codex-spark-review",
-        "slashai/gpt-5.3-codex-xhigh",
-        "slashai/gpt-5.3-codex-xhigh-review",
-        "slashai/gpt-5.4",
-        "slashai/gpt-5.4-mini",
-        "slashai/gpt-5.4-nano",
-        "slashai/gpt-5.4-pro",
-        "slashai/gpt-5.4-review",
-        "slashai/gpt-5.5",
-        "slashai/gpt-5.5-instant",
-        "slashai/gpt-5.5-review",
-    ],
-    "Claude": [
-        "slashai/claude-haiku-4.5",
-        "slashai/claude-opus-4.5",
-        "slashai/claude-opus-4.6",
-        "slashai/claude-opus-4.7",
-        "slashai/claude-sonnet-4.5",
-        "slashai/claude-sonnet-4.6",
-        "slashai/claude-sonnet-4.7",
-    ],
-    "DeepSeek": [
-        "slashai/deepseek-3.2",
-        "slashai/deepseek-v3.2",
-        "slashai/deepseek-v4-flash",
-        "slashai/deepseek-v4-pro",
-    ],
-    "Gemini": [
-        "slashai/gemini-3-flash",
-        "slashai/gemini-3.1-pro",
-    ],
-    "Lainnya": [
-        "slashai/Kimi-K2.5",
-        "slashai/Kimi-K2.6",
-        "slashai/qwen3-coder-next",
-        "slashai/Qwen3.6-Max-Preview",
-        "slashai/Qwen3.6-Plus",
-        "slashai/GLM-5",
-        "slashai/GLM-5.1",
-        "slashai/MiniMax-M2.5",
-        "slashai/MiniMax-M2.7",
-        "slashai/mimo-v2-flash",
-        "slashai/mimo-v2-omni",
-        "slashai/mimo-v2-pro",
-        "slashai/mimo-v2.5",
-        "slashai/mimo-v2.5-pro",
-        "slashai/Step-3.5-Flash",
-    ],
+    # Mahal
+    "slashai/deepseek-v4-flash": {"input": 1500, "output": 6000},
+    "slashai/deepseek-v4-pro": {"input": 4000, "output": 18000},
+    "bai/claude-opus-4.7": {"input": 5000, "output": 25000},
+    "cx/gpt-5.2": {"input": 5000, "output": 25000},
+    "cx/gpt-5.4": {"input": 5000, "output": 25000},
+    "cx/gpt-5.5": {"input": 5000, "output": 25000},
+    "slashai/Qwen3.6-Max-Preview": {"input": 5000, "output": 25000},
+    "slashai/claude-opus-4.5": {"input": 5000, "output": 25000},
+    "slashai/claude-opus-4.6": {"input": 5000, "output": 25000},
+    "slashai/claude-sonnet-4.7": {"input": 5000, "output": 15000},
+    "slashai/gpt-5-codex": {"input": 5000, "output": 25000},
+    "slashai/gpt-5-codex-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.1": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.1-codex": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.1-codex-max": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.1-codex-max-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.1-codex-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.1-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.2": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.2-codex": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.2-codex-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.2-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex-high": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex-high-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex-none": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex-none-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex-xhigh": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.3-codex-xhigh-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.4": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.4-pro": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.4-review": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.5": {"input": 5000, "output": 25000},
+    "slashai/gpt-5.5-review": {"input": 5000, "output": 25000},
+
+    # Sangat mahal / hindari untuk default
+    "slashai/claude-opus-4.7": {"input": 250000, "output": 1250000},
 }
 
-DEFAULT_SYSTEM_PROMPT = """
-Kamu adalah asisten pribadi AI yang cepat, jelas, dan praktis.
-Jawab dalam bahasa Indonesia kecuali pengguna meminta bahasa lain.
-Prioritaskan jawaban langsung, ringkas, dan mudah dipakai.
-Jika pertanyaan teknis, berikan langkah yang runtut tanpa terlalu banyak teori.
-""".strip()
+CHEAP_FALLBACKS = [
+    "slashai/gemini-3-flash",
+    "slashai/gpt-5-nano",
+    "slashai/gpt-5-mini",
+    "slashai/mimo-v2-flash",
+    "slashai/Step-3.5-Flash",
+    "slashai/MiniMax-M2.5",
+    "bai/deepseek-v4-flash",
+    "bai/claude-haiku-4.5",
+]
+
+MODE_PRESETS = {
+    "Super Hemat": {
+        "default_model": "slashai/gemini-3-flash",
+        "max_tokens": 500,
+        "history_turns": 4,
+        "temperature": 0.4,
+        "timeout": 25,
+        "stream": True,
+        "fallback_attempts": 1,
+    },
+    "Cepat Seimbang": {
+        "default_model": "slashai/gpt-5-nano",
+        "max_tokens": 800,
+        "history_turns": 6,
+        "temperature": 0.5,
+        "timeout": 35,
+        "stream": True,
+        "fallback_attempts": 2,
+    },
+    "Lebih Pintar": {
+        "default_model": "slashai/gpt-5-mini",
+        "max_tokens": 1200,
+        "history_turns": 8,
+        "temperature": 0.6,
+        "timeout": 45,
+        "stream": True,
+        "fallback_attempts": 2,
+    },
+}
 
 
-# =====================================================
-# SECRETS STREAMLIT
-# =====================================================
-def get_secret(name: str, default: Optional[str] = None) -> Optional[str]:
+# =========================
+# UTILITAS
+# =========================
+
+def rupiah(value: float) -> str:
+    return "Rp " + f"{value:,.0f}".replace(",", ".")
+
+
+def estimate_tokens(text: str) -> int:
+    # Estimasi kasar: 1 token ~ 4 karakter.
+    return max(1, int(len(text) / 4))
+
+
+def estimate_messages_tokens(messages: List[Dict[str, str]]) -> int:
+    total = 0
+    for msg in messages:
+        total += estimate_tokens(msg.get("content", "")) + 4
+    return total
+
+
+def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> Tuple[float, float, float]:
+    price = MODEL_PRICES.get(model, {"input": 0, "output": 0})
+    input_cost = (input_tokens / 1_000_000) * price["input"]
+    output_cost = (output_tokens / 1_000_000) * price["output"]
+    return input_cost, output_cost, input_cost + output_cost
+
+
+def price_tier(model: str) -> str:
+    p = MODEL_PRICES.get(model, {"input": 0, "output": 0})
+    if p["input"] <= 50 and p["output"] <= 200:
+        return "Super hemat"
+    if p["input"] <= 500 and p["output"] <= 2000:
+        return "Menengah"
+    if p["input"] <= 5000 and p["output"] <= 25000:
+        return "Mahal"
+    return "Sangat mahal"
+
+
+def model_label(model: str) -> str:
+    p = MODEL_PRICES.get(model)
+    if not p:
+        return model
+    return f"{model} — {price_tier(model)} — In {rupiah(p['input'])}/1M | Out {rupiah(p['output'])}/1M"
+
+
+def sort_models_by_cost(models: List[str]) -> List[str]:
+    return sorted(models, key=lambda m: (
+        MODEL_PRICES.get(m, {"input": 999999999})["input"],
+        MODEL_PRICES.get(m, {"output": 999999999})["output"],
+        m.lower()
+    ))
+
+
+def get_secret(name: str, default: str = "") -> str:
     try:
-        return st.secrets.get(name, default)
+        return str(st.secrets.get(name, default))
     except Exception:
         return default
 
 
-API_KEY = get_secret("SLASHAI_API_KEY")
-API_URL = get_secret("SLASHAI_API_URL", "https://api.slashai.my.id/v1/chat/completions")
-DEFAULT_MODEL = get_secret("SLASHAI_MODEL", "slashai/deepseek-v4-flash")
-
-
-# =====================================================
-# HELPER
-# =====================================================
-def init_state() -> None:
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "system_prompt" not in st.session_state:
-        st.session_state.system_prompt = DEFAULT_SYSTEM_PROMPT
-    if "last_used_model" not in st.session_state:
-        st.session_state.last_used_model = DEFAULT_MODEL
-
-
-def is_access_denied_error(status_code: int, text: str) -> bool:
-    text_lower = text.lower()
-    return (
-        status_code == 403
-        or "access_denied" in text_lower
-        or "deposit required" in text_lower
-        or "premium models" in text_lower
-    )
-
-
-def find_default_group(model_name: str) -> str:
-    for group, models in MODEL_GROUPS.items():
-        if model_name in models:
-            return group
-    return "Cepat & Hemat"
-
-
-def trim_history(messages: List[Dict[str, str]], max_chat_messages: int) -> List[Dict[str, str]]:
-    """
-    Supaya cepat dan hemat token, hanya kirim beberapa chat terakhir ke API.
-    Riwayat tetap tampil di UI, tetapi request API dibuat lebih ringan.
-    """
-    if max_chat_messages <= 0:
-        return []
-    return messages[-max_chat_messages:]
-
-
-def build_api_messages(system_prompt: str, history: List[Dict[str, str]], max_chat_messages: int) -> List[Dict[str, str]]:
-    return [
-        {"role": "system", "content": system_prompt},
-        *trim_history(history, max_chat_messages=max_chat_messages),
+def build_messages(system_prompt: str, user_prompt: str, history_turns: int) -> List[Dict[str, str]]:
+    # Ambil hanya beberapa percakapan terakhir agar lebih cepat dan murah.
+    recent_history = st.session_state.messages[-history_turns * 2:] if history_turns > 0 else []
+    return [{"role": "system", "content": system_prompt}] + recent_history + [
+        {"role": "user", "content": user_prompt}
     ]
 
 
-def parse_non_stream_response(response: requests.Response, model: str) -> str:
+def parse_non_stream_response(response: requests.Response) -> str:
+    data = response.json()
     try:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
-    except Exception as exc:
-        raise RuntimeError(f"Format respons API tidak sesuai dari model {model}: {response.text[:1000]}") from exc
+        return data["choices"][0]["message"]["content"] or ""
+    except Exception:
+        return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def stream_chunks(response: requests.Response, model: str) -> Generator[str, None, None]:
-    """Parse format Server-Sent Events ala OpenAI: data: {...}."""
-    found_chunk = False
-
+def stream_chunks(response: requests.Response):
     for raw_line in response.iter_lines(decode_unicode=True):
         if not raw_line:
             continue
-
         line = raw_line.strip()
         if line.startswith("data:"):
-            line = line[len("data:"):].strip()
-
+            line = line[5:].strip()
         if line == "[DONE]":
             break
-
         try:
             data = json.loads(line)
-        except json.JSONDecodeError:
+            delta = data.get("choices", [{}])[0].get("delta", {})
+            content = delta.get("content")
+            if content:
+                yield content
+        except Exception:
             continue
 
-        choice = data.get("choices", [{}])[0]
-        delta = choice.get("delta", {}) or {}
-        message = choice.get("message", {}) or {}
-        content = delta.get("content") or message.get("content") or ""
 
-        if content:
-            found_chunk = True
-            yield content
-
-    if not found_chunk:
-        raise RuntimeError(
-            f"Model {model} tidak mengirim chunk streaming. Matikan mode streaming di sidebar, lalu coba lagi."
-        )
-
-
-def post_chat(
-    messages: List[Dict[str, str]],
+def call_api_once(
+    api_url: str,
+    api_key: str,
     model: str,
+    messages: List[Dict[str, str]],
     temperature: float,
     max_tokens: int,
-    stream: bool,
-    timeout_seconds: int,
-) -> requests.Response:
-    if not API_KEY:
-        raise RuntimeError("API key belum diatur. Isi SLASHAI_API_KEY di Streamlit Secrets.")
-
+    timeout: int,
+    use_streaming: bool,
+):
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
     payload = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "stream": stream,
+        "stream": use_streaming,
     }
 
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    try:
-        response = requests.post(
-            API_URL,
-            headers=headers,
-            json=payload,
-            stream=stream,
-            timeout=(8, timeout_seconds),
-        )
-    except requests.exceptions.Timeout as exc:
-        raise RuntimeError("Request timeout. Turunkan Max Tokens atau gunakan model yang lebih ringan.") from exc
-    except requests.exceptions.RequestException as exc:
-        raise RuntimeError(f"Gagal menghubungi API: {exc}") from exc
+    response = requests.post(
+        api_url,
+        headers=headers,
+        json=payload,
+        timeout=timeout,
+        stream=use_streaming,
+    )
 
     if response.status_code != 200:
-        detail = response.text[:1200]
-        if is_access_denied_error(response.status_code, detail):
-            raise PermissionError(f"Model terkunci/ditolak: {model}. Detail: {detail}")
-        raise RuntimeError(f"API mengembalikan status {response.status_code}: {detail}")
+        # Potong pesan agar UI tidak terlalu panjang.
+        try:
+            err = response.json()
+            err_text = json.dumps(err, ensure_ascii=False)
+        except Exception:
+            err_text = response.text
+        raise RuntimeError(f"Status {response.status_code}: {err_text[:1000]}")
 
     return response
 
 
-def generate_answer_fast(
-    placeholder,
-    messages: List[Dict[str, str]],
-    primary_model: str,
+def generate_answer(
+    api_url: str,
+    api_key: str,
+    selected_model: str,
     fallback_models: List[str],
-    max_fallback: int,
+    messages: List[Dict[str, str]],
     temperature: float,
     max_tokens: int,
+    timeout: int,
     use_streaming: bool,
-    timeout_seconds: int,
-) -> Tuple[str, str, List[str]]:
-    """
-    Alur cepat:
-    1. Coba model utama.
-    2. Jika 403/deposit required, coba fallback maksimal beberapa model saja.
-    3. Tidak mencoba semua model agar tidak lambat.
-    """
-    models_to_try = [primary_model]
-    for item in fallback_models[:max_fallback]:
-        if item and item not in models_to_try:
-            models_to_try.append(item)
+    max_fallback_attempts: int,
+):
+    tried = []
+    models_to_try = [selected_model] + [m for m in fallback_models if m != selected_model]
+    models_to_try = models_to_try[: max(1, 1 + max_fallback_attempts)]
 
-    locked_models: List[str] = []
-    last_error: Optional[Exception] = None
-
+    last_error = None
     for model in models_to_try:
+        tried.append(model)
         try:
-            response = post_chat(
-                messages=messages,
+            response = call_api_once(
+                api_url=api_url,
+                api_key=api_key,
                 model=model,
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                stream=use_streaming,
-                timeout_seconds=timeout_seconds,
+                timeout=timeout,
+                use_streaming=use_streaming,
             )
-
-            if use_streaming:
-                collected = ""
-                for chunk in stream_chunks(response=response, model=model):
-                    collected += chunk
-                    placeholder.markdown(collected + "▌")
-                placeholder.markdown(collected)
-                return collected, model, locked_models
-
-            answer = parse_non_stream_response(response=response, model=model)
-            placeholder.markdown(answer)
-            return answer, model, locked_models
-
-        except PermissionError as exc:
-            locked_models.append(model)
-            last_error = exc
+            return model, response, None
+        except Exception as exc:
+            last_error = str(exc)
             continue
 
-    failed = "\n".join([f"- {m}" for m in locked_models])
-    raise RuntimeError(
-        "Semua model yang dicoba masih ditolak oleh provider.\n\n"
-        f"Model yang ditolak:\n{failed}\n\n"
-        "Solusi cepat: isi deposit/top up, atau pilih model lain yang sudah aktif di akun API kamu.\n\n"
-        f"Error terakhir: {last_error}"
+    return None, None, f"Semua model gagal dicoba: {', '.join(tried)}\n\nError terakhir:\n{last_error}"
+
+
+# =========================
+# UI STREAMLIT
+# =========================
+
+st.set_page_config(
+    page_title="Asisten Pribadi AI",
+    page_icon="🤖",
+    layout="centered",
+)
+
+st.title("🤖 Asisten Pribadi AI")
+st.caption("Versi cepat dan hemat biaya memakai API kompatibel OpenAI SlashAI.")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "system_prompt" not in st.session_state:
+    st.session_state.system_prompt = (
+        "Kamu adalah asisten pribadi yang cepat, jelas, hemat token, dan membantu pengguna dalam bahasa Indonesia. "
+        "Jawab langsung ke inti, tetapi tetap sopan. Jika diminta membuat kode, berikan kode yang siap pakai."
     )
 
-
-# =====================================================
-# UI
-# =====================================================
-init_state()
+api_url = get_secret("SLASHAI_API_URL", "https://api.slashai.my.id/v1/chat/completions")
+api_key = get_secret("SLASHAI_API_KEY", "")
+secret_model = get_secret("SLASHAI_MODEL", "slashai/gemini-3-flash")
 
 with st.sidebar:
-    st.title("⚙️ Mode Cepat")
+    st.header("⚙️ Pengaturan")
 
-    default_group = find_default_group(DEFAULT_MODEL)
-    group_names = list(MODEL_GROUPS.keys())
-    selected_group = st.selectbox(
-        "Kategori Model",
-        options=group_names,
-        index=group_names.index(default_group),
-    )
-
-    model_options = MODEL_GROUPS[selected_group]
-    default_index = model_options.index(DEFAULT_MODEL) if DEFAULT_MODEL in model_options else 0
-    selected_model = st.selectbox("Model", model_options, index=default_index)
-
-    use_custom_model = st.toggle("Custom model", value=False)
-    model = selected_model
-    if use_custom_model:
-        model = st.text_input("Nama model", value=selected_model).strip()
-
-    speed_profile = st.radio(
-        "Profil Kecepatan",
-        options=["Cepat", "Seimbang", "Lengkap"],
+    mode = st.selectbox(
+        "Mode",
+        list(MODE_PRESETS.keys()),
         index=0,
-        horizontal=True,
-        help="Cepat = respons lebih ringan. Lengkap = konteks lebih panjang, tapi bisa lebih lambat.",
+        help="Super Hemat paling murah dan cepat. Lebih Pintar memakai output lebih panjang.",
     )
-
-    if speed_profile == "Cepat":
-        default_max_messages = 8
-        default_max_tokens = 900
-        default_temperature = 0.4
-        default_max_fallback = 2
-        default_timeout = 45
-    elif speed_profile == "Seimbang":
-        default_max_messages = 14
-        default_max_tokens = 1500
-        default_temperature = 0.6
-        default_max_fallback = 3
-        default_timeout = 75
-    else:
-        default_max_messages = 24
-        default_max_tokens = 2500
-        default_temperature = 0.7
-        default_max_fallback = 5
-        default_timeout = 120
-
-    use_streaming = st.toggle(
-        "Streaming jawaban",
-        value=True,
-        help="Jawaban muncul bertahap. Jika provider tidak mendukung streaming, matikan opsi ini.",
-    )
-
-    with st.expander("Pengaturan lanjutan"):
-        temperature = st.slider("Temperature", 0.0, 1.5, float(default_temperature), 0.1)
-        max_tokens = st.slider("Max tokens", 256, 4096, int(default_max_tokens), 128)
-        max_chat_messages = st.slider("Jumlah chat terakhir yang dikirim", 4, 30, int(default_max_messages), 2)
-        max_fallback = st.slider("Maksimal fallback", 0, 6, int(default_max_fallback), 1)
-        timeout_seconds = st.slider("Timeout API/detik", 20, 180, int(default_timeout), 5)
-        fallback_text = st.text_area(
-            "Model fallback",
-            value="\n".join([m for m in FAST_MODELS if m != selected_model]),
-            height=130,
-            help="Satu model per baris. Aplikasi hanya mencoba sesuai batas Maksimal fallback.",
-        )
-        fallback_models = [line.strip() for line in fallback_text.splitlines() if line.strip()]
-
-    st.session_state.system_prompt = st.text_area(
-        "Instruksi Asisten",
-        value=st.session_state.system_prompt,
-        height=130,
-    )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🧹 Hapus", use_container_width=True):
-            st.session_state.messages = []
-            st.rerun()
-    with col2:
-        if st.button("🔄 Reset", use_container_width=True):
-            st.session_state.system_prompt = DEFAULT_SYSTEM_PROMPT
-            st.session_state.messages = []
-            st.rerun()
+    preset = MODE_PRESETS[mode]
 
     st.divider()
-    if API_KEY:
-        st.success("API key terbaca")
+    st.subheader("Model")
+
+    only_cheap = st.checkbox("Tampilkan model Rp50/Rp200 saja", value=True)
+
+    all_models = sort_models_by_cost(list(MODEL_PRICES.keys()))
+    if only_cheap:
+        shown_models = [m for m in all_models if MODEL_PRICES[m]["input"] <= 50 and MODEL_PRICES[m]["output"] <= 200]
     else:
-        st.error("API key belum ada")
-    st.caption(f"Endpoint: {API_URL}")
+        shown_models = all_models
+
+    default_model = secret_model if secret_model in shown_models else preset["default_model"]
+    if default_model not in shown_models:
+        default_model = shown_models[0]
+
+    selected_model = st.selectbox(
+        "Pilih model utama",
+        shown_models,
+        index=shown_models.index(default_model),
+        format_func=model_label,
+    )
+
+    custom_model_enabled = st.checkbox("Pakai model custom/manual", value=False)
+    if custom_model_enabled:
+        selected_model = st.text_input("Nama model custom", value=selected_model)
+
+    p = MODEL_PRICES.get(selected_model)
+    if p:
+        st.info(f"Harga model: Input {rupiah(p['input'])}/1M token | Output {rupiah(p['output'])}/1M token")
+    else:
+        st.warning("Harga model custom belum ada di daftar, estimasi biaya tidak tersedia.")
+
+    auto_fallback = st.checkbox("Auto fallback jika model error/403", value=True)
+    fallback_models = []
+    if auto_fallback:
+        fallback_models = st.multiselect(
+            "Fallback model murah",
+            CHEAP_FALLBACKS,
+            default=[m for m in CHEAP_FALLBACKS if m != selected_model][: preset["fallback_attempts"]],
+            format_func=model_label,
+        )
+        max_fallback_attempts = st.slider(
+            "Maksimal fallback",
+            min_value=0,
+            max_value=3,
+            value=preset["fallback_attempts"],
+            help="Makin kecil makin cepat. Gunakan 1–2 agar tidak lama.",
+        )
+    else:
+        max_fallback_attempts = 0
+
+    st.divider()
+    st.subheader("Kecepatan & Token")
+
+    use_streaming = st.toggle("Streaming jawaban", value=preset["stream"])
+    max_tokens = st.slider("Maksimal output token", 150, 2500, preset["max_tokens"], step=50)
+    history_turns = st.slider("Jumlah chat terakhir yang dikirim", 0, 12, preset["history_turns"])
+    temperature = st.slider("Kreativitas", 0.0, 1.0, preset["temperature"], step=0.1)
+    timeout = st.slider("Timeout API/detik", 10, 90, preset["timeout"], step=5)
+
+    st.divider()
+    st.subheader("Instruksi Asisten")
+    st.session_state.system_prompt = st.text_area(
+        "System prompt",
+        value=st.session_state.system_prompt,
+        height=140,
+    )
+
+    if st.button("🧹 Hapus riwayat chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+    st.caption("Tips: untuk hemat biaya, pakai Super Hemat + model Rp50/Rp200 + riwayat 4–6 chat.")
 
 
-st.title("⚡ Asisten Pribadi AI")
-st.caption("Alur cepat: konteks dipangkas, model ringan, streaming, dan fallback dibatasi.")
+if not api_key:
+    st.error(
+        "API key belum ditemukan. Isi Streamlit Secrets dengan SLASHAI_API_KEY, "
+        "SLASHAI_API_URL, dan SLASHAI_MODEL."
+    )
+    st.stop()
 
-if st.session_state.last_used_model:
-    st.caption(f"Model terakhir: `{st.session_state.last_used_model}`")
-
+# Tampilkan riwayat chat
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if not st.session_state.messages:
-    with st.chat_message("assistant"):
-        st.markdown("Halo! Tulis pertanyaan kamu. Saya akan jawab dengan alur cepat.")
-
-user_prompt = st.chat_input("Tulis pertanyaan...")
+user_prompt = st.chat_input("Tulis pertanyaan kamu di sini...")
 
 if user_prompt:
     st.session_state.messages.append({"role": "user", "content": user_prompt})
@@ -449,38 +455,77 @@ if user_prompt:
     with st.chat_message("user"):
         st.markdown(user_prompt)
 
-    api_messages = build_api_messages(
+    messages_for_api = build_messages(
         system_prompt=st.session_state.system_prompt,
-        history=st.session_state.messages,
-        max_chat_messages=max_chat_messages,
+        user_prompt=user_prompt,
+        history_turns=history_turns,
     )
 
+    input_tokens_est = estimate_messages_tokens(messages_for_api)
+    input_cost, output_cost, total_cost = estimate_cost(selected_model, input_tokens_est, max_tokens)
+
+    with st.expander("Estimasi biaya request ini", expanded=False):
+        st.write(f"Estimasi input: **{input_tokens_est:,} token**".replace(",", "."))
+        st.write(f"Maksimal output: **{max_tokens:,} token**".replace(",", "."))
+        if MODEL_PRICES.get(selected_model):
+            st.write(f"Estimasi biaya maksimal: **{rupiah(total_cost)}**")
+            st.caption(
+                "Ini estimasi kasar. Biaya asli tergantung token aktual dari provider."
+            )
+        else:
+            st.write("Estimasi biaya tidak tersedia untuk model custom.")
+
+    start = time.time()
+
     with st.chat_message("assistant"):
-        placeholder = st.empty()
-        with st.spinner("Menjawab..."):
+        status_box = st.empty()
+        answer_box = st.empty()
+
+        status_box.caption("Menghubungi model...")
+
+        used_model, response, error = generate_answer(
+            api_url=api_url,
+            api_key=api_key,
+            selected_model=selected_model,
+            fallback_models=fallback_models,
+            messages=messages_for_api,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            use_streaming=use_streaming,
+            max_fallback_attempts=max_fallback_attempts if auto_fallback else 0,
+        )
+
+        final_answer = ""
+
+        if error:
+            final_answer = (
+                "Maaf, API belum berhasil menjawab.\n\n"
+                f"```text\n{error}\n```\n\n"
+                "Coba pilih model Rp50/Rp200 lain seperti `slashai/gemini-3-flash`, "
+                "`slashai/gpt-5-nano`, atau `slashai/mimo-v2-flash`. "
+                "Jika tetap 403, kemungkinan akun API belum memiliki akses atau perlu deposit."
+            )
+            status_box.empty()
+            answer_box.markdown(final_answer)
+        else:
             try:
-                answer, used_model, locked_models = generate_answer_fast(
-                    placeholder=placeholder,
-                    messages=api_messages,
-                    primary_model=model,
-                    fallback_models=fallback_models,
-                    max_fallback=max_fallback,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    use_streaming=use_streaming,
-                    timeout_seconds=timeout_seconds,
-                )
-
-                st.session_state.last_used_model = used_model
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-
-                if locked_models:
-                    st.caption(
-                        "Beberapa model ditolak, lalu berhasil memakai: "
-                        f"`{used_model}`"
-                    )
+                if use_streaming:
+                    chunks = []
+                    for chunk in stream_chunks(response):
+                        chunks.append(chunk)
+                        final_answer = "".join(chunks)
+                        answer_box.markdown(final_answer + "▌")
+                    answer_box.markdown(final_answer)
                 else:
-                    st.caption(f"Model: `{used_model}`")
+                    final_answer = parse_non_stream_response(response)
+                    answer_box.markdown(final_answer)
 
-            except Exception as err:
-                st.error(str(err))
+                elapsed = time.time() - start
+                status_box.caption(f"Model dipakai: `{used_model}` • selesai {elapsed:.1f} detik")
+            except Exception as exc:
+                final_answer = f"Jawaban diterima, tetapi parsing gagal:\n\n```text\n{exc}\n```"
+                status_box.empty()
+                answer_box.markdown(final_answer)
+
+    st.session_state.messages.append({"role": "assistant", "content": final_answer})
