@@ -1,33 +1,19 @@
-# Streamlit Personal Assistant - Cost Aware
+# Asisten Pribadi AI Streamlit - No Empty Fix
 
-Aplikasi asisten pribadi AI berbasis Streamlit dengan API kompatibel OpenAI:
+Versi ini dibuat untuk memperbaiki masalah model tidak menjawab/hasil kosong.
 
-`https://api.slashai.my.id/v1/chat/completions`
+## Perbaikan utama
 
-## Fitur
+- Streaming jawaban default OFF agar kompatibel dengan API yang format streaming-nya tidak standar.
+- Parsing respons diperkuat untuk beberapa format OpenAI-compatible.
+- Jika streaming kosong, aplikasi bisa otomatis mencoba ulang non-streaming.
+- Prompt user tidak dikirim dobel ke API.
+- Ada tombol Tes koneksi API di sidebar.
+- Ada debug raw response jika provider mengembalikan format yang berbeda.
 
-- Chat AI seperti ChatGPT.
-- API key aman memakai Streamlit Secrets.
-- Pilihan model berdasarkan harga.
-- Default model hemat: `slashai/gemini-3-flash`.
-- Estimasi biaya per request.
-- Mode Super Hemat, Cepat Seimbang, dan Lebih Pintar.
-- Streaming jawaban.
-- Auto fallback hanya ke model murah agar cepat.
-- Riwayat chat dibatasi agar hemat token.
+## Streamlit Secrets
 
-## Cara pakai lokal
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## Secrets untuk Streamlit Online
-
-Masukkan di menu Streamlit Cloud:
-
-App > Settings > Secrets
+Masukkan ini di Settings > Secrets:
 
 ```toml
 SLASHAI_API_KEY = "ISI_API_KEY_KAMU"
@@ -35,17 +21,21 @@ SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/gemini-3-flash"
 ```
 
-## Rekomendasi model murah
+## Jalankan lokal
 
-Gunakan model harga Rp50 input / Rp200 output per 1M token:
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
 
-- `slashai/gemini-3-flash`
-- `slashai/gpt-5-nano`
-- `slashai/gpt-5-mini`
-- `slashai/mimo-v2-flash`
-- `slashai/Step-3.5-Flash`
-- `slashai/MiniMax-M2.5`
-- `bai/deepseek-v4-flash`
-- `bai/claude-haiku-4.5`
+## Model yang disarankan
 
-Catatan penting: `slashai/deepseek-v4-flash` pada daftar harga kamu tertulis Rp1.500/Rp6.000, jadi tidak dijadikan default hemat.
+Coba dari yang paling aman/murah:
+
+1. `slashai/gemini-3-flash`
+2. `slashai/gpt-5-nano`
+3. `slashai/gpt-5-mini`
+4. `slashai/mimo-v2-flash`
+5. `slashai/Step-3.5-Flash`
+
+Jika semua tetap error 403, berarti akun API belum memiliki akses model atau perlu deposit/top up.
