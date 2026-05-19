@@ -1,3 +1,4 @@
+import hmac
 import time
 from typing import Any
 
@@ -26,6 +27,43 @@ def parse_bool(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def safe_compare(left: Any, right: Any) -> bool:
+    return hmac.compare_digest(str(left or ""), str(right or ""))
+
+
+def require_admin_login(admin_username: str, admin_password: str) -> None:
+    """Stop rendering the dashboard until the admin enters the correct password."""
+    if not admin_password:
+        st.error("ADMIN_PASSWORD belum diisi di Streamlit Secrets.")
+        st.info("Tambahkan ADMIN_PASSWORD di Settings → Secrets agar dashboard terlindungi.")
+        st.stop()
+
+    if st.session_state.get("admin_authenticated"):
+        return
+
+    st.title("🔐 Login Admin")
+    st.write("Masukkan password admin untuk membuka dashboard, setting, memory, dan kontrol Bot Telegram.")
+
+    with st.form("admin_login_form", clear_on_submit=False):
+        username_input = st.text_input("Username", value="", placeholder="admin")
+        password_input = st.text_input("Password Admin", type="password", placeholder="Masukkan password admin")
+        submitted = st.form_submit_button("Masuk", use_container_width=True)
+
+    if submitted:
+        username_ok = safe_compare(username_input.strip(), admin_username)
+        password_ok = safe_compare(password_input, admin_password)
+
+        if username_ok and password_ok:
+            st.session_state.admin_authenticated = True
+            st.session_state.admin_username = admin_username
+            st.rerun()
+        else:
+            st.error("Username atau password admin salah.")
+
+    st.caption("Semua konfigurasi rahasia dibaca dari Streamlit Secrets/TOML.")
+    st.stop()
+
+
 DEFAULT_PERSONA = (
     "Nama kamu adalah adioranye. "
     "Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan pengguna. "
@@ -50,6 +88,10 @@ telegram_token = get_secret("TELEGRAM_BOT_TOKEN", "")
 memory_file = get_secret("MEMORY_FILE", "assistant_memory.json")
 persona_from_secret = get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA)
 auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", False), default=False)
+admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
+admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
+
+require_admin_login(admin_username, admin_password)
 
 memory = MemoryStore(memory_file)
 
@@ -62,6 +104,11 @@ if "persona" not in st.session_state:
 
 with st.sidebar:
     st.title("⚙️ Adioranye")
+    st.success(f"Login sebagai: {st.session_state.get('admin_username', 'admin')}")
+    if st.button("🚪 Logout Admin", use_container_width=True):
+        st.session_state.admin_authenticated = False
+        st.session_state.admin_username = ""
+        st.rerun()
 
     st.subheader("Model AI")
     selected_model = st.selectbox(
@@ -276,6 +323,9 @@ with tab_setup:
     st.code("Streamlit Cloud → App → Settings → Secrets", language="text")
 
     secrets_text = '''
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "Admin"
+
 TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_DARI_BOTFATHER"
 SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"

@@ -17,6 +17,9 @@ Di Streamlit Cloud:
 Isi:
 
 ```toml
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "Admin"
+
 TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_DARI_BOTFATHER"
 SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
@@ -27,6 +30,19 @@ MEMORY_FILE = "assistant_memory.json"
 
 TELEGRAM_AUTO_START = true
 ```
+
+## Proteksi Admin
+
+Dashboard Streamlit, setting model, persona, memory, tes AI, dan kontrol Bot Telegram hanya bisa dibuka setelah login admin.
+
+Default login pada contoh secrets:
+
+```text
+Username: admin
+Password: Admin
+```
+
+Sebaiknya ganti `ADMIN_PASSWORD` dengan password yang lebih kuat sebelum deploy publik.
 
 ## Deploy ke Streamlit Online
 
