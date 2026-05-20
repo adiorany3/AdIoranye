@@ -427,8 +427,7 @@ start_telegram_if_needed()
 # Admin settings UI
 # =========================
 def render_admin_login() -> None:
-    st.subheader("🔐 Admin Settings")
-    st.caption("Chat AI bisa dipakai tanpa login. Login hanya untuk membuka setting, memory, debug, dan kontrol Bot Telegram.")
+    st.subheader("🔐 Admin")
 
     if not admin_password:
         st.error("ADMIN_PASSWORD belum diisi di Streamlit Secrets.")
@@ -450,9 +449,36 @@ def render_admin_login() -> None:
             st.error("Username atau password salah.")
 
 
+def render_admin_status() -> None:
+    cfg = get_runtime_config()
+    price = model_price(cfg["model"])
+    last_meta = st.session_state.get("last_answer_meta", {}) or {}
+    last_model = (
+        last_meta.get("active_model_final")
+        or last_meta.get("model_requested")
+        or last_meta.get("model")
+        or cfg["model"]
+    )
+    exp_used = "ya" if last_meta.get("expensive_fallback_used") else "tidak"
+    telegram_status = "ON" if service.status()["running"] else "OFF"
+
+    st.markdown("#### Status Sistem")
+    st.caption("Chat publik aktif. Setting hanya untuk admin.")
+    status_text = (
+        f"Model utama: {cfg['model']}\n\n"
+        f"Tier: {model_cost_tier(cfg['model'])} | Rp{price.get('input', 0):,}/Rp{price.get('output', 0):,}\n\n"
+        f"Jawaban terakhir: {last_model}\n\n"
+        f"Model mahal dipakai: {exp_used}\n\n"
+        f"Telegram: {telegram_status}"
+    ).replace(",", ".")
+    st.info(status_text)
+
+
 def render_admin_settings() -> None:
     st.subheader("⚙️ Admin Settings")
     st.success(f"Login sebagai: {admin_username}")
+
+    render_admin_status()
 
     if st.button("🚪 Logout Admin", use_container_width=True):
         st.session_state.admin_authenticated = False
@@ -722,24 +748,7 @@ MAX_EXPENSIVE_MODELS = 1''',
 # =========================
 with st.sidebar:
     st.title("🤖 Adioranye")
-    st.caption("Chat publik aktif. Setting hanya untuk admin.")
 
-    cfg = get_runtime_config()
-    price = model_price(cfg["model"])
-    st.markdown(f'<span class="status-pill">Model utama: {cfg["model"]}</span>', unsafe_allow_html=True)
-    st.markdown(f'<span class="status-pill">Tier: {model_cost_tier(cfg["model"])} | Rp{price.get("input",0):,}/Rp{price.get("output",0):,}</span>'.replace(',', '.'), unsafe_allow_html=True)
-    last_meta = st.session_state.get("last_answer_meta", {}) or {}
-    if last_meta:
-        last_model = last_meta.get("active_model_final") or last_meta.get("model_requested") or last_meta.get("model") or cfg["model"]
-        exp_used = "ya" if last_meta.get("expensive_fallback_used") else "tidak"
-        st.markdown(f'<span class="status-pill">Jawaban terakhir: {last_model}</span>', unsafe_allow_html=True)
-        st.markdown(f'<span class="status-pill">Model mahal dipakai: {exp_used}</span>', unsafe_allow_html=True)
-    st.markdown(
-        f'<span class="status-pill">Telegram: {"ON" if service.status()["running"] else "OFF"}</span>',
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
     if st.session_state.admin_authenticated:
         render_admin_settings()
     else:
@@ -847,12 +856,13 @@ if user_input:
                 final_model = (meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or cfg["model"]
                 consulted = (meta or {}).get("consulted_models") or []
                 expensive_used = (meta or {}).get("expensive_fallback_used", False)
-                caption_text = f"Model aktif: {final_model}"
-                if consulted:
-                    caption_text += " • konsultasi: " + ", ".join(consulted[:4])
-                if expensive_used:
-                    caption_text += " • model menengah/mahal dipakai karena jawaban hemat kurang cukup"
-                st.caption(caption_text)
+                if st.session_state.admin_authenticated:
+                    caption_text = f"Model aktif: {final_model}"
+                    if consulted:
+                        caption_text += " • konsultasi: " + ", ".join(consulted[:4])
+                    if expensive_used:
+                        caption_text += " • model menengah/mahal dipakai karena jawaban hemat kurang cukup"
+                    st.caption(caption_text)
         except Exception as exc:
             answer = (
                 "Maaf, Adioranye belum bisa menjawab saat ini. "
