@@ -173,69 +173,71 @@ def persona_with_default_memory(persona: str) -> str:
 
 
 # =========================
-# iPhone-style liquid glass mobile-first styling
+# macOS-style glass desktop-first styling
 # =========================
 st.markdown(
     """
     <style>
     :root {
-        --ios-bg-1: #f7fbff;
-        --ios-bg-2: #eaf3ff;
-        --ios-bg-3: #fff5fb;
-        --ios-text: #0b1220;
-        --ios-muted: #65758b;
-        --ios-border: rgba(255, 255, 255, 0.72);
-        --ios-border-soft: rgba(15, 23, 42, 0.08);
-        --ios-glass: rgba(255, 255, 255, 0.58);
-        --ios-glass-strong: rgba(255, 255, 255, 0.78);
-        --ios-glass-soft: rgba(255, 255, 255, 0.38);
-        --ios-blue: #1677ff;
-        --ios-blue-soft: rgba(22, 119, 255, 0.13);
-        --ios-purple: rgba(128, 93, 255, 0.18);
-        --ios-pink: rgba(255, 99, 164, 0.16);
-        --ios-cyan: rgba(45, 212, 191, 0.18);
-        --ios-user: rgba(22, 119, 255, 0.16);
-        --ios-assistant: rgba(255, 255, 255, 0.66);
-        --ios-shadow: 0 24px 70px rgba(15, 23, 42, 0.16);
-        --ios-shadow-soft: 0 14px 34px rgba(15, 23, 42, 0.10);
-        --ios-blur: blur(26px) saturate(180%);
-        --ios-radius-xl: 38px;
-        --ios-radius-lg: 28px;
-        --ios-radius-md: 22px;
+        --mac-bg-1: #f4f7fb;
+        --mac-bg-2: #e8eef7;
+        --mac-bg-3: #fdf7f0;
+        --mac-text: #111827;
+        --mac-muted: #667085;
+        --mac-border: rgba(17, 24, 39, 0.10);
+        --mac-border-strong: rgba(17, 24, 39, 0.16);
+        --mac-window: rgba(255, 255, 255, 0.72);
+        --mac-window-strong: rgba(255, 255, 255, 0.86);
+        --mac-panel: rgba(255, 255, 255, 0.58);
+        --mac-panel-soft: rgba(255, 255, 255, 0.42);
+        --mac-toolbar: rgba(246, 248, 251, 0.72);
+        --mac-blue: #0a84ff;
+        --mac-blue-soft: rgba(10, 132, 255, 0.12);
+        --mac-green-soft: rgba(48, 209, 88, 0.12);
+        --mac-orange-soft: rgba(255, 159, 10, 0.13);
+        --mac-user: rgba(10, 132, 255, 0.14);
+        --mac-assistant: rgba(255, 255, 255, 0.66);
+        --mac-shadow: 0 30px 90px rgba(15, 23, 42, 0.16);
+        --mac-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.09);
+        --mac-blur: blur(24px) saturate(170%);
+        --mac-radius-window: 28px;
+        --mac-radius-card: 22px;
+        --mac-radius-bubble: 18px;
     }
 
     @media (prefers-color-scheme: dark) {
         :root {
-            --ios-bg-1: #050b16;
-            --ios-bg-2: #081427;
-            --ios-bg-3: #111827;
-            --ios-text: #f8fafc;
-            --ios-muted: #cbd5e1;
-            --ios-border: rgba(255, 255, 255, 0.15);
-            --ios-border-soft: rgba(255, 255, 255, 0.10);
-            --ios-glass: rgba(15, 23, 42, 0.58);
-            --ios-glass-strong: rgba(15, 23, 42, 0.78);
-            --ios-glass-soft: rgba(30, 41, 59, 0.48);
-            --ios-blue: #8ec5ff;
-            --ios-blue-soft: rgba(142, 197, 255, 0.14);
-            --ios-purple: rgba(168, 85, 247, 0.22);
-            --ios-pink: rgba(236, 72, 153, 0.17);
-            --ios-cyan: rgba(45, 212, 191, 0.13);
-            --ios-user: rgba(30, 92, 166, 0.54);
-            --ios-assistant: rgba(15, 23, 42, 0.64);
-            --ios-shadow: 0 26px 78px rgba(0, 0, 0, 0.42);
-            --ios-shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.26);
+            --mac-bg-1: #090f1d;
+            --mac-bg-2: #111827;
+            --mac-bg-3: #182235;
+            --mac-text: #f8fafc;
+            --mac-muted: #cbd5e1;
+            --mac-border: rgba(255, 255, 255, 0.11);
+            --mac-border-strong: rgba(255, 255, 255, 0.18);
+            --mac-window: rgba(15, 23, 42, 0.70);
+            --mac-window-strong: rgba(15, 23, 42, 0.86);
+            --mac-panel: rgba(30, 41, 59, 0.58);
+            --mac-panel-soft: rgba(30, 41, 59, 0.38);
+            --mac-toolbar: rgba(15, 23, 42, 0.78);
+            --mac-blue: #7cc4ff;
+            --mac-blue-soft: rgba(124, 196, 255, 0.14);
+            --mac-green-soft: rgba(48, 209, 88, 0.12);
+            --mac-orange-soft: rgba(255, 184, 77, 0.14);
+            --mac-user: rgba(10, 132, 255, 0.28);
+            --mac-assistant: rgba(15, 23, 42, 0.62);
+            --mac-shadow: 0 34px 96px rgba(0, 0, 0, 0.46);
+            --mac-shadow-soft: 0 15px 38px rgba(0, 0, 0, 0.28);
         }
     }
 
     html, body, .stApp {
         min-height: 100%;
-        color: var(--ios-text) !important;
+        color: var(--mac-text) !important;
         background:
-            radial-gradient(circle at 18% 8%, var(--ios-cyan), transparent 28%),
-            radial-gradient(circle at 82% 5%, var(--ios-pink), transparent 26%),
-            radial-gradient(circle at 58% 88%, var(--ios-purple), transparent 34%),
-            linear-gradient(145deg, var(--ios-bg-1), var(--ios-bg-2) 48%, var(--ios-bg-3)) !important;
+            radial-gradient(circle at 16% 10%, rgba(10,132,255,0.16), transparent 28%),
+            radial-gradient(circle at 82% 4%, rgba(255,159,10,0.14), transparent 26%),
+            radial-gradient(circle at 62% 92%, rgba(48,209,88,0.10), transparent 34%),
+            linear-gradient(145deg, var(--mac-bg-1), var(--mac-bg-2) 52%, var(--mac-bg-3)) !important;
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
     }
@@ -255,58 +257,46 @@ st.markdown(
         pointer-events: none;
         z-index: 0;
         background:
-            radial-gradient(circle at 50% -12%, rgba(255,255,255,0.58), transparent 32%),
-            linear-gradient(rgba(255,255,255,0.10) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px);
-        background-size: auto, 52px 52px, 52px 52px;
-        mask-image: linear-gradient(to bottom, rgba(0,0,0,0.45), transparent 72%);
+            linear-gradient(rgba(255,255,255,0.16) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.16) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,0.28), transparent 72%);
     }
 
     .main .block-container {
         position: relative;
         z-index: 1;
-        width: min(100%, 1040px);
-        max-width: 1040px;
-        min-height: calc(100svh - 44px);
-        margin: 20px auto 22px;
-        padding: 1.22rem 1.38rem 8.8rem;
-        border: 1px solid rgba(255, 255, 255, 0.70);
-        border-radius: 44px;
+        width: min(calc(100vw - 72px), 1120px);
+        max-width: 1120px;
+        min-height: calc(100svh - 48px);
+        margin: 24px auto 24px;
+        padding: 0 1.45rem 8.2rem;
+        border: 1px solid var(--mac-border-strong);
+        border-radius: var(--mac-radius-window);
         background:
-            linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0.14)),
-            rgba(255,255,255,0.18);
-        box-shadow:
-            0 44px 105px rgba(15, 23, 42, 0.18),
-            inset 0 1px 0 rgba(255,255,255,0.62);
-        backdrop-filter: blur(18px) saturate(155%);
-        -webkit-backdrop-filter: blur(18px) saturate(155%);
+            linear-gradient(180deg, rgba(255,255,255,0.44), rgba(255,255,255,0.16)),
+            var(--mac-window);
+        box-shadow: var(--mac-shadow), inset 0 1px 0 rgba(255,255,255,0.64);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
         overflow: visible;
     }
 
     @media (prefers-color-scheme: dark) {
         .main .block-container {
-            border-color: rgba(255,255,255,0.10);
             background:
                 linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)),
-                rgba(2, 6, 23, 0.28);
-            box-shadow:
-                0 42px 110px rgba(0, 0, 0, 0.48),
-                inset 0 1px 0 rgba(255,255,255,0.10);
-        }
-    }
-
-    @media (min-width: 900px) {
-        .main .block-container {
-            width: min(calc(100vw - 72px), 1040px);
+                var(--mac-window);
+            box-shadow: var(--mac-shadow), inset 0 1px 0 rgba(255,255,255,0.10);
         }
     }
 
     @media (min-width: 1280px) {
         .main .block-container {
-            max-width: 1120px;
-            width: min(calc(100vw - 120px), 1120px);
-            padding-left: 1.7rem;
-            padding-right: 1.7rem;
+            width: min(calc(100vw - 140px), 1180px);
+            max-width: 1180px;
+            padding-left: 1.75rem;
+            padding-right: 1.75rem;
         }
     }
 
@@ -316,7 +306,7 @@ st.markdown(
             max-width: 100%;
             min-height: 100svh;
             margin: 0;
-            padding: 0.76rem 0.88rem 7.7rem;
+            padding: 0.78rem 0.86rem 7.5rem;
             border: 0;
             border-radius: 0;
             box-shadow: none;
@@ -324,26 +314,18 @@ st.markdown(
         }
     }
 
-    @media (min-width: 761px) and (max-width: 899px) {
-        .main .block-container {
-            width: min(calc(100vw - 36px), 760px);
-            max-width: 760px;
-            border-radius: 38px;
-        }
-    }
-
     div[data-testid="stSidebar"] {
-        min-width: min(90vw, 378px) !important;
-        max-width: min(90vw, 410px) !important;
-        background: var(--ios-glass-strong) !important;
-        border-right: 1px solid var(--ios-border);
-        box-shadow: var(--ios-shadow);
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        min-width: min(90vw, 390px) !important;
+        max-width: min(90vw, 430px) !important;
+        background: var(--mac-window-strong) !important;
+        border-right: 1px solid var(--mac-border-strong);
+        box-shadow: var(--mac-shadow);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     div[data-testid="stSidebar"] * {
-        color: var(--ios-text) !important;
+        color: var(--mac-text) !important;
     }
 
     div[data-testid="stSidebar"] section,
@@ -351,49 +333,101 @@ st.markdown(
         background: transparent !important;
     }
 
-    .ios-topbar {
-        position: relative;
-        display: flex;
+    .mac-windowbar {
+        display: grid;
+        grid-template-columns: 120px 1fr 120px;
         align-items: center;
-        justify-content: center;
-        min-height: 34px;
-        margin: 0 0 10px;
+        min-height: 48px;
+        margin: 0 -1.45rem 16px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--mac-border);
+        border-radius: var(--mac-radius-window) var(--mac-radius-window) 0 0;
+        background: var(--mac-toolbar);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
-    .ios-dynamic-island {
-        width: 116px;
-        height: 32px;
+    .mac-traffic {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .mac-traffic span {
+        width: 13px;
+        height: 13px;
         border-radius: 999px;
-        background: rgba(5, 8, 15, 0.94);
-        box-shadow:
-            inset 0 1px 3px rgba(255,255,255,0.08),
-            0 9px 24px rgba(0,0,0,0.22);
+        display: inline-block;
+        box-shadow: inset 0 0 0 1px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.08);
     }
 
-    .ios-status-time {
-        position: absolute;
-        left: 8px;
-        top: 7px;
-        font-size: 0.78rem;
-        font-weight: 750;
-        color: var(--ios-text);
-        opacity: 0.86;
+    .mac-close { background: #ff5f57; }
+    .mac-min { background: #ffbd2e; }
+    .mac-max { background: #28c840; }
+
+    .mac-window-title {
+        text-align: center;
+        color: var(--mac-muted);
+        font-size: 0.92rem;
+        font-weight: 720;
         letter-spacing: -0.01em;
     }
 
-    .ios-status-icons {
-        position: absolute;
-        right: 7px;
-        top: 8px;
-        font-size: 0.76rem;
-        color: var(--ios-text);
-        opacity: 0.76;
-        letter-spacing: 0.02em;
+    .mac-window-actions {
+        justify-self: end;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 11px;
+        border-radius: 999px;
+        border: 1px solid var(--mac-border);
+        background: var(--mac-panel-soft);
+        color: var(--mac-muted);
+        font-size: 0.82rem;
+        font-weight: 700;
     }
 
-    @media (min-width: 900px) {
-        .ios-topbar {
-            display: none;
+    .mac-window-actions::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #28c840;
+        box-shadow: 0 0 0 4px rgba(40, 200, 64, 0.12);
+    }
+
+    @media (min-width: 1280px) {
+        .mac-windowbar {
+            margin-left: -1.75rem;
+            margin-right: -1.75rem;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .mac-windowbar {
+            grid-template-columns: auto 1fr auto;
+            min-height: 40px;
+            margin: 0 0 12px;
+            padding: 0 2px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+
+        .mac-traffic span {
+            width: 10px;
+            height: 10px;
+        }
+
+        .mac-window-title {
+            font-size: 0.82rem;
+        }
+
+        .mac-window-actions {
+            padding: 5px 8px;
+            font-size: 0.72rem;
         }
     }
 
@@ -402,122 +436,94 @@ st.markdown(
         overflow: hidden;
         display: flex;
         align-items: center;
-        gap: 13px;
-        padding: 17px 16px;
-        margin: 0 0 14px;
-        border: 1px solid var(--ios-border);
-        border-radius: var(--ios-radius-xl);
+        gap: 16px;
+        padding: 24px 24px;
+        margin: 0 0 16px;
+        border: 1px solid var(--mac-border);
+        border-radius: 24px;
         background:
-            radial-gradient(circle at 12% 5%, rgba(255,255,255,0.74), transparent 34%),
-            radial-gradient(circle at 90% 12%, var(--ios-blue-soft), transparent 38%),
-            linear-gradient(145deg, var(--ios-glass-strong), var(--ios-glass-soft));
-        box-shadow: var(--ios-shadow);
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
-    }
-
-    .app-hero::before {
-        content: "";
-        position: absolute;
-        inset: 1px;
-        border-radius: calc(var(--ios-radius-xl) - 1px);
-        background: linear-gradient(180deg, rgba(255,255,255,0.34), transparent 42%);
-        pointer-events: none;
+            radial-gradient(circle at 10% 0%, rgba(255,255,255,0.72), transparent 34%),
+            radial-gradient(circle at 96% 12%, var(--mac-blue-soft), transparent 38%),
+            linear-gradient(145deg, var(--mac-panel), var(--mac-panel-soft));
+        box-shadow: var(--mac-shadow-soft);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     .app-hero::after {
         content: "";
         position: absolute;
-        width: 170px;
-        height: 170px;
-        right: -82px;
-        top: -86px;
+        width: 210px;
+        height: 210px;
+        right: -90px;
+        top: -116px;
         border-radius: 999px;
-        background: radial-gradient(circle, rgba(22,119,255,0.20), transparent 66%);
-        filter: blur(1px);
+        background: radial-gradient(circle, rgba(10,132,255,0.17), transparent 66%);
         pointer-events: none;
     }
 
     .app-logo {
         position: relative;
         z-index: 1;
-        flex: 0 0 56px;
-        width: 56px;
-        height: 56px;
+        flex: 0 0 64px;
+        width: 64px;
+        height: 64px;
         display: grid;
         place-items: center;
-        border-radius: 19px;
+        border-radius: 18px;
         background:
-            linear-gradient(145deg, rgba(255,255,255,0.72), rgba(255,255,255,0.28));
-        border: 1px solid var(--ios-border);
-        box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.62),
-            0 16px 32px rgba(15,23,42,0.12);
-        font-size: 1.55rem;
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+            linear-gradient(145deg, rgba(255,255,255,0.78), rgba(255,255,255,0.36));
+        border: 1px solid var(--mac-border);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.72), 0 14px 30px rgba(15,23,42,0.12);
+        font-size: 1.8rem;
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     .app-title {
         position: relative;
         z-index: 1;
         margin: 0;
-        color: var(--ios-text);
-        font-size: clamp(1.44rem, 5vw, 1.92rem);
-        line-height: 1.03;
-        font-weight: 860;
-        letter-spacing: -0.045em;
+        color: var(--mac-text);
+        font-size: clamp(1.9rem, 3vw, 2.85rem);
+        line-height: 1.02;
+        font-weight: 820;
+        letter-spacing: -0.052em;
     }
 
     .app-subtitle {
         position: relative;
         z-index: 1;
-        margin: 7px 0 0;
-        color: var(--ios-muted);
-        font-size: clamp(0.91rem, 3.55vw, 0.98rem);
-        line-height: 1.43;
+        max-width: 720px;
+        margin: 8px 0 0;
+        color: var(--mac-muted);
+        font-size: clamp(0.96rem, 1.4vw, 1.06rem);
+        line-height: 1.55;
         letter-spacing: -0.008em;
     }
 
-    @media (min-width: 900px) {
+    @media (max-width: 760px) {
         .app-hero {
-            min-height: 148px;
-            padding: 28px 30px;
-            margin-bottom: 18px;
-            border-radius: 34px;
+            gap: 12px;
+            padding: 16px 15px;
+            border-radius: 22px;
         }
 
         .app-logo {
-            width: 72px;
-            height: 72px;
-            flex-basis: 72px;
-            border-radius: 24px;
-            font-size: 2rem;
+            width: 52px;
+            height: 52px;
+            flex-basis: 52px;
+            border-radius: 16px;
+            font-size: 1.45rem;
         }
 
         .app-title {
-            font-size: clamp(2rem, 3vw, 3rem);
-            letter-spacing: -0.055em;
+            font-size: clamp(1.42rem, 6vw, 1.9rem);
         }
 
         .app-subtitle {
-            max-width: 720px;
-            font-size: 1.06rem;
-            line-height: 1.55;
-        }
-    }
-
-    @media (max-width: 420px) {
-        .app-hero {
-            padding: 15px 14px;
-            gap: 11px;
-        }
-
-        .app-logo {
-            width: 50px;
-            height: 50px;
-            flex-basis: 50px;
-            border-radius: 17px;
+            font-size: 0.93rem;
+            line-height: 1.45;
         }
     }
 
@@ -526,55 +532,67 @@ st.markdown(
         align-items: center;
         gap: 6px;
         min-height: 34px;
-        padding: 8px 12px;
+        padding: 8px 13px;
         border-radius: 999px;
-        border: 1px solid var(--ios-border);
-        background: var(--ios-glass);
-        color: var(--ios-muted);
-        box-shadow: var(--ios-shadow-soft);
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        border: 1px solid var(--mac-border);
+        background: var(--mac-panel);
+        color: var(--mac-muted);
+        box-shadow: var(--mac-shadow-soft);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
         font-size: 0.86rem;
-        font-weight: 640;
+        font-weight: 660;
     }
 
     .simple-note,
     .stCaptionContainer,
     div[data-testid="stCaptionContainer"] {
-        color: var(--ios-muted) !important;
+        color: var(--mac-muted) !important;
         font-size: 0.86rem;
     }
 
     div[data-testid="stChatMessage"] {
-        border: 1px solid var(--ios-border);
-        border-radius: 28px;
-        padding: 0.62rem 0.72rem;
+        border: 1px solid var(--mac-border);
+        border-radius: var(--mac-radius-bubble);
+        padding: 0.72rem 0.86rem;
         margin-bottom: 0.82rem;
-        background: var(--ios-assistant);
-        color: var(--ios-text) !important;
-        box-shadow: var(--ios-shadow-soft);
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        background: var(--mac-assistant);
+        color: var(--mac-text) !important;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-        background: var(--ios-user);
-        border-color: rgba(22, 119, 255, 0.20);
+        background: var(--mac-user);
+        border-color: rgba(10, 132, 255, 0.18);
+    }
+
+    @media (min-width: 900px) {
+        div[data-testid="stChatMessage"] {
+            max-width: 86%;
+            border-radius: 20px;
+            padding: 0.82rem 0.96rem;
+        }
+
+        div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+            margin-left: auto;
+        }
     }
 
     div[data-testid="stChatMessage"] * {
-        color: var(--ios-text) !important;
+        color: var(--mac-text) !important;
     }
 
     div[data-testid="stChatMessageAvatarUser"],
     div[data-testid="stChatMessageAvatarAssistant"] {
         width: 34px !important;
         height: 34px !important;
-        background: rgba(255, 255, 255, 0.38) !important;
-        border: 1px solid var(--ios-border) !important;
+        background: var(--mac-panel) !important;
+        border: 1px solid var(--mac-border) !important;
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.40);
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     div[data-testid="stMarkdownContainer"] p,
@@ -585,16 +603,6 @@ st.markdown(
     }
 
     @media (min-width: 900px) {
-        div[data-testid="stChatMessage"] {
-            max-width: 88%;
-            padding: 0.78rem 0.92rem;
-            border-radius: 30px;
-        }
-
-        div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-            margin-left: auto;
-        }
-
         div[data-testid="stMarkdownContainer"] p,
         div[data-testid="stMarkdownContainer"] li {
             font-size: 1.02rem;
@@ -603,61 +611,52 @@ st.markdown(
 
     code, pre,
     div[data-testid="stMarkdownContainer"] code {
-        border-radius: 16px !important;
+        border-radius: 14px !important;
         white-space: pre-wrap !important;
         word-break: break-word !important;
-        border: 1px solid var(--ios-border-soft) !important;
+        border: 1px solid var(--mac-border) !important;
     }
 
     textarea,
     input,
     div[data-baseweb="input"] input,
     div[data-baseweb="textarea"] textarea {
-        background: var(--ios-glass) !important;
-        color: var(--ios-text) !important;
-        border-color: var(--ios-border) !important;
+        background: var(--mac-panel) !important;
+        color: var(--mac-text) !important;
+        border-color: var(--mac-border) !important;
         font-size: 16px !important;
-        border-radius: 20px !important;
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        border-radius: 15px !important;
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     div[data-testid="stChatInput"] {
         position: fixed !important;
         left: 50%;
         right: auto;
-        bottom: 14px;
+        bottom: 18px;
         transform: translateX(-50%);
-        width: min(960px, calc(100vw - 72px));
-        border: 1px solid var(--ios-border);
-        border-radius: 30px;
-        padding: 0.48rem 0.55rem max(0.48rem, env(safe-area-inset-bottom));
-        background:
-            linear-gradient(145deg, var(--ios-glass-strong), var(--ios-glass-soft)) !important;
-        box-shadow:
-            0 24px 56px rgba(15, 23, 42, 0.22),
-            inset 0 1px 0 rgba(255,255,255,0.56);
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        width: min(1040px, calc(100vw - 92px));
+        border: 1px solid var(--mac-border-strong);
+        border-radius: 22px;
+        padding: 0.5rem 0.55rem max(0.5rem, env(safe-area-inset-bottom));
+        background: var(--mac-window-strong) !important;
+        box-shadow: 0 22px 54px rgba(15, 23, 42, 0.20), inset 0 1px 0 rgba(255,255,255,0.56);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
         z-index: 999;
     }
 
     div[data-testid="stChatInput"] textarea {
         min-height: 48px !important;
-        border-radius: 24px !important;
-        border: 1px solid rgba(255,255,255,0.52) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.36);
+        border-radius: 16px !important;
+        border: 1px solid var(--mac-border) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.32);
     }
 
     @media (min-width: 1280px) {
         div[data-testid="stChatInput"] {
-            width: min(1040px, calc(100vw - 120px));
-        }
-    }
-
-    @media (min-width: 761px) and (max-width: 899px) {
-        div[data-testid="stChatInput"] {
-            width: min(724px, calc(100vw - 36px));
+            width: min(1090px, calc(100vw - 160px));
         }
     }
 
@@ -665,7 +664,7 @@ st.markdown(
         div[data-testid="stChatInput"] {
             bottom: 10px;
             width: calc(100vw - 20px);
-            border-radius: 28px;
+            border-radius: 21px;
         }
     }
 
@@ -673,19 +672,18 @@ st.markdown(
     div[data-testid="stFormSubmitButton"] button,
     div[data-testid="stButton"] button,
     div[data-testid="stDownloadButton"] button {
-        min-height: 44px;
-        border-radius: 999px !important;
-        border: 1px solid var(--ios-border) !important;
-        background:
-            linear-gradient(145deg, var(--ios-glass-strong), var(--ios-glass-soft)) !important;
-        color: var(--ios-text) !important;
-        font-weight: 720 !important;
+        min-height: 42px;
+        border-radius: 13px !important;
+        border: 1px solid var(--mac-border) !important;
+        background: linear-gradient(180deg, var(--mac-window-strong), var(--mac-panel)) !important;
+        color: var(--mac-text) !important;
+        font-weight: 700 !important;
         letter-spacing: -0.01em;
         text-align: center !important;
-        box-shadow: var(--ios-shadow-soft) !important;
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
-        transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07) !important;
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
+        transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
     }
 
     button[kind="primary"]:hover,
@@ -693,27 +691,27 @@ st.markdown(
     div[data-testid="stButton"] button:hover,
     div[data-testid="stDownloadButton"] button:hover {
         transform: translateY(-1px);
-        border-color: rgba(22, 119, 255, 0.28) !important;
-        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14) !important;
+        border-color: rgba(10, 132, 255, 0.28) !important;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12) !important;
     }
 
     div[data-testid="stAlert"],
     .stAlert {
-        border-radius: 24px !important;
-        border: 1px solid var(--ios-border) !important;
-        box-shadow: var(--ios-shadow-soft);
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        border-radius: 18px !important;
+        border: 1px solid var(--mac-border) !important;
+        box-shadow: var(--mac-shadow-soft);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     div[data-baseweb="select"] > div,
     div[data-baseweb="textarea"] > div,
     div[data-baseweb="input"] > div {
-        border-radius: 18px !important;
-        border-color: var(--ios-border) !important;
-        background: var(--ios-glass-soft) !important;
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        border-radius: 14px !important;
+        border-color: var(--mac-border) !important;
+        background: var(--mac-panel-soft) !important;
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     .stTabs [data-baseweb="tab-list"] {
@@ -721,13 +719,13 @@ st.markdown(
     }
 
     .stTabs [data-baseweb="tab"] {
-        min-height: 39px;
-        border-radius: 999px;
-        background: var(--ios-glass-soft);
-        border: 1px solid var(--ios-border);
-        color: var(--ios-text) !important;
-        backdrop-filter: var(--ios-blur);
-        -webkit-backdrop-filter: var(--ios-blur);
+        min-height: 38px;
+        border-radius: 12px;
+        background: var(--mac-panel-soft);
+        border: 1px solid var(--mac-border);
+        color: var(--mac-text) !important;
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
     }
 
     hr {
@@ -756,6 +754,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 
 # =========================
 # Runtime config
@@ -1175,16 +1174,20 @@ cfg = get_runtime_config()
 
 st.markdown(
     """
-    <div class="ios-topbar">
-        <div class="ios-status-time">AI</div>
-        <div class="ios-dynamic-island"></div>
-        <div class="ios-status-icons">●●● ▰</div>
+    <div class="mac-windowbar">
+        <div class="mac-traffic">
+            <span class="mac-close"></span>
+            <span class="mac-min"></span>
+            <span class="mac-max"></span>
+        </div>
+        <div class="mac-window-title">Adioranye AI</div>
+        <div class="mac-window-actions">Online</div>
     </div>
     <div class="app-hero">
         <div class="app-logo">🤖</div>
         <div>
             <h1 class="app-title">Adioranye AI</h1>
-            <p class="app-subtitle">Tulis pesan Anda. Adioranye akan membantu dengan jawaban yang jelas, ramah, dan praktis.</p>
+            <p class="app-subtitle">Tulis pesan Anda. Adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis.</p>
         </div>
     </div>
     """,
