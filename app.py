@@ -265,21 +265,21 @@ st.markdown(
     .main .block-container {
         position: relative;
         z-index: 1;
-        width: min(100%, 448px);
-        max-width: 448px;
-        min-height: calc(100svh - 22px);
-        margin: 10px auto 12px;
-        padding: 1.02rem 1rem 8.2rem;
+        width: min(100%, 1040px);
+        max-width: 1040px;
+        min-height: calc(100svh - 44px);
+        margin: 20px auto 22px;
+        padding: 1.22rem 1.38rem 8.8rem;
         border: 1px solid rgba(255, 255, 255, 0.70);
-        border-radius: 52px;
+        border-radius: 44px;
         background:
-            linear-gradient(180deg, rgba(255,255,255,0.30), rgba(255,255,255,0.12)),
-            rgba(255,255,255,0.20);
+            linear-gradient(180deg, rgba(255,255,255,0.34), rgba(255,255,255,0.14)),
+            rgba(255,255,255,0.18);
         box-shadow:
-            0 40px 95px rgba(15, 23, 42, 0.20),
+            0 44px 105px rgba(15, 23, 42, 0.18),
             inset 0 1px 0 rgba(255,255,255,0.62);
-        backdrop-filter: blur(16px) saturate(150%);
-        -webkit-backdrop-filter: blur(16px) saturate(150%);
+        backdrop-filter: blur(18px) saturate(155%);
+        -webkit-backdrop-filter: blur(18px) saturate(155%);
         overflow: visible;
     }
 
@@ -295,7 +295,22 @@ st.markdown(
         }
     }
 
-    @media (max-width: 640px) {
+    @media (min-width: 900px) {
+        .main .block-container {
+            width: min(calc(100vw - 72px), 1040px);
+        }
+    }
+
+    @media (min-width: 1280px) {
+        .main .block-container {
+            max-width: 1120px;
+            width: min(calc(100vw - 120px), 1120px);
+            padding-left: 1.7rem;
+            padding-right: 1.7rem;
+        }
+    }
+
+    @media (max-width: 760px) {
         .main .block-container {
             width: 100%;
             max-width: 100%;
@@ -306,6 +321,14 @@ st.markdown(
             border-radius: 0;
             box-shadow: none;
             background: transparent;
+        }
+    }
+
+    @media (min-width: 761px) and (max-width: 899px) {
+        .main .block-container {
+            width: min(calc(100vw - 36px), 760px);
+            max-width: 760px;
+            border-radius: 38px;
         }
     }
 
@@ -366,6 +389,12 @@ st.markdown(
         color: var(--ios-text);
         opacity: 0.76;
         letter-spacing: 0.02em;
+    }
+
+    @media (min-width: 900px) {
+        .ios-topbar {
+            display: none;
+        }
     }
 
     .app-hero {
@@ -450,6 +479,48 @@ st.markdown(
         letter-spacing: -0.008em;
     }
 
+    @media (min-width: 900px) {
+        .app-hero {
+            min-height: 148px;
+            padding: 28px 30px;
+            margin-bottom: 18px;
+            border-radius: 34px;
+        }
+
+        .app-logo {
+            width: 72px;
+            height: 72px;
+            flex-basis: 72px;
+            border-radius: 24px;
+            font-size: 2rem;
+        }
+
+        .app-title {
+            font-size: clamp(2rem, 3vw, 3rem);
+            letter-spacing: -0.055em;
+        }
+
+        .app-subtitle {
+            max-width: 720px;
+            font-size: 1.06rem;
+            line-height: 1.55;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .app-hero {
+            padding: 15px 14px;
+            gap: 11px;
+        }
+
+        .app-logo {
+            width: 50px;
+            height: 50px;
+            flex-basis: 50px;
+            border-radius: 17px;
+        }
+    }
+
     .ios-chat-meta {
         display: inline-flex;
         align-items: center;
@@ -513,6 +584,23 @@ st.markdown(
         letter-spacing: -0.003em;
     }
 
+    @media (min-width: 900px) {
+        div[data-testid="stChatMessage"] {
+            max-width: 88%;
+            padding: 0.78rem 0.92rem;
+            border-radius: 30px;
+        }
+
+        div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+            margin-left: auto;
+        }
+
+        div[data-testid="stMarkdownContainer"] p,
+        div[data-testid="stMarkdownContainer"] li {
+            font-size: 1.02rem;
+        }
+    }
+
     code, pre,
     div[data-testid="stMarkdownContainer"] code {
         border-radius: 16px !important;
@@ -538,9 +626,9 @@ st.markdown(
         position: fixed !important;
         left: 50%;
         right: auto;
-        bottom: 13px;
+        bottom: 14px;
         transform: translateX(-50%);
-        width: min(448px, calc(100vw - 24px));
+        width: min(960px, calc(100vw - 72px));
         border: 1px solid var(--ios-border);
         border-radius: 30px;
         padding: 0.48rem 0.55rem max(0.48rem, env(safe-area-inset-bottom));
@@ -561,7 +649,19 @@ st.markdown(
         box-shadow: inset 0 1px 0 rgba(255,255,255,0.36);
     }
 
-    @media (max-width: 640px) {
+    @media (min-width: 1280px) {
+        div[data-testid="stChatInput"] {
+            width: min(1040px, calc(100vw - 120px));
+        }
+    }
+
+    @media (min-width: 761px) and (max-width: 899px) {
+        div[data-testid="stChatInput"] {
+            width: min(724px, calc(100vw - 36px));
+        }
+    }
+
+    @media (max-width: 760px) {
         div[data-testid="stChatInput"] {
             bottom: 10px;
             width: calc(100vw - 20px);
@@ -635,7 +735,7 @@ st.markdown(
         margin: 0.7rem 0 !important;
     }
 
-    @media (max-width: 640px) {
+    @media (max-width: 760px) {
         div[data-testid="column"] {
             width: 100% !important;
             flex: 1 1 100% !important;
@@ -1094,7 +1194,7 @@ st.markdown(
 if not api_key:
     st.warning("SLASHAI_API_KEY belum diisi. Chat belum bisa digunakan sampai admin mengisi Secrets di Streamlit Cloud.")
 
-col_new_chat, col_info = st.columns([1, 2])
+col_new_chat, col_info = st.columns([1, 4])
 with col_new_chat:
     if st.button("🧹 Chat baru", use_container_width=True):
         st.session_state.chat_messages = []
