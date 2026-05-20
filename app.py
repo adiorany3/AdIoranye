@@ -135,179 +135,146 @@ service = get_telegram_service()
 
 
 # =========================
-# Mobile-first, eye-friendly adaptive styling
+# Simple mobile-first styling
 # =========================
 st.markdown(
     """
     <style>
     :root {
-        --app-bg: #f6f7fb;
-        --app-surface: #ffffff;
-        --app-surface-soft: #eef2f8;
-        --app-text: #111827;
-        --app-muted: #4b5563;
-        --app-border: rgba(17, 24, 39, 0.13);
-        --app-primary: #2563eb;
-        --app-primary-strong: #1d4ed8;
-        --app-primary-soft: rgba(37, 99, 235, 0.10);
-        --app-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        --bg: #f7f8fc;
+        --surface: #ffffff;
+        --surface-soft: #f1f5f9;
+        --text: #111827;
+        --muted: #64748b;
+        --border: rgba(15, 23, 42, 0.10);
+        --primary: #2563eb;
+        --primary-soft: rgba(37, 99, 235, 0.10);
+        --shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
+        --user-bubble: #eaf2ff;
         --assistant-bubble: #ffffff;
-        --user-bubble: #e8f0ff;
-        --input-bg: #ffffff;
-        --success-soft: rgba(34, 197, 94, 0.12);
     }
 
     @media (prefers-color-scheme: dark) {
         :root {
-            --app-bg: #0b1120;
-            --app-surface: #111827;
-            --app-surface-soft: #1f2937;
-            --app-text: #f8fafc;
-            --app-muted: #cbd5e1;
-            --app-border: rgba(226, 232, 240, 0.15);
-            --app-primary: #93c5fd;
-            --app-primary-strong: #bfdbfe;
-            --app-primary-soft: rgba(147, 197, 253, 0.14);
-            --app-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
-            --assistant-bubble: #111827;
+            --bg: #0b1120;
+            --surface: #111827;
+            --surface-soft: #1f2937;
+            --text: #f8fafc;
+            --muted: #cbd5e1;
+            --border: rgba(226, 232, 240, 0.14);
+            --primary: #93c5fd;
+            --primary-soft: rgba(147, 197, 253, 0.14);
+            --shadow: 0 10px 26px rgba(0, 0, 0, 0.30);
             --user-bubble: #1e3a5f;
-            --input-bg: #111827;
-            --success-soft: rgba(34, 197, 94, 0.16);
+            --assistant-bubble: #111827;
         }
     }
 
     html, body, .stApp {
-        background: var(--app-bg) !important;
-        color: var(--app-text) !important;
+        background: var(--bg) !important;
+        color: var(--text) !important;
     }
 
-    /* Main layout: comfortable on phone, still clean on desktop. */
+    #MainMenu, footer {
+        visibility: hidden;
+    }
+
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+    }
+
     .main .block-container {
-        width: min(100%, 860px);
-        max-width: 860px;
-        padding: 0.85rem 1rem 6.5rem 1rem;
+        max-width: 760px;
+        padding: 0.9rem 1rem 6.8rem;
     }
 
     @media (max-width: 640px) {
         .main .block-container {
-            padding: 0.65rem 0.72rem 7.2rem 0.72rem;
+            padding: 0.65rem 0.72rem 7.4rem;
         }
     }
 
-    /* Sidebar/admin should remain readable when opened on mobile. */
     div[data-testid="stSidebar"] {
+        background: var(--surface) !important;
+        border-right: 1px solid var(--border);
         min-width: min(88vw, 360px) !important;
         max-width: min(88vw, 390px) !important;
-        background: var(--app-surface) !important;
-        border-right: 1px solid var(--app-border);
     }
 
     div[data-testid="stSidebar"] * {
-        color: var(--app-text) !important;
+        color: var(--text) !important;
     }
 
-    .mobile-hero {
-        border: 1px solid var(--app-border);
-        border-radius: 26px;
-        padding: 18px 18px;
-        margin: 0 0 14px 0;
-        background:
-            radial-gradient(circle at 4% 8%, var(--app-primary-soft), transparent 38%),
-            var(--app-surface);
-        color: var(--app-text);
-        box-shadow: var(--app-shadow);
-    }
-
-    .mobile-hero-title {
+    .app-hero {
         display: flex;
+        gap: 13px;
         align-items: center;
-        gap: 10px;
-        font-size: clamp(1.35rem, 5.3vw, 2rem);
-        line-height: 1.15;
-        margin: 0 0 8px 0;
-        font-weight: 800;
-        letter-spacing: -0.035em;
-        color: var(--app-text);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        padding: 16px;
+        margin: 0 0 14px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
     }
 
-    .mobile-hero p {
-        margin: 0;
-        color: var(--app-muted);
-        line-height: 1.52;
-        font-size: clamp(0.94rem, 3.6vw, 1rem);
-    }
-
-    .status-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-        margin-top: 12px;
-    }
-
-    .status-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 6px 10px;
-        min-height: 32px;
-        border-radius: 999px;
-        background: var(--app-primary-soft);
-        border: 1px solid var(--app-border);
-        color: var(--app-text) !important;
-        font-size: 0.84rem;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    .suggestion-grid {
+    .app-logo {
+        width: 46px;
+        height: 46px;
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-        margin: 10px 0 6px;
+        place-items: center;
+        flex: 0 0 46px;
+        border-radius: 16px;
+        background: var(--primary-soft);
+        font-size: 1.45rem;
     }
 
-    @media (max-width: 520px) {
-        .suggestion-grid {
-            grid-template-columns: 1fr;
-        }
+    .app-title {
+        margin: 0;
+        color: var(--text);
+        font-size: clamp(1.35rem, 5vw, 1.9rem);
+        line-height: 1.1;
+        font-weight: 800;
+        letter-spacing: -0.03em;
     }
 
-    .quick-card {
-        border: 1px solid var(--app-border);
-        border-radius: 18px;
-        padding: 14px 15px;
-        background: var(--app-surface);
-        color: var(--app-text);
-        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
-        line-height: 1.48;
+    .app-subtitle {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: clamp(0.92rem, 3.6vw, 1rem);
+        line-height: 1.45;
+    }
+
+    .section-title {
+        margin: 12px 0 8px;
+        color: var(--text);
+        font-weight: 750;
         font-size: 0.96rem;
-        min-height: 74px;
     }
 
-    .toolbar-card {
-        border: 1px solid var(--app-border);
-        border-radius: 18px;
-        padding: 10px 12px;
+    .simple-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
         margin: 10px 0 12px;
-        background: var(--app-surface);
-        color: var(--app-muted);
+        color: var(--muted);
     }
 
-    .small-note,
+    .simple-note,
     .stCaptionContainer,
     div[data-testid="stCaptionContainer"] {
-        color: var(--app-muted) !important;
-        font-size: 0.88rem;
+        color: var(--muted) !important;
+        font-size: 0.86rem;
     }
 
-    /* Chat bubbles */
     div[data-testid="stChatMessage"] {
-        border: 1px solid var(--app-border);
-        border-radius: 20px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
         padding: 0.48rem 0.62rem;
-        margin-bottom: 0.78rem;
+        margin-bottom: 0.72rem;
         background: var(--assistant-bubble);
-        color: var(--app-text) !important;
-        box-shadow: 0 7px 18px rgba(15, 23, 42, 0.04);
+        color: var(--text) !important;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
     }
 
     div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
@@ -315,38 +282,43 @@ st.markdown(
     }
 
     div[data-testid="stChatMessage"] * {
-        color: var(--app-text) !important;
+        color: var(--text) !important;
     }
 
     div[data-testid="stMarkdownContainer"] p,
     div[data-testid="stMarkdownContainer"] li {
-        line-height: 1.68;
-        font-size: clamp(0.98rem, 3.7vw, 1.04rem);
+        line-height: 1.65;
+        font-size: clamp(0.97rem, 3.7vw, 1.03rem);
     }
 
-    div[data-testid="stMarkdownContainer"] code,
-    code, pre {
+    code, pre,
+    div[data-testid="stMarkdownContainer"] code {
         border-radius: 12px !important;
         white-space: pre-wrap !important;
         word-break: break-word !important;
     }
 
-    /* Inputs: 16px prevents zoom on iOS. */
     textarea,
     input,
     div[data-baseweb="input"] input,
     div[data-baseweb="textarea"] textarea {
-        background: var(--input-bg) !important;
-        color: var(--app-text) !important;
-        border-color: var(--app-border) !important;
+        background: var(--surface) !important;
+        color: var(--text) !important;
+        border-color: var(--border) !important;
         font-size: 16px !important;
     }
 
     div[data-testid="stChatInput"] {
-        background: color-mix(in srgb, var(--app-bg) 92%, transparent) !important;
-        border-top: 1px solid var(--app-border);
-        padding: 0.55rem 0.72rem max(0.55rem, env(safe-area-inset-bottom)) 0.72rem;
+        background: rgba(247, 248, 252, 0.92) !important;
+        border-top: 1px solid var(--border);
+        padding: 0.55rem 0.72rem max(0.6rem, env(safe-area-inset-bottom));
         backdrop-filter: blur(10px);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        div[data-testid="stChatInput"] {
+            background: rgba(11, 17, 32, 0.92) !important;
+        }
     }
 
     div[data-testid="stChatInput"] textarea {
@@ -360,21 +332,22 @@ st.markdown(
     div[data-testid="stDownloadButton"] button {
         min-height: 44px;
         border-radius: 14px !important;
-        border: 1px solid var(--app-border) !important;
-        color: var(--app-text) !important;
+        border: 1px solid var(--border) !important;
         font-weight: 650 !important;
     }
 
-    /* Make buttons easier to tap on small screens. */
     @media (max-width: 640px) {
         div[data-testid="column"] {
             width: 100% !important;
             flex: 1 1 100% !important;
             min-width: 100% !important;
         }
-        button {
+
+        div[data-testid="stButton"] button {
             width: 100% !important;
+            text-align: left;
         }
+
         .stTabs [data-baseweb="tab-list"] {
             gap: 4px;
             overflow-x: auto;
@@ -387,8 +360,8 @@ st.markdown(
     }
 
     hr {
-        border-color: var(--app-border) !important;
-        margin: 0.9rem 0 !important;
+        border-color: var(--border) !important;
+        margin: 0.8rem 0 !important;
     }
     </style>
     """,
@@ -779,16 +752,12 @@ with st.sidebar:
 cfg = get_runtime_config()
 
 st.markdown(
-    f"""
-    <div class="mobile-hero">
-        <div class="mobile-hero-title">🤖 Adioranye AI</div>
-        <p>Asisten pribadi yang siap membantu menjawab pertanyaan, menulis, merangkum, membuat ide, dan memberi solusi praktis.</p>
-        <div class="status-row">
-            <span class="status-pill">💬 Chat publik</span>
-            <span class="status-pill">⚙️ Setting terkunci admin</span>
-            <span class="status-pill">📱 Mobile friendly</span>
-            <span class="status-pill">⚡ Fast accurate router</span>
-            <span class="status-pill">🧠 Model: {cfg["model"]}</span>
+    """
+    <div class="app-hero">
+        <div class="app-logo">🤖</div>
+        <div>
+            <h1 class="app-title">Adioranye AI</h1>
+            <p class="app-subtitle">Tulis kebutuhan Anda. Jawaban dibuat singkat, jelas, dan siap dipakai.</p>
         </div>
     </div>
     """,
@@ -798,32 +767,29 @@ st.markdown(
 if not api_key:
     st.warning("SLASHAI_API_KEY belum diisi. Chat belum bisa digunakan sampai admin mengisi Secrets di Streamlit Cloud.")
 
-# Quick prompt buttons only shown when chat is empty
+# Quick prompt buttons are only shown when chat is empty.
 if not st.session_state.chat_messages:
-    st.markdown("**Pilih contoh cepat atau langsung ketik di bawah:**")
+    st.markdown('<div class="section-title">Contoh cepat</div>', unsafe_allow_html=True)
     prompt_examples = [
-        "Buatkan caption promosi produk yang singkat dan menarik.",
-        "Ringkas materi ini menjadi bahasa mahasiswa yang natural.",
-        "Bantu susun jawaban presentasi agar terdengar percaya diri.",
-        "Buatkan ide konten TikTok edukasi yang berpotensi ramai.",
+        ("Caption promosi", "Buatkan caption promosi produk yang singkat dan menarik."),
+        ("Ringkas teks", "Ringkas materi ini menjadi bahasa yang natural dan mudah dipahami."),
+        ("Jawaban presentasi", "Bantu susun jawaban presentasi agar terdengar percaya diri."),
+        ("Ide konten TikTok", "Buatkan ide konten TikTok edukasi yang berpotensi ramai."),
     ]
     cols = st.columns(2)
-    for idx, example in enumerate(prompt_examples):
+    for idx, (label, prompt_text) in enumerate(prompt_examples):
         with cols[idx % 2]:
-            if st.button(example, key=f"quick_prompt_{idx}", use_container_width=True):
-                st.session_state.pending_prompt = example
+            if st.button(label, key=f"quick_prompt_{idx}", use_container_width=True):
+                st.session_state.pending_prompt = prompt_text
 
-# Chat toolbar
-st.markdown('<div class="toolbar-card">', unsafe_allow_html=True)
-col_toolbar_1, col_toolbar_2 = st.columns([1, 2])
-with col_toolbar_1:
+col_new_chat, col_info = st.columns([1, 2])
+with col_new_chat:
     if st.button("🧹 Chat baru", use_container_width=True):
         st.session_state.chat_messages = []
         st.session_state.pending_prompt = ""
         st.rerun()
-with col_toolbar_2:
-    st.caption(f"{len(st.session_state.chat_messages)} pesan • Model utama: {cfg['model']} • Router {'ON' if cfg['smart_model_router'] else 'OFF'} • Mahal jika perlu: {'ON' if cfg['allow_expensive_fallback'] else 'OFF'}")
-st.markdown('</div>', unsafe_allow_html=True)
+with col_info:
+    st.caption(f"{len(st.session_state.chat_messages)} pesan")
 
 st.divider()
 
@@ -831,7 +797,7 @@ for msg in st.session_state.chat_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-typed_input = st.chat_input("Tulis pertanyaan kamu untuk Adioranye...")
+typed_input = st.chat_input("Ketik pesan Anda...")
 user_input = st.session_state.pending_prompt or typed_input
 if st.session_state.pending_prompt:
     st.session_state.pending_prompt = ""
@@ -856,7 +822,7 @@ if user_input:
         try:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                placeholder.markdown("⏳ Adioranye sedang menyusun jawaban...")
+                placeholder.markdown("⏳ Kami siapkan jawaban detail untuk Anda, tunggu sebentar...")
                 answer, meta = generate_answer(
                     api_url=api_url,
                     api_key=api_key,
