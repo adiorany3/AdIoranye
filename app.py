@@ -270,7 +270,7 @@ st.markdown(
         max-width: 1120px;
         min-height: calc(100svh - 48px);
         margin: 24px auto 24px;
-        padding: 0 1.45rem 8.2rem;
+        padding: 0 1.45rem 10.8rem;
         border: 1px solid var(--mac-border-strong);
         border-radius: var(--mac-radius-window);
         background:
@@ -306,7 +306,7 @@ st.markdown(
             max-width: 100%;
             min-height: 100svh;
             margin: 0;
-            padding: 0.78rem 0.86rem 7.5rem;
+            padding: 0.78rem 0.86rem 9.8rem;
             border: 0;
             border-radius: 0;
             box-shadow: none;
@@ -630,13 +630,26 @@ st.markdown(
         -webkit-backdrop-filter: var(--mac-blur);
     }
 
+    .chat-input-safe-space {
+        height: 136px;
+        width: 100%;
+        flex-shrink: 0;
+    }
+
+    @media (max-width: 760px) {
+        .chat-input-safe-space {
+            height: 124px;
+        }
+    }
+
     div[data-testid="stChatInput"] {
         position: fixed !important;
         left: 50%;
         right: auto;
-        bottom: 18px;
+        bottom: 22px;
         transform: translateX(-50%);
         width: min(1040px, calc(100vw - 92px));
+        max-height: min(34svh, 240px);
         border: 1px solid var(--mac-border-strong);
         border-radius: 22px;
         padding: 0.5rem 0.55rem max(0.5rem, env(safe-area-inset-bottom));
@@ -662,7 +675,7 @@ st.markdown(
 
     @media (max-width: 760px) {
         div[data-testid="stChatInput"] {
-            bottom: 10px;
+            bottom: 12px;
             width: calc(100vw - 20px);
             border-radius: 21px;
         }
@@ -1214,6 +1227,8 @@ st.divider()
 for msg in st.session_state.chat_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+
+st.markdown('<div class="chat-input-safe-space"></div>', unsafe_allow_html=True)
 
 typed_input = st.chat_input("Ketik pesan Anda...")
 user_input = st.session_state.pending_prompt or typed_input
