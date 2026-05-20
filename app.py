@@ -270,7 +270,7 @@ st.markdown(
         max-width: 1120px;
         min-height: calc(100svh - 48px);
         margin: 24px auto 24px;
-        padding: 0 1.45rem 10.8rem;
+        padding: 0 1.45rem 14.5rem;
         border: 1px solid var(--mac-border-strong);
         border-radius: var(--mac-radius-window);
         background:
@@ -306,7 +306,7 @@ st.markdown(
             max-width: 100%;
             min-height: 100svh;
             margin: 0;
-            padding: 0.78rem 0.86rem 9.8rem;
+            padding: 0.78rem 0.86rem 13.2rem;
             border: 0;
             border-radius: 0;
             box-shadow: none;
@@ -584,6 +584,17 @@ st.markdown(
         color: var(--mac-text) !important;
     }
 
+
+    div[data-testid="stChatMessage"]:last-of-type {
+        scroll-margin-bottom: 240px;
+    }
+
+    @media (max-width: 760px) {
+        div[data-testid="stChatMessage"]:last-of-type {
+            scroll-margin-bottom: 210px;
+        }
+    }
+
     div[data-testid="stChatMessageAvatarUser"],
     div[data-testid="stChatMessageAvatarAssistant"] {
         width: 34px !important;
@@ -631,14 +642,15 @@ st.markdown(
     }
 
     .chat-input-safe-space {
-        height: 136px;
+        height: 220px;
         width: 100%;
         flex-shrink: 0;
+        pointer-events: none;
     }
 
     @media (max-width: 760px) {
         .chat-input-safe-space {
-            height: 124px;
+            height: 190px;
         }
     }
 
@@ -646,10 +658,10 @@ st.markdown(
         position: fixed !important;
         left: 50%;
         right: auto;
-        bottom: 22px;
+        bottom: 12px;
         transform: translateX(-50%);
         width: min(1040px, calc(100vw - 92px));
-        max-height: min(34svh, 240px);
+        max-height: min(28svh, 190px);
         border: 1px solid var(--mac-border-strong);
         border-radius: 22px;
         padding: 0.5rem 0.55rem max(0.5rem, env(safe-area-inset-bottom));
@@ -675,7 +687,7 @@ st.markdown(
 
     @media (max-width: 760px) {
         div[data-testid="stChatInput"] {
-            bottom: 12px;
+            bottom: 8px;
             width: calc(100vw - 20px);
             border-radius: 21px;
         }
@@ -1228,8 +1240,7 @@ for msg in st.session_state.chat_messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-st.markdown('<div class="chat-input-safe-space"></div>', unsafe_allow_html=True)
-
+# Spacer is rendered at the very end so it also protects newly generated messages.
 typed_input = st.chat_input("Ketik pesan Anda...")
 user_input = st.session_state.pending_prompt or typed_input
 if st.session_state.pending_prompt:
@@ -1307,6 +1318,9 @@ if user_input:
     if meta and st.session_state.admin_authenticated and st.session_state.show_debug:
         with st.expander("Debug response admin"):
             st.json(meta)
+
+# Ruang aman terakhir agar input floating tidak menutupi pesan terakhir, termasuk pesan yang baru dibuat.
+st.markdown('<div class="chat-input-safe-space"></div>', unsafe_allow_html=True)
 
 # Tiny refresh delay for Streamlit Cloud stability
 time.sleep(0.03)
