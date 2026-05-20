@@ -135,44 +135,75 @@ service = get_telegram_service()
 
 
 # =========================
-# Simple mobile-first styling
+# Glass mobile-first styling
 # =========================
 st.markdown(
     """
     <style>
     :root {
-        --bg: #f7f8fc;
-        --surface: #ffffff;
-        --surface-soft: #f1f5f9;
-        --text: #111827;
-        --muted: #64748b;
-        --border: rgba(15, 23, 42, 0.10);
+        --bg-main: #eef5ff;
+        --bg-orb-1: rgba(59, 130, 246, 0.30);
+        --bg-orb-2: rgba(236, 72, 153, 0.20);
+        --bg-orb-3: rgba(45, 212, 191, 0.20);
+        --glass: rgba(255, 255, 255, 0.56);
+        --glass-strong: rgba(255, 255, 255, 0.74);
+        --glass-soft: rgba(255, 255, 255, 0.34);
+        --text: #0f172a;
+        --muted: #475569;
+        --border: rgba(255, 255, 255, 0.58);
+        --border-soft: rgba(15, 23, 42, 0.09);
         --primary: #2563eb;
-        --primary-soft: rgba(37, 99, 235, 0.10);
-        --shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
-        --user-bubble: #eaf2ff;
-        --assistant-bubble: #ffffff;
+        --primary-soft: rgba(37, 99, 235, 0.13);
+        --user-bubble: rgba(219, 234, 254, 0.72);
+        --assistant-bubble: rgba(255, 255, 255, 0.62);
+        --shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+        --shadow-soft: 0 10px 24px rgba(15, 23, 42, 0.08);
+        --blur: blur(18px) saturate(145%);
     }
 
     @media (prefers-color-scheme: dark) {
         :root {
-            --bg: #0b1120;
-            --surface: #111827;
-            --surface-soft: #1f2937;
+            --bg-main: #07111f;
+            --bg-orb-1: rgba(37, 99, 235, 0.34);
+            --bg-orb-2: rgba(168, 85, 247, 0.24);
+            --bg-orb-3: rgba(20, 184, 166, 0.16);
+            --glass: rgba(15, 23, 42, 0.52);
+            --glass-strong: rgba(15, 23, 42, 0.70);
+            --glass-soft: rgba(30, 41, 59, 0.42);
             --text: #f8fafc;
             --muted: #cbd5e1;
-            --border: rgba(226, 232, 240, 0.14);
+            --border: rgba(255, 255, 255, 0.14);
+            --border-soft: rgba(255, 255, 255, 0.10);
             --primary: #93c5fd;
             --primary-soft: rgba(147, 197, 253, 0.14);
-            --shadow: 0 10px 26px rgba(0, 0, 0, 0.30);
-            --user-bubble: #1e3a5f;
-            --assistant-bubble: #111827;
+            --user-bubble: rgba(30, 64, 112, 0.66);
+            --assistant-bubble: rgba(15, 23, 42, 0.58);
+            --shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+            --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.24);
         }
     }
 
     html, body, .stApp {
-        background: var(--bg) !important;
+        background:
+            radial-gradient(circle at 8% 8%, var(--bg-orb-1), transparent 34%),
+            radial-gradient(circle at 92% 10%, var(--bg-orb-2), transparent 30%),
+            radial-gradient(circle at 50% 96%, var(--bg-orb-3), transparent 34%),
+            linear-gradient(135deg, var(--bg-main), var(--bg-main)) !important;
         color: var(--text) !important;
+        min-height: 100%;
+    }
+
+    .stApp::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background-image:
+            linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+        background-size: 46px 46px;
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,0.38), transparent 72%);
     }
 
     #MainMenu, footer {
@@ -184,19 +215,24 @@ st.markdown(
     }
 
     .main .block-container {
+        position: relative;
+        z-index: 1;
         max-width: 760px;
         padding: 0.9rem 1rem 6.8rem;
     }
 
     @media (max-width: 640px) {
         .main .block-container {
-            padding: 0.65rem 0.72rem 7.4rem;
+            padding: 0.68rem 0.76rem 7.6rem;
         }
     }
 
     div[data-testid="stSidebar"] {
-        background: var(--surface) !important;
+        background: var(--glass-strong) !important;
         border-right: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
         min-width: min(88vw, 360px) !important;
         max-width: min(88vw, 390px) !important;
     }
@@ -205,59 +241,80 @@ st.markdown(
         color: var(--text) !important;
     }
 
+    div[data-testid="stSidebar"] section,
+    div[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] {
+        background: transparent !important;
+    }
+
     .app-hero {
+        position: relative;
+        overflow: hidden;
         display: flex;
         gap: 13px;
         align-items: center;
         border: 1px solid var(--border);
-        border-radius: 22px;
-        padding: 16px;
+        border-radius: 26px;
+        padding: 17px;
         margin: 0 0 14px;
-        background: var(--surface);
+        background: linear-gradient(135deg, var(--glass-strong), var(--glass-soft));
         box-shadow: var(--shadow);
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+    }
+
+    .app-hero::after {
+        content: "";
+        position: absolute;
+        width: 110px;
+        height: 110px;
+        right: -34px;
+        top: -42px;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        filter: blur(4px);
     }
 
     .app-logo {
-        width: 46px;
-        height: 46px;
+        width: 48px;
+        height: 48px;
         display: grid;
         place-items: center;
-        flex: 0 0 46px;
-        border-radius: 16px;
-        background: var(--primary-soft);
-        font-size: 1.45rem;
+        flex: 0 0 48px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.38);
+        border: 1px solid var(--border);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), var(--shadow-soft);
+        font-size: 1.48rem;
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+        z-index: 1;
     }
 
     .app-title {
+        position: relative;
+        z-index: 1;
         margin: 0;
         color: var(--text);
-        font-size: clamp(1.35rem, 5vw, 1.9rem);
+        font-size: clamp(1.38rem, 5vw, 1.95rem);
         line-height: 1.1;
-        font-weight: 800;
-        letter-spacing: -0.03em;
+        font-weight: 850;
+        letter-spacing: -0.035em;
     }
 
     .app-subtitle {
+        position: relative;
+        z-index: 1;
         margin: 5px 0 0;
         color: var(--muted);
-        font-size: clamp(0.92rem, 3.6vw, 1rem);
-        line-height: 1.45;
+        font-size: clamp(0.93rem, 3.6vw, 1rem);
+        line-height: 1.48;
     }
 
     .section-title {
         margin: 12px 0 8px;
         color: var(--text);
-        font-weight: 750;
+        font-weight: 780;
         font-size: 0.96rem;
-    }
-
-    .simple-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin: 10px 0 12px;
-        color: var(--muted);
     }
 
     .simple-note,
@@ -269,12 +326,14 @@ st.markdown(
 
     div[data-testid="stChatMessage"] {
         border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 0.48rem 0.62rem;
-        margin-bottom: 0.72rem;
+        border-radius: 22px;
+        padding: 0.54rem 0.66rem;
+        margin-bottom: 0.76rem;
         background: var(--assistant-bubble);
         color: var(--text) !important;
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+        box-shadow: var(--shadow-soft);
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
     }
 
     div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
@@ -285,6 +344,14 @@ st.markdown(
         color: var(--text) !important;
     }
 
+    div[data-testid="stChatMessageAvatarUser"],
+    div[data-testid="stChatMessageAvatarAssistant"] {
+        background: rgba(255, 255, 255, 0.32) !important;
+        border: 1px solid var(--border) !important;
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+    }
+
     div[data-testid="stMarkdownContainer"] p,
     div[data-testid="stMarkdownContainer"] li {
         line-height: 1.65;
@@ -293,37 +360,52 @@ st.markdown(
 
     code, pre,
     div[data-testid="stMarkdownContainer"] code {
-        border-radius: 12px !important;
+        border-radius: 14px !important;
         white-space: pre-wrap !important;
         word-break: break-word !important;
+        border: 1px solid var(--border-soft) !important;
     }
 
     textarea,
     input,
     div[data-baseweb="input"] input,
     div[data-baseweb="textarea"] textarea {
-        background: var(--surface) !important;
+        background: rgba(255, 255, 255, 0.48) !important;
         color: var(--text) !important;
         border-color: var(--border) !important;
         font-size: 16px !important;
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        textarea,
+        input,
+        div[data-baseweb="input"] input,
+        div[data-baseweb="textarea"] textarea {
+            background: rgba(15, 23, 42, 0.54) !important;
+        }
     }
 
     div[data-testid="stChatInput"] {
-        background: rgba(247, 248, 252, 0.92) !important;
+        background: rgba(238, 245, 255, 0.62) !important;
         border-top: 1px solid var(--border);
-        padding: 0.55rem 0.72rem max(0.6rem, env(safe-area-inset-bottom));
-        backdrop-filter: blur(10px);
+        padding: 0.58rem 0.76rem max(0.62rem, env(safe-area-inset-bottom));
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
     }
 
     @media (prefers-color-scheme: dark) {
         div[data-testid="stChatInput"] {
-            background: rgba(11, 17, 32, 0.92) !important;
+            background: rgba(7, 17, 31, 0.66) !important;
         }
     }
 
     div[data-testid="stChatInput"] textarea {
         min-height: 46px !important;
-        border-radius: 18px !important;
+        border-radius: 20px !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: var(--shadow-soft);
     }
 
     button[kind="primary"],
@@ -331,9 +413,62 @@ st.markdown(
     div[data-testid="stButton"] button,
     div[data-testid="stDownloadButton"] button {
         min-height: 44px;
-        border-radius: 14px !important;
+        border-radius: 16px !important;
         border: 1px solid var(--border) !important;
-        font-weight: 650 !important;
+        background: linear-gradient(135deg, var(--glass-strong), var(--glass-soft)) !important;
+        color: var(--text) !important;
+        font-weight: 680 !important;
+        box-shadow: var(--shadow-soft) !important;
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+        transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+
+    button[kind="primary"]:hover,
+    div[data-testid="stFormSubmitButton"] button:hover,
+    div[data-testid="stButton"] button:hover,
+    div[data-testid="stDownloadButton"] button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(37, 99, 235, 0.28) !important;
+        box-shadow: 0 14px 28px rgba(15, 23, 42, 0.13) !important;
+    }
+
+    div[data-testid="stAlert"],
+    .stAlert {
+        border-radius: 18px !important;
+        border: 1px solid var(--border) !important;
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+        box-shadow: var(--shadow-soft);
+    }
+
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="textarea"] > div,
+    div[data-baseweb="input"] > div {
+        border-radius: 16px !important;
+        border-color: var(--border) !important;
+        background: var(--glass-soft) !important;
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 999px;
+        background: var(--glass-soft);
+        border: 1px solid var(--border);
+        color: var(--text) !important;
+        min-height: 38px;
+        backdrop-filter: var(--blur);
+        -webkit-backdrop-filter: var(--blur);
+    }
+
+    hr {
+        border-color: var(--border-soft) !important;
+        margin: 0.82rem 0 !important;
     }
 
     @media (max-width: 640px) {
@@ -349,19 +484,10 @@ st.markdown(
         }
 
         .stTabs [data-baseweb="tab-list"] {
-            gap: 4px;
+            gap: 5px;
             overflow-x: auto;
             white-space: nowrap;
         }
-    }
-
-    .stAlert {
-        border-radius: 16px;
-    }
-
-    hr {
-        border-color: var(--border) !important;
-        margin: 0.8rem 0 !important;
     }
     </style>
     """,
