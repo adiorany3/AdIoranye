@@ -135,60 +135,62 @@ service = get_telegram_service()
 
 
 # =========================
-# Glass mobile-first styling
+# Clean glass mobile-first styling
 # =========================
 st.markdown(
     """
     <style>
     :root {
         --bg-main: #eef5ff;
-        --bg-orb-1: rgba(59, 130, 246, 0.30);
-        --bg-orb-2: rgba(236, 72, 153, 0.20);
-        --bg-orb-3: rgba(45, 212, 191, 0.20);
-        --glass: rgba(255, 255, 255, 0.56);
-        --glass-strong: rgba(255, 255, 255, 0.74);
-        --glass-soft: rgba(255, 255, 255, 0.34);
+        --bg-soft: #f8fbff;
+        --orb-blue: rgba(37, 99, 235, 0.24);
+        --orb-pink: rgba(236, 72, 153, 0.14);
+        --orb-teal: rgba(20, 184, 166, 0.14);
+        --glass: rgba(255, 255, 255, 0.58);
+        --glass-strong: rgba(255, 255, 255, 0.76);
+        --glass-muted: rgba(255, 255, 255, 0.34);
         --text: #0f172a;
-        --muted: #475569;
-        --border: rgba(255, 255, 255, 0.58);
-        --border-soft: rgba(15, 23, 42, 0.09);
+        --muted: #64748b;
+        --border: rgba(255, 255, 255, 0.62);
+        --border-soft: rgba(15, 23, 42, 0.08);
         --primary: #2563eb;
-        --primary-soft: rgba(37, 99, 235, 0.13);
-        --user-bubble: rgba(219, 234, 254, 0.72);
-        --assistant-bubble: rgba(255, 255, 255, 0.62);
-        --shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
-        --shadow-soft: 0 10px 24px rgba(15, 23, 42, 0.08);
-        --blur: blur(18px) saturate(145%);
+        --primary-soft: rgba(37, 99, 235, 0.12);
+        --user-bubble: rgba(219, 234, 254, 0.78);
+        --assistant-bubble: rgba(255, 255, 255, 0.68);
+        --shadow: 0 22px 48px rgba(15, 23, 42, 0.12);
+        --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.08);
+        --blur: blur(20px) saturate(150%);
     }
 
     @media (prefers-color-scheme: dark) {
         :root {
             --bg-main: #07111f;
-            --bg-orb-1: rgba(37, 99, 235, 0.34);
-            --bg-orb-2: rgba(168, 85, 247, 0.24);
-            --bg-orb-3: rgba(20, 184, 166, 0.16);
-            --glass: rgba(15, 23, 42, 0.52);
-            --glass-strong: rgba(15, 23, 42, 0.70);
-            --glass-soft: rgba(30, 41, 59, 0.42);
+            --bg-soft: #0f172a;
+            --orb-blue: rgba(37, 99, 235, 0.30);
+            --orb-pink: rgba(168, 85, 247, 0.18);
+            --orb-teal: rgba(20, 184, 166, 0.14);
+            --glass: rgba(15, 23, 42, 0.56);
+            --glass-strong: rgba(15, 23, 42, 0.74);
+            --glass-muted: rgba(30, 41, 59, 0.44);
             --text: #f8fafc;
             --muted: #cbd5e1;
             --border: rgba(255, 255, 255, 0.14);
             --border-soft: rgba(255, 255, 255, 0.10);
             --primary: #93c5fd;
             --primary-soft: rgba(147, 197, 253, 0.14);
-            --user-bubble: rgba(30, 64, 112, 0.66);
-            --assistant-bubble: rgba(15, 23, 42, 0.58);
-            --shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
-            --shadow-soft: 0 10px 24px rgba(0, 0, 0, 0.24);
+            --user-bubble: rgba(30, 64, 112, 0.70);
+            --assistant-bubble: rgba(15, 23, 42, 0.62);
+            --shadow: 0 22px 48px rgba(0, 0, 0, 0.34);
+            --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.24);
         }
     }
 
     html, body, .stApp {
         background:
-            radial-gradient(circle at 8% 8%, var(--bg-orb-1), transparent 34%),
-            radial-gradient(circle at 92% 10%, var(--bg-orb-2), transparent 30%),
-            radial-gradient(circle at 50% 96%, var(--bg-orb-3), transparent 34%),
-            linear-gradient(135deg, var(--bg-main), var(--bg-main)) !important;
+            radial-gradient(circle at 12% 4%, var(--orb-blue), transparent 30%),
+            radial-gradient(circle at 92% 14%, var(--orb-pink), transparent 28%),
+            radial-gradient(circle at 46% 96%, var(--orb-teal), transparent 32%),
+            linear-gradient(135deg, var(--bg-main), var(--bg-soft)) !important;
         color: var(--text) !important;
         min-height: 100%;
     }
@@ -197,13 +199,13 @@ st.markdown(
         content: "";
         position: fixed;
         inset: 0;
-        pointer-events: none;
         z-index: 0;
+        pointer-events: none;
         background-image:
-            linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
-        background-size: 46px 46px;
-        mask-image: linear-gradient(to bottom, rgba(0,0,0,0.38), transparent 72%);
+            linear-gradient(rgba(255,255,255,0.10) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.10) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(to bottom, rgba(0,0,0,0.30), transparent 70%);
     }
 
     #MainMenu, footer {
@@ -217,24 +219,24 @@ st.markdown(
     .main .block-container {
         position: relative;
         z-index: 1;
-        max-width: 760px;
-        padding: 0.9rem 1rem 6.8rem;
+        max-width: 740px;
+        padding: 1rem 1rem 6.9rem;
     }
 
     @media (max-width: 640px) {
         .main .block-container {
-            padding: 0.68rem 0.76rem 7.6rem;
+            padding: 0.72rem 0.78rem 7.7rem;
         }
     }
 
     div[data-testid="stSidebar"] {
+        min-width: min(88vw, 360px) !important;
+        max-width: min(88vw, 390px) !important;
         background: var(--glass-strong) !important;
         border-right: 1px solid var(--border);
         box-shadow: var(--shadow);
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
-        min-width: min(88vw, 360px) !important;
-        max-width: min(88vw, 390px) !important;
     }
 
     div[data-testid="stSidebar"] * {
@@ -250,13 +252,13 @@ st.markdown(
         position: relative;
         overflow: hidden;
         display: flex;
-        gap: 13px;
         align-items: center;
+        gap: 14px;
+        padding: 18px;
+        margin: 0 0 16px;
         border: 1px solid var(--border);
-        border-radius: 26px;
-        padding: 17px;
-        margin: 0 0 14px;
-        background: linear-gradient(135deg, var(--glass-strong), var(--glass-soft));
+        border-radius: 28px;
+        background: linear-gradient(135deg, var(--glass-strong), var(--glass-muted));
         box-shadow: var(--shadow);
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
@@ -265,29 +267,30 @@ st.markdown(
     .app-hero::after {
         content: "";
         position: absolute;
-        width: 110px;
-        height: 110px;
-        right: -34px;
-        top: -42px;
+        width: 130px;
+        height: 130px;
+        right: -56px;
+        top: -62px;
         border-radius: 999px;
         background: var(--primary-soft);
-        filter: blur(4px);
+        filter: blur(2px);
     }
 
     .app-logo {
-        width: 48px;
-        height: 48px;
+        position: relative;
+        z-index: 1;
+        flex: 0 0 50px;
+        width: 50px;
+        height: 50px;
         display: grid;
         place-items: center;
-        flex: 0 0 48px;
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.38);
+        border-radius: 19px;
+        background: rgba(255, 255, 255, 0.42);
         border: 1px solid var(--border);
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), var(--shadow-soft);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.38), var(--shadow-soft);
         font-size: 1.48rem;
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
-        z-index: 1;
     }
 
     .app-title {
@@ -296,7 +299,7 @@ st.markdown(
         margin: 0;
         color: var(--text);
         font-size: clamp(1.38rem, 5vw, 1.95rem);
-        line-height: 1.1;
+        line-height: 1.08;
         font-weight: 850;
         letter-spacing: -0.035em;
     }
@@ -304,17 +307,19 @@ st.markdown(
     .app-subtitle {
         position: relative;
         z-index: 1;
-        margin: 5px 0 0;
+        max-width: 520px;
+        margin: 6px 0 0;
         color: var(--muted);
         font-size: clamp(0.93rem, 3.6vw, 1rem);
         line-height: 1.48;
     }
 
     .section-title {
-        margin: 12px 0 8px;
+        margin: 14px 0 9px;
         color: var(--text);
         font-weight: 780;
-        font-size: 0.96rem;
+        font-size: 0.95rem;
+        letter-spacing: -0.01em;
     }
 
     .simple-note,
@@ -326,9 +331,9 @@ st.markdown(
 
     div[data-testid="stChatMessage"] {
         border: 1px solid var(--border);
-        border-radius: 22px;
-        padding: 0.54rem 0.66rem;
-        margin-bottom: 0.76rem;
+        border-radius: 23px;
+        padding: 0.58rem 0.68rem;
+        margin-bottom: 0.78rem;
         background: var(--assistant-bubble);
         color: var(--text) !important;
         box-shadow: var(--shadow-soft);
@@ -346,7 +351,7 @@ st.markdown(
 
     div[data-testid="stChatMessageAvatarUser"],
     div[data-testid="stChatMessageAvatarAssistant"] {
-        background: rgba(255, 255, 255, 0.32) !important;
+        background: rgba(255, 255, 255, 0.36) !important;
         border: 1px solid var(--border) !important;
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
@@ -370,7 +375,7 @@ st.markdown(
     input,
     div[data-baseweb="input"] input,
     div[data-baseweb="textarea"] textarea {
-        background: rgba(255, 255, 255, 0.48) !important;
+        background: rgba(255, 255, 255, 0.50) !important;
         color: var(--text) !important;
         border-color: var(--border) !important;
         font-size: 16px !important;
@@ -383,27 +388,27 @@ st.markdown(
         input,
         div[data-baseweb="input"] input,
         div[data-baseweb="textarea"] textarea {
-            background: rgba(15, 23, 42, 0.54) !important;
+            background: rgba(15, 23, 42, 0.58) !important;
         }
     }
 
     div[data-testid="stChatInput"] {
-        background: rgba(238, 245, 255, 0.62) !important;
+        background: rgba(238, 245, 255, 0.66) !important;
         border-top: 1px solid var(--border);
         padding: 0.58rem 0.76rem max(0.62rem, env(safe-area-inset-bottom));
-        backdrop-filter: blur(18px) saturate(160%);
-        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
     }
 
     @media (prefers-color-scheme: dark) {
         div[data-testid="stChatInput"] {
-            background: rgba(7, 17, 31, 0.66) !important;
+            background: rgba(7, 17, 31, 0.70) !important;
         }
     }
 
     div[data-testid="stChatInput"] textarea {
-        min-height: 46px !important;
-        border-radius: 20px !important;
+        min-height: 48px !important;
+        border-radius: 21px !important;
         border: 1px solid var(--border) !important;
         box-shadow: var(--shadow-soft);
     }
@@ -415,9 +420,10 @@ st.markdown(
         min-height: 44px;
         border-radius: 16px !important;
         border: 1px solid var(--border) !important;
-        background: linear-gradient(135deg, var(--glass-strong), var(--glass-soft)) !important;
+        background: linear-gradient(135deg, var(--glass-strong), var(--glass-muted)) !important;
         color: var(--text) !important;
         font-weight: 680 !important;
+        text-align: center !important;
         box-shadow: var(--shadow-soft) !important;
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
@@ -430,16 +436,16 @@ st.markdown(
     div[data-testid="stDownloadButton"] button:hover {
         transform: translateY(-1px);
         border-color: rgba(37, 99, 235, 0.28) !important;
-        box-shadow: 0 14px 28px rgba(15, 23, 42, 0.13) !important;
+        box-shadow: 0 16px 30px rgba(15, 23, 42, 0.13) !important;
     }
 
     div[data-testid="stAlert"],
     .stAlert {
         border-radius: 18px !important;
         border: 1px solid var(--border) !important;
+        box-shadow: var(--shadow-soft);
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
-        box-shadow: var(--shadow-soft);
     }
 
     div[data-baseweb="select"] > div,
@@ -447,7 +453,7 @@ st.markdown(
     div[data-baseweb="input"] > div {
         border-radius: 16px !important;
         border-color: var(--border) !important;
-        background: var(--glass-soft) !important;
+        background: var(--glass-muted) !important;
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
     }
@@ -457,18 +463,18 @@ st.markdown(
     }
 
     .stTabs [data-baseweb="tab"] {
+        min-height: 38px;
         border-radius: 999px;
-        background: var(--glass-soft);
+        background: var(--glass-muted);
         border: 1px solid var(--border);
         color: var(--text) !important;
-        min-height: 38px;
         backdrop-filter: var(--blur);
         -webkit-backdrop-filter: var(--blur);
     }
 
     hr {
         border-color: var(--border-soft) !important;
-        margin: 0.82rem 0 !important;
+        margin: 0.86rem 0 !important;
     }
 
     @media (max-width: 640px) {
@@ -480,7 +486,6 @@ st.markdown(
 
         div[data-testid="stButton"] button {
             width: 100% !important;
-            text-align: left;
         }
 
         .stTabs [data-baseweb="tab-list"] {
@@ -892,7 +897,7 @@ st.markdown(
         <div class="app-logo">🤖</div>
         <div>
             <h1 class="app-title">Adioranye AI</h1>
-            <p class="app-subtitle">Tulis kebutuhan Anda. Jawaban dibuat singkat, jelas, dan siap dipakai.</p>
+            <p class="app-subtitle">Tulis pesan Anda, lalu Adioranye akan membantu dengan jawaban yang jelas dan praktis.</p>
         </div>
     </div>
     """,
@@ -957,7 +962,7 @@ if user_input:
         try:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                placeholder.markdown("⏳ Kami siapkan jawaban detail untuk Anda, tunggu sebentar...")
+                placeholder.markdown("⏳ sedang berpikir dalam...")
                 answer, meta = generate_answer(
                     api_url=api_url,
                     api_key=api_key,
