@@ -907,21 +907,6 @@ st.markdown(
 if not api_key:
     st.warning("SLASHAI_API_KEY belum diisi. Chat belum bisa digunakan sampai admin mengisi Secrets di Streamlit Cloud.")
 
-# Quick prompt buttons are only shown when chat is empty.
-if not st.session_state.chat_messages:
-    st.markdown('<div class="section-title">Contoh cepat</div>', unsafe_allow_html=True)
-    prompt_examples = [
-        ("Caption promosi", "Buatkan caption promosi produk yang singkat dan menarik."),
-        ("Ringkas teks", "Ringkas materi ini menjadi bahasa yang natural dan mudah dipahami."),
-        ("Jawaban presentasi", "Bantu susun jawaban presentasi agar terdengar percaya diri."),
-        ("Ide konten TikTok", "Buatkan ide konten TikTok edukasi yang berpotensi ramai."),
-    ]
-    cols = st.columns(2)
-    for idx, (label, prompt_text) in enumerate(prompt_examples):
-        with cols[idx % 2]:
-            if st.button(label, key=f"quick_prompt_{idx}", use_container_width=True):
-                st.session_state.pending_prompt = prompt_text
-
 col_new_chat, col_info = st.columns([1, 2])
 with col_new_chat:
     if st.button("🧹 Chat baru", use_container_width=True):
