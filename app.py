@@ -85,6 +85,8 @@ def init_state() -> None:
         st.session_state.last_answer_meta = {}
     if "pending_prompt" not in st.session_state:
         st.session_state.pending_prompt = ""
+    if "active_default_memory" not in st.session_state:
+        st.session_state.active_default_memory = str(get_secret("DEFAULT_MEMORY_CONTEXT", DEFAULT_MEMORY_CONTEXT))
 
 
 # =========================
@@ -93,10 +95,24 @@ def init_state() -> None:
 
 DEFAULT_PERSONA = (
     "Nama kamu adalah adioranye. "
-    "Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang aman dan bermanfaat. "
-    "Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele. "
+    "Kamu adalah asisten pribadi yang sangat cerdas, ramah, teliti, detail, cepat memahami konteks, dan mampu membantu berbagai kebutuhan pengguna secara praktis. "
+    "Jawab dalam bahasa Indonesia yang natural, jelas, sopan, dan mudah dipahami. "
+    "Untuk pertanyaan sederhana, jawab singkat dan langsung. Untuk pertanyaan teknis, akademik, bisnis, coding, atau analisis, jawab lebih detail, bertahap, dan berikan contoh bila membantu. "
+    "Jangan mengarang fakta. Jika informasi tidak pasti, jelaskan keterbatasannya dan berikan saran langkah aman. "
     "Jika permintaan berbahaya atau melanggar aturan, tolak dengan singkat dan arahkan ke alternatif yang aman."
 )
+
+DEFAULT_MEMORY_CONTEXT = """
+Memory default Adioranye:
+- Adioranye dapat membantu menjawab pertanyaan umum, akademik, teknis, bisnis, kreatif, penulisan, coding, analisis data, strategi konten, dan kebutuhan praktis sehari-hari.
+- Prioritaskan jawaban yang akurat, jelas, ramah, detail secukupnya, dan langsung bisa dipakai.
+- Untuk pertanyaan akademik, bantu dengan struktur rapi, bahasa natural, contoh, dan penjelasan yang mudah dipahami.
+- Untuk pertanyaan coding atau aplikasi, berikan langkah perbaikan yang praktis, kode yang siap ditempel, dan jelaskan letak perubahan penting.
+- Untuk pertanyaan bisnis, pemasaran, desain, konten, atau promosi, berikan ide yang ringkas, menarik, dan mudah dieksekusi.
+- Untuk pertanyaan yang membutuhkan data terbaru, hukum, medis, keuangan, atau keputusan berisiko, jangan mengarang. Jelaskan bahwa data perlu diverifikasi dan berikan arahan aman.
+- Jika pengguna meminta format tertentu, ikuti format tersebut. Jika tidak, gunakan struktur yang paling mudah dibaca.
+- Jika permintaan kurang jelas, tetap berikan jawaban terbaik berdasarkan konteks yang ada dan sebutkan asumsi yang digunakan.
+""".strip()
 
 CHEAP_MODEL_OPTIONS = DEFAULT_CHEAP_FALLBACK_MODELS.copy()
 EXPENSIVE_MODEL_OPTIONS = DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
@@ -117,6 +133,7 @@ default_model = str(get_secret("SLASHAI_MODEL", "slashai/gpt-5-nano"))
 telegram_token = str(get_secret("TELEGRAM_BOT_TOKEN", ""))
 memory_file = str(get_secret("MEMORY_FILE", "assistant_memory.json"))
 persona_from_secret = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
+default_memory_context_from_secret = str(get_secret("DEFAULT_MEMORY_CONTEXT", DEFAULT_MEMORY_CONTEXT))
 auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", False), default=False)
 drop_pending_updates = parse_bool(get_secret("TELEGRAM_DROP_PENDING_UPDATES", True), default=True)
 send_processing_message = parse_bool(get_secret("TELEGRAM_SEND_PROCESSING_MESSAGE", False), default=False)
@@ -132,6 +149,27 @@ max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 init_state()
 memory = MemoryStore(memory_file)
 service = get_telegram_service()
+
+
+def build_memory_text(limit: int = 12) -> str:
+    """Gabungkan memory default dengan memory lokal admin."""
+    default_context = str(st.session_state.get("active_default_memory") or default_memory_context_from_secret or DEFAULT_MEMORY_CONTEXT).strip()
+    local_memory = str(memory.as_prompt_text(limit=limit) or "").strip()
+
+    sections = []
+    if default_context:
+        sections.append("MEMORY DEFAULT AKTIF:\n" + default_context)
+    if local_memory:
+        sections.append("MEMORY TAMBAHAN ADMIN:\n" + local_memory)
+    return "\n\n".join(sections)
+
+
+def persona_with_default_memory(persona: str) -> str:
+    """Dipakai untuk Bot Telegram agar memory default tetap masuk ke instruksi bot."""
+    default_context = str(st.session_state.get("active_default_memory") or default_memory_context_from_secret or DEFAULT_MEMORY_CONTEXT).strip()
+    if not default_context:
+        return persona
+    return f"{persona}\n\nKonteks default yang selalu dipakai:\n{default_context}"
 
 
 # =========================
@@ -517,6 +555,7 @@ def get_runtime_config() -> Dict[str, Any]:
         "max_smart_models": int(st.session_state.active_max_smart_models),
         "allow_expensive_fallback": bool(st.session_state.allow_expensive_fallback),
         "max_expensive_models": int(st.session_state.max_expensive_models),
+        "default_memory_context": str(st.session_state.active_default_memory),
     }
 
 
@@ -529,7 +568,7 @@ def start_telegram_if_needed() -> None:
                 "slashai_api_key": api_key,
                 "slashai_api_url": api_url,
                 "slashai_model": cfg["model"],
-                "persona": cfg["persona"],
+                "persona": persona_with_default_memory(cfg["persona"]),
                 "memory_file": memory_file,
                 "fallback_models": DEFAULT_CHEAP_FALLBACK_MODELS,
                 "expensive_fallback_models": DEFAULT_EXPENSIVE_FALLBACK_MODELS,
@@ -704,7 +743,7 @@ def render_admin_settings() -> None:
                         model=st.session_state.active_model,
                         system_prompt=st.session_state.active_persona,
                         user_text="Jawab singkat: apakah kamu aktif?",
-                        memory_text=memory.as_prompt_text(limit=8),
+                        memory_text=build_memory_text(limit=8),
                         recent_messages=[],
                         fallback_models=DEFAULT_CHEAP_FALLBACK_MODELS,
                         expensive_fallback_models=DEFAULT_EXPENSIVE_FALLBACK_MODELS,
@@ -725,6 +764,7 @@ def render_admin_settings() -> None:
             if st.button("↩️ Reset dari Secrets", use_container_width=True):
                 st.session_state.active_model = default_model
                 st.session_state.active_persona = persona_from_secret
+                st.session_state.active_default_memory = default_memory_context_from_secret
                 st.session_state.active_temperature = 0.3
                 st.session_state.active_max_tokens = 2600
                 st.session_state.show_debug = False
@@ -757,7 +797,7 @@ def render_admin_settings() -> None:
             "slashai_api_key": api_key,
             "slashai_api_url": api_url,
             "slashai_model": st.session_state.active_model,
-            "persona": st.session_state.active_persona,
+            "persona": persona_with_default_memory(st.session_state.active_persona),
             "memory_file": memory_file,
             "fallback_models": DEFAULT_CHEAP_FALLBACK_MODELS,
             "expensive_fallback_models": DEFAULT_EXPENSIVE_FALLBACK_MODELS,
@@ -808,11 +848,20 @@ def render_admin_settings() -> None:
         st.info(
             "Memory ini dipakai sebagai konteks tambahan. Di Streamlit Online, file lokal bisa hilang saat app restart/redeploy."
         )
+        st.markdown("#### Memory Default Aktif")
+        st.caption("Memory default ini selalu ikut dikirim ke AI, baik ada memori lokal maupun belum ada.")
+        st.session_state.active_default_memory = st.text_area(
+            "Memory default",
+            value=st.session_state.active_default_memory,
+            height=220,
+        )
+
+        st.markdown("#### Memory Tambahan Admin")
         current_memory = memory.list_text(limit=80)
         if current_memory:
             st.code(current_memory)
         else:
-            st.write("Belum ada memori.")
+            st.write("Belum ada memori tambahan.")
 
         new_memory = st.text_input("Tambah memori")
         if st.button("Simpan memori", use_container_width=True):
@@ -846,7 +895,20 @@ SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
 SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
 SLASHAI_MODEL = "slashai/gpt-5-nano"
 
-ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang pintar, cepat, ramah, dan dapat membantu menjawab berbagai pertanyaan yang aman dan bermanfaat. Jawab dalam bahasa Indonesia yang natural, jelas, praktis, dan tidak bertele-tele. Jika permintaan berbahaya atau melanggar aturan, tolak dengan singkat dan arahkan ke alternatif yang aman."
+ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang sangat cerdas, ramah, teliti, detail, cepat memahami konteks, dan mampu membantu berbagai kebutuhan pengguna secara praktis. Jawab dalam bahasa Indonesia yang natural, jelas, sopan, dan mudah dipahami. Untuk pertanyaan sederhana, jawab singkat dan langsung. Untuk pertanyaan teknis, akademik, bisnis, coding, atau analisis, jawab lebih detail, bertahap, dan berikan contoh bila membantu. Jangan mengarang fakta. Jika informasi tidak pasti, jelaskan keterbatasannya dan berikan saran langkah aman."
+
+DEFAULT_MEMORY_CONTEXT = """
+Memory default Adioranye:
+- Adioranye dapat membantu menjawab pertanyaan umum, akademik, teknis, bisnis, kreatif, penulisan, coding, analisis data, strategi konten, dan kebutuhan praktis sehari-hari.
+- Prioritaskan jawaban yang akurat, jelas, ramah, detail secukupnya, dan langsung bisa dipakai.
+- Untuk pertanyaan akademik, bantu dengan struktur rapi, bahasa natural, contoh, dan penjelasan yang mudah dipahami.
+- Untuk pertanyaan coding atau aplikasi, berikan langkah perbaikan yang praktis, kode yang siap ditempel, dan jelaskan letak perubahan penting.
+- Untuk pertanyaan bisnis, pemasaran, desain, konten, atau promosi, berikan ide yang ringkas, menarik, dan mudah dieksekusi.
+- Untuk pertanyaan yang membutuhkan data terbaru, hukum, medis, keuangan, atau keputusan berisiko, jangan mengarang. Jelaskan bahwa data perlu diverifikasi dan berikan arahan aman.
+- Jika pengguna meminta format tertentu, ikuti format tersebut. Jika tidak, gunakan struktur yang paling mudah dibaca.
+- Jika permintaan kurang jelas, tetap berikan jawaban terbaik berdasarkan konteks yang ada dan sebutkan asumsi yang digunakan.
+"""
+
 MEMORY_FILE = "assistant_memory.json"
 
 # true = bot Telegram otomatis start saat app Streamlit dibuka/aktif
@@ -954,7 +1016,7 @@ if user_input:
                     model=cfg["model"],
                     system_prompt=cfg["persona"],
                     user_text=user_input,
-                    memory_text=memory.as_prompt_text(limit=12),
+                    memory_text=build_memory_text(limit=12),
                     recent_messages=st.session_state.chat_messages[:-1][-6:],
                     fallback_models=DEFAULT_CHEAP_FALLBACK_MODELS,
                     expensive_fallback_models=DEFAULT_EXPENSIVE_FALLBACK_MODELS,
