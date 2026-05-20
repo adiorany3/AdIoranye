@@ -947,7 +947,7 @@ if user_input:
         try:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                placeholder.markdown("⏳ sedang berpikir dalam...")
+                placeholder.markdown("⏳ adioranye sedang berpikir dalam...")
                 answer, meta = generate_answer(
                     api_url=api_url,
                     api_key=api_key,
