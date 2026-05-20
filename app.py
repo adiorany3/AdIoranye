@@ -662,21 +662,37 @@ st.markdown(
         transform: translateX(-50%);
         width: min(1040px, calc(100vw - 92px));
         max-height: min(28svh, 190px);
-        border: 1px solid var(--mac-border-strong);
+        border: 1px solid rgba(255, 255, 255, 0.34);
         border-radius: 22px;
         padding: 0.5rem 0.55rem max(0.5rem, env(safe-area-inset-bottom));
-        background: var(--mac-window-strong) !important;
-        box-shadow: 0 22px 54px rgba(15, 23, 42, 0.20), inset 0 1px 0 rgba(255,255,255,0.56);
-        backdrop-filter: var(--mac-blur);
-        -webkit-backdrop-filter: var(--mac-blur);
+        background: linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.12)) !important;
+        box-shadow: 0 22px 54px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255,255,255,0.45);
+        backdrop-filter: blur(24px) saturate(180%);
+        -webkit-backdrop-filter: blur(24px) saturate(180%);
         z-index: 999;
+    }
+
+    div[data-testid="stChatInput"] > div,
+    div[data-testid="stChatInput"] [data-baseweb="textarea"],
+    div[data-testid="stChatInput"] [data-baseweb="base-input"],
+    div[data-testid="stChatInput"] [data-baseweb="textarea"] > div {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
     }
 
     div[data-testid="stChatInput"] textarea {
         min-height: 48px !important;
         border-radius: 16px !important;
-        border: 1px solid var(--mac-border) !important;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.32);
+        border: 1px solid rgba(255, 255, 255, 0.26) !important;
+        background: rgba(255, 255, 255, 0.10) !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+        backdrop-filter: blur(16px) saturate(170%);
+        -webkit-backdrop-filter: blur(16px) saturate(170%);
+    }
+
+    div[data-testid="stChatInput"] textarea::placeholder {
+        color: rgba(30, 41, 59, 0.72) !important;
     }
 
     @media (min-width: 1280px) {
@@ -751,6 +767,24 @@ st.markdown(
         color: var(--mac-text) !important;
         backdrop-filter: var(--mac-blur);
         -webkit-backdrop-filter: var(--mac-blur);
+    }
+
+
+    @media (prefers-color-scheme: dark) {
+        div[data-testid="stChatInput"] {
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: linear-gradient(180deg, rgba(17,24,39,0.42), rgba(17,24,39,0.30)) !important;
+            box-shadow: 0 22px 54px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255,255,255,0.10);
+        }
+
+        div[data-testid="stChatInput"] textarea {
+            background: rgba(255, 255, 255, 0.06) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        }
+
+        div[data-testid="stChatInput"] textarea::placeholder {
+            color: rgba(226, 232, 240, 0.70) !important;
+        }
     }
 
     hr {
