@@ -322,6 +322,93 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     return unique_models(cheap), unique_models(expensive)
 
 
+def build_model_routing_plan() -> Dict[str, Any]:
+    """
+    Routing default:
+    1) Pakai model murah aktif sebagai primary.
+    2) Jika model murah/fallback murah tidak cukup, langsung izinkan naik ke model menengah/mahal aktif.
+    3) Setelah request selesai, state aplikasi bisa dikembalikan ke model murah aktif.
+    """
+    active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+    selected_model = str(st.session_state.get("active_model") or default_model).strip()
+    health_cache = st.session_state.get("model_health_cache") or {}
+
+    selected_is_cheap = _tier_rank(selected_model) == 0
+    selected_is_active = bool(health_cache.get(selected_model, {}).get("active"))
+
+    # Primary normal selalu model murah aktif. Jika pilihan admin murah dan aktif, pakai itu.
+    # Jika tidak, pakai default_model bila aktif, lalu fallback ke model murah aktif tercepat/termurah.
+    direct_to_expensive = False
+    if active_cheap_models:
+        if selected_is_cheap and selected_model in active_cheap_models and selected_is_active:
+            primary_model = selected_model
+        elif default_model in active_cheap_models:
+            primary_model = default_model
+        else:
+            primary_model = active_cheap_models[0]
+    elif active_expensive_models:
+        # Tidak ada model murah yang hidup: langsung pakai model menengah/mahal aktif.
+        primary_model = active_expensive_models[0]
+        direct_to_expensive = True
+    else:
+        # Fallback paling akhir: jangan kosongkan model agar error tetap informatif dari generate_answer.
+        primary_model = selected_model or default_model
+
+    cheap_fallback_models = [model for model in active_cheap_models if model != primary_model]
+    expensive_fallback_models = [model for model in active_expensive_models if model != primary_model]
+
+    # Default: expensive fallback aktif. Admin masih bisa mematikan lewat toggle,
+    # tetapi jika tidak ada model murah aktif sama sekali, expensive tetap dipakai agar bot tetap menjawab.
+    allow_expensive = bool(active_expensive_models) and (
+        bool(st.session_state.get("allow_expensive_fallback", True)) or direct_to_expensive
+    )
+
+    max_expensive = int(st.session_state.get("max_expensive_models", 1) or 1)
+    if expensive_fallback_models:
+        max_expensive = max(1, min(max_expensive, len(expensive_fallback_models)))
+    else:
+        max_expensive = 1
+
+    # Karena fallback murah biayanya rendah, izinkan router mengecek semua model murah aktif
+    # sebelum naik ke model menengah/mahal.
+    max_smart_models = max(
+        int(st.session_state.get("active_max_smart_models", 2) or 2),
+        len(cheap_fallback_models),
+        1,
+    )
+
+    return_to_primary = bool(st.session_state.get("active_return_to_primary", True)) and not direct_to_expensive
+
+    return {
+        "primary_model": primary_model,
+        "cheap_fallback_models": unique_models(cheap_fallback_models),
+        "expensive_fallback_models": unique_models(expensive_fallback_models),
+        "allow_expensive_fallback": allow_expensive,
+        "max_expensive_models": max_expensive,
+        "max_smart_models": max_smart_models,
+        "return_to_primary": return_to_primary,
+        "direct_to_expensive": direct_to_expensive,
+        "active_cheap_models": active_cheap_models,
+        "active_expensive_models": active_expensive_models,
+    }
+
+
+def restore_active_model_to_cheap() -> None:
+    """Kembalikan pilihan model aktif ke model murah yang hidup setelah request memakai expensive."""
+    active_cheap_models, _ = get_prioritized_fallback_models()
+    if not active_cheap_models:
+        return
+
+    current_model = str(st.session_state.get("active_model") or default_model).strip()
+    if current_model in active_cheap_models:
+        return
+
+    if default_model in active_cheap_models:
+        st.session_state.active_model = default_model
+    else:
+        st.session_state.active_model = active_cheap_models[0]
+
+
 def render_model_health_table() -> None:
     """Tampilkan daftar model aktif/nonaktif untuk admin."""
     cache = st.session_state.get("model_health_cache") or {}
@@ -1016,19 +1103,19 @@ def get_runtime_config() -> Dict[str, Any]:
 def start_telegram_if_needed() -> None:
     cfg = get_runtime_config()
     if auto_start and telegram_token and api_key and not service.status()["running"]:
-        active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+        route = build_model_routing_plan()
         service.start(
             {
                 "telegram_token": telegram_token,
                 "slashai_api_key": api_key,
                 "slashai_api_url": api_url,
-                "slashai_model": cfg["model"],
+                "slashai_model": route["primary_model"],
                 "persona": persona_with_default_memory(cfg["persona"]),
                 "memory_file": memory_file,
-                "fallback_models": active_cheap_models,
-                "expensive_fallback_models": active_expensive_models,
-                "allow_expensive_fallback": cfg["allow_expensive_fallback"],
-                "max_expensive_models": cfg["max_expensive_models"],
+                "fallback_models": route["cheap_fallback_models"],
+                "expensive_fallback_models": route["expensive_fallback_models"],
+                "allow_expensive_fallback": route["allow_expensive_fallback"],
+                "max_expensive_models": route["max_expensive_models"],
                 "show_model_info": telegram_show_model_info,
                 "temperature": cfg["temperature"],
                 "max_completion_tokens": cfg["max_completion_tokens"],
@@ -1039,10 +1126,11 @@ def start_telegram_if_needed() -> None:
                 "lock_file": telegram_lock_file,
                 "allow_memory_commands": False,
                 "smart_model_router": cfg["smart_model_router"],
-                "return_to_primary": cfg["return_to_primary"],
-                "max_smart_models": cfg["max_smart_models"],
+                "return_to_primary": route["return_to_primary"],
+                "max_smart_models": route["max_smart_models"],
             }
         )
+        restore_active_model_to_cheap()
 
 
 start_telegram_if_needed()
@@ -1190,14 +1278,18 @@ def render_admin_settings() -> None:
             disabled=not st.session_state.allow_expensive_fallback,
         )
         with st.expander("Daftar jalur model"):
-            active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+            route = build_model_routing_plan()
+            st.markdown("**Primary default:**")
+            st.code(model_price_label(route["primary_model"]))
             st.markdown("**Model hemat aktif/prioritas backup:**")
-            st.code("\n".join(model_price_label(m) for m in active_cheap_models) or "Belum ada model hemat aktif")
-            st.markdown("**Model menengah/mahal aktif hanya saat perlu:**")
-            st.code("\n".join(model_price_label(m) for m in active_expensive_models) or "Belum ada model menengah/mahal aktif")
+            st.code("\n".join(model_price_label(m) for m in route["active_cheap_models"]) or "Belum ada model hemat aktif")
+            st.markdown("**Model menengah/mahal aktif otomatis jika model hemat tidak cukup:**")
+            st.code("\n".join(model_price_label(m) for m in route["active_expensive_models"]) or "Belum ada model menengah/mahal aktif")
+            if route["direct_to_expensive"]:
+                st.warning("Tidak ada model hemat aktif. Request berikutnya langsung memakai model menengah/mahal aktif, lalu sistem akan kembali ke model hemat saat sudah aktif lagi.")
 
         st.markdown("#### Cek Berkala Model")
-        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Fallback diprioritaskan dari model yang lolos cek.")
+        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Urutan default: model hemat aktif → model menengah/mahal aktif jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif.")
         col_health_check, col_health_info = st.columns([1, 2])
         with col_health_check:
             if st.button("🔁 Cek model sekarang", use_container_width=True):
@@ -1213,26 +1305,27 @@ def render_admin_settings() -> None:
         with col_test:
             if st.button("🧪 Tes AI", use_container_width=True):
                 try:
-                    active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+                    route = build_model_routing_plan()
                     answer, meta = generate_answer(
                         api_url=api_url,
                         api_key=api_key,
-                        model=st.session_state.active_model,
+                        model=route["primary_model"],
                         system_prompt=st.session_state.active_persona,
                         user_text="Jawab singkat: apakah kamu aktif?",
                         memory_text=build_memory_text(limit=8),
                         recent_messages=[],
-                        fallback_models=active_cheap_models,
-                        expensive_fallback_models=active_expensive_models,
-                        allow_expensive_fallback=bool(st.session_state.allow_expensive_fallback),
-                        max_expensive_models=int(st.session_state.max_expensive_models),
+                        fallback_models=route["cheap_fallback_models"],
+                        expensive_fallback_models=route["expensive_fallback_models"],
+                        allow_expensive_fallback=route["allow_expensive_fallback"],
+                        max_expensive_models=route["max_expensive_models"],
                         temperature=float(st.session_state.active_temperature),
                         max_completion_tokens=int(st.session_state.active_max_tokens),
                         timeout=60,
                         smart_model_router=bool(st.session_state.active_smart_router),
-                        return_to_primary=bool(st.session_state.active_return_to_primary),
-                        max_smart_models=int(st.session_state.active_max_smart_models),
+                        return_to_primary=route["return_to_primary"],
+                        max_smart_models=route["max_smart_models"],
                     )
+                    restore_active_model_to_cheap()
                     st.success(answer)
                     st.caption(f"Model: {meta.get('model') or meta.get('model_requested')}")
                 except Exception as exc:
@@ -1274,18 +1367,18 @@ def render_admin_settings() -> None:
             st.caption(f"Worker: {status['worker_id']}")
         st.caption(f"Duplikat dicegah: {status.get('duplicates_skipped', 0)}")
 
-        active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+        route = build_model_routing_plan()
         bot_config = {
             "telegram_token": telegram_token,
             "slashai_api_key": api_key,
             "slashai_api_url": api_url,
-            "slashai_model": st.session_state.active_model,
+            "slashai_model": route["primary_model"],
             "persona": persona_with_default_memory(st.session_state.active_persona),
             "memory_file": memory_file,
-            "fallback_models": active_cheap_models,
-            "expensive_fallback_models": active_expensive_models,
-            "allow_expensive_fallback": bool(st.session_state.allow_expensive_fallback),
-            "max_expensive_models": int(st.session_state.max_expensive_models),
+            "fallback_models": route["cheap_fallback_models"],
+            "expensive_fallback_models": route["expensive_fallback_models"],
+            "allow_expensive_fallback": route["allow_expensive_fallback"],
+            "max_expensive_models": route["max_expensive_models"],
             "show_model_info": telegram_show_model_info,
             "temperature": float(st.session_state.active_temperature),
             "max_completion_tokens": int(st.session_state.active_max_tokens),
@@ -1296,8 +1389,8 @@ def render_admin_settings() -> None:
             "lock_file": telegram_lock_file,
             "allow_memory_commands": False,
             "smart_model_router": bool(st.session_state.active_smart_router),
-            "return_to_primary": bool(st.session_state.active_return_to_primary),
-            "max_smart_models": int(st.session_state.active_max_smart_models),
+            "return_to_primary": route["return_to_primary"],
+            "max_smart_models": route["max_smart_models"],
         }
 
         col_start, col_stop = st.columns(2)
@@ -1407,6 +1500,9 @@ MAX_COMPLETION_TOKENS = 2600
 SMART_MODEL_ROUTER = true
 RETURN_TO_PRIMARY_MODEL = true
 MAX_SMART_MODELS = 2
+
+# Default aktif: jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal.
+# Setelah request selesai, aplikasi kembali memilih model murah aktif sebagai default.
 ALLOW_EXPENSIVE_FALLBACK = true
 MAX_EXPENSIVE_MODELS = 1
 MODEL_HEALTH_CHECK_INTERVAL_SECONDS = 900
@@ -1508,26 +1604,27 @@ if user_input:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
                 placeholder.markdown("⏳ adioranye sedang berpikir dalam...")
-                active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+                route = build_model_routing_plan()
                 answer, meta = generate_answer(
                     api_url=api_url,
                     api_key=api_key,
-                    model=cfg["model"],
+                    model=route["primary_model"],
                     system_prompt=cfg["persona"],
                     user_text=user_input,
                     memory_text=build_memory_text(limit=12),
                     recent_messages=st.session_state.chat_messages[:-1][-6:],
-                    fallback_models=active_cheap_models,
-                    expensive_fallback_models=active_expensive_models,
-                    allow_expensive_fallback=bool(cfg["allow_expensive_fallback"]),
-                    max_expensive_models=int(cfg["max_expensive_models"]),
+                    fallback_models=route["cheap_fallback_models"],
+                    expensive_fallback_models=route["expensive_fallback_models"],
+                    allow_expensive_fallback=route["allow_expensive_fallback"],
+                    max_expensive_models=route["max_expensive_models"],
                     temperature=float(cfg["temperature"]),
                     max_completion_tokens=int(cfg["max_completion_tokens"]),
                     timeout=60,
                     smart_model_router=bool(cfg["smart_model_router"]),
-                    return_to_primary=bool(cfg["return_to_primary"]),
-                    max_smart_models=int(cfg["max_smart_models"]),
+                    return_to_primary=route["return_to_primary"],
+                    max_smart_models=route["max_smart_models"],
                 )
+                restore_active_model_to_cheap()
                 placeholder.markdown(answer)
                 st.session_state.last_answer_meta = meta or {}
                 final_model = (meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or cfg["model"]
