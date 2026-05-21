@@ -106,6 +106,8 @@ def init_state() -> None:
         st.session_state.cheap_model_rotation_index = 0
     if "last_rotated_primary_model" not in st.session_state:
         st.session_state.last_rotated_primary_model = ""
+    if "active_use_streamlit_cache_memory" not in st.session_state:
+        st.session_state.active_use_streamlit_cache_memory = parse_bool(get_secret("USE_STREAMLIT_CACHE_MEMORY", True), default=True)
 
 
 # =========================
@@ -167,31 +169,136 @@ max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 model_health_check_interval = int(get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 900) or 900)
 model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
 rotate_cheap_primary_default = parse_bool(get_secret("ROTATE_CHEAP_PRIMARY", True), default=True)
+use_streamlit_cache_memory_default = parse_bool(get_secret("USE_STREAMLIT_CACHE_MEMORY", True), default=True)
+streamlit_cache_memory_limit = int(get_secret("STREAMLIT_CACHE_MEMORY_LIMIT", 200) or 200)
 
 init_state()
 memory = MemoryStore(memory_file)
 service = get_telegram_service()
 
 
+@st.cache_resource(show_spinner=False)
+def get_streamlit_memory_cache_store() -> Dict[str, Any]:
+    """Cache memory berbasis RAM Streamlit.
+
+    Catatan: cache ini bertahan melewati rerun selama proses/container Streamlit masih hidup,
+    tetapi bisa hilang saat app sleep, restart, clear cache, atau redeploy.
+    """
+    return {"items": []}
+
+
+def _streamlit_cache_memory_items() -> List[Dict[str, Any]]:
+    store = get_streamlit_memory_cache_store()
+    items = store.setdefault("items", [])
+    if not isinstance(items, list):
+        store["items"] = []
+        items = store["items"]
+    return items
+
+
+def add_streamlit_cache_memory(text: str, source: str = "streamlit-cache-admin") -> bool:
+    clean_text = str(text or "").strip()
+    if not clean_text:
+        return False
+
+    items = _streamlit_cache_memory_items()
+    # Hindari duplikasi persis agar prompt tidak membengkak.
+    if any(str(item.get("text", "")).strip() == clean_text for item in items):
+        return False
+
+    items.append(
+        {
+            "text": clean_text,
+            "source": source,
+            "created_at": datetime.now(ZoneInfo("Asia/Jakarta")).strftime("%Y-%m-%d %H:%M:%S WIB"),
+        }
+    )
+
+    max_items = max(1, int(streamlit_cache_memory_limit or 200))
+    if len(items) > max_items:
+        del items[: len(items) - max_items]
+    return True
+
+
+def streamlit_cache_memory_prompt_text(limit: int = 12) -> str:
+    if not bool(st.session_state.get("active_use_streamlit_cache_memory", True)):
+        return ""
+
+    items = _streamlit_cache_memory_items()
+    if not items:
+        return ""
+
+    selected_items = items[-max(1, int(limit or 12)) :]
+    return "\n".join(f"- {str(item.get('text', '')).strip()}" for item in selected_items if str(item.get("text", "")).strip())
+
+
+def streamlit_cache_memory_list_text(limit: int = 80) -> str:
+    items = _streamlit_cache_memory_items()
+    if not items:
+        return ""
+
+    selected_items = items[-max(1, int(limit or 80)) :]
+    lines = []
+    start_number = max(1, len(items) - len(selected_items) + 1)
+    for idx, item in enumerate(selected_items, start=start_number):
+        created_at = str(item.get("created_at") or "").strip()
+        source = str(item.get("source") or "cache").strip()
+        body = str(item.get("text") or "").strip()
+        if body:
+            prefix = f"{idx}."
+            meta = f" [{created_at} | {source}]" if created_at or source else ""
+            lines.append(f"{prefix}{meta} {body}")
+    return "\n".join(lines)
+
+
+def forget_streamlit_cache_memory_contains(keyword: str) -> int:
+    keyword_clean = str(keyword or "").strip().lower()
+    if not keyword_clean:
+        return 0
+
+    items = _streamlit_cache_memory_items()
+    before = len(items)
+    items[:] = [item for item in items if keyword_clean not in str(item.get("text", "")).lower()]
+    return before - len(items)
+
+
+def reset_streamlit_cache_memory() -> int:
+    items = _streamlit_cache_memory_items()
+    count = len(items)
+    items.clear()
+    return count
+
+
 def build_memory_text(limit: int = 12) -> str:
-    """Gabungkan memory default dengan memory lokal admin."""
+    """Gabungkan memory default, cache Streamlit, dan memory lokal admin."""
     default_context = str(st.session_state.get("active_default_memory") or default_memory_context_from_secret or DEFAULT_MEMORY_CONTEXT).strip()
+    cache_memory = str(streamlit_cache_memory_prompt_text(limit=limit) or "").strip()
     local_memory = str(memory.as_prompt_text(limit=limit) or "").strip()
 
     sections = []
     if default_context:
         sections.append("MEMORY DEFAULT AKTIF:\n" + default_context)
+    if cache_memory:
+        sections.append("MEMORY CACHE STREAMLIT AKTIF:\n" + cache_memory)
     if local_memory:
-        sections.append("MEMORY TAMBAHAN ADMIN:\n" + local_memory)
+        sections.append("MEMORY TAMBAHAN ADMIN FILE LOKAL:\n" + local_memory)
     return "\n\n".join(sections)
 
 
 def persona_with_default_memory(persona: str) -> str:
-    """Dipakai untuk Bot Telegram agar memory default tetap masuk ke instruksi bot."""
+    """Dipakai untuk Bot Telegram agar memory default/cache tetap masuk ke instruksi bot."""
     default_context = str(st.session_state.get("active_default_memory") or default_memory_context_from_secret or DEFAULT_MEMORY_CONTEXT).strip()
-    if not default_context:
+    cache_context = str(streamlit_cache_memory_prompt_text(limit=20) or "").strip()
+
+    context_sections = []
+    if default_context:
+        context_sections.append("Konteks default yang selalu dipakai:\n" + default_context)
+    if cache_context:
+        context_sections.append("Memory cache Streamlit aktif:\n" + cache_context)
+
+    if not context_sections:
         return persona
-    return f"{persona}\n\nKonteks default yang selalu dipakai:\n{default_context}"
+    return f"{persona}\n\n" + "\n\n".join(context_sections)
 
 
 # =========================
@@ -1204,6 +1311,7 @@ def get_runtime_config() -> Dict[str, Any]:
         "allow_expensive_fallback": bool(st.session_state.allow_expensive_fallback),
         "max_expensive_models": int(st.session_state.max_expensive_models),
         "default_memory_context": str(st.session_state.active_default_memory),
+        "use_streamlit_cache_memory": bool(st.session_state.active_use_streamlit_cache_memory),
     }
 
 
@@ -1470,6 +1578,7 @@ def render_admin_settings() -> None:
                 st.session_state.active_expensive_fallback_models = DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
                 st.session_state.last_model_health_error = ""
                 st.session_state.active_rotate_cheap_primary = rotate_cheap_primary_default
+                st.session_state.active_use_streamlit_cache_memory = use_streamlit_cache_memory_default
                 st.session_state.cheap_model_rotation_index = 0
                 st.session_state.last_rotated_primary_model = ""
                 st.rerun()
@@ -1555,43 +1664,97 @@ def render_admin_settings() -> None:
                 st.code(status["last_error"][:2000])
 
     with tab_memory:
-        st.markdown("#### Memory Lokal")
-        st.info(
-            "Memory ini dipakai sebagai konteks tambahan. Di Streamlit Online, file lokal bisa hilang saat app restart/redeploy."
-        )
         st.markdown("#### Memory Default Aktif")
-        st.caption("Memory default ini selalu ikut dikirim ke AI, baik ada memori lokal maupun belum ada.")
+        st.caption("Memory default ini selalu ikut dikirim ke AI, baik ada memory cache maupun belum ada.")
         st.session_state.active_default_memory = st.text_area(
             "Memory default",
             value=st.session_state.active_default_memory,
             height=220,
         )
 
-        st.markdown("#### Memory Tambahan Admin")
+        st.markdown("#### Memory Cache Streamlit Online")
+        st.info(
+            "Memory cache disimpan di RAM/cache Streamlit. Memory ini bertahan saat rerun dan selama container app masih hidup, "
+            "tetapi bisa hilang saat app sleep, restart, clear cache, atau redeploy. Cocok untuk memory cepat di Streamlit Cloud."
+        )
+        st.session_state.active_use_streamlit_cache_memory = st.toggle(
+            "Aktifkan memory cache Streamlit untuk jawaban AI",
+            value=bool(st.session_state.active_use_streamlit_cache_memory),
+        )
+
+        cache_memory_text = streamlit_cache_memory_list_text(limit=80)
+        if cache_memory_text:
+            st.code(cache_memory_text)
+        else:
+            st.write("Belum ada memory di cache Streamlit.")
+
+        new_cache_memory = st.text_area(
+            "Tambah memory ke cache Streamlit",
+            value="",
+            height=90,
+            placeholder="Contoh: User ingin jawaban yang ringkas, jelas, dan langsung bisa dipakai.",
+        )
+        col_cache_save, col_cache_save_both = st.columns(2)
+        with col_cache_save:
+            if st.button("Simpan ke cache Streamlit", use_container_width=True):
+                saved = add_streamlit_cache_memory(new_cache_memory, source="streamlit-admin-cache")
+                if saved:
+                    st.success("Memory disimpan ke cache Streamlit.")
+                else:
+                    st.info("Memory kosong atau sudah ada di cache.")
+                st.rerun()
+        with col_cache_save_both:
+            if st.button("Simpan ke cache + file lokal", use_container_width=True):
+                saved_cache = add_streamlit_cache_memory(new_cache_memory, source="streamlit-admin-cache")
+                if new_cache_memory.strip():
+                    memory.add(new_cache_memory.strip(), source="streamlit-admin-file")
+                if saved_cache or new_cache_memory.strip():
+                    st.success("Memory disimpan ke cache Streamlit dan file lokal.")
+                else:
+                    st.info("Memory kosong atau sudah ada.")
+                st.rerun()
+
+        forget_cache_keyword = st.text_input("Hapus memory cache yang mengandung kata")
+        col_cache_forget, col_cache_reset = st.columns(2)
+        with col_cache_forget:
+            if st.button("Hapus dari cache berdasarkan kata", use_container_width=True):
+                count = forget_streamlit_cache_memory_contains(forget_cache_keyword)
+                st.warning(f"{count} memory cache dihapus.")
+                st.rerun()
+        with col_cache_reset:
+            if st.button("Reset semua memory cache", use_container_width=True):
+                count = reset_streamlit_cache_memory()
+                st.warning(f"{count} memory cache dihapus.")
+                st.rerun()
+
+        st.markdown("#### Memory Tambahan File Lokal")
+        st.caption("Opsional. File lokal dapat hilang di Streamlit Cloud saat app restart/redeploy, tetapi tetap dipertahankan untuk kompatibilitas fitur lama.")
         current_memory = memory.list_text(limit=80)
         if current_memory:
             st.code(current_memory)
         else:
-            st.write("Belum ada memori tambahan.")
+            st.write("Belum ada memory file lokal.")
 
-        new_memory = st.text_input("Tambah memori")
-        if st.button("Simpan memori", use_container_width=True):
-            if new_memory.strip():
-                memory.add(new_memory.strip(), source="streamlit-admin")
-                st.success("Memori disimpan.")
+        new_file_memory = st.text_input("Tambah memory ke file lokal")
+        if st.button("Simpan ke file lokal", use_container_width=True):
+            if new_file_memory.strip():
+                memory.add(new_file_memory.strip(), source="streamlit-admin-file")
+                st.success("Memory disimpan ke file lokal.")
                 st.rerun()
+            else:
+                st.info("Memory masih kosong.")
 
-        forget_keyword = st.text_input("Hapus memori yang mengandung kata")
+        forget_keyword = st.text_input("Hapus memory file lokal yang mengandung kata")
         col_forget, col_reset_memory = st.columns(2)
         with col_forget:
-            if st.button("Hapus berdasarkan kata", use_container_width=True):
+            if st.button("Hapus file lokal berdasarkan kata", use_container_width=True):
                 count = memory.forget_contains(forget_keyword)
-                st.warning(f"{count} memori dihapus.")
+                st.warning(f"{count} memory file lokal dihapus.")
                 st.rerun()
         with col_reset_memory:
-            if st.button("Reset semua memori", use_container_width=True):
+            if st.button("Reset semua memory file lokal", use_container_width=True):
                 memory.reset()
-                st.warning("Semua memori dihapus.")
+                st.warning("Semua memory file lokal dihapus.")
                 st.rerun()
 
     with tab_setup:
@@ -1636,6 +1799,8 @@ SMART_MODEL_ROUTER = true
 RETURN_TO_PRIMARY_MODEL = true
 MAX_SMART_MODELS = 2
 ROTATE_CHEAP_PRIMARY = true
+USE_STREAMLIT_CACHE_MEMORY = true
+STREAMLIT_CACHE_MEMORY_LIMIT = 200
 
 # Default aktif: model murah aktif dipakai bergiliran sebagai primary.
 # Jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal.
