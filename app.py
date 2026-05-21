@@ -1,6 +1,7 @@
 import hmac
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -201,8 +202,51 @@ def unique_models(models: List[str]) -> List[str]:
     return list(dict.fromkeys(str(model).strip() for model in models if str(model).strip()))
 
 
-def _utc_now_text() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+WIB_TZ = ZoneInfo("Asia/Jakarta")
+
+
+def _wib_now_text() -> str:
+    return datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
+
+
+def _timestamp_to_wib_text(timestamp_value: Any) -> str:
+    try:
+        return datetime.fromtimestamp(float(timestamp_value), WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
+    except Exception:
+        return "belum pernah"
+
+
+def _to_wib_display_text(value: Any) -> str:
+    """Konversi datetime/timestamp/string UTC/ISO ke tampilan WIB jika memungkinkan."""
+    if value in (None, ""):
+        return ""
+
+    if isinstance(value, (int, float)):
+        return _timestamp_to_wib_text(value)
+
+    if isinstance(value, datetime):
+        dt = value
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
+
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    if "WIB" in raw.upper():
+        return raw
+
+    try:
+        if raw.endswith(" UTC"):
+            dt = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+        else:
+            normalized = raw.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(normalized)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
+    except Exception:
+        return raw
 
 
 def _tier_rank(model: str) -> int:
@@ -251,7 +295,7 @@ def check_single_model_health(model: str, timeout: int = 12) -> Dict[str, Any]:
                 "active": False,
                 "status_code": response.status_code,
                 "latency_ms": latency_ms,
-                "checked_at": _utc_now_text(),
+                "checked_at": _wib_now_text(),
                 "error": response.text[:300],
             }
 
@@ -265,7 +309,7 @@ def check_single_model_health(model: str, timeout: int = 12) -> Dict[str, Any]:
             "active": bool(choices),
             "status_code": response.status_code,
             "latency_ms": latency_ms,
-            "checked_at": _utc_now_text(),
+            "checked_at": _wib_now_text(),
             "sample": content[:60],
             "error": "" if choices else "Response 200 tetapi choices kosong",
         }
@@ -274,7 +318,7 @@ def check_single_model_health(model: str, timeout: int = 12) -> Dict[str, Any]:
             "active": False,
             "status_code": None,
             "latency_ms": round((time.time() - started) * 1000, 1),
-            "checked_at": _utc_now_text(),
+            "checked_at": _wib_now_text(),
             "error": str(exc)[:300],
         }
 
@@ -489,7 +533,7 @@ def render_model_health_table() -> None:
                 "harga": model_price_label(model_name),
                 "latency_ms": info.get("latency_ms"),
                 "kode": info.get("status_code"),
-                "dicek": info.get("checked_at"),
+                "dicek": _to_wib_display_text(info.get("checked_at")),
                 "error": str(info.get("error") or "")[:120],
             }
         )
@@ -1241,7 +1285,7 @@ def render_admin_status() -> None:
     active_count = sum(1 for item in health_cache.values() if item.get("active"))
     checked_at = "belum pernah"
     if st.session_state.get("model_health_checked_at"):
-        checked_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(float(st.session_state.model_health_checked_at)))
+        checked_at = _timestamp_to_wib_text(st.session_state.model_health_checked_at)
 
     st.markdown("#### Status Sistem")
     st.caption("Chat publik aktif. Setting hanya untuk admin.")
@@ -1442,7 +1486,7 @@ def render_admin_settings() -> None:
         st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
         st.caption(f"Pesan diproses: {status.get('processed', 0)}")
         if status.get("started_at"):
-            st.caption(f"Mulai: {status['started_at']}")
+            st.caption(f"Mulai: {_to_wib_display_text(status['started_at'])}")
         if status.get("worker_id"):
             st.caption(f"Worker: {status['worker_id']}")
         st.caption(f"Duplikat dicegah: {status.get('duplicates_skipped', 0)}")
