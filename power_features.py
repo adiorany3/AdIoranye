@@ -1527,14 +1527,14 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
 
     if lower in {"/kb", "/rag", "/kb bantuan", "/rag bantuan", "/kb help", "/rag help"}:
         return (
-            "Perintah Knowledge Base:\n"
-            "/kb statistik - lihat jumlah dokumen/chunk\n"
-            "/kb list - lihat dokumen terakhir\n"
-            "/kb cari <query> - cari isi knowledge base\n"
-            "/kb detail <doc_id> - preview dokumen\n"
-            "/kb hapus <doc_id> - hapus dokumen\n"
-            "/kb rebuild - bangun ulang index FTS\n"
-            "/kb tambah <judul>\n<isi dokumen> - tambah dokumen manual"
+            "📚 Knowledge Base\n\n"
+            "• /kb statistik — jumlah dokumen dan chunk\n"
+            "• /kb list — daftar dokumen terakhir\n"
+            "• /kb cari <query> — cari isi knowledge base\n"
+            "• /kb detail <doc_id> — preview dokumen\n"
+            "• /kb hapus <doc_id> — hapus dokumen\n"
+            "• /kb rebuild — bangun ulang index FTS\n"
+            "• /kb tambah <judul> lalu baris baru isi dokumen"
         )
 
     if lower in {"/kb statistik", "/rag statistik", "/kb stats", "/rag stats"}:
@@ -1551,12 +1551,14 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
         docs = store.list_documents(limit=15)
         if not docs:
             return "Knowledge base masih kosong."
-        lines = ["📚 Dokumen Knowledge Base terakhir:"]
+        lines = ["📚 Dokumen Knowledge Base terakhir", ""]
         for doc in docs:
             lines.append(
-                f"- ID {doc.get('id')} | {doc.get('title')} | {doc.get('chunks')} chunk | {doc.get('created_at_wib', '')}"
+                f"ID {doc.get('id')} — {doc.get('title')}\n"
+                f"Chunk: {doc.get('chunks')} | Tanggal: {doc.get('created_at_wib', '-')}"
             )
-        return "\n".join(lines)
+            lines.append("")
+        return "\n".join(lines).strip()
 
     if lower.startswith(("/kb detail ", "/rag detail ")):
         doc_id = raw.split(" ", 2)[2].strip()
@@ -1599,10 +1601,19 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
 
     if lower in {"/biaya", "/usage", "/biaya hari ini", "/usage hari ini"}:
         data = store.usage_summary(days=1)
-        lines = [f"📊 Usage 24 jam terakhir: {data['requests']} request | estimasi Rp{data['cost_idr']:.2f}"]
-        for row in data.get("by_model", [])[:10]:
+        lines = [
+            "📊 Usage 24 jam terakhir",
+            "",
+            f"Request: {data['requests']}",
+            f"Estimasi biaya: Rp{data['cost_idr']:.2f}",
+        ]
+        rows = data.get("by_model", [])[:10]
+        if rows:
+            lines.append("\nPer model:")
+        for idx, row in enumerate(rows, start=1):
             lines.append(
-                f"- {row.get('model') or '-'}: {row.get('requests')} req | in {int(row.get('input_tokens') or 0)} | out {int(row.get('output_tokens') or 0)} | Rp{float(row.get('cost_idr') or 0):.2f}"
+                f"{idx}. {row.get('model') or '-'}\n"
+                f"   Req {row.get('requests')} | In {int(row.get('input_tokens') or 0)} | Out {int(row.get('output_tokens') or 0)} | Rp{float(row.get('cost_idr') or 0):.2f}"
             )
         return "\n".join(lines)
 
@@ -1610,10 +1621,12 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
         rows = store.model_score_rows(limit=15)
         if not rows:
             return "Belum ada data skor model. Gunakan AI beberapa kali atau jalankan benchmark dulu."
-        lines = ["🏆 Skor model adaptif:"]
-        for row in rows[:15]:
+        lines = ["🏆 Skor model adaptif", ""]
+        for idx, row in enumerate(rows[:15], start=1):
             lines.append(
-                f"- {row.get('model')} [{row.get('intent')}]: score {row.get('computed_score')} | success {row.get('success_rate')} | latency {row.get('avg_latency')}s | quality {row.get('avg_quality')}"
+                f"{idx}. {row.get('model')}\n"
+                f"   Intent: {row.get('intent')} | Score: {row.get('computed_score')}\n"
+                f"   Success: {row.get('success_rate')} | Latency: {row.get('avg_latency')}s | Quality: {row.get('avg_quality')}"
             )
         return "\n".join(lines)
 
@@ -1621,10 +1634,14 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
         rows = store.circuit_breaker_status(limit=20)
         if not rows:
             return "Circuit breaker masih kosong."
-        lines = ["🧯 Circuit breaker:"]
-        for row in rows[:20]:
+        lines = ["🧯 Circuit breaker", ""]
+        for idx, row in enumerate(rows[:20], start=1):
             status = "BLOCKED" if row.get("blocked") else "OK"
-            lines.append(f"- {row.get('model')}: {status} | gagal {row.get('failure_count')} | buka sampai {row.get('open_until_wib')}")
+            until = row.get("open_until_wib") or "-"
+            lines.append(
+                f"{idx}. {row.get('model')}\n"
+                f"   Status: {status} | Gagal: {row.get('failure_count')} | Buka sampai: {until}"
+            )
         return "\n".join(lines)
 
     if lower in {"/template", "/template list", "/mode list"}:

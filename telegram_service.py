@@ -39,27 +39,44 @@ def _wib_now_text() -> str:
 
 
 def split_telegram_message(text: str, max_len: int = 3900) -> List[str]:
-    text = text or ""
+    """Split Telegram messages without cutting words/code lines when possible."""
+    text = str(text or "")
     if len(text) <= max_len:
         return [text]
-    chunks = []
-    while text:
-        chunks.append(text[:max_len])
-        text = text[max_len:]
-    return chunks
+
+    chunks: List[str] = []
+    remaining = text
+    while len(remaining) > max_len:
+        # Prefer paragraph, then line, then whitespace boundaries.
+        cut = remaining.rfind("\n\n", 0, max_len)
+        if cut < max_len * 0.45:
+            cut = remaining.rfind("\n", 0, max_len)
+        if cut < max_len * 0.45:
+            cut = remaining.rfind(" ", 0, max_len)
+        if cut < max_len * 0.45:
+            cut = max_len
+        chunk = remaining[:cut].strip()
+        if chunk:
+            chunks.append(chunk)
+        remaining = remaining[cut:].strip()
+    if remaining:
+        chunks.append(remaining)
+    return chunks or [""]
 
 
 def normalize_telegram_text(text: str) -> str:
-    """Send AI output to Telegram as safe plain text.
+    """Send AI output to Telegram as safe, readable plain text.
 
-    AI answers may contain XML/HTML/Android tags such as <uses-permission>.
-    If Telegram receives that while parse_mode=HTML, sendMessage fails with
-    `can't parse entities`. The safest default is plain text without parse_mode.
-    This function only removes unsupported control characters and keeps < > intact.
+    We intentionally do not use parse_mode so code/XML/HTML snippets never break
+    Telegram parsing. This formatter only cleans control characters, trims noisy
+    whitespace, and keeps user-facing content intact.
     """
     text = str(text or "")
-    # Telegram can reject some ASCII control characters. Keep newlines/tabs.
-    return "".join(ch for ch in text if ch in "\n\r\t" or ord(ch) >= 32)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = "".join(ch for ch in text if ch in "\n\t" or ord(ch) >= 32)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{4,}", "\n\n\n", text)
+    return text.strip()
 
 
 def _as_string_list(value: Any) -> List[str]:
@@ -225,52 +242,110 @@ def resolve_answering_model(meta: Any, fallback_model: str) -> str:
     return str(fallback_model or "tidak diketahui")
 
 
+TELEGRAM_THIN_SEPARATOR = "\n\n━━━━━━━━━━━━\n"
+
+
+def _telegram_mode_label(meta: Any) -> str:
+    if not isinstance(meta, dict):
+        return "normal"
+    forced_mode = str(meta.get("telegram_forced_model_mode") or "").lower()
+    if forced_mode == "expensive":
+        return "mahal"
+    if forced_mode == "cheap":
+        return "murah"
+    if meta.get("telegram_auto_rotated_after_error"):
+        return "auto-rotate"
+    if meta.get("telegram_rotate_mode"):
+        return "rotate"
+    if meta.get("telegram_thinking_mode"):
+        return "thinking"
+    if meta.get("telegram_fast_normal_mode"):
+        return "cepat"
+    return "normal"
+
+
+def build_telegram_help_text(is_admin: bool = False) -> str:
+    """Build readable /help text for Telegram."""
+    lines = [
+        "🤖 Adioranye AI",
+        "Kirim pertanyaan langsung untuk dijawab AI.",
+        "",
+        "Perintah umum:",
+        "• /start — mulai bot",
+        "• /help — bantuan",
+    ]
+    if is_admin:
+        lines.extend([
+            "",
+            "Model & router:",
+            "• /speed 4321 — cek model aktif dan pilih tercepat",
+            "• /rotate — ganti ke model aktif terbaik saat ini",
+            "• /ubah murah — pakai model murah/cepat",
+            "• /ubah mahal — pakai model medium/mahal",
+            "• /model skor — lihat skor model adaptif",
+            "• /circuit — lihat model yang dikarantina",
+            "",
+            "Knowledge Base:",
+            "• /kb bantuan — daftar perintah KB",
+            "• /kb statistik — statistik dokumen",
+            "• /kb list — daftar dokumen terakhir",
+            "• /kb cari <query> — cari isi dokumen",
+            "• /kb tambah <judul> lalu baris baru isi dokumen",
+            "",
+            "Memory & biaya:",
+            "• /ingat <teks> — simpan memory permanen",
+            "• /lupa <keyword> — hapus memory sesuai keyword",
+            "• /biaya — ringkasan biaya 24 jam",
+        ])
+    else:
+        lines.extend([
+            "",
+            "Catatan: perintah admin disembunyikan. Hubungi admin bot untuk pengaturan model/KB.",
+        ])
+    return "\n".join(lines)
+
+
 def build_telegram_model_note(
     meta: Any,
     requested_model: str,
     default_model: str,
 ) -> str:
-    """Build a clear model note appended below every Telegram answer."""
+    """Build a compact footer appended below every Telegram answer."""
     answering_model = resolve_answering_model(meta, requested_model or default_model)
-    info_lines = [
-        "",
-        "—",
-        f"🤖 Dijawab oleh model: {answering_model}",
-    ]
+    mode_label = _telegram_mode_label(meta)
+    footer_parts = [f"Model: {answering_model}", f"Mode: {mode_label}"]
 
     if isinstance(meta, dict):
         requested = str(meta.get("telegram_model_requested") or requested_model or "").strip()
         if requested and requested != answering_model:
-            info_lines.append(f"🚦 Model awal: {requested}")
+            footer_parts.append(f"Awal: {requested}")
 
-        forced_mode = str(meta.get("telegram_forced_model_mode") or "").lower()
-        if forced_mode == "expensive":
-            info_lines.append("💎 Mode: paksa medium/mahal (/ubah mahal)")
-        elif forced_mode == "cheap":
-            info_lines.append("💸 Mode: paksa murah/cepat (/ubah murah)")
-        elif meta.get("telegram_rotate_mode"):
-            info_lines.append("🔄 Mode: rotate/otomatis sesuai model aktif")
-        elif meta.get("telegram_thinking_mode"):
-            info_lines.append("🧠 Mode: thinking/capable")
-        elif meta.get("telegram_fast_normal_mode"):
-            info_lines.append("⚡ Mode: normal cepat/model tercepat aktif")
-        else:
-            info_lines.append("🧭 Mode: normal/model murah aktif")
+        intent = str(meta.get("power_intent") or meta.get("intent") or "").strip()
+        if intent:
+            footer_parts.append(f"Intent: {intent}")
 
-        if meta.get("telegram_speed_updated_at"):
-            info_lines.append(f"🧪 Update model terakhir: {meta.get('telegram_speed_updated_at')}")
+        if meta.get("power_response_cache_hit") or meta.get("cache_hit"):
+            footer_parts.append("Cache: hit")
+
+        rag_sources = meta.get("power_rag_sources") or meta.get("rag_sources") or []
+        try:
+            rag_count = len(rag_sources)
+        except Exception:
+            rag_count = 0
+        if rag_count:
+            footer_parts.append(f"KB: {rag_count} sumber")
 
         consulted = meta.get("consulted_models") or []
         if consulted:
-            info_lines.append("🔁 Konsultasi model: " + ", ".join(str(item) for item in consulted[:4]))
+            short_consulted = ", ".join(str(item) for item in consulted[:3])
+            footer_parts.append(f"Konsultasi: {short_consulted}")
 
-        if meta.get("expensive_fallback_used"):
-            info_lines.append("⚠️ Fallback: model menengah/mahal dipakai karena model murah belum cukup.")
-    else:
-        info_lines.append("🧭 Mode: normal")
+        if meta.get("telegram_auto_rotated_after_error"):
+            footer_parts.append("Retry: auto-rotate")
+        elif meta.get("expensive_fallback_used"):
+            footer_parts.append("Fallback: capable")
 
-    return "\n".join(info_lines)
-
+    return TELEGRAM_THIN_SEPARATOR + "ℹ️ " + " | ".join(footer_parts)
 
 
 def _model_tier_rank(model: str) -> int:
@@ -994,38 +1069,45 @@ def refresh_telegram_runtime_models(
 
 
 def build_speed_update_summary(result: Dict[str, Any]) -> str:
-    """Human-readable Telegram summary after /speed command."""
+    """Human-readable Telegram summary after /speed or /rotate command."""
     primary = result.get("primary_model") or "tidak ada"
     fast_cheap = result.get("fast_cheap_models") or []
     active_expensive = result.get("active_expensive_models") or []
     health_cache = result.get("health_cache") or {}
+    discovery = result.get("api_model_discovery") or {}
+
     lines = [
-        "✅ Update model selesai.",
+        "✅ Update model selesai",
         "",
-        f"Model utama sekarang: {primary}",
-        f"Model murah aktif: {len(fast_cheap)}",
-        f"Model menengah/mahal aktif: {len(active_expensive)}",
-        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)} | Sementara error: {result.get('transient_total', 0)} | Mati: {result.get('dead_total', 0)}",
-        f"Metode cek: paralel {result.get('health_workers', 1)} worker | retry {result.get('health_retries', 0)}x",
+        f"Model utama: {primary}",
+        f"Aktif: {result.get('active_total', 0)}/{result.get('checked_total', 0)} model",
+        f"Murah aktif: {len(fast_cheap)} | Capable aktif: {len(active_expensive)}",
+        f"Transient: {result.get('transient_total', 0)} | Mati: {result.get('dead_total', 0)}",
+        f"Cek: {result.get('health_workers', 1)} worker | retry {result.get('health_retries', 0)}x",
     ]
+    if discovery.get("ok"):
+        lines.append(f"Discovery API: {len(discovery.get('models') or [])} model")
+
     if fast_cheap:
-        lines.append("")
-        lines.append("⚡ Urutan model murah tercepat:")
-        for model_name in fast_cheap[:8]:
+        lines.append(TELEGRAM_THIN_SEPARATOR.strip())
+        lines.append("⚡ Model murah tercepat")
+        for idx, model_name in enumerate(fast_cheap[:8], start=1):
             latency = health_cache.get(model_name, {}).get("latency_ms")
-            lines.append(f"- {model_name} ({latency} ms)")
+            latency_text = f"{latency} ms" if latency is not None else "-"
+            lines.append(f"{idx}. {model_name} — {latency_text}")
+
     if active_expensive:
-        lines.append("")
-        lines.append("🧠 Model capable aktif:")
-        for model_name in active_expensive[:5]:
+        lines.append(TELEGRAM_THIN_SEPARATOR.strip())
+        lines.append("🧠 Model capable aktif")
+        for idx, model_name in enumerate(active_expensive[:8], start=1):
             latency = health_cache.get(model_name, {}).get("latency_ms")
-            lines.append(f"- {model_name} ({latency} ms)")
+            latency_text = f"{latency} ms" if latency is not None else "-"
+            lines.append(f"{idx}. {model_name} — {latency_text}")
+
     if not fast_cheap and active_expensive:
-        lines.append("")
-        lines.append("Catatan: tidak ada model murah yang hidup, jadi bot sementara memakai model menengah/mahal aktif.")
+        lines.append("\nCatatan: tidak ada model murah aktif, jadi bot memakai model capable.")
     elif not fast_cheap and not active_expensive:
-        lines.append("")
-        lines.append("Peringatan: tidak ada model yang lolos health check. Bot tetap memakai model terakhir agar error tetap terlihat.")
+        lines.append("\nPeringatan: tidak ada model lolos health check. Bot tetap memakai model terakhir agar error terlihat.")
     return "\n".join(lines)
 
 
@@ -1502,7 +1584,7 @@ class TelegramBotService:
                             self._send_message(
                                 token,
                                 chat_id,
-                                "Halo, saya adioranye. Kirim pertanyaan apa saja, nanti saya bantu jawab.",
+                                "Halo, saya adioranye.\n\nKirim pertanyaan langsung untuk dijawab AI.\nKetik /help untuk melihat bantuan.",
                                 parse_mode=telegram_parse_mode,
                             )
                             continue
@@ -1511,18 +1593,7 @@ class TelegramBotService:
                             self._send_message(
                                 token,
                                 chat_id,
-                                "Perintah:\n"
-                                "/start - mulai bot\n"
-                                "/help - bantuan\n"
-                                "/speed 4321 - admin: update model aktif dan pilih yang tercepat\n"
-                                "/rotate - admin: cek ulang kondisi model dan ganti ke model aktif terbaik saat ini\n"
-                                "/ubah mahal - admin: pakai model medium/mahal aktif\n"
-                                "/ubah murah - admin: kembali pakai model murah/cepat aktif\n"
-                                "/ingat <teks> - admin: simpan memory permanen SQLite\n"
-                                "/rag tambah <judul>\n<isi> - admin: tambah knowledge base\n"
-                                "/rag cari <query> - admin: cari knowledge base\n"
-                                "/biaya - admin: ringkasan biaya 24 jam\n\n"
-                                "Langsung kirim pertanyaan untuk dijawab AI.",
+                                build_telegram_help_text(is_admin=self._is_admin_chat(chat_id, config)),
                                 parse_mode=telegram_parse_mode,
                             )
                             continue
@@ -1945,7 +2016,7 @@ class TelegramBotService:
                             self._send_message(
                                 token,
                                 chat_id,
-                                "Maaf, bot belum bisa menjawab.\n\nDetail ringkas:\n" + self._last_error[:1200],
+                                "Maaf, bot belum bisa menjawab.\n\nDetail ringkas:\n" + self._last_error[:900],
                                 parse_mode=telegram_parse_mode,
                             )
 
