@@ -240,6 +240,8 @@ def build_telegram_model_note(
             info_lines.append("💎 Mode: paksa medium/mahal (/ubah mahal)")
         elif forced_mode == "cheap":
             info_lines.append("💸 Mode: paksa murah/cepat (/ubah murah)")
+        elif meta.get("telegram_rotate_mode"):
+            info_lines.append("🔄 Mode: rotate/otomatis sesuai model aktif")
         elif meta.get("telegram_thinking_mode"):
             info_lines.append("🧠 Mode: thinking/capable")
         elif meta.get("telegram_fast_normal_mode"):
@@ -398,6 +400,151 @@ def build_model_switch_summary(mode: str, model: str, cheap_models: List[str], c
 
     return "Format perintah: /ubah mahal atau /ubah murah"
 
+
+
+
+def is_rotate_model_command(text: str) -> bool:
+    """Return True for /rotate command.
+
+    Supports:
+    - /rotate
+    - /rotate@NamaBot
+    """
+    raw = str(text or "").strip()
+    parts = raw.split()
+    if len(parts) != 1:
+        return False
+    command = parts[0].lower()
+    if "@" in command:
+        command = command.split("@", 1)[0]
+    return command == "/rotate"
+
+
+def select_rotated_runtime_model(result: Dict[str, Any], current_mode: str, current_model: str) -> Dict[str, Any]:
+    """Select the best currently-active model according to current routing mode.
+
+    - cheap mode: use fastest active cheap model; fall back to capable if no cheap model is alive.
+    - expensive mode: use active medium/expensive model; fall back to cheap if no capable model is alive.
+    - auto mode: use refresh_telegram_runtime_models' primary model.
+    """
+    mode = str(current_mode or "auto").lower()
+    fast_cheap = _as_string_list(result.get("fast_cheap_models"))
+    active_expensive = _as_string_list(result.get("active_expensive_models"))
+    active_cheap = _as_string_list(result.get("active_cheap_models")) or fast_cheap
+    primary = str(result.get("primary_model") or current_model or "").strip()
+
+    selected_mode = mode if mode in {"auto", "cheap", "expensive"} else "auto"
+    selected_model = primary
+    fallback_models = _as_string_list(result.get("fallback_models"))
+    expensive_fallback_models = _as_string_list(result.get("expensive_fallback_models"))
+    allow_expensive = bool(expensive_fallback_models or active_expensive)
+
+    if selected_mode == "cheap":
+        if fast_cheap:
+            selected_model = fast_cheap[0]
+            fallback_models = [item for item in fast_cheap if item != selected_model]
+            expensive_fallback_models = []
+            allow_expensive = False
+        elif active_expensive:
+            # Safety fallback: if every cheap model is down, keep bot alive using capable model.
+            selected_model = active_expensive[0]
+            fallback_models = []
+            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
+            allow_expensive = True
+            selected_mode = "expensive"
+    elif selected_mode == "expensive":
+        if active_expensive:
+            selected_model = active_expensive[0]
+            fallback_models = []
+            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
+            allow_expensive = True
+        elif fast_cheap:
+            # Safety fallback: if every capable model is down, keep bot alive using cheap model.
+            selected_model = fast_cheap[0]
+            fallback_models = [item for item in fast_cheap if item != selected_model]
+            expensive_fallback_models = []
+            allow_expensive = False
+            selected_mode = "cheap"
+    else:
+        selected_model = primary
+        if fast_cheap and selected_model in fast_cheap:
+            fallback_models = [item for item in fast_cheap if item != selected_model]
+            expensive_fallback_models = active_expensive
+            allow_expensive = bool(active_expensive)
+        elif active_expensive and selected_model in active_expensive:
+            fallback_models = []
+            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
+            allow_expensive = True
+        else:
+            fallback_models = [item for item in fast_cheap if item != selected_model]
+            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
+            allow_expensive = bool(expensive_fallback_models)
+
+    if not selected_model:
+        selected_model = current_model
+
+    return {
+        "selected_model": selected_model,
+        "selected_mode": selected_mode,
+        "fallback_models": fallback_models,
+        "expensive_fallback_models": expensive_fallback_models,
+        "allow_expensive_fallback": allow_expensive,
+        "active_cheap_models": active_cheap,
+        "fast_cheap_models": fast_cheap,
+        "active_expensive_models": active_expensive,
+    }
+
+
+def build_rotate_summary(result: Dict[str, Any], rotation: Dict[str, Any], previous_model: str) -> str:
+    """Human-readable Telegram summary after /rotate command."""
+    selected_model = rotation.get("selected_model") or "tidak ada"
+    selected_mode = str(rotation.get("selected_mode") or "auto")
+    fast_cheap = rotation.get("fast_cheap_models") or []
+    active_expensive = rotation.get("active_expensive_models") or []
+    health_cache = result.get("health_cache") or {}
+
+    mode_label = {
+        "auto": "OTOMATIS",
+        "cheap": "MURAH/CEPAT",
+        "expensive": "MEDIUM/MAHAL",
+    }.get(selected_mode, selected_mode.upper())
+
+    lines = [
+        "✅ Rotate model selesai.",
+        "",
+        f"Mode aktif: {mode_label}",
+        f"Model sebelumnya: {previous_model or 'tidak diketahui'}",
+        f"Model sekarang: {selected_model}",
+        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)}",
+    ]
+
+    if selected_model in health_cache:
+        latency = health_cache.get(selected_model, {}).get("latency_ms")
+        status_code = health_cache.get(selected_model, {}).get("status_code")
+        lines.append(f"Status model terpilih: aktif | {latency} ms | HTTP {status_code}")
+
+    if fast_cheap:
+        lines.append("")
+        lines.append("⚡ Murah aktif tercepat:")
+        for model_name in fast_cheap[:5]:
+            latency = health_cache.get(model_name, {}).get("latency_ms")
+            lines.append(f"- {model_name} ({latency} ms)")
+
+    if active_expensive:
+        lines.append("")
+        lines.append("🧠 Medium/mahal aktif:")
+        for model_name in active_expensive[:5]:
+            latency = health_cache.get(model_name, {}).get("latency_ms")
+            lines.append(f"- {model_name} ({latency} ms)")
+
+    if not fast_cheap and not active_expensive:
+        lines.append("")
+        lines.append("Peringatan: tidak ada model yang lolos health check. Bot tetap memakai model terakhir agar error tetap terlihat.")
+    elif previous_model == selected_model:
+        lines.append("")
+        lines.append("Catatan: model tidak berubah karena model ini masih menjadi pilihan terbaik yang aktif saat ini.")
+
+    return "\n".join(lines)
 
 def check_telegram_single_model_health(api_url: str, api_key: str, model: str, timeout: int = 12) -> Dict[str, Any]:
     """Check whether one model can answer a tiny OpenAI-compatible request."""
@@ -568,6 +715,7 @@ class TelegramBotService:
         self._lock_fd = None
         self._model_health_cache: Dict[str, Dict[str, Any]] = {}
         self._model_health_checked_at = ""
+        self._last_model_update_source = ""
         self._runtime_primary_model = ""
         self._forced_model_mode = "auto"
 
@@ -583,6 +731,7 @@ class TelegramBotService:
             "worker_id": self._worker_id if alive else "",
             "runtime_primary_model": self._runtime_primary_model,
             "telegram_forced_model_mode": self._forced_model_mode,
+            "last_model_update_source": self._last_model_update_source,
             "model_health_checked_at": self._model_health_checked_at,
             "model_health_active_count": sum(1 for item in self._model_health_cache.values() if item.get("active")),
         }
@@ -837,6 +986,7 @@ class TelegramBotService:
                                 "/start - mulai bot\n"
                                 "/help - bantuan\n"
                                 "/speed 4321 - update model aktif dan pilih yang tercepat\n"
+                                "/rotate - cek ulang kondisi model dan ganti ke model aktif terbaik saat ini\n"
                                 "/ubah mahal - pakai model medium/mahal\n"
                                 "/ubah murah - kembali pakai model murah/cepat\n\n"
                                 "Langsung kirim pertanyaan untuk dijawab AI.",
@@ -877,6 +1027,7 @@ class TelegramBotService:
 
                                 self._model_health_cache = speed_result.get("health_cache") or {}
                                 self._model_health_checked_at = _wib_now_text()
+                                self._last_model_update_source = "speed"
                                 self._runtime_primary_model = model
                                 self._send_message(token, chat_id, build_speed_update_summary(speed_result), parse_mode=telegram_parse_mode)
                             except Exception as exc:
@@ -898,11 +1049,93 @@ class TelegramBotService:
                             )
                             continue
 
+                        if is_rotate_model_command(text):
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "⏳ Rotate model: mengecek kondisi model aktif saat ini...",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            try:
+                                previous_model = model
+                                rotate_result = refresh_telegram_runtime_models(
+                                    api_url=api_url,
+                                    api_key=api_key,
+                                    current_model=model,
+                                    config=config,
+                                    timeout=model_health_timeout,
+                                )
+                                rotation = select_rotated_runtime_model(
+                                    result=rotate_result,
+                                    current_mode=forced_model_mode,
+                                    current_model=model,
+                                )
+
+                                model = rotation.get("selected_model") or model
+                                forced_model_mode = rotation.get("selected_mode") or forced_model_mode or "auto"
+                                fallback_models = rotation.get("fallback_models") or []
+                                expensive_fallback_models = rotation.get("expensive_fallback_models") or []
+                                fast_cheap_models_runtime = rotation.get("fast_cheap_models") or []
+                                thinking_capable_models_runtime = rotation.get("active_expensive_models") or []
+                                allow_expensive_fallback = bool(rotation.get("allow_expensive_fallback"))
+                                max_smart_models = max(int(max_smart_models or 1), len(fallback_models), 1)
+
+                                # Restore routers according to the selected mode.
+                                if forced_model_mode == "cheap":
+                                    thinking_model_router = False
+                                    fast_normal_model_router = True
+                                elif forced_model_mode == "expensive":
+                                    thinking_model_router = False
+                                    fast_normal_model_router = False
+                                else:
+                                    thinking_model_router = bool(config.get("thinking_model_router", True))
+                                    fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
+
+                                config["slashai_model"] = model
+                                config["telegram_model_mode"] = forced_model_mode
+                                config["fallback_models"] = fallback_models
+                                config["expensive_fallback_models"] = expensive_fallback_models
+                                config["active_cheap_models"] = rotation.get("active_cheap_models") or []
+                                config["fast_cheap_models"] = fast_cheap_models_runtime
+                                config["fastest_cheap_model"] = fast_cheap_models_runtime[0] if fast_cheap_models_runtime else ""
+                                config["thinking_capable_models"] = thinking_capable_models_runtime
+
+                                self._model_health_cache = rotate_result.get("health_cache") or {}
+                                self._model_health_checked_at = _wib_now_text()
+                                self._last_model_update_source = "rotate"
+                                self._runtime_primary_model = model
+                                self._forced_model_mode = forced_model_mode
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    build_rotate_summary(rotate_result, rotation, previous_model),
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            except Exception as exc:
+                                self._last_error = str(exc)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "Gagal rotate model.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            continue
+
+                        if text_lower.startswith("/rotate"):
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "Format perintah salah. Gunakan: /rotate",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
                         switch_mode = parse_model_switch_command(text)
                         if switch_mode:
                             forced_model_mode = switch_mode
                             config["telegram_model_mode"] = switch_mode
                             self._forced_model_mode = switch_mode
+                            self._last_model_update_source = "manual"
 
                             if switch_mode == "expensive":
                                 allow_expensive_fallback = True
@@ -1052,6 +1285,7 @@ class TelegramBotService:
                                 meta["telegram_thinking_mode"] = thinking_mode
                                 meta["telegram_fast_normal_mode"] = fast_normal_mode
                                 meta["telegram_forced_model_mode"] = manual_mode
+                                meta["telegram_rotate_mode"] = manual_mode == "auto" and self._last_model_update_source == "rotate"
                                 meta["telegram_model_requested"] = request_model
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
