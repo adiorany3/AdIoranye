@@ -148,6 +148,68 @@ def pick_telegram_capable_model(
     return primary_model
 
 
+def resolve_answering_model(meta: Any, fallback_model: str) -> str:
+    """Return the best available model name that actually answered.
+
+    ai_core versions may use different meta keys. Prefer final/active keys first,
+    then fall back to the model requested for this Telegram message.
+    """
+    if not isinstance(meta, dict):
+        return str(fallback_model or "tidak diketahui")
+
+    candidate_keys = [
+        "active_model_final",
+        "final_model",
+        "model_final",
+        "model_used",
+        "selected_model",
+        "active_model",
+        "model",
+        "telegram_model_requested",
+        "model_requested",
+    ]
+    for key in candidate_keys:
+        value = str(meta.get(key) or "").strip()
+        if value:
+            return value
+    return str(fallback_model or "tidak diketahui")
+
+
+def build_telegram_model_note(
+    meta: Any,
+    requested_model: str,
+    default_model: str,
+) -> str:
+    """Build a clear model note appended below every Telegram answer."""
+    answering_model = resolve_answering_model(meta, requested_model or default_model)
+    info_lines = [
+        "",
+        "—",
+        f"🤖 Dijawab oleh model: {answering_model}",
+    ]
+
+    if isinstance(meta, dict):
+        requested = str(meta.get("telegram_model_requested") or requested_model or "").strip()
+        if requested and requested != answering_model:
+            info_lines.append(f"🚦 Model awal: {requested}")
+
+        if meta.get("telegram_thinking_mode"):
+            info_lines.append("🧠 Mode: thinking/capable")
+        else:
+            info_lines.append("🧭 Mode: normal/model murah aktif")
+
+        consulted = meta.get("consulted_models") or []
+        if consulted:
+            info_lines.append("🔁 Konsultasi model: " + ", ".join(str(item) for item in consulted[:4]))
+
+        if meta.get("expensive_fallback_used"):
+            info_lines.append("⚠️ Fallback: model menengah/mahal dipakai karena model murah belum cukup.")
+    else:
+        info_lines.append("🧭 Mode: normal")
+
+    return "\n".join(info_lines)
+
+
 class TelegramBotService:
     """Singleton polling service for Streamlit.
 
@@ -500,19 +562,15 @@ class TelegramBotService:
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})
                             self._histories[key] = history[-8:]
+                            # Keterangan model ditampilkan di bawah setiap jawaban Telegram
+                            # agar admin/pengguna tahu model mana yang benar-benar menjawab.
                             show_model = bool(config.get("show_model_info", True))
-                            if show_model and isinstance(meta, dict):
-                                final_model = meta.get("active_model_final") or meta.get("telegram_model_requested") or meta.get("model_requested") or model
-                                consulted = meta.get("consulted_models") or []
-                                expensive_used = meta.get("expensive_fallback_used", False)
-                                info = f"\n\n—\nModel aktif: {final_model}"
-                                if consulted:
-                                    info += "\nKonsultasi model: " + ", ".join(consulted[:4])
-                                if expensive_used:
-                                    info += "\nModel menengah/mahal dipakai karena model hemat belum cukup."
-                                if meta.get("telegram_thinking_mode"):
-                                    info += "\nMode thinking: aktif, memakai model capable untuk pertanyaan kompleks."
-                                answer_to_send = answer + info
+                            if show_model:
+                                answer_to_send = answer + build_telegram_model_note(
+                                    meta=meta,
+                                    requested_model=request_model,
+                                    default_model=model,
+                                )
                             else:
                                 answer_to_send = answer
                             self._send_message(token, chat_id, answer_to_send, parse_mode=telegram_parse_mode)
