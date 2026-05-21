@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import threading
 import fcntl
 import time
@@ -1247,6 +1248,21 @@ class TelegramBotService:
                 self._running = True
                 return False
 
+            token = str(config.get("telegram_token") or "").strip()
+            if not token:
+                self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
+                self._running = False
+                return False
+
+            # Validate the token before creating the worker. This prevents the UI
+            # from showing a bot as started while the polling thread immediately dies.
+            try:
+                self._telegram_post(token, "getMe", {}, timeout=12)
+            except Exception as exc:
+                self._last_error = f"Gagal validasi token Telegram: {exc}"
+                self._running = False
+                return False
+
             self._lock_file = str(config.get("lock_file") or DEFAULT_LOCK_FILE)
             if not self._acquire_file_lock():
                 self._running = False
@@ -1350,17 +1366,90 @@ class TelegramBotService:
         self._seen_set.add(update_id)
         return True
 
+    def _telegram_error_message(self, method: str, data: Dict[str, Any], status_code: int | None = None) -> str:
+        """Build a clear Telegram API error message without exposing the bot token."""
+        error_code = data.get("error_code") if isinstance(data, dict) else status_code
+        description = str((data or {}).get("description") or "").strip()
+        prefix = f"Telegram API error {method}"
+
+        if error_code == 401 or "unauthorized" in description.lower():
+            return (
+                f"{prefix}: token bot tidak valid/expired/revoked. "
+                "Buat token baru di BotFather lalu update TELEGRAM_BOT_TOKEN di Secrets."
+            )
+        if error_code == 404 or "not found" in description.lower():
+            return (
+                f"{prefix}: endpoint bot tidak ditemukan. "
+                "Periksa format TELEGRAM_BOT_TOKEN; jangan ada spasi, kutip tambahan, atau karakter tersembunyi."
+            )
+        if error_code == 409 or "conflict" in description.lower():
+            return (
+                f"{prefix}: 409 Conflict. Token bot sedang dipakai oleh instance lain/getUpdates lain. "
+                "Matikan deploy/laptop/VPS lama, klik Reset koneksi Telegram, atau revoke token di BotFather lalu pakai token baru."
+            )
+        return f"{prefix}: {data}"
+
+    def _is_fatal_telegram_error(self, error_text: str) -> bool:
+        lower = str(error_text or "").lower()
+        fatal_markers = [
+            "token bot tidak valid",
+            "unauthorized",
+            "not found",
+            "409 conflict",
+            "sedang dipakai oleh instance lain",
+        ]
+        return any(marker in lower for marker in fatal_markers)
+
     def _telegram_post(self, token: str, method: str, payload: Dict[str, Any], timeout: int = 35) -> Dict[str, Any]:
-        url = TELEGRAM_API.format(token=token, method=method)
-        resp = requests.post(url, json=payload, timeout=timeout)
+        if not str(token or "").strip():
+            raise RuntimeError("TELEGRAM_BOT_TOKEN belum diisi.")
+
+        url = TELEGRAM_API.format(token=str(token).strip(), method=method)
+        try:
+            resp = requests.post(url, json=payload, timeout=timeout)
+        except requests.Timeout:
+            raise RuntimeError(f"Telegram API timeout saat menjalankan {method}. Coba ulangi atau cek koneksi Streamlit Cloud.")
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Telegram API request gagal saat {method}: {exc}")
+
         try:
             data = resp.json()
         except Exception:
-            raise RuntimeError(f"Telegram response bukan JSON: {resp.text[:1000]}")
+            raise RuntimeError(f"Telegram response bukan JSON saat {method}. HTTP {resp.status_code}: {resp.text[:1000]}")
 
-        if not data.get("ok"):
-            raise RuntimeError(f"Telegram API error {method}: {data}")
+        if resp.status_code != 200 or not data.get("ok"):
+            raise RuntimeError(self._telegram_error_message(method, data, status_code=resp.status_code))
         return data
+
+    def diagnose(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Run lightweight Telegram diagnostics for the admin panel."""
+        token = str(config.get("telegram_token") or "").strip()
+        result: Dict[str, Any] = {
+            "ok": False,
+            "bot_username": "",
+            "bot_id": "",
+            "webhook_url": "",
+            "pending_update_count": None,
+            "last_error": "",
+            "running": self.status().get("running", False),
+        }
+        if not token:
+            result["last_error"] = "TELEGRAM_BOT_TOKEN belum diisi."
+            return result
+        try:
+            me = self._telegram_post(token, "getMe", {}, timeout=12).get("result") or {}
+            result["bot_username"] = str(me.get("username") or "")
+            result["bot_id"] = str(me.get("id") or "")
+
+            webhook = self._telegram_post(token, "getWebhookInfo", {}, timeout=12).get("result") or {}
+            result["webhook_url"] = str(webhook.get("url") or "")
+            result["pending_update_count"] = webhook.get("pending_update_count")
+            result["ok"] = True
+            return result
+        except Exception as exc:
+            result["last_error"] = str(exc)[:1200]
+            self._last_error = result["last_error"]
+            return result
 
     def _send_message(self, token: str, chat_id: int, text: str, parse_mode: str = "") -> None:
         """Send Telegram message as strict plain text.
@@ -2025,6 +2114,10 @@ class TelegramBotService:
 
                 except Exception as exc:
                     self._last_error = str(exc)
+                    if self._is_fatal_telegram_error(self._last_error):
+                        # Do not keep looping forever for invalid token or 409 conflict.
+                        self._stop_event.set()
+                        break
                     time.sleep(4)
         finally:
             self._running = False

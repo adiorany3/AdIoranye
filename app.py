@@ -2994,6 +2994,20 @@ def render_admin_settings() -> None:
         if status.get("model_health_checked_at"):
             st.caption(f"Update model Telegram terakhir: {_to_wib_display_text(status.get('model_health_checked_at'))} | aktif: {status.get('model_health_active_count', 0)}")
 
+        if st.button("🧪 Tes koneksi Telegram", use_container_width=True, key="telegram_diagnose_connection_btn"):
+            diag_config = {"telegram_token": telegram_token}
+            diag = service.diagnose(diag_config)
+            if diag.get("ok"):
+                bot_user = diag.get("bot_username") or "tidak diketahui"
+                st.success(f"Koneksi Telegram OK. Bot: @{bot_user}")
+                if diag.get("webhook_url"):
+                    st.warning("Webhook masih aktif. Untuk mode polling, klik Reset koneksi Telegram agar webhook dihapus.")
+                    st.caption(f"Webhook: {diag.get('webhook_url')}")
+                st.caption(f"Pending update: {diag.get('pending_update_count')}")
+            else:
+                st.error("Koneksi Telegram gagal.")
+                st.code(str(diag.get("last_error") or "Tidak ada detail error."))
+
         route = build_model_routing_plan()
         bot_config = {
             "telegram_token": telegram_token,
@@ -3075,7 +3089,13 @@ def render_admin_settings() -> None:
                 if started:
                     st.success(f"Bot Telegram dijalankan dengan primary: {start_route['primary_model']}")
                 else:
-                    st.info("Bot sudah berjalan.")
+                    latest_status = service.status()
+                    if latest_status.get("running"):
+                        st.info("Bot sudah berjalan.")
+                    else:
+                        st.error("Bot Telegram gagal dijalankan.")
+                        if latest_status.get("last_error"):
+                            st.code(str(latest_status.get("last_error"))[:2000])
         with col_stop:
             if st.button("⏹️ Stop Bot", use_container_width=True, key="auto_btn_2954"):
                 service.stop()
