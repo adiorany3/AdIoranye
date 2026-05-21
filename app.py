@@ -1,4 +1,5 @@
 import hmac
+import re
 import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -57,6 +58,161 @@ def format_token_status(label: str, value: str) -> None:
         st.success(f"{label} terdeteksi")
     else:
         st.error(f"{label} belum diisi")
+
+
+def _pdf_escape(text: str) -> str:
+    """Escape teks untuk content stream PDF sederhana."""
+    return (
+        str(text or "")
+        .replace("\\", "\\\\")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+    )
+
+
+def _clean_text_for_pdf(text: str) -> str:
+    """Bersihkan markdown ringan agar nyaman dibaca di PDF."""
+    clean = str(text or "")
+    clean = re.sub(r"```([a-zA-Z0-9_+-]*)\n", "", clean)
+    clean = clean.replace("```", "")
+    clean = re.sub(r"`([^`]*)`", r"\1", clean)
+    clean = re.sub(r"\*\*([^*]+)\*\*", r"\1", clean)
+    clean = re.sub(r"\*([^*]+)\*", r"\1", clean)
+    clean = re.sub(r"__([^_]+)__", r"\1", clean)
+    clean = re.sub(r"_([^_]+)_", r"\1", clean)
+    clean = re.sub(r"\[(.*?)\]\((.*?)\)", r"\1 (\2)", clean)
+    clean = re.sub(r"<[^>]+>", "", clean)
+    clean = clean.replace("\r\n", "\n").replace("\r", "\n")
+    # Built-in Helvetica PDF aman untuk Latin-1. Karakter lain diganti agar PDF tidak rusak.
+    clean = clean.encode("latin-1", "replace").decode("latin-1")
+    return clean.strip()
+
+
+def _wrap_pdf_text(text: str, max_chars: int = 92) -> List[str]:
+    """Wrap teks tanpa dependency eksternal."""
+    lines: List[str] = []
+    for paragraph in _clean_text_for_pdf(text).split("\n"):
+        raw = paragraph.strip()
+        if not raw:
+            lines.append("")
+            continue
+        while len(raw) > max_chars:
+            split_at = raw.rfind(" ", 0, max_chars + 1)
+            if split_at <= 20:
+                split_at = max_chars
+            lines.append(raw[:split_at].strip())
+            raw = raw[split_at:].strip()
+        lines.append(raw)
+    return lines
+
+
+def make_answer_pdf_bytes(answer_text: str, title: str = "Jawaban Adioranye AI", meta_text: str = "") -> bytes:
+    """Buat PDF teks sederhana agar hasil jawaban web bisa diunduh.
+
+    Sengaja tidak memakai reportlab/fpdf supaya tidak menambah dependency di Streamlit Cloud.
+    PDF memakai font Helvetica bawaan PDF viewer.
+    """
+    page_width = 595
+    page_height = 842
+    left = 48
+    top = 790
+    bottom = 54
+    line_height = 15
+    max_chars = 92
+
+    title_clean = _clean_text_for_pdf(title or "Jawaban Adioranye AI")[:120]
+    meta_clean = _clean_text_for_pdf(meta_text or "")
+    body_lines = _wrap_pdf_text(answer_text, max_chars=max_chars)
+
+    pages: List[List[str]] = []
+    current: List[str] = []
+    usable_lines = int((top - bottom - 46) / line_height)
+    for line in body_lines:
+        if len(current) >= usable_lines:
+            pages.append(current)
+            current = []
+        current.append(line)
+    pages.append(current or [""])
+
+    objects: List[bytes] = []
+
+    def add_obj(payload: str | bytes) -> int:
+        if isinstance(payload, str):
+            payload_b = payload.encode("latin-1", "replace")
+        else:
+            payload_b = payload
+        objects.append(payload_b)
+        return len(objects)
+
+    catalog_id = add_obj("<< /Type /Catalog /Pages 2 0 R >>")
+    pages_id = add_obj(b"")
+    font_id = add_obj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    page_ids: List[int] = []
+
+    for idx, page_lines in enumerate(pages, start=1):
+        stream_lines: List[str] = [
+            "BT",
+            f"/F1 16 Tf {left} {top} Td ({_pdf_escape(title_clean)}) Tj",
+            f"/F1 9 Tf 0 -18 Td ({_pdf_escape('Dibuat: ' + now_wib_text())}) Tj",
+        ]
+        if meta_clean:
+            stream_lines.append(f"0 -13 Td ({_pdf_escape(meta_clean[:120])}) Tj")
+        stream_lines.append(f"/F1 11 Tf 0 -24 Td ({_pdf_escape(page_lines[0] if page_lines else '')}) Tj")
+        for line in page_lines[1:]:
+            if line == "":
+                stream_lines.append(f"0 -{line_height} Td ( ) Tj")
+            else:
+                stream_lines.append(f"0 -{line_height} Td ({_pdf_escape(line)}) Tj")
+        footer = f"Halaman {idx} dari {len(pages)}"
+        stream_lines.extend([
+            "ET",
+            "BT",
+            f"/F1 9 Tf {left} 30 Td ({_pdf_escape(footer)}) Tj",
+            "ET",
+        ])
+        stream = "\n".join(stream_lines).encode("latin-1", "replace")
+        content_id = add_obj(b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream")
+        page_id = add_obj(
+            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {page_width} {page_height}] "
+            f"/Resources << /Font << /F1 {font_id} 0 R >> >> /Contents {content_id} 0 R >>"
+        )
+        page_ids.append(page_id)
+
+    kids = " ".join(f"{pid} 0 R" for pid in page_ids)
+    objects[pages_id - 1] = f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>".encode("latin-1")
+
+    pdf = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0]
+    for i, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{i} 0 obj\n".encode("ascii"))
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+    xref_pos = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for off in offsets[1:]:
+        pdf.extend(f"{off:010d} 00000 n \n".encode("ascii"))
+    pdf.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\nstartxref\n{xref_pos}\n%%EOF\n".encode("ascii")
+    )
+    return bytes(pdf)
+
+
+def answer_pdf_download_button(answer_text: str, key: str, model_name: str = "") -> None:
+    """Render tombol download PDF untuk sebuah jawaban assistant."""
+    if not str(answer_text or "").strip():
+        return
+    meta_text = f"Model: {model_name}" if model_name else ""
+    filename = f"jawaban-adioranye-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.pdf"
+    st.download_button(
+        "⬇️ Download jawaban PDF",
+        data=make_answer_pdf_bytes(answer_text, meta_text=meta_text),
+        file_name=filename,
+        mime="application/pdf",
+        key=key,
+        use_container_width=True,
+    )
 
 
 def init_state() -> None:
@@ -2057,11 +2213,31 @@ with col_info:
         unsafe_allow_html=True,
     )
 
+if st.session_state.chat_messages:
+    transcript_parts = []
+    for item in st.session_state.chat_messages:
+        role_label = "Pengguna" if item.get("role") == "user" else "Adioranye"
+        transcript_parts.append(f"{role_label}:\n{item.get('content', '')}")
+    st.download_button(
+        "⬇️ Download semua chat PDF",
+        data=make_answer_pdf_bytes("\n\n".join(transcript_parts), title="Riwayat Chat Adioranye AI"),
+        file_name=f"riwayat-chat-adioranye-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.pdf",
+        mime="application/pdf",
+        key="download_pdf_full_chat",
+        use_container_width=True,
+    )
+
 st.divider()
 
-for msg in st.session_state.chat_messages:
+for idx, msg in enumerate(st.session_state.chat_messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
+        if msg.get("role") == "assistant":
+            answer_pdf_download_button(
+                msg.get("content", ""),
+                key=f"download_pdf_history_{idx}",
+                model_name=str((msg.get("meta") or {}).get("active_model_final") or (msg.get("meta") or {}).get("model_requested") or ""),
+            )
 
 # Spacer is rendered at the very end so it also protects newly generated messages.
 typed_input = st.chat_input("Ketik pesan Anda...")
@@ -2114,6 +2290,7 @@ if user_input:
                 placeholder.markdown(answer)
                 st.session_state.last_answer_meta = meta or {}
                 final_model = (meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or cfg["model"]
+                answer_pdf_download_button(answer, key="download_pdf_latest_answer", model_name=final_model)
                 consulted = (meta or {}).get("consulted_models") or []
                 expensive_used = (meta or {}).get("expensive_fallback_used", False)
                 if st.session_state.admin_authenticated:
@@ -2139,8 +2316,9 @@ if user_input:
     if local_reply:
         with st.chat_message("assistant"):
             st.markdown(answer)
+            answer_pdf_download_button(answer, key="download_pdf_local_reply")
 
-    st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+    st.session_state.chat_messages.append({"role": "assistant", "content": answer, "meta": meta or {}})
 
     if meta and st.session_state.admin_authenticated and st.session_state.show_debug:
         with st.expander("Debug response admin"):
