@@ -1,7 +1,9 @@
 import hmac
 import time
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Tuple
 
+import requests
 import streamlit as st
 
 from ai_core import (
@@ -87,6 +89,16 @@ def init_state() -> None:
         st.session_state.pending_prompt = ""
     if "active_default_memory" not in st.session_state:
         st.session_state.active_default_memory = str(get_secret("DEFAULT_MEMORY_CONTEXT", DEFAULT_MEMORY_CONTEXT))
+    if "model_health_cache" not in st.session_state:
+        st.session_state.model_health_cache = {}
+    if "model_health_checked_at" not in st.session_state:
+        st.session_state.model_health_checked_at = 0.0
+    if "active_cheap_fallback_models" not in st.session_state:
+        st.session_state.active_cheap_fallback_models = DEFAULT_CHEAP_FALLBACK_MODELS.copy()
+    if "active_expensive_fallback_models" not in st.session_state:
+        st.session_state.active_expensive_fallback_models = DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+    if "last_model_health_error" not in st.session_state:
+        st.session_state.last_model_health_error = ""
 
 
 # =========================
@@ -145,6 +157,8 @@ admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
 smart_model_router_default = parse_bool(get_secret("SMART_MODEL_ROUTER", True), default=True)
 return_to_primary_default = parse_bool(get_secret("RETURN_TO_PRIMARY_MODEL", True), default=True)
 max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
+model_health_check_interval = int(get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 900) or 900)
+model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
 
 init_state()
 memory = MemoryStore(memory_file)
@@ -170,6 +184,168 @@ def persona_with_default_memory(persona: str) -> str:
     if not default_context:
         return persona
     return f"{persona}\n\nKonteks default yang selalu dipakai:\n{default_context}"
+
+
+# =========================
+# Model health check & active fallback priority
+# =========================
+def unique_models(models: List[str]) -> List[str]:
+    """Hilangkan model kosong/duplikat sambil mempertahankan urutan."""
+    return list(dict.fromkeys(str(model).strip() for model in models if str(model).strip()))
+
+
+def _utc_now_text() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _tier_rank(model: str) -> int:
+    tier = model_cost_tier(model)
+    if tier == "cheap":
+        return 0
+    if tier in {"medium", "menengah"}:
+        return 1
+    return 2
+
+
+def prioritize_active_models(models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> List[str]:
+    """Urutkan fallback aktif: tier hemat dulu, harga output rendah, lalu latency rendah."""
+    active_models = [model for model in unique_models(models) if health_cache.get(model, {}).get("active")]
+
+    def sort_key(model: str) -> Tuple[int, int, float, str]:
+        price = model_price(model)
+        latency = float(health_cache.get(model, {}).get("latency_ms") or 999999)
+        return (_tier_rank(model), int(price.get("output", 999999999)), latency, model)
+
+    return sorted(active_models, key=sort_key)
+
+
+def check_single_model_health(model: str, timeout: int = 12) -> Dict[str, Any]:
+    """Cek apakah model bisa menjawab request kecil. Aman untuk OpenAI-compatible /chat/completions."""
+    started = time.time()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Jawab sangat singkat."},
+            {"role": "user", "content": "ping"},
+        ],
+        "temperature": 0,
+        "max_completion_tokens": 8,
+    }
+
+    try:
+        response = requests.post(api_url, headers=headers, json=payload, timeout=timeout)
+        latency_ms = round((time.time() - started) * 1000, 1)
+        if response.status_code != 200:
+            return {
+                "active": False,
+                "status_code": response.status_code,
+                "latency_ms": latency_ms,
+                "checked_at": _utc_now_text(),
+                "error": response.text[:300],
+            }
+
+        data = response.json()
+        choices = data.get("choices") or []
+        content = ""
+        if choices:
+            content = str((choices[0].get("message") or {}).get("content") or "").strip()
+
+        return {
+            "active": bool(choices),
+            "status_code": response.status_code,
+            "latency_ms": latency_ms,
+            "checked_at": _utc_now_text(),
+            "sample": content[:60],
+            "error": "" if choices else "Response 200 tetapi choices kosong",
+        }
+    except Exception as exc:
+        return {
+            "active": False,
+            "status_code": None,
+            "latency_ms": round((time.time() - started) * 1000, 1),
+            "checked_at": _utc_now_text(),
+            "error": str(exc)[:300],
+        }
+
+
+def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, Any]]:
+    """Cek model berkala. Streamlit tidak punya cron murni, jadi dicek saat app aktif/rerun/chat."""
+    if not api_key:
+        st.session_state.last_model_health_error = "SLASHAI_API_KEY belum diisi."
+        return st.session_state.model_health_cache
+
+    now = time.time()
+    last_checked = float(st.session_state.get("model_health_checked_at") or 0)
+    cache = st.session_state.get("model_health_cache") or {}
+    interval = max(60, int(model_health_check_interval or 900))
+
+    if not force and cache and now - last_checked < interval:
+        return cache
+
+    models_to_check = unique_models(
+        [st.session_state.get("active_model") or default_model, default_model]
+        + DEFAULT_CHEAP_FALLBACK_MODELS
+        + DEFAULT_EXPENSIVE_FALLBACK_MODELS
+        + MODEL_OPTIONS
+    )
+
+    fresh_cache: Dict[str, Dict[str, Any]] = {}
+    for model_name in models_to_check:
+        fresh_cache[model_name] = check_single_model_health(model_name, timeout=int(model_health_timeout or 12))
+
+    active_cheap = prioritize_active_models(DEFAULT_CHEAP_FALLBACK_MODELS, fresh_cache)
+    active_expensive = prioritize_active_models(DEFAULT_EXPENSIVE_FALLBACK_MODELS, fresh_cache)
+
+    st.session_state.model_health_cache = fresh_cache
+    st.session_state.model_health_checked_at = now
+
+    # Jika API sedang down total, jangan kosongkan fallback terakhir yang masih tersimpan.
+    if active_cheap:
+        st.session_state.active_cheap_fallback_models = active_cheap
+    if active_expensive:
+        st.session_state.active_expensive_fallback_models = active_expensive
+
+    active_total = sum(1 for item in fresh_cache.values() if item.get("active"))
+    st.session_state.last_model_health_error = "" if active_total else "Tidak ada model yang lolos health check terakhir."
+    return fresh_cache
+
+
+def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
+    """Ambil fallback yang sudah dicek aktif dan diurutkan berdasarkan prioritas biaya/latency."""
+    refresh_model_health_if_needed(force=False)
+    cheap = st.session_state.get("active_cheap_fallback_models") or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
+    expensive = st.session_state.get("active_expensive_fallback_models") or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+    return unique_models(cheap), unique_models(expensive)
+
+
+def render_model_health_table() -> None:
+    """Tampilkan daftar model aktif/nonaktif untuk admin."""
+    cache = st.session_state.get("model_health_cache") or {}
+    if not cache:
+        st.info("Belum ada hasil cek model. Klik tombol cek manual atau kirim pertanyaan agar sistem mengecek otomatis.")
+        return
+
+    rows = []
+    for model_name, info in cache.items():
+        rows.append(
+            {
+                "status": "🟢 aktif" if info.get("active") else "🔴 mati",
+                "model": model_name,
+                "tier": model_cost_tier(model_name),
+                "harga": model_price_label(model_name),
+                "latency_ms": info.get("latency_ms"),
+                "kode": info.get("status_code"),
+                "dicek": info.get("checked_at"),
+                "error": str(info.get("error") or "")[:120],
+            }
+        )
+
+    rows.sort(key=lambda row: (0 if row["status"].startswith("🟢") else 1, row["tier"], row["latency_ms"] or 999999, row["model"]))
+    st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
 # =========================
@@ -840,6 +1016,7 @@ def get_runtime_config() -> Dict[str, Any]:
 def start_telegram_if_needed() -> None:
     cfg = get_runtime_config()
     if auto_start and telegram_token and api_key and not service.status()["running"]:
+        active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
         service.start(
             {
                 "telegram_token": telegram_token,
@@ -848,8 +1025,8 @@ def start_telegram_if_needed() -> None:
                 "slashai_model": cfg["model"],
                 "persona": persona_with_default_memory(cfg["persona"]),
                 "memory_file": memory_file,
-                "fallback_models": DEFAULT_CHEAP_FALLBACK_MODELS,
-                "expensive_fallback_models": DEFAULT_EXPENSIVE_FALLBACK_MODELS,
+                "fallback_models": active_cheap_models,
+                "expensive_fallback_models": active_expensive_models,
                 "allow_expensive_fallback": cfg["allow_expensive_fallback"],
                 "max_expensive_models": cfg["max_expensive_models"],
                 "show_model_info": telegram_show_model_info,
@@ -909,6 +1086,11 @@ def render_admin_status() -> None:
     )
     exp_used = "ya" if last_meta.get("expensive_fallback_used") else "tidak"
     telegram_status = "ON" if service.status()["running"] else "OFF"
+    health_cache = st.session_state.get("model_health_cache") or {}
+    active_count = sum(1 for item in health_cache.values() if item.get("active"))
+    checked_at = "belum pernah"
+    if st.session_state.get("model_health_checked_at"):
+        checked_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(float(st.session_state.model_health_checked_at)))
 
     st.markdown("#### Status Sistem")
     st.caption("Chat publik aktif. Setting hanya untuk admin.")
@@ -917,7 +1099,9 @@ def render_admin_status() -> None:
         f"Tier: {model_cost_tier(cfg['model'])} | Rp{price.get('input', 0):,}/Rp{price.get('output', 0):,}\n\n"
         f"Jawaban terakhir: {last_model}\n\n"
         f"Model mahal dipakai: {exp_used}\n\n"
-        f"Telegram: {telegram_status}"
+        f"Telegram: {telegram_status}\n\n"
+        f"Model aktif terdeteksi: {active_count}\n\n"
+        f"Cek model terakhir: {checked_at}"
     ).replace(",", ".")
     st.info(status_text)
 
@@ -1006,15 +1190,30 @@ def render_admin_settings() -> None:
             disabled=not st.session_state.allow_expensive_fallback,
         )
         with st.expander("Daftar jalur model"):
-            st.markdown("**Model hemat utama/cadangan:**")
-            st.code("\n".join(model_price_label(m) for m in CHEAP_MODEL_OPTIONS))
-            st.markdown("**Model menengah/mahal hanya saat perlu:**")
-            st.code("\n".join(model_price_label(m) for m in EXPENSIVE_MODEL_OPTIONS))
+            active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+            st.markdown("**Model hemat aktif/prioritas backup:**")
+            st.code("\n".join(model_price_label(m) for m in active_cheap_models) or "Belum ada model hemat aktif")
+            st.markdown("**Model menengah/mahal aktif hanya saat perlu:**")
+            st.code("\n".join(model_price_label(m) for m in active_expensive_models) or "Belum ada model menengah/mahal aktif")
+
+        st.markdown("#### Cek Berkala Model")
+        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Fallback diprioritaskan dari model yang lolos cek.")
+        col_health_check, col_health_info = st.columns([1, 2])
+        with col_health_check:
+            if st.button("🔁 Cek model sekarang", use_container_width=True):
+                refresh_model_health_if_needed(force=True)
+                st.success("Cek model selesai.")
+        with col_health_info:
+            cheap_active, expensive_active = get_prioritized_fallback_models()
+            st.info(f"Backup hemat aktif: {len(cheap_active)} | Backup menengah/mahal aktif: {len(expensive_active)}")
+        with st.expander("Detail status semua model"):
+            render_model_health_table()
 
         col_test, col_reset = st.columns(2)
         with col_test:
             if st.button("🧪 Tes AI", use_container_width=True):
                 try:
+                    active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
                     answer, meta = generate_answer(
                         api_url=api_url,
                         api_key=api_key,
@@ -1023,8 +1222,8 @@ def render_admin_settings() -> None:
                         user_text="Jawab singkat: apakah kamu aktif?",
                         memory_text=build_memory_text(limit=8),
                         recent_messages=[],
-                        fallback_models=DEFAULT_CHEAP_FALLBACK_MODELS,
-                        expensive_fallback_models=DEFAULT_EXPENSIVE_FALLBACK_MODELS,
+                        fallback_models=active_cheap_models,
+                        expensive_fallback_models=active_expensive_models,
                         allow_expensive_fallback=bool(st.session_state.allow_expensive_fallback),
                         max_expensive_models=int(st.session_state.max_expensive_models),
                         temperature=float(st.session_state.active_temperature),
@@ -1051,6 +1250,11 @@ def render_admin_settings() -> None:
                 st.session_state.active_max_smart_models = max_smart_models_default
                 st.session_state.allow_expensive_fallback = parse_bool(get_secret("ALLOW_EXPENSIVE_FALLBACK", True), default=True)
                 st.session_state.max_expensive_models = int(get_secret("MAX_EXPENSIVE_MODELS", 1) or 1)
+                st.session_state.model_health_cache = {}
+                st.session_state.model_health_checked_at = 0.0
+                st.session_state.active_cheap_fallback_models = DEFAULT_CHEAP_FALLBACK_MODELS.copy()
+                st.session_state.active_expensive_fallback_models = DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+                st.session_state.last_model_health_error = ""
                 st.rerun()
 
     with tab_bot:
@@ -1070,6 +1274,7 @@ def render_admin_settings() -> None:
             st.caption(f"Worker: {status['worker_id']}")
         st.caption(f"Duplikat dicegah: {status.get('duplicates_skipped', 0)}")
 
+        active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
         bot_config = {
             "telegram_token": telegram_token,
             "slashai_api_key": api_key,
@@ -1077,8 +1282,8 @@ def render_admin_settings() -> None:
             "slashai_model": st.session_state.active_model,
             "persona": persona_with_default_memory(st.session_state.active_persona),
             "memory_file": memory_file,
-            "fallback_models": DEFAULT_CHEAP_FALLBACK_MODELS,
-            "expensive_fallback_models": DEFAULT_EXPENSIVE_FALLBACK_MODELS,
+            "fallback_models": active_cheap_models,
+            "expensive_fallback_models": active_expensive_models,
             "allow_expensive_fallback": bool(st.session_state.allow_expensive_fallback),
             "max_expensive_models": int(st.session_state.max_expensive_models),
             "show_model_info": telegram_show_model_info,
@@ -1203,7 +1408,9 @@ SMART_MODEL_ROUTER = true
 RETURN_TO_PRIMARY_MODEL = true
 MAX_SMART_MODELS = 2
 ALLOW_EXPENSIVE_FALLBACK = true
-MAX_EXPENSIVE_MODELS = 1''',
+MAX_EXPENSIVE_MODELS = 1
+MODEL_HEALTH_CHECK_INTERVAL_SECONDS = 900
+MODEL_HEALTH_TIMEOUT_SECONDS = 12''',
             language="toml",
         )
         st.markdown(
@@ -1301,6 +1508,7 @@ if user_input:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
                 placeholder.markdown("⏳ adioranye sedang berpikir dalam...")
+                active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
                 answer, meta = generate_answer(
                     api_url=api_url,
                     api_key=api_key,
@@ -1309,8 +1517,8 @@ if user_input:
                     user_text=user_input,
                     memory_text=build_memory_text(limit=12),
                     recent_messages=st.session_state.chat_messages[:-1][-6:],
-                    fallback_models=DEFAULT_CHEAP_FALLBACK_MODELS,
-                    expensive_fallback_models=DEFAULT_EXPENSIVE_FALLBACK_MODELS,
+                    fallback_models=active_cheap_models,
+                    expensive_fallback_models=active_expensive_models,
                     allow_expensive_fallback=bool(cfg["allow_expensive_fallback"]),
                     max_expensive_models=int(cfg["max_expensive_models"]),
                     temperature=float(cfg["temperature"]),
