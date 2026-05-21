@@ -1,4 +1,5 @@
 import hmac
+import html
 import re
 import time
 from datetime import datetime, timezone
@@ -972,6 +973,92 @@ def render_model_health_table() -> None:
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
 
+def _html_escape(value: Any) -> str:
+    # Escape teks sebelum dimasukkan ke HTML custom Streamlit.
+    return html.escape(str(value or ""), quote=True)
+
+
+def get_answer_model_name(meta: Dict[str, Any] | None, fallback: str = "") -> str:
+    # Ambil nama model yang benar-benar dipakai dari metadata jawaban.
+    data = meta or {}
+    model_name = (
+        data.get("active_model_final")
+        or data.get("model_final")
+        or data.get("model_used")
+        or data.get("model")
+        or data.get("model_requested")
+        or fallback
+        or ""
+    )
+    return str(model_name or "").strip()
+
+
+def render_answer_model_caption(meta: Dict[str, Any] | None, fallback: str = "", admin_detail: bool = False) -> None:
+    # Tampilkan model yang menjawab di bawah respons assistant.
+    model_name = get_answer_model_name(meta, fallback=fallback)
+    if not model_name:
+        return
+
+    data = meta or {}
+    caption_text = f"Model aktif: {model_name}"
+
+    # Detail jalur routing hanya untuk admin agar tampilan publik tetap bersih.
+    if admin_detail:
+        consulted = data.get("consulted_models") or []
+        if consulted:
+            caption_text += " • konsultasi: " + ", ".join(str(item) for item in consulted[:4])
+        if data.get("expensive_fallback_used"):
+            caption_text += " • model menengah/mahal dipakai"
+
+    st.caption(caption_text)
+
+
+def build_public_model_status_html(route: Dict[str, Any], last_meta: Dict[str, Any] | None = None) -> str:
+    # Buat panel kecil agar model aktif/route berikutnya terlihat di halaman publik.
+    route = route or {}
+    last_model = get_answer_model_name(last_meta, fallback="")
+    next_model = str(route.get("primary_model") or st.session_state.get("active_model") or default_model or "").strip()
+    fast_model = str(route.get("fastest_cheap_primary_model") or "").strip()
+    capable_model = str(route.get("capable_primary_model") or "").strip()
+    cheap_count = len(route.get("active_cheap_models") or [])
+    expensive_count = len(route.get("active_expensive_models") or [])
+
+    checked_at = "belum pernah"
+    if st.session_state.get("model_health_checked_at"):
+        checked_at = _timestamp_to_wib_text(st.session_state.model_health_checked_at)
+
+    last_model_html = (
+        f'<div class="model-status-pill">Jawaban terakhir: <strong>{_html_escape(last_model)}</strong></div>'
+        if last_model
+        else ""
+    )
+    fast_model_html = (
+        f'<div class="model-status-pill">Model ringan tercepat: <strong>{_html_escape(fast_model)}</strong></div>'
+        if fast_model
+        else ""
+    )
+    capable_model_html = (
+        f'<div class="model-status-pill">Model thinking: <strong>{_html_escape(capable_model)}</strong></div>'
+        if capable_model
+        else ""
+    )
+
+    return f"""
+    <div class="model-status-panel">
+        <div class="model-status-title">🟢 Model aktif terlihat</div>
+        <div class="model-status-grid">
+            <div class="model-status-pill">Model yang akan dipakai: <strong>{_html_escape(next_model)}</strong></div>
+            {last_model_html}
+            {fast_model_html}
+            {capable_model_html}
+            <div class="model-status-pill">Hemat aktif: <strong>{cheap_count}</strong></div>
+            <div class="model-status-pill">Menengah/mahal aktif: <strong>{expensive_count}</strong></div>
+            <div class="model-status-pill">Cek terakhir: <strong>{_html_escape(checked_at)}</strong></div>
+        </div>
+    </div>
+    """
+
+
 # =========================
 # macOS-style glass desktop-first styling
 # =========================
@@ -1325,6 +1412,50 @@ st.markdown(
         box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
         backdrop-filter: var(--mac-blur);
         -webkit-backdrop-filter: var(--mac-blur);
+    }
+
+    .model-status-panel {
+        margin: -4px 0 16px;
+        padding: 13px 14px;
+        border: 1px solid var(--mac-border);
+        border-radius: 20px;
+        background: linear-gradient(145deg, var(--mac-panel), var(--mac-panel-soft));
+        box-shadow: var(--mac-shadow-soft);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
+    }
+
+    .model-status-title {
+        margin-bottom: 9px;
+        color: var(--mac-text);
+        font-size: 0.91rem;
+        font-weight: 820;
+        letter-spacing: -0.012em;
+    }
+
+    .model-status-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .model-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--mac-border);
+        background: var(--mac-panel-soft);
+        color: var(--mac-muted);
+        font-size: 0.82rem;
+        font-weight: 650;
+        letter-spacing: -0.006em;
+    }
+
+    .model-status-pill strong {
+        color: var(--mac-text);
+        font-weight: 820;
     }
 
     @media (max-width: 760px) {
@@ -2275,9 +2406,13 @@ with st.sidebar:
 # Public Chat UI
 # =========================
 cfg = get_runtime_config()
+public_route_preview = build_model_routing_plan(user_text="halo")
+cheap_active = public_route_preview.get("active_cheap_models") or []
+expensive_active = public_route_preview.get("active_expensive_models") or []
+last_public_meta = st.session_state.get("last_answer_meta", {}) or {}
 
 st.markdown(
-    """
+    f"""
     <div class="mac-windowbar">
         <div class="mac-traffic">
             <span class="mac-close"></span>
@@ -2291,10 +2426,11 @@ st.markdown(
         <div class="app-logo">🤖</div>
         <div>
             <h3 class="app-title">Adioranye AI</h3>
-            <p class="app-subtitle">Tulis pesan Anda. Adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. Terdapat : {len(cheap_active)} agen AI aktif dan {len(expensive_active)} standby siap menjawab pertanyaan Anda</p>
+            <p class="app-subtitle">Tulis pesan Anda. Adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. Terdapat {len(cheap_active)} model hemat aktif dan {len(expensive_active)} model standby untuk menjawab pertanyaan Anda.</p>
         </div>
     </div>
     <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
+    {build_public_model_status_html(public_route_preview, last_public_meta)}
     """,
     unsafe_allow_html=True,
 )
@@ -2334,10 +2470,16 @@ for idx, msg in enumerate(st.session_state.chat_messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
         if msg.get("role") == "assistant":
+            msg_meta = msg.get("meta") or {}
             answer_pdf_download_button(
                 msg.get("content", ""),
                 key=f"download_pdf_history_{idx}",
-                model_name=str((msg.get("meta") or {}).get("active_model_final") or (msg.get("meta") or {}).get("model_requested") or ""),
+                model_name=get_answer_model_name(msg_meta),
+            )
+            render_answer_model_caption(
+                msg_meta,
+                fallback="",
+                admin_detail=bool(st.session_state.admin_authenticated),
             )
 
 # Spacer is rendered at the very end so it also protects newly generated messages.
@@ -2392,17 +2534,17 @@ if user_input:
                 st.session_state.last_answer_meta = meta or {}
                 final_model = (meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or cfg["model"]
                 answer_pdf_download_button(answer, key="download_pdf_latest_answer", model_name=final_model)
-                consulted = (meta or {}).get("consulted_models") or []
-                expensive_used = (meta or {}).get("expensive_fallback_used", False)
+                caption_text = f"Model aktif: {final_model}"
                 if st.session_state.admin_authenticated:
-                    caption_text = f"Model aktif: {final_model}"
+                    consulted = (meta or {}).get("consulted_models") or []
+                    expensive_used = (meta or {}).get("expensive_fallback_used", False)
                     if consulted:
-                        caption_text += " • konsultasi: " + ", ".join(consulted[:4])
+                        caption_text += " • konsultasi: " + ", ".join(str(item) for item in consulted[:4])
                     if route.get("thinking_direct_to_capable"):
                         caption_text += " • thinking mode: memakai model capable"
                     elif expensive_used:
                         caption_text += " • model menengah/mahal dipakai karena jawaban hemat kurang cukup"
-                    st.caption(caption_text)
+                st.caption(caption_text)
         except Exception as exc:
             answer = (
                 "Maaf, Adioranye belum bisa menjawab saat ini. "
