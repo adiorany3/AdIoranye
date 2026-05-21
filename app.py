@@ -99,6 +99,12 @@ def init_state() -> None:
         st.session_state.active_expensive_fallback_models = DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
     if "last_model_health_error" not in st.session_state:
         st.session_state.last_model_health_error = ""
+    if "active_rotate_cheap_primary" not in st.session_state:
+        st.session_state.active_rotate_cheap_primary = parse_bool(get_secret("ROTATE_CHEAP_PRIMARY", True), default=True)
+    if "cheap_model_rotation_index" not in st.session_state:
+        st.session_state.cheap_model_rotation_index = 0
+    if "last_rotated_primary_model" not in st.session_state:
+        st.session_state.last_rotated_primary_model = ""
 
 
 # =========================
@@ -159,6 +165,7 @@ return_to_primary_default = parse_bool(get_secret("RETURN_TO_PRIMARY_MODEL", Tru
 max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 model_health_check_interval = int(get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 900) or 900)
 model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
+rotate_cheap_primary_default = parse_bool(get_secret("ROTATE_CHEAP_PRIMARY", True), default=True)
 
 init_state()
 memory = MemoryStore(memory_file)
@@ -322,12 +329,47 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     return unique_models(cheap), unique_models(expensive)
 
 
-def build_model_routing_plan() -> Dict[str, Any]:
+def get_rotating_cheap_primary(active_cheap_models: List[str], advance: bool = False) -> str:
+    """
+    Ambil model murah aktif secara round-robin.
+    - advance=False: hanya mengintip model murah berikutnya, aman untuk render UI.
+    - advance=True: dipakai saat request benar-benar dikirim, lalu indeks digeser ke model murah berikutnya.
+    """
+    models = unique_models(active_cheap_models)
+    if not models:
+        return ""
+
+    try:
+        index = int(st.session_state.get("cheap_model_rotation_index", 0) or 0)
+    except Exception:
+        index = 0
+
+    index = index % len(models)
+    primary_model = models[index]
+
+    if advance:
+        st.session_state.cheap_model_rotation_index = (index + 1) % len(models)
+        st.session_state.last_rotated_primary_model = primary_model
+        st.session_state.active_model = primary_model
+
+    return primary_model
+
+
+def sync_rotation_index_to_selected_model(active_cheap_models: List[str]) -> None:
+    """Jika admin memilih model murah tertentu, jadikan pilihan itu titik awal rotasi berikutnya."""
+    models = unique_models(active_cheap_models)
+    selected_model = str(st.session_state.get("active_model") or default_model).strip()
+    if selected_model in models:
+        st.session_state.cheap_model_rotation_index = models.index(selected_model)
+
+
+def build_model_routing_plan(advance_rotation: bool = False) -> Dict[str, Any]:
     """
     Routing default:
-    1) Pakai model murah aktif sebagai primary.
-    2) Jika model murah/fallback murah tidak cukup, langsung izinkan naik ke model menengah/mahal aktif.
-    3) Setelah request selesai, state aplikasi bisa dikembalikan ke model murah aktif.
+    1) Jika rotasi aktif, model utama diambil bergiliran dari daftar model murah aktif.
+    2) Jika rotasi nonaktif, pakai model murah aktif pilihan admin/default.
+    3) Jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal aktif.
+    4) Setelah request selesai, state aplikasi tetap diarahkan kembali ke model murah aktif.
     """
     active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
     selected_model = str(st.session_state.get("active_model") or default_model).strip()
@@ -335,12 +377,18 @@ def build_model_routing_plan() -> Dict[str, Any]:
 
     selected_is_cheap = _tier_rank(selected_model) == 0
     selected_is_active = bool(health_cache.get(selected_model, {}).get("active"))
+    rotate_enabled = bool(st.session_state.get("active_rotate_cheap_primary", True))
 
-    # Primary normal selalu model murah aktif. Jika pilihan admin murah dan aktif, pakai itu.
-    # Jika tidak, pakai default_model bila aktif, lalu fallback ke model murah aktif tercepat/termurah.
     direct_to_expensive = False
+    rotated_primary = ""
+
     if active_cheap_models:
-        if selected_is_cheap and selected_model in active_cheap_models and selected_is_active:
+        if rotate_enabled:
+            # Setiap request sungguhan memakai model murah aktif berikutnya.
+            # Render UI/admin hanya mengintip tanpa menggeser indeks.
+            primary_model = get_rotating_cheap_primary(active_cheap_models, advance=advance_rotation)
+            rotated_primary = primary_model
+        elif selected_is_cheap and selected_model in active_cheap_models and selected_is_active:
             primary_model = selected_model
         elif default_model in active_cheap_models:
             primary_model = default_model
@@ -379,6 +427,10 @@ def build_model_routing_plan() -> Dict[str, Any]:
 
     return_to_primary = bool(st.session_state.get("active_return_to_primary", True)) and not direct_to_expensive
 
+    next_cheap_model = ""
+    if active_cheap_models:
+        next_cheap_model = get_rotating_cheap_primary(active_cheap_models, advance=False)
+
     return {
         "primary_model": primary_model,
         "cheap_fallback_models": unique_models(cheap_fallback_models),
@@ -390,24 +442,35 @@ def build_model_routing_plan() -> Dict[str, Any]:
         "direct_to_expensive": direct_to_expensive,
         "active_cheap_models": active_cheap_models,
         "active_expensive_models": active_expensive_models,
+        "rotate_cheap_primary": rotate_enabled,
+        "rotated_primary_model": rotated_primary,
+        "next_cheap_primary_model": next_cheap_model,
+        "cheap_rotation_index": int(st.session_state.get("cheap_model_rotation_index", 0) or 0),
     }
 
 
-def restore_active_model_to_cheap() -> None:
+def restore_active_model_to_cheap(preferred_model: str = "") -> None:
     """Kembalikan pilihan model aktif ke model murah yang hidup setelah request memakai expensive."""
     active_cheap_models, _ = get_prioritized_fallback_models()
     if not active_cheap_models:
+        return
+
+    preferred_model = str(preferred_model or "").strip()
+    if preferred_model in active_cheap_models:
+        st.session_state.active_model = preferred_model
         return
 
     current_model = str(st.session_state.get("active_model") or default_model).strip()
     if current_model in active_cheap_models:
         return
 
-    if default_model in active_cheap_models:
+    next_cheap_model = get_rotating_cheap_primary(active_cheap_models, advance=False)
+    if next_cheap_model:
+        st.session_state.active_model = next_cheap_model
+    elif default_model in active_cheap_models:
         st.session_state.active_model = default_model
     else:
         st.session_state.active_model = active_cheap_models[0]
-
 
 def render_model_health_table() -> None:
     """Tampilkan daftar model aktif/nonaktif untuk admin."""
@@ -1103,7 +1166,7 @@ def get_runtime_config() -> Dict[str, Any]:
 def start_telegram_if_needed() -> None:
     cfg = get_runtime_config()
     if auto_start and telegram_token and api_key and not service.status()["running"]:
-        route = build_model_routing_plan()
+        route = build_model_routing_plan(advance_rotation=True)
         service.start(
             {
                 "telegram_token": telegram_token,
@@ -1130,7 +1193,7 @@ def start_telegram_if_needed() -> None:
                 "max_smart_models": route["max_smart_models"],
             }
         )
-        restore_active_model_to_cheap()
+        restore_active_model_to_cheap(route.get("primary_model"))
 
 
 start_telegram_if_needed()
@@ -1188,6 +1251,7 @@ def render_admin_status() -> None:
         f"Jawaban terakhir: {last_model}\n\n"
         f"Model mahal dipakai: {exp_used}\n\n"
         f"Telegram: {telegram_status}\n\n"
+        f"Rotasi murah: {'ON' if st.session_state.get('active_rotate_cheap_primary', True) else 'OFF'}\n\n"
         f"Model aktif terdeteksi: {active_count}\n\n"
         f"Cek model terakhir: {checked_at}"
     ).replace(",", ".")
@@ -1242,6 +1306,18 @@ def render_admin_settings() -> None:
             int(st.session_state.active_max_tokens),
             100,
         )
+        st.session_state.active_rotate_cheap_primary = st.toggle(
+            "Rotate model murah sebagai model utama",
+            value=bool(st.session_state.active_rotate_cheap_primary),
+            help="Jika aktif, setiap request memakai model murah aktif berikutnya secara bergiliran. Model mahal tetap hanya cadangan saat murah gagal/kurang cukup.",
+        )
+        if st.session_state.active_rotate_cheap_primary:
+            cheap_for_sync, _ = get_prioritized_fallback_models()
+            next_rotation_model = get_rotating_cheap_primary(cheap_for_sync, advance=False) if cheap_for_sync else ""
+            st.caption(f"Model murah berikutnya: {next_rotation_model or 'belum ada model murah aktif'}")
+            if st.button("Mulai rotasi dari model yang dipilih", use_container_width=True):
+                sync_rotation_index_to_selected_model(cheap_for_sync)
+                st.success("Titik awal rotasi disesuaikan dengan model murah yang dipilih.")
         st.session_state.active_persona = st.text_area(
             "System persona",
             value=st.session_state.active_persona,
@@ -1249,7 +1325,7 @@ def render_admin_settings() -> None:
         )
         st.session_state.show_debug = st.toggle("Tampilkan debug respons di chat", value=st.session_state.show_debug)
         st.markdown("#### Router Cepat & Akurat")
-        st.caption("Algoritma baru: model utama menjawab dulu. Jika skor jawaban rendah/kosong/tidak yakin, barulah 1-2 model cadangan dikonsultasikan secara paralel terbatas, lalu hasil akhir dikembalikan ke model utama.")
+        st.caption("Algoritma baru: model murah aktif dipakai bergiliran sebagai model utama. Jika jawaban kosong/kurang kuat/gagal, sistem mencoba backup murah aktif lain, lalu baru naik ke model menengah/mahal. Setelah selesai tetap kembali ke jalur murah.")
         st.session_state.active_smart_router = st.toggle(
             "Aktifkan router hanya jika jawaban kurang kuat",
             value=bool(st.session_state.active_smart_router),
@@ -1279,8 +1355,9 @@ def render_admin_settings() -> None:
         )
         with st.expander("Daftar jalur model"):
             route = build_model_routing_plan()
-            st.markdown("**Primary default:**")
+            st.markdown("**Primary berikutnya:**")
             st.code(model_price_label(route["primary_model"]))
+            st.caption(f"Rotasi murah: {'ON' if route.get('rotate_cheap_primary') else 'OFF'} | indeks berikutnya: {route.get('cheap_rotation_index', 0)}")
             st.markdown("**Model hemat aktif/prioritas backup:**")
             st.code("\n".join(model_price_label(m) for m in route["active_cheap_models"]) or "Belum ada model hemat aktif")
             st.markdown("**Model menengah/mahal aktif otomatis jika model hemat tidak cukup:**")
@@ -1289,7 +1366,7 @@ def render_admin_settings() -> None:
                 st.warning("Tidak ada model hemat aktif. Request berikutnya langsung memakai model menengah/mahal aktif, lalu sistem akan kembali ke model hemat saat sudah aktif lagi.")
 
         st.markdown("#### Cek Berkala Model")
-        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Urutan default: model hemat aktif → model menengah/mahal aktif jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif.")
+        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Urutan default: rotasi model hemat aktif → backup hemat aktif lain → model menengah/mahal jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif.")
         col_health_check, col_health_info = st.columns([1, 2])
         with col_health_check:
             if st.button("🔁 Cek model sekarang", use_container_width=True):
@@ -1305,7 +1382,7 @@ def render_admin_settings() -> None:
         with col_test:
             if st.button("🧪 Tes AI", use_container_width=True):
                 try:
-                    route = build_model_routing_plan()
+                    route = build_model_routing_plan(advance_rotation=True)
                     answer, meta = generate_answer(
                         api_url=api_url,
                         api_key=api_key,
@@ -1325,7 +1402,7 @@ def render_admin_settings() -> None:
                         return_to_primary=route["return_to_primary"],
                         max_smart_models=route["max_smart_models"],
                     )
-                    restore_active_model_to_cheap()
+                    restore_active_model_to_cheap(route.get("primary_model"))
                     st.success(answer)
                     st.caption(f"Model: {meta.get('model') or meta.get('model_requested')}")
                 except Exception as exc:
@@ -1348,6 +1425,9 @@ def render_admin_settings() -> None:
                 st.session_state.active_cheap_fallback_models = DEFAULT_CHEAP_FALLBACK_MODELS.copy()
                 st.session_state.active_expensive_fallback_models = DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
                 st.session_state.last_model_health_error = ""
+                st.session_state.active_rotate_cheap_primary = rotate_cheap_primary_default
+                st.session_state.cheap_model_rotation_index = 0
+                st.session_state.last_rotated_primary_model = ""
                 st.rerun()
 
     with tab_bot:
@@ -1396,9 +1476,20 @@ def render_admin_settings() -> None:
         col_start, col_stop = st.columns(2)
         with col_start:
             if st.button("▶️ Start Bot", use_container_width=True):
+                start_route = build_model_routing_plan(advance_rotation=True)
+                bot_config.update({
+                    "slashai_model": start_route["primary_model"],
+                    "fallback_models": start_route["cheap_fallback_models"],
+                    "expensive_fallback_models": start_route["expensive_fallback_models"],
+                    "allow_expensive_fallback": start_route["allow_expensive_fallback"],
+                    "max_expensive_models": start_route["max_expensive_models"],
+                    "return_to_primary": start_route["return_to_primary"],
+                    "max_smart_models": start_route["max_smart_models"],
+                })
                 started = service.start(bot_config)
+                restore_active_model_to_cheap(start_route.get("primary_model"))
                 if started:
-                    st.success("Bot Telegram dijalankan.")
+                    st.success(f"Bot Telegram dijalankan dengan primary: {start_route['primary_model']}")
                 else:
                     st.info("Bot sudah berjalan.")
         with col_stop:
@@ -1500,8 +1591,10 @@ MAX_COMPLETION_TOKENS = 2600
 SMART_MODEL_ROUTER = true
 RETURN_TO_PRIMARY_MODEL = true
 MAX_SMART_MODELS = 2
+ROTATE_CHEAP_PRIMARY = true
 
-# Default aktif: jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal.
+# Default aktif: model murah aktif dipakai bergiliran sebagai primary.
+# Jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal.
 # Setelah request selesai, aplikasi kembali memilih model murah aktif sebagai default.
 ALLOW_EXPENSIVE_FALLBACK = true
 MAX_EXPENSIVE_MODELS = 1
@@ -1604,7 +1697,7 @@ if user_input:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
                 placeholder.markdown("⏳ adioranye sedang berpikir dalam...")
-                route = build_model_routing_plan()
+                route = build_model_routing_plan(advance_rotation=True)
                 answer, meta = generate_answer(
                     api_url=api_url,
                     api_key=api_key,
@@ -1624,7 +1717,7 @@ if user_input:
                     return_to_primary=route["return_to_primary"],
                     max_smart_models=route["max_smart_models"],
                 )
-                restore_active_model_to_cheap()
+                restore_active_model_to_cheap(route.get("primary_model"))
                 placeholder.markdown(answer)
                 st.session_state.last_answer_meta = meta or {}
                 final_model = (meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or cfg["model"]
