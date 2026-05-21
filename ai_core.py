@@ -9,100 +9,226 @@ from typing import Any, Dict, List, Tuple, Optional
 import requests
 
 
-# Model cadangan disusun berdasarkan biaya.
-# Jalur utama selalu memakai model hemat dulu. Model mahal hanya dipanggil jika
-# jawaban model murah kosong, terlalu lemah, atau mengaku tidak tahu.
-DEFAULT_CHEAP_FALLBACK_MODELS = [
-    "slashai/gpt-5-nano",
-    "slashai/gemini-3-flash",
-    "slashai/mimo-v2-flash",
-    "slashai/gpt-5-mini",
-    "slashai/Step-3.5-Flash",
-    "slashai/MiniMax-M2.5",
-    "slashai/gpt-5.4-nano",
-    "slashai/claude-haiku-4.5",
+# =========================
+# SlashAI model catalog
+# =========================
+# Katalog ini menjadi satu sumber referensi untuk harga, tier, fallback,
+# health-check, /speed, /rotate, /ubah murah, dan /ubah mahal.
+# Satuan harga: Rupiah per 1M token.
+SLASHAI_MODEL_CATALOG: List[Dict[str, Any]] = [
+    {"model": 'slashai/claude-haiku-4.5:fast', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/claude-haiku-4.5:free', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/claude-haiku-4.5:slow', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/claude-opus-4.5', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/claude-opus-4.6', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/claude-opus-4.7:fast', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/claude-opus-4.7:slow', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/claude-sonnet-4.5:fast', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/claude-sonnet-4.5:free', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/claude-sonnet-4.5:slow', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/claude-sonnet-4.6', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/claude-sonnet-4:free', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/deepseek-3.2:fast', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/deepseek-3.2:free', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/deepseek-v3.2', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/deepseek-v4-flash:medium', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/deepseek-v4-flash:slow', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/deepseek-v4-pro:medium', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/deepseek-v4-pro:slow', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gemini-3-flash', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gemini-3.1-pro', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/glm-5.1:medium', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/glm-5.1:slow', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/glm-5:fast', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/glm-5:free', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/glm-5:medium', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/glm-5:slow', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5-codex', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5-codex-mini', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5-codex-mini-review', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5-codex-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5-mini', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5-nano', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.1', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.1-codex', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.1-codex-max', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gpt-5.1-codex-max-review', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gpt-5.1-codex-mini', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.1-codex-mini-high', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.1-codex-mini-high-review', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.1-codex-mini-review', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.1-codex-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.1-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.2-codex', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.2-codex-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.2-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.2:cx', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.2:slow', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.3-codex', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.3-codex-high', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gpt-5.3-codex-high-review', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gpt-5.3-codex-low', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.3-codex-low-review', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.3-codex-none', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.3-codex-none-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.3-codex-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.3-codex-spark', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.3-codex-spark-review', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.3-codex-xhigh', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gpt-5.3-codex-xhigh-review', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gpt-5.4-mini', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.4-nano', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.4-pro', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/gpt-5.4-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.4:cx', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.4:slow', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.5-instant', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/gpt-5.5-review', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.5:cx', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/gpt-5.5:slow', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/kimi-k2.5:medium', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/kimi-k2.5:slow', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/kimi-k2.6', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/mimo-v2-omni', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/mimo-v2-pro', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/mimo-v2.5', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/mimo-v2.5-pro', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/minimax-m2.1:free', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/minimax-m2.5:fast', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/minimax-m2.5:free', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/minimax-m2.5:medium', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/minimax-m2.5:slow', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/minimax-m2.7:medium', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/minimax-m2.7:slow', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/qwen3-coder-next:fast', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/qwen3-coder-next:free', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/qwen3.6-max-preview', "aliases": [], "input": 5000, "output": 25000},
+    {"model": 'slashai/qwen3.6-plus', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/step-3.5-flash', "aliases": [], "input": 50, "output": 200},
 ]
 
-# Model mahal/lebih kuat. Dipakai hanya saat model hemat tidak memberi jawaban memadai.
-# Default dibuat moderat agar tidak langsung memakai model ultra mahal.
-DEFAULT_EXPENSIVE_FALLBACK_MODELS = [
-    "slashai/Qwen3.6-Plus",
-    "slashai/claude-sonnet-4.5",
+
+def _unique_ordered(items: List[str]) -> List[str]:
+    return list(dict.fromkeys(str(item).strip() for item in items if str(item).strip()))
+
+
+def _tier_from_price(input_price: int, output_price: int) -> str:
+    if input_price == 0 and output_price == 0:
+        return "unknown"
+    if input_price <= 50 and output_price <= 200:
+        return "cheap"
+    if input_price <= 500 and output_price <= 2000:
+        return "medium"
+    if input_price <= 5000 and output_price <= 25000:
+        return "expensive"
+    return "ultra"
+
+
+MODEL_PRICE_IDR: Dict[str, Dict[str, int]] = {
+    item["model"]: {"input": int(item["input"]), "output": int(item["output"])}
+    for item in SLASHAI_MODEL_CATALOG
+}
+
+# Kompatibilitas nama lama/varian kapitalisasi dari patch sebelumnya.
+MODEL_PRICE_IDR.update({
+    'slashai/claude-haiku-4.5': {"input": 50, "output": 200},
+    'slashai/claude-sonnet-4.5': {"input": 500, "output": 2000},
+    'slashai/claude-opus-4.7': {"input": 5000, "output": 25000},
+    'slashai/deepseek-3.2': {"input": 500, "output": 2000},
+    'slashai/deepseek-v4-flash': {"input": 50, "output": 200},
+    'slashai/deepseek-v4-pro': {"input": 5000, "output": 25000},
+    'slashai/glm-5': {"input": 500, "output": 2000},
+    'slashai/GLM-5': {"input": 500, "output": 2000},
+    'slashai/glm-5.1': {"input": 500, "output": 2000},
+    'slashai/GLM-5.1': {"input": 500, "output": 2000},
+    'slashai/gpt-5.2': {"input": 500, "output": 2000},
+    'slashai/gpt-5.4': {"input": 500, "output": 2000},
+    'slashai/gpt-5.5': {"input": 500, "output": 2000},
+    'slashai/kimi-k2.5': {"input": 500, "output": 2000},
+    'slashai/Kimi-K2.5': {"input": 500, "output": 2000},
+    'slashai/Kimi-K2.6': {"input": 500, "output": 2000},
+    'slashai/minimax-m2.5': {"input": 50, "output": 200},
+    'slashai/MiniMax-M2.5': {"input": 50, "output": 200},
+    'slashai/minimax-m2.7': {"input": 50, "output": 200},
+    'slashai/MiniMax-M2.7': {"input": 50, "output": 200},
+    'slashai/qwen3-coder-next': {"input": 500, "output": 2000},
+    'slashai/Qwen3.6-Plus': {"input": 500, "output": 2000},
+    'slashai/Qwen3.6-Max-Preview': {"input": 5000, "output": 25000},
+    'slashai/Step-3.5-Flash': {"input": 50, "output": 200},
+})
+
+ALL_SLASHAI_MODELS = _unique_ordered([item["model"] for item in SLASHAI_MODEL_CATALOG])
+ALL_CHEAP_MODELS = _unique_ordered([
+    item["model"] for item in SLASHAI_MODEL_CATALOG
+    if _tier_from_price(int(item["input"]), int(item["output"])) == "cheap"
+])
+ALL_MEDIUM_MODELS = _unique_ordered([
+    item["model"] for item in SLASHAI_MODEL_CATALOG
+    if _tier_from_price(int(item["input"]), int(item["output"])) == "medium"
+])
+ALL_EXPENSIVE_MODELS = _unique_ordered([
+    item["model"] for item in SLASHAI_MODEL_CATALOG
+    if _tier_from_price(int(item["input"]), int(item["output"])) == "expensive"
+])
+ALL_CAPABLE_MODELS = _unique_ordered(ALL_MEDIUM_MODELS + ALL_EXPENSIVE_MODELS)
+
+# Jalur murah: banyak opsi agar /rotate dan health-check bisa memilih yang hidup/tercepat.
+DEFAULT_CHEAP_FALLBACK_MODELS = _unique_ordered([
+    "slashai/gemini-3-flash",
+    "slashai/gpt-5-nano",
+    "slashai/gpt-5-mini",
+    "slashai/gpt-5.5-instant",
+    "slashai/gpt-5.4-mini",
+    "slashai/gpt-5.4-nano",
+    "slashai/gemini-3.1-pro",
+    "slashai/deepseek-v4-flash:medium",
+    "slashai/claude-haiku-4.5:fast",
+    "slashai/minimax-m2.5:fast",
+    "slashai/minimax-m2.7:medium",
+    "slashai/step-3.5-flash",
+    "slashai/gpt-5-codex-mini",
+    "slashai/gpt-5.1-codex-mini",
+    "slashai/gpt-5.3-codex-spark",
+    "slashai/gpt-5.3-codex-low",
+] + ALL_CHEAP_MODELS)
+
+# Jalur menengah/mahal: dipakai oleh /ubah mahal, thinking router, atau fallback saat murah kurang cukup.
+DEFAULT_EXPENSIVE_FALLBACK_MODELS = _unique_ordered([
+    "slashai/qwen3.6-plus",
+    "slashai/claude-sonnet-4.5:fast",
+    "slashai/deepseek-3.2:fast",
     "slashai/deepseek-v3.2",
-    "slashai/GLM-5.1",
-    "slashai/Kimi-K2.6",
-    "slashai/gpt-5.2",
-]
+    "slashai/glm-5:fast",
+    "slashai/glm-5.1:medium",
+    "slashai/kimi-k2.6",
+    "slashai/gpt-5.1",
+    "slashai/gpt-5.2:cx",
+    "slashai/gpt-5-codex",
+    "slashai/qwen3-coder-next:fast",
+    "slashai/mimo-v2.5",
+    "slashai/mimo-v2-omni",
+    "slashai/gpt-5.4-pro",
+    "slashai/qwen3.6-max-preview",
+    "slashai/claude-opus-4.5",
+] + ALL_CAPABLE_MODELS)
 
 # Kompatibilitas dengan versi lama.
 DEFAULT_FALLBACK_MODELS = DEFAULT_CHEAP_FALLBACK_MODELS
 
-# Harga dari list SlashAI yang diberikan user. Satuan: Rupiah per 1M token.
-MODEL_PRICE_IDR: Dict[str, Dict[str, int]] = {
-    "slashai/gpt-5-nano": {"input": 50, "output": 200},
-    "slashai/gpt-5-mini": {"input": 50, "output": 200},
-    "slashai/gpt-5.4-nano": {"input": 50, "output": 200},
-    "slashai/gpt-5.5-instant": {"input": 50, "output": 200},
-    "slashai/gpt-5-codex-mini": {"input": 50, "output": 200},
-    "slashai/gpt-5.1-codex-mini": {"input": 50, "output": 200},
-    "slashai/gpt-5.3-codex-low": {"input": 50, "output": 200},
-    "slashai/gpt-5.3-codex-spark": {"input": 50, "output": 200},
-    "slashai/gemini-3-flash": {"input": 50, "output": 200},
-    "slashai/gemini-3.1-pro": {"input": 50, "output": 200},
-    "slashai/mimo-v2-flash": {"input": 50, "output": 200},
-    "slashai/MiniMax-M2.5": {"input": 50, "output": 200},
-    "slashai/MiniMax-M2.7": {"input": 50, "output": 200},
-    "slashai/minimax-m2.5": {"input": 50, "output": 200},
-    "slashai/minimax-m2.7": {"input": 50, "output": 200},
-    "slashai/Step-3.5-Flash": {"input": 50, "output": 200},
-    "slashai/claude-haiku-4.5": {"input": 50, "output": 200},
-    "slashai/Qwen3.6-Plus": {"input": 500, "output": 2000},
-    "slashai/qwen3-coder-next": {"input": 500, "output": 2000},
-    "slashai/claude-sonnet-4.5": {"input": 500, "output": 2000},
-    "slashai/claude-sonnet-4.6": {"input": 500, "output": 2000},
-    "slashai/deepseek-3.2": {"input": 500, "output": 2000},
-    "slashai/deepseek-v3.2": {"input": 500, "output": 2000},
-    "slashai/GLM-5": {"input": 500, "output": 2000},
-    "slashai/GLM-5.1": {"input": 500, "output": 2000},
-    "slashai/glm-5": {"input": 500, "output": 2000},
-    "slashai/glm-5.1": {"input": 500, "output": 2000},
-    "slashai/Kimi-K2.5": {"input": 500, "output": 2000},
-    "slashai/Kimi-K2.6": {"input": 500, "output": 2000},
-    "slashai/kimi-k2.5": {"input": 500, "output": 2000},
-    "slashai/mimo-v2-omni": {"input": 500, "output": 2000},
-    "slashai/mimo-v2-pro": {"input": 500, "output": 2000},
-    "slashai/mimo-v2.5": {"input": 500, "output": 2000},
-    "slashai/mimo-v2.5-pro": {"input": 500, "output": 2000},
-    "slashai/deepseek-v4-flash": {"input": 1500, "output": 6000},
-    "slashai/deepseek-v4-pro": {"input": 4000, "output": 18000},
-    "slashai/gpt-5.2": {"input": 5000, "output": 25000},
-    "slashai/gpt-5.4": {"input": 5000, "output": 25000},
-    "slashai/gpt-5.5": {"input": 5000, "output": 25000},
-    "slashai/claude-opus-4.5": {"input": 5000, "output": 25000},
-    "slashai/claude-opus-4.6": {"input": 5000, "output": 25000},
-    "slashai/claude-sonnet-4.7": {"input": 5000, "output": 15000},
-    "slashai/Qwen3.6-Max-Preview": {"input": 5000, "output": 25000},
-    "slashai/claude-opus-4.7": {"input": 250000, "output": 1250000},
-}
-
 
 def model_price(model: str) -> Dict[str, int]:
-    return MODEL_PRICE_IDR.get(model, {"input": 0, "output": 0})
+    model_name = str(model or "").strip()
+    if model_name in MODEL_PRICE_IDR:
+        return MODEL_PRICE_IDR[model_name]
+    lowered = model_name.lower()
+    if lowered in MODEL_PRICE_IDR:
+        return MODEL_PRICE_IDR[lowered]
+    return {"input": 0, "output": 0}
 
 
 def model_cost_tier(model: str) -> str:
     price = model_price(model)
-    inp = price.get("input", 0)
-    out = price.get("output", 0)
-    if inp == 0 and out == 0:
-        return "unknown"
-    if inp <= 50 and out <= 200:
-        return "cheap"
-    if inp <= 500 and out <= 2000:
-        return "medium"
-    if inp <= 5000 and out <= 25000:
-        return "expensive"
-    return "ultra"
+    return _tier_from_price(int(price.get("input", 0) or 0), int(price.get("output", 0) or 0))
 
 
 def model_price_label(model: str) -> str:
@@ -114,34 +240,50 @@ def model_price_label(model: str) -> str:
     return f"{model} | {tier_label} | Rp{price['input']:,}/Rp{price['output']:,} per 1M".replace(",", ".")
 
 
+def _profile_for_model(model: str) -> Dict[str, float]:
+    name = str(model or "").lower()
+    tier = model_cost_tier(model)
+    if tier == "cheap":
+        speed, quality, cost = 0.88, 0.74, 1.0
+    elif tier == "medium":
+        speed, quality, cost = 0.75, 0.86, 10.0
+    elif tier == "expensive":
+        speed, quality, cost = 0.62, 0.93, 100.0
+    else:
+        speed, quality, cost = 0.50, 0.95, 999.0
+
+    if ":fast" in name or "flash" in name or "instant" in name:
+        speed += 0.08
+    if ":slow" in name:
+        speed -= 0.12
+    if ":free" in name:
+        speed -= 0.03
+    if "mini" in name:
+        speed += 0.03
+        quality += 0.02
+    if "nano" in name:
+        speed += 0.05
+        quality -= 0.03
+    if "sonnet" in name or "qwen" in name or "deepseek" in name or "glm" in name or "kimi" in name:
+        quality += 0.03
+    if "opus" in name or "pro" in name or "max" in name or "xhigh" in name:
+        quality += 0.05
+    if "codex" in name:
+        quality += 0.03
+    if "review" in name:
+        quality += 0.01
+        speed -= 0.02
+
+    return {
+        "speed": max(0.20, min(speed, 0.99)),
+        "quality": max(0.50, min(quality, 0.98)),
+        "cost": cost,
+    }
+
+
 # Estimasi profil sederhana untuk menentukan fallback yang cepat dan kompeten.
 # speed: makin besar makin cepat, quality: makin besar makin kuat, cost: relatif makin kecil makin hemat.
-MODEL_PROFILES: Dict[str, Dict[str, float]] = {
-    "slashai/gpt-5-nano": {"speed": 0.92, "quality": 0.72, "cost": 1.0},
-    "slashai/gpt-5-mini": {"speed": 0.82, "quality": 0.82, "cost": 1.0},
-    "slashai/gpt-5.4-nano": {"speed": 0.90, "quality": 0.72, "cost": 1.0},
-    "slashai/gpt-5.5-instant": {"speed": 0.88, "quality": 0.78, "cost": 1.0},
-    "slashai/gemini-3-flash": {"speed": 0.95, "quality": 0.76, "cost": 1.0},
-    "slashai/gemini-3.1-pro": {"speed": 0.90, "quality": 0.82, "cost": 1.0},
-    "slashai/mimo-v2-flash": {"speed": 0.94, "quality": 0.70, "cost": 1.0},
-    "slashai/Step-3.5-Flash": {"speed": 0.90, "quality": 0.68, "cost": 1.0},
-    "slashai/MiniMax-M2.5": {"speed": 0.88, "quality": 0.70, "cost": 1.0},
-    "slashai/MiniMax-M2.7": {"speed": 0.86, "quality": 0.72, "cost": 1.0},
-    "slashai/claude-haiku-4.5": {"speed": 0.86, "quality": 0.76, "cost": 1.0},
-    "slashai/Qwen3.6-Plus": {"speed": 0.78, "quality": 0.84, "cost": 10.0},
-    "slashai/qwen3-coder-next": {"speed": 0.76, "quality": 0.84, "cost": 10.0},
-    "slashai/claude-sonnet-4.5": {"speed": 0.74, "quality": 0.88, "cost": 10.0},
-    "slashai/claude-sonnet-4.6": {"speed": 0.72, "quality": 0.89, "cost": 10.0},
-    "slashai/deepseek-v3.2": {"speed": 0.78, "quality": 0.84, "cost": 10.0},
-    "slashai/GLM-5.1": {"speed": 0.76, "quality": 0.83, "cost": 10.0},
-    "slashai/Kimi-K2.6": {"speed": 0.76, "quality": 0.84, "cost": 10.0},
-    "slashai/deepseek-v4-flash": {"speed": 0.82, "quality": 0.82, "cost": 30.0},
-    "slashai/deepseek-v4-pro": {"speed": 0.70, "quality": 0.90, "cost": 80.0},
-    "slashai/gpt-5.2": {"speed": 0.64, "quality": 0.92, "cost": 100.0},
-    "slashai/gpt-5.4": {"speed": 0.62, "quality": 0.93, "cost": 100.0},
-    "slashai/gpt-5.5": {"speed": 0.62, "quality": 0.94, "cost": 100.0},
-    "slashai/claude-opus-4.5": {"speed": 0.58, "quality": 0.94, "cost": 100.0},
-}
+MODEL_PROFILES: Dict[str, Dict[str, float]] = {model: _profile_for_model(model) for model in MODEL_PRICE_IDR}
 
 SAFE_PERSONA_SUFFIX = (
     "\n\nAturan keamanan: bantu pengguna semaksimal mungkin untuk permintaan yang aman dan bermanfaat. "

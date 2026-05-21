@@ -1,0 +1,447 @@
+[
+  {
+    "model": "slashai/claude-haiku-4.5:fast",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/claude-haiku-4.5:free",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/claude-haiku-4.5:slow",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/claude-opus-4.5",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/claude-opus-4.6",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/claude-opus-4.7:fast",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/claude-opus-4.7:slow",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/claude-sonnet-4.5:fast",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/claude-sonnet-4.5:free",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/claude-sonnet-4.5:slow",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/claude-sonnet-4.6",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/claude-sonnet-4:free",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/deepseek-3.2:fast",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/deepseek-3.2:free",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/deepseek-v3.2",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/deepseek-v4-flash:medium",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/deepseek-v4-flash:slow",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/deepseek-v4-pro:medium",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/deepseek-v4-pro:slow",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gemini-3-flash",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gemini-3.1-pro",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/glm-5.1:medium",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/glm-5.1:slow",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/glm-5:fast",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/glm-5:free",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/glm-5:medium",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/glm-5:slow",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5-codex",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5-codex-mini",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5-codex-mini-review",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5-codex-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5-mini",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5-nano",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.1",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.1-codex",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.1-codex-max",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gpt-5.1-codex-max-review",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gpt-5.1-codex-mini",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.1-codex-mini-high",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.1-codex-mini-high-review",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.1-codex-mini-review",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.1-codex-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.1-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.2-codex",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.2-codex-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.2-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.2:cx",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.2:slow",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-high",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-high-review",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-low",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-low-review",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-none",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-none-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-spark",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-spark-review",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-xhigh",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gpt-5.3-codex-xhigh-review",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gpt-5.4-mini",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.4-nano",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.4-pro",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/gpt-5.4-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.4:cx",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.4:slow",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.5-instant",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/gpt-5.5-review",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.5:cx",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/gpt-5.5:slow",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/kimi-k2.5:medium",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/kimi-k2.5:slow",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/kimi-k2.6",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/mimo-v2-omni",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/mimo-v2-pro",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/mimo-v2.5",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/mimo-v2.5-pro",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/minimax-m2.1:free",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/minimax-m2.5:fast",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/minimax-m2.5:free",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/minimax-m2.5:medium",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/minimax-m2.5:slow",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/minimax-m2.7:medium",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/minimax-m2.7:slow",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  },
+  {
+    "model": "slashai/qwen3-coder-next:fast",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/qwen3-coder-next:free",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/qwen3.6-max-preview",
+    "input_per_1m": 5000,
+    "output_per_1m": 25000
+  },
+  {
+    "model": "slashai/qwen3.6-plus",
+    "input_per_1m": 500,
+    "output_per_1m": 2000
+  },
+  {
+    "model": "slashai/step-3.5-flash",
+    "input_per_1m": 50,
+    "output_per_1m": 200
+  }
+]

@@ -12,6 +12,9 @@ from typing import Dict, Any, List, Optional, Deque, Set
 import requests
 
 from ai_core import (
+    ALL_SLASHAI_MODELS,
+    ALL_CHEAP_MODELS,
+    ALL_CAPABLE_MODELS,
     DEFAULT_CHEAP_FALLBACK_MODELS,
     DEFAULT_EXPENSIVE_FALLBACK_MODELS,
     generate_answer,
@@ -387,8 +390,8 @@ def _candidate_tier(model: str) -> str:
 
 def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
     """Build robust model pools from defaults, config, and dynamically classified candidates."""
-    default_cheap = _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS)
-    default_expensive = _as_string_list(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
+    default_cheap = _as_string_list(ALL_CHEAP_MODELS) or _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS)
+    default_expensive = _as_string_list(ALL_CAPABLE_MODELS) or _as_string_list(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
 
     declared_cheap = []
     declared_cheap.extend(_as_string_list(config.get("all_cheap_models")) or default_cheap)
@@ -406,6 +409,7 @@ def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dic
         declared_capable.append(capable_override)
 
     extra = _as_string_list(config.get("all_model_candidates"))
+    extra.extend(_as_string_list(ALL_SLASHAI_MODELS))
     all_candidates = _as_string_list([current_model] + declared_cheap + declared_capable + extra)
 
     dynamic_cheap: List[str] = []
@@ -885,7 +889,7 @@ def refresh_telegram_runtime_models(
     candidates = pools["all"]
 
     if not candidates:
-        candidates = _as_string_list([current_model] + DEFAULT_CHEAP_FALLBACK_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS)
+        candidates = _as_string_list([current_model] + ALL_SLASHAI_MODELS + DEFAULT_CHEAP_FALLBACK_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS)
 
     max_workers = int(config.get("model_health_workers", 6) or 6)
     max_workers = max(1, min(max_workers, len(candidates), 10))

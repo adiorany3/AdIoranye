@@ -2,6 +2,7 @@ import hmac
 import html
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Tuple
@@ -10,6 +11,9 @@ import requests
 import streamlit as st
 
 from ai_core import (
+    ALL_SLASHAI_MODELS,
+    ALL_CHEAP_MODELS,
+    ALL_CAPABLE_MODELS,
     DEFAULT_CHEAP_FALLBACK_MODELS,
     DEFAULT_EXPENSIVE_FALLBACK_MODELS,
     DEFAULT_FALLBACK_MODELS,
@@ -299,17 +303,9 @@ Memory default Adioranye:
 - Jika permintaan kurang jelas, tetap berikan jawaban terbaik berdasarkan konteks yang ada dan sebutkan asumsi yang digunakan.
 """.strip()
 
-CHEAP_MODEL_OPTIONS = DEFAULT_CHEAP_FALLBACK_MODELS.copy()
-EXPENSIVE_MODEL_OPTIONS = DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
-MODEL_OPTIONS = list(dict.fromkeys(CHEAP_MODEL_OPTIONS + EXPENSIVE_MODEL_OPTIONS + [
-    "slashai/gemini-3.1-pro",
-    "slashai/qwen3-coder-next",
-    "slashai/deepseek-v4-flash",
-    "slashai/deepseek-v4-pro",
-    "slashai/gpt-5.4",
-    "slashai/gpt-5.5",
-    "slashai/claude-opus-4.5",
-]))
+CHEAP_MODEL_OPTIONS = list(dict.fromkeys(ALL_CHEAP_MODELS or DEFAULT_CHEAP_FALLBACK_MODELS.copy()))
+EXPENSIVE_MODEL_OPTIONS = list(dict.fromkeys(ALL_CAPABLE_MODELS or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()))
+MODEL_OPTIONS = list(dict.fromkeys(ALL_SLASHAI_MODELS + CHEAP_MODEL_OPTIONS + EXPENSIVE_MODEL_OPTIONS))
 
 # Secrets
 api_key = str(get_secret("SLASHAI_API_KEY", ""))
@@ -333,6 +329,8 @@ return_to_primary_default = parse_bool(get_secret("RETURN_TO_PRIMARY_MODEL", Tru
 max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 model_health_check_interval = int(get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 90000) or 90000)
 model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
+model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 8) or 8)
+model_health_retries = int(get_secret("MODEL_HEALTH_RETRIES", 1) or 1)
 # Health check model hanya boleh berjalan pada jendela tengah malam WIB.
 # Default: 00:00-00:59 WIB. Di luar jam ini sistem memakai cache/daftar fallback terakhir.
 model_health_midnight_only = parse_bool(get_secret("MODEL_HEALTH_MIDNIGHT_ONLY", True), default=True)
@@ -582,65 +580,220 @@ def prioritize_fastest_active_models(models: List[str], health_cache: Dict[str, 
     return sorted(active_models, key=sort_key)
 
 
-def check_single_model_health(model: str, timeout: int = 12) -> Dict[str, Any]:
-    """Cek apakah model bisa menjawab request kecil. Aman untuk OpenAI-compatible /chat/completions."""
+TRANSIENT_HEALTH_HTTP_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def _is_gpt5_health_model(model: str) -> bool:
+    return "gpt-5" in str(model or "").lower()
+
+
+def _extract_health_content(data: Any) -> str:
+    if not isinstance(data, dict):
+        return ""
+    choices = data.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return ""
+    choice = choices[0]
+    message = choice.get("message") or {}
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: List[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                parts.append(str(item.get("text") or item.get("content") or ""))
+            else:
+                parts.append(str(item or ""))
+        return "\n".join(part for part in parts if part.strip()).strip()
+    text = choice.get("text")
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    delta = choice.get("delta") or {}
+    delta_content = delta.get("content")
+    if isinstance(delta_content, str):
+        return delta_content.strip()
+    return ""
+
+
+def _build_model_health_payload(model: str) -> Dict[str, Any]:
+    max_tokens = 64 if _is_gpt5_health_model(model) else 16
+    payload: Dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Balas hanya satu kata: OK."},
+            {"role": "user", "content": "OK?"},
+        ],
+        "temperature": 0,
+        "max_completion_tokens": max_tokens,
+        "stream": False,
+    }
+    if _is_gpt5_health_model(model):
+        payload["reasoning_effort"] = "minimal"
+    return payload
+
+
+def check_single_model_health(model: str, timeout: int = 12, retries: int = 1) -> Dict[str, Any]:
+    """Cek apakah model benar-benar aktif, bukan sekadar HTTP 200.
+
+    Aktif hanya jika API mengembalikan choices dan content assistant tidak kosong.
+    Error sementara 429/5xx/timeout dicoba ulang dan diberi label transient.
+    """
     started = time.time()
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "Jawab sangat singkat."},
-            {"role": "user", "content": "ping"},
-        ],
-        "temperature": 0,
-        "max_completion_tokens": 8,
-    }
+    attempts = max(1, int(retries or 0) + 1)
+    last_error = ""
+    last_status = None
 
-    try:
-        response = requests.post(api_url, headers=headers, json=payload, timeout=timeout)
-        latency_ms = round((time.time() - started) * 1000, 1)
-        if response.status_code != 200:
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.post(
+                api_url,
+                headers=headers,
+                json=_build_model_health_payload(model),
+                timeout=timeout,
+            )
+            latency_ms = round((time.time() - started) * 1000, 1)
+            last_status = response.status_code
+
+            if response.status_code != 200:
+                is_transient = response.status_code in TRANSIENT_HEALTH_HTTP_CODES
+                last_error = response.text[:500]
+                if is_transient and attempt < attempts:
+                    time.sleep(min(1.2, 0.35 * attempt))
+                    continue
+                return {
+                    "active": False,
+                    "health_status": "transient" if is_transient else "dead",
+                    "error_class": "transient_http" if is_transient else "http_error",
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "attempts": attempt,
+                    "checked_at": _wib_now_text(),
+                    "tier": model_cost_tier(model),
+                    "error": last_error,
+                }
+
+            try:
+                data = response.json()
+            except Exception:
+                return {
+                    "active": False,
+                    "health_status": "dead",
+                    "error_class": "invalid_json",
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "attempts": attempt,
+                    "checked_at": _wib_now_text(),
+                    "tier": model_cost_tier(model),
+                    "error": "Respons 200 tetapi bukan JSON valid: " + (response.text or "")[:500],
+                }
+
+            choices = data.get("choices") or [] if isinstance(data, dict) else []
+            content = _extract_health_content(data)
+            finish_reason = ""
+            if choices and isinstance(choices[0], dict):
+                finish_reason = str(choices[0].get("finish_reason") or "")
+
+            if choices and content:
+                return {
+                    "active": True,
+                    "health_status": "active",
+                    "error_class": "",
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "attempts": attempt,
+                    "checked_at": _wib_now_text(),
+                    "tier": model_cost_tier(model),
+                    "finish_reason": finish_reason,
+                    "sample": content[:80],
+                    "error": "",
+                }
+
+            usage = data.get("usage") if isinstance(data, dict) else None
+            details = (usage or {}).get("completion_tokens_details") if isinstance(usage, dict) else None
+            reasoning_tokens = (details or {}).get("reasoning_tokens") if isinstance(details, dict) else None
+            last_error = "Response 200 tetapi choices/content kosong"
+            if reasoning_tokens:
+                last_error += f"; reasoning_tokens={reasoning_tokens}"
             return {
                 "active": False,
+                "health_status": "dead",
+                "error_class": "empty_content",
                 "status_code": response.status_code,
                 "latency_ms": latency_ms,
+                "attempts": attempt,
                 "checked_at": _wib_now_text(),
-                "error": response.text[:300],
+                "tier": model_cost_tier(model),
+                "finish_reason": finish_reason,
+                "error": last_error,
+            }
+        except requests.Timeout as exc:
+            last_error = str(exc)[:500]
+            if attempt < attempts:
+                time.sleep(min(1.2, 0.35 * attempt))
+                continue
+            return {
+                "active": False,
+                "health_status": "transient",
+                "error_class": "timeout",
+                "status_code": last_status,
+                "latency_ms": round((time.time() - started) * 1000, 1),
+                "attempts": attempt,
+                "checked_at": _wib_now_text(),
+                "tier": model_cost_tier(model),
+                "error": last_error,
+            }
+        except requests.RequestException as exc:
+            last_error = str(exc)[:500]
+            if attempt < attempts:
+                time.sleep(min(1.2, 0.35 * attempt))
+                continue
+            return {
+                "active": False,
+                "health_status": "transient",
+                "error_class": "request_exception",
+                "status_code": last_status,
+                "latency_ms": round((time.time() - started) * 1000, 1),
+                "attempts": attempt,
+                "checked_at": _wib_now_text(),
+                "tier": model_cost_tier(model),
+                "error": last_error,
+            }
+        except Exception as exc:
+            return {
+                "active": False,
+                "health_status": "dead",
+                "error_class": "unexpected_error",
+                "status_code": last_status,
+                "latency_ms": round((time.time() - started) * 1000, 1),
+                "attempts": attempt,
+                "checked_at": _wib_now_text(),
+                "tier": model_cost_tier(model),
+                "error": str(exc)[:500],
             }
 
-        data = response.json()
-        choices = data.get("choices") or []
-        content = ""
-        if choices:
-            content = str((choices[0].get("message") or {}).get("content") or "").strip()
-
-        return {
-            "active": bool(choices),
-            "status_code": response.status_code,
-            "latency_ms": latency_ms,
-            "checked_at": _wib_now_text(),
-            "sample": content[:60],
-            "error": "" if choices else "Response 200 tetapi choices kosong",
-        }
-    except Exception as exc:
-        return {
-            "active": False,
-            "status_code": None,
-            "latency_ms": round((time.time() - started) * 1000, 1),
-            "checked_at": _wib_now_text(),
-            "error": str(exc)[:300],
-        }
+    return {
+        "active": False,
+        "health_status": "dead",
+        "error_class": "unknown",
+        "status_code": last_status,
+        "latency_ms": round((time.time() - started) * 1000, 1),
+        "attempts": attempts,
+        "checked_at": _wib_now_text(),
+        "tier": model_cost_tier(model),
+        "error": last_error or "Health check gagal tanpa detail.",
+    }
 
 
 def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, Any]]:
-    """Cek model hanya pada jendela tengah malam WIB.
+    """Refresh health model.
 
-    Streamlit tidak punya cron murni, jadi pengecekan tetap dipicu saat app aktif/rerun/chat,
-    tetapi request ping ke model hanya dijalankan jika waktu WIB sedang berada pada jendela
-    MODEL_HEALTH_HOUR_WIB + MODEL_HEALTH_WINDOW_MINUTES.
+    Otomatis tetap mengikuti jendela tengah malam WIB. Namun force=True dari admin
+    boleh menjalankan cek saat itu juga, supaya tombol manual dan /rotate tidak memakai cache basi.
     """
     if not api_key:
         st.session_state.last_model_health_error = "SLASHAI_API_KEY belum diisi."
@@ -651,9 +804,9 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
     cache = st.session_state.get("model_health_cache") or {}
     interval = max(60, int(model_health_check_interval or 900))
 
-    if not is_model_health_check_allowed_now():
+    if not force and not is_model_health_check_allowed_now():
         st.session_state.last_model_health_error = (
-            f"Health check model hanya dijalankan pukul {_health_window_label_wib()}. "
+            f"Health check otomatis hanya dijalankan pukul {_health_window_label_wib()}. "
             f"Di luar jam itu sistem memakai cache/daftar model aktif terakhir."
         )
         return cache
@@ -663,29 +816,58 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
 
     models_to_check = unique_models(
         [st.session_state.get("active_model") or default_model, default_model]
+        + MODEL_OPTIONS
+        + CHEAP_MODEL_OPTIONS
+        + EXPENSIVE_MODEL_OPTIONS
         + DEFAULT_CHEAP_FALLBACK_MODELS
         + DEFAULT_EXPENSIVE_FALLBACK_MODELS
-        + MODEL_OPTIONS
     )
 
     fresh_cache: Dict[str, Dict[str, Any]] = {}
-    for model_name in models_to_check:
-        fresh_cache[model_name] = check_single_model_health(model_name, timeout=int(model_health_timeout or 12))
+    max_workers = max(1, min(int(model_health_workers or 8), len(models_to_check), 12))
+    retries = max(0, min(int(model_health_retries or 1), 2))
 
-    active_cheap = prioritize_active_models(DEFAULT_CHEAP_FALLBACK_MODELS, fresh_cache)
-    active_expensive = prioritize_active_models(DEFAULT_EXPENSIVE_FALLBACK_MODELS, fresh_cache)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(check_single_model_health, model_name, int(model_health_timeout or 12), retries): model_name
+            for model_name in models_to_check
+        }
+        for future in as_completed(future_map):
+            model_name = future_map[future]
+            try:
+                fresh_cache[model_name] = future.result()
+            except Exception as exc:
+                fresh_cache[model_name] = {
+                    "active": False,
+                    "health_status": "dead",
+                    "error_class": "future_error",
+                    "status_code": None,
+                    "latency_ms": None,
+                    "attempts": 0,
+                    "checked_at": _wib_now_text(),
+                    "tier": model_cost_tier(model_name),
+                    "error": str(exc)[:500],
+                }
+
+    active_cheap = prioritize_active_models(CHEAP_MODEL_OPTIONS, fresh_cache)
+    active_expensive = prioritize_active_models(EXPENSIVE_MODEL_OPTIONS, fresh_cache)
 
     st.session_state.model_health_cache = fresh_cache
     st.session_state.model_health_checked_at = now
 
-    # Jika API sedang down total, jangan kosongkan fallback terakhir yang masih tersimpan.
     if active_cheap:
         st.session_state.active_cheap_fallback_models = active_cheap
     if active_expensive:
         st.session_state.active_expensive_fallback_models = active_expensive
 
     active_total = sum(1 for item in fresh_cache.values() if item.get("active"))
-    st.session_state.last_model_health_error = "" if active_total else "Tidak ada model yang lolos health check terakhir."
+    transient_total = sum(1 for item in fresh_cache.values() if item.get("health_status") == "transient")
+    if active_total:
+        st.session_state.last_model_health_error = ""
+    elif transient_total:
+        st.session_state.last_model_health_error = "Belum ada model aktif; sebagian error sementara/transient. Coba ulang beberapa saat lagi."
+    else:
+        st.session_state.last_model_health_error = "Tidak ada model yang lolos health check terakhir."
     return fresh_cache
 
 
@@ -1822,6 +2004,8 @@ def start_telegram_if_needed() -> None:
                 "all_cheap_models": CHEAP_MODEL_OPTIONS,
                 "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
                 "all_model_candidates": MODEL_OPTIONS,
+                "model_health_workers": model_health_workers,
+                "model_health_retries": model_health_retries,
                 "active_cheap_models": route.get("active_cheap_models", []),
                 "thinking_capable_models": route.get("active_expensive_models", []),
                 "speed_update_code": telegram_speed_update_code,
@@ -2161,6 +2345,8 @@ def render_admin_settings() -> None:
             "all_cheap_models": CHEAP_MODEL_OPTIONS,
             "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
             "all_model_candidates": MODEL_OPTIONS,
+                "model_health_workers": model_health_workers,
+                "model_health_retries": model_health_retries,
             "active_cheap_models": route.get("active_cheap_models", []),
             "thinking_capable_models": route.get("active_expensive_models", []),
             "speed_update_code": telegram_speed_update_code,
