@@ -23,7 +23,7 @@ from telegram_service import get_telegram_service
 
 
 st.set_page_config(
-    page_title="Adioranye AI",
+    page_title="Adioranye AI bu Galuh Adi Insani",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="collapsed",
