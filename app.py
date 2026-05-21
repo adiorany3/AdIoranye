@@ -41,7 +41,7 @@ st.set_page_config(
     page_title="Adioranye AI by Galuh Adi Insani",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 
@@ -1278,7 +1278,7 @@ def render_answer_model_caption(meta: Dict[str, Any] | None, fallback: str = "",
 
 
 def build_public_model_status_html(route: Dict[str, Any], last_meta: Dict[str, Any] | None = None) -> str:
-    # Buat panel kecil agar model aktif/route berikutnya terlihat di halaman publik.
+    # Panel ringkas agar pengguna/admin langsung tahu status route model tanpa membuka debug.
     route = route or {}
     last_model = get_answer_model_name(last_meta, fallback="")
     next_model = str(route.get("primary_model") or st.session_state.get("active_model") or default_model or "").strip()
@@ -1308,6 +1308,37 @@ def build_public_model_status_html(route: Dict[str, Any], last_meta: Dict[str, A
     )
 
     return f"""
+    <div class="model-status-panel easy-status-panel">
+        <div class="model-status-title">Status AI saat ini</div>
+        <div class="model-status-grid">
+            <div class="model-status-pill">Model berikutnya: <strong>{_html_escape(next_model)}</strong></div>
+            {last_model_html}
+            {fast_model_html}
+            {capable_model_html}
+            <div class="model-status-pill">Model murah aktif: <strong>{cheap_count}</strong></div>
+            <div class="model-status-pill">Model capable aktif: <strong>{expensive_count}</strong></div>
+            <div class="model-status-pill">Cek model: <strong>{_html_escape(checked_at)}</strong></div>
+        </div>
+    </div>
+    """
+
+
+def build_quick_help_html(is_admin: bool = False) -> str:
+    admin_hint = (
+        '<div class="quick-help-card"><strong>Admin</strong><span>Buka sidebar kiri untuk model, Telegram, Knowledge Base, biaya, dan benchmark.</span></div>'
+        if is_admin
+        else '<div class="quick-help-card"><strong>Admin</strong><span>Login lewat sidebar untuk mengatur model, upload KB, dan cek biaya.</span></div>'
+    )
+    return f"""
+    <div class="quick-help-panel">
+        <div class="quick-help-title">Mulai cepat</div>
+        <div class="quick-help-grid">
+            <div class="quick-help-card"><strong>Tanya biasa</strong><span>Ketik pertanyaan singkat; sistem otomatis memilih model cepat.</span></div>
+            <div class="quick-help-card"><strong>Tugas berat</strong><span>Untuk kode, analisis, skripsi, dan dokumen, router memilih model capable.</span></div>
+            <div class="quick-help-card"><strong>Knowledge Base</strong><span>Upload dokumen di admin agar jawaban bisa memakai sumber internal.</span></div>
+            {admin_hint}
+        </div>
+    </div>
     """
 
 
@@ -2022,6 +2053,113 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# =========================
+# Extra UX polish: easier navigation and admin panels
+# =========================
+st.markdown(
+    """
+    <style>
+    .easy-status-panel {
+        margin-top: 0;
+    }
+
+    .quick-help-panel {
+        margin: -4px 0 18px;
+        padding: 15px;
+        border: 1px solid var(--mac-border);
+        border-radius: 22px;
+        background: linear-gradient(145deg, var(--mac-panel), var(--mac-panel-soft));
+        box-shadow: var(--mac-shadow-soft);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
+    }
+
+    .quick-help-title {
+        margin-bottom: 10px;
+        color: var(--mac-text);
+        font-size: 0.94rem;
+        font-weight: 840;
+        letter-spacing: -0.012em;
+    }
+
+    .quick-help-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .quick-help-card {
+        min-height: 74px;
+        padding: 12px;
+        border: 1px solid var(--mac-border);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.34);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.38);
+    }
+
+    .quick-help-card strong {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--mac-text);
+        font-size: 0.86rem;
+        font-weight: 820;
+    }
+
+    .quick-help-card span {
+        display: block;
+        color: var(--mac-muted);
+        font-size: 0.79rem;
+        line-height: 1.35;
+        font-weight: 610;
+    }
+
+    .easy-admin-panel {
+        padding: 0.75rem 0.9rem 0.95rem;
+        border: 1px solid var(--mac-border);
+        border-radius: 20px;
+        background: linear-gradient(145deg, var(--mac-panel), var(--mac-panel-soft));
+        box-shadow: var(--mac-shadow-soft);
+        margin-bottom: 1rem;
+    }
+
+    .easy-admin-panel h4 {
+        margin: 0 0 0.15rem !important;
+        color: var(--mac-text) !important;
+    }
+
+    .easy-admin-panel p {
+        margin: 0 !important;
+        color: var(--mac-muted) !important;
+        font-size: 0.86rem;
+        line-height: 1.45;
+    }
+
+    div[data-testid="stSidebar"] div[data-testid="stMetric"] {
+        border: 1px solid var(--mac-border);
+        border-radius: 16px;
+        padding: 0.75rem;
+        background: var(--mac-panel-soft);
+    }
+
+    @media (max-width: 900px) {
+        .quick-help-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 560px) {
+        .quick-help-grid {
+            grid-template-columns: 1fr;
+        }
+        .quick-help-card {
+            min-height: auto;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 # =========================
 # Runtime config
@@ -2199,6 +2337,15 @@ def render_admin_status() -> None:
 def render_admin_settings() -> None:
     st.subheader("⚙️ Admin Settings")
     st.success(f"Login sebagai: {admin_username}")
+    st.markdown(
+        """
+        <div class="easy-admin-panel">
+            <h4>Pusat Kontrol</h4>
+            <p>Gunakan tab di bawah untuk mengatur model, Telegram, memory, secrets, dan fitur power. Untuk dokumen/KB, buka panel Power Features di halaman utama setelah login.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     render_admin_status()
 
@@ -2731,6 +2878,7 @@ st.markdown(
     </div>
     <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
     {build_public_model_status_html(public_route_preview, last_public_meta)}
+    {build_quick_help_html(bool(st.session_state.get("admin_authenticated", False)))}
     """,
     unsafe_allow_html=True,
 )
@@ -2787,8 +2935,8 @@ for idx, msg in enumerate(st.session_state.chat_messages):
 # Power Features Admin Panel
 # =========================
 if power_features_enabled and st.session_state.get("admin_authenticated", False):
-    with st.expander("⚡ Power Features: RAG, Memory, Benchmark, Biaya", expanded=False):
-        st.caption("Fitur ini memakai SQLite lokal agar memory, knowledge base, log biaya, dan benchmark tetap tersimpan selama file aplikasi tidak dihapus.")
+    with st.expander("⚡ Pusat Fitur Pintar: Knowledge Base, Memory, Biaya, Optimizer", expanded=True):
+        st.caption("Kelola fitur pintar dari satu tempat. Mulai dari Upload File untuk knowledge base, lalu pantau Usage dan Optimizer agar model tetap hemat dan stabil.")
         col_a, col_b, col_c = st.columns(3)
         with col_a:
             st.metric("RAG", "ON" if power_rag_enabled else "OFF")
@@ -2797,7 +2945,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
         with col_c:
             st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
 
-        tabs_power = st.tabs(["Knowledge Base", "Memory", "Usage", "Optimizer", "Benchmark"])
+        tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark"])
         with tabs_power[0]:
             kb_stats = power_store.knowledge_stats()
             c1, c2, c3 = st.columns(3)
@@ -2937,7 +3085,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                 st.dataframe(power_store.latest_benchmarks(limit=80), use_container_width=True, hide_index=True)
 
 # Spacer is rendered at the very end so it also protects newly generated messages.
-typed_input = st.chat_input("Ketik pesan Anda...")
+typed_input = st.chat_input("Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode...")
 user_input = st.session_state.pending_prompt or typed_input
 if st.session_state.pending_prompt:
     st.session_state.pending_prompt = ""
