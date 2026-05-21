@@ -27,6 +27,13 @@ from ai_core import (
 )
 from memory_store import MemoryStore, handle_local_memory_command
 from telegram_service import get_telegram_service
+from power_features import (
+    get_power_store,
+    handle_power_command,
+    generate_power_answer,
+    classify_intent_text,
+    run_model_benchmark,
+)
 
 
 st.set_page_config(
@@ -358,9 +365,21 @@ models_api_url = str(get_secret("SLASHAI_MODELS_API_URL", "") or "").strip()
 model_discovery_timeout = int(get_secret("MODEL_DISCOVERY_TIMEOUT_SECONDS", 12) or 12)
 model_discovery_interval = int(get_secret("MODEL_DISCOVERY_INTERVAL_SECONDS", 3600) or 3600)
 
+# Power features: persistent memory, RAG, logging, budget guard, self-check.
+power_features_enabled = parse_bool(get_secret("POWER_FEATURES_ENABLED", True), default=True)
+power_db_path = str(get_secret("POWER_DB_PATH", ".adioranye_power.db") or ".adioranye_power.db")
+power_rag_enabled = parse_bool(get_secret("POWER_RAG_ENABLED", True), default=True)
+power_persistent_memory_enabled = parse_bool(get_secret("POWER_PERSISTENT_MEMORY_ENABLED", True), default=True)
+power_prompt_templates_enabled = parse_bool(get_secret("POWER_PROMPT_TEMPLATES_ENABLED", True), default=True)
+power_self_verification_enabled = parse_bool(get_secret("POWER_SELF_VERIFICATION_ENABLED", False), default=False)
+daily_cost_limit_idr = float(get_secret("DAILY_COST_LIMIT_IDR", 0) or 0)
+max_expensive_calls_per_day = int(get_secret("MAX_EXPENSIVE_CALLS_PER_DAY", 0) or 0)
+benchmark_max_models = int(get_secret("BENCHMARK_MAX_MODELS", 8) or 8)
+
 init_state()
 memory = MemoryStore(memory_file)
 service = get_telegram_service()
+power_store = get_power_store(power_db_path)
 
 
 @st.cache_resource(show_spinner=False)
@@ -468,6 +487,15 @@ def build_memory_text(limit: int = 12) -> str:
         sections.append("MEMORY CACHE STREAMLIT AKTIF:\n" + cache_memory)
     if local_memory:
         sections.append("MEMORY TAMBAHAN ADMIN FILE LOKAL:\n" + local_memory)
+    if power_features_enabled and power_persistent_memory_enabled:
+        try:
+            # Persistent SQLite memory is query-aware in generate_power_answer; here we only
+            # add the most recent general records as a safe baseline.
+            recent_power_memory = power_store.search_memories("preferensi konteks proyek", user_id="global", limit=6)
+            if recent_power_memory:
+                sections.append("MEMORY SQLITE UMUM AKTIF:\n" + "\n".join(f"- {item['text']}" for item in recent_power_memory))
+        except Exception:
+            pass
     return "\n\n".join(sections)
 
 
@@ -2008,6 +2036,14 @@ def get_runtime_config() -> Dict[str, Any]:
         "use_streamlit_cache_memory": bool(st.session_state.active_use_streamlit_cache_memory),
         "thinking_model_router": bool(st.session_state.active_thinking_model_router),
         "fast_normal_model_router": bool(st.session_state.active_fast_normal_model_router),
+        "power_features_enabled": bool(power_features_enabled),
+        "power_db_path": power_db_path,
+        "power_rag_enabled": bool(power_rag_enabled),
+        "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
+        "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
+        "power_self_verification_enabled": bool(power_self_verification_enabled),
+        "daily_cost_limit_idr": float(daily_cost_limit_idr),
+        "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
     }
 
 
@@ -2053,6 +2089,14 @@ def start_telegram_if_needed() -> None:
                 "model_discovery_timeout": int(model_discovery_timeout or 12),
                 "model_health_workers": model_health_workers,
                 "model_health_retries": model_health_retries,
+            "power_features_enabled": bool(power_features_enabled),
+            "power_db_path": power_db_path,
+            "power_rag_enabled": bool(power_rag_enabled),
+            "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
+            "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
+            "power_self_verification_enabled": bool(power_self_verification_enabled),
+            "daily_cost_limit_idr": float(daily_cost_limit_idr),
+            "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
                 "active_cheap_models": route.get("active_cheap_models", []),
                 "thinking_capable_models": route.get("active_expensive_models", []),
                 "speed_update_code": telegram_speed_update_code,
@@ -2397,6 +2441,14 @@ def render_admin_settings() -> None:
             "model_discovery_timeout": int(model_discovery_timeout or 12),
                 "model_health_workers": model_health_workers,
                 "model_health_retries": model_health_retries,
+            "power_features_enabled": bool(power_features_enabled),
+            "power_db_path": power_db_path,
+            "power_rag_enabled": bool(power_rag_enabled),
+            "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
+            "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
+            "power_self_verification_enabled": bool(power_self_verification_enabled),
+            "daily_cost_limit_idr": float(daily_cost_limit_idr),
+            "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
             "active_cheap_models": route.get("active_cheap_models", []),
             "thinking_capable_models": route.get("active_expensive_models", []),
             "speed_update_code": telegram_speed_update_code,
@@ -2707,6 +2759,77 @@ for idx, msg in enumerate(st.session_state.chat_messages):
                 admin_detail=bool(st.session_state.admin_authenticated),
             )
 
+
+# =========================
+# Power Features Admin Panel
+# =========================
+if power_features_enabled and st.session_state.get("admin_authenticated", False):
+    with st.expander("⚡ Power Features: RAG, Memory, Benchmark, Biaya", expanded=False):
+        st.caption("Fitur ini memakai SQLite lokal agar memory, knowledge base, log biaya, dan benchmark tetap tersimpan selama file aplikasi tidak dihapus.")
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.metric("RAG", "ON" if power_rag_enabled else "OFF")
+        with col_b:
+            st.metric("SQLite Memory", "ON" if power_persistent_memory_enabled else "OFF")
+        with col_c:
+            st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
+
+        tabs_power = st.tabs(["Knowledge Base", "Memory", "Usage", "Benchmark"])
+        with tabs_power[0]:
+            uploaded_kb = st.file_uploader("Upload TXT/MD/CSV sederhana ke knowledge base", type=["txt", "md", "csv"], accept_multiple_files=True)
+            if uploaded_kb and st.button("➕ Masukkan file ke RAG", use_container_width=True):
+                added = []
+                for up in uploaded_kb:
+                    try:
+                        content = up.read().decode("utf-8", "ignore")
+                        doc_id, chunks = power_store.add_document(title=up.name, text=content, source="streamlit-upload")
+                        added.append(f"{up.name}: doc {doc_id}, {chunks} chunk")
+                    except Exception as exc:
+                        added.append(f"{up.name}: gagal - {exc}")
+                st.success("\n".join(added))
+            kb_query = st.text_input("Cari isi knowledge base", key="power_kb_query")
+            if kb_query:
+                for item in power_store.search_documents(kb_query, limit=5):
+                    st.markdown(f"**{item.get('title')}** · chunk {item.get('chunk_index')} · score {item.get('score')}")
+                    st.write(str(item.get("content") or "")[:800])
+            with st.expander("Dokumen terakhir"):
+                st.dataframe(power_store.list_documents(limit=20), use_container_width=True, hide_index=True)
+
+        with tabs_power[1]:
+            mem_text = st.text_area("Tambah memory permanen SQLite", height=100, placeholder="Contoh: User ingin jawaban profesional, praktis, dan kode siap tempel.")
+            if st.button("💾 Simpan memory permanen", use_container_width=True) and mem_text.strip():
+                mem_id = power_store.add_memory(mem_text, user_id="global", tags="streamlit-admin")
+                st.success(f"Memory tersimpan. ID: {mem_id}")
+            mem_query = st.text_input("Cari memory", key="power_mem_query")
+            if mem_query:
+                st.dataframe(power_store.search_memories(mem_query, user_id="global", limit=20), use_container_width=True, hide_index=True)
+
+        with tabs_power[2]:
+            usage = power_store.usage_summary(days=1)
+            st.metric("Estimasi biaya 24 jam", f"Rp{usage.get('cost_idr', 0):.2f}")
+            st.metric("Request 24 jam", usage.get("requests", 0))
+            st.dataframe(usage.get("by_model", []), use_container_width=True, hide_index=True)
+            st.caption(f"Limit harian: Rp{daily_cost_limit_idr:.0f} | Max expensive calls/hari: {max_expensive_calls_per_day}")
+
+        with tabs_power[3]:
+            route_preview = build_model_routing_plan()
+            bench_models = unique_models([route_preview.get("primary_model", "")] + route_preview.get("active_cheap_models", [])[:4] + route_preview.get("active_expensive_models", [])[:4])
+            st.write("Model yang akan dites:")
+            st.code("\n".join(bench_models[:benchmark_max_models]) or "Belum ada model aktif")
+            if st.button("🧪 Jalankan benchmark ringan", use_container_width=True, disabled=not bool(api_key and bench_models)):
+                results = run_model_benchmark(
+                    store=power_store,
+                    api_url=api_url,
+                    api_key=api_key,
+                    models=bench_models,
+                    system_prompt=st.session_state.active_persona,
+                    timeout=45,
+                    max_models=benchmark_max_models,
+                )
+                st.dataframe(results, use_container_width=True, hide_index=True)
+            with st.expander("Riwayat benchmark"):
+                st.dataframe(power_store.latest_benchmarks(limit=80), use_container_width=True, hide_index=True)
+
 # Spacer is rendered at the very end so it also protects newly generated messages.
 typed_input = st.chat_input("Ketik pesan Anda...")
 user_input = st.session_state.pending_prompt or typed_input
@@ -2724,6 +2847,8 @@ if user_input:
     local_reply = ""
     if st.session_state.admin_authenticated:
         local_reply = handle_local_memory_command(user_input, memory)
+        if not local_reply and power_features_enabled:
+            local_reply = handle_power_command(user_input, power_store, user_id="web-admin", is_admin=True)
 
     if local_reply:
         answer = local_reply
@@ -2735,13 +2860,13 @@ if user_input:
                 placeholder = st.empty()
                 placeholder.markdown("⏳ Siap! adioranye sedang menyiapkan jawaban untukmu...")
                 route = build_model_routing_plan(advance_rotation=True, user_text=user_input)
-                answer, meta = generate_answer(
+                answer, meta = generate_power_answer(
                     api_url=api_url,
                     api_key=api_key,
                     model=route["primary_model"],
                     system_prompt=cfg["persona"],
                     user_text=user_input,
-                    memory_text=build_memory_text(limit=12),
+                    base_memory_text=build_memory_text(limit=12),
                     recent_messages=st.session_state.chat_messages[:-1][-6:],
                     fallback_models=route["cheap_fallback_models"],
                     expensive_fallback_models=route["expensive_fallback_models"],
@@ -2753,6 +2878,15 @@ if user_input:
                     smart_model_router=bool(cfg["smart_model_router"]),
                     return_to_primary=route["return_to_primary"],
                     max_smart_models=route["max_smart_models"],
+                    store=power_store,
+                    user_id="web-admin" if st.session_state.get("admin_authenticated", False) else "web-public",
+                    channel="web",
+                    enable_rag=bool(power_features_enabled and power_rag_enabled),
+                    enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
+                    enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
+                    enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
+                    daily_cost_limit_idr=float(daily_cost_limit_idr),
+                    max_expensive_calls_per_day=int(max_expensive_calls_per_day),
                 )
                 restore_active_model_to_cheap(route.get("primary_model"))
                 placeholder.markdown(answer)
@@ -2760,6 +2894,10 @@ if user_input:
                 final_model = (meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or cfg["model"]
                 answer_pdf_download_button(answer, key="download_pdf_latest_answer", model_name=final_model)
                 caption_text = f"Model aktif: {final_model}"
+                if (meta or {}).get("power_intent"):
+                    caption_text += f" • intent: {(meta or {}).get('power_intent')}"
+                if (meta or {}).get("self_verified_by"):
+                    caption_text += f" • self-check: {(meta or {}).get('self_verified_by')}"
                 if st.session_state.admin_authenticated:
                     consulted = (meta or {}).get("consulted_models") or []
                     expensive_used = (meta or {}).get("expensive_fallback_used", False)

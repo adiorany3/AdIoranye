@@ -24,6 +24,7 @@ from ai_core import (
     model_price,
 )
 from memory_store import MemoryStore, handle_local_memory_command
+from power_features import get_power_store, handle_power_command, generate_power_answer
 
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
@@ -1332,6 +1333,14 @@ class TelegramBotService:
         fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
         speed_update_code = str(config.get("speed_update_code") or "4321").strip()
         model_health_timeout = int(config.get("model_health_timeout", 12) or 12)
+        power_features_enabled = bool(config.get("power_features_enabled", True))
+        power_db_path = str(config.get("power_db_path") or ".adioranye_power.db")
+        power_rag_enabled = bool(config.get("power_rag_enabled", True))
+        power_persistent_memory_enabled = bool(config.get("power_persistent_memory_enabled", True))
+        power_prompt_templates_enabled = bool(config.get("power_prompt_templates_enabled", True))
+        power_self_verification_enabled = bool(config.get("power_self_verification_enabled", False))
+        daily_cost_limit_idr = float(config.get("daily_cost_limit_idr", 0) or 0)
+        max_expensive_calls_per_day = int(config.get("max_expensive_calls_per_day", 0) or 0)
         fast_cheap_models_runtime = _as_string_list(config.get("fast_cheap_models"))
         thinking_capable_models_runtime = _as_string_list(config.get("thinking_capable_models"))
         forced_model_mode = str(config.get("telegram_model_mode") or "auto").strip().lower()
@@ -1373,6 +1382,7 @@ class TelegramBotService:
             return
 
         memory = MemoryStore(memory_file)
+        power_store = get_power_store(power_db_path)
         offset = None
 
         def persist_current_runtime_state(source: str) -> None:
@@ -1500,7 +1510,11 @@ class TelegramBotService:
                                 "/speed 4321 - admin: update model aktif dan pilih yang tercepat\n"
                                 "/rotate - admin: cek ulang kondisi model dan ganti ke model aktif terbaik saat ini\n"
                                 "/ubah mahal - admin: pakai model medium/mahal aktif\n"
-                                "/ubah murah - admin: kembali pakai model murah/cepat aktif\n\n"
+                                "/ubah murah - admin: kembali pakai model murah/cepat aktif\n"
+                                "/ingat <teks> - admin: simpan memory permanen SQLite\n"
+                                "/rag tambah <judul>\n<isi> - admin: tambah knowledge base\n"
+                                "/rag cari <query> - admin: cari knowledge base\n"
+                                "/biaya - admin: ringkasan biaya 24 jam\n\n"
                                 "Langsung kirim pertanyaan untuk dijawab AI.",
                                 parse_mode=telegram_parse_mode,
                             )
@@ -1674,6 +1688,13 @@ class TelegramBotService:
                             continue
 
                         local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
+                        if not local_reply and power_features_enabled:
+                            local_reply = handle_power_command(
+                                text,
+                                power_store,
+                                user_id=str(chat_id),
+                                is_admin=self._is_admin_chat(chat_id, config),
+                            )
                         if local_reply:
                             self._send_message(token, chat_id, local_reply, parse_mode=telegram_parse_mode)
                             continue
@@ -1767,13 +1788,13 @@ class TelegramBotService:
                                     request_fallback_models = [item for item in fast_pool if item != request_model]
                                     fast_normal_mode = True
 
-                            answer, meta = generate_answer(
+                            answer, meta = generate_power_answer(
                                 api_url=api_url,
                                 api_key=api_key,
                                 model=request_model,
                                 system_prompt=persona,
                                 user_text=text,
-                                memory_text=memory_text,
+                                base_memory_text=memory_text,
                                 recent_messages=history,
                                 fallback_models=request_fallback_models,
                                 expensive_fallback_models=request_expensive_fallback_models,
@@ -1785,6 +1806,15 @@ class TelegramBotService:
                                 smart_model_router=smart_model_router,
                                 return_to_primary=request_return_to_primary,
                                 max_smart_models=max_smart_models,
+                                store=power_store,
+                                user_id=str(chat_id),
+                                channel="telegram",
+                                enable_rag=bool(power_features_enabled and power_rag_enabled),
+                                enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
+                                enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
+                                enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
+                                daily_cost_limit_idr=float(daily_cost_limit_idr),
+                                max_expensive_calls_per_day=int(max_expensive_calls_per_day),
                             )
 
                             if isinstance(meta, dict):
@@ -1836,13 +1866,13 @@ class TelegramBotService:
                                     retry_previous_model = model
                                     apply_rotation_result(retry_result, retry_rotation, "auto_retry")
 
-                                    retry_answer, retry_meta = generate_answer(
+                                    retry_answer, retry_meta = generate_power_answer(
                                         api_url=api_url,
                                         api_key=api_key,
                                         model=model,
                                         system_prompt=persona,
                                         user_text=text,
-                                        memory_text=memory_text,
+                                        base_memory_text=memory_text,
                                         recent_messages=history,
                                         fallback_models=fallback_models,
                                         expensive_fallback_models=expensive_fallback_models,
@@ -1854,6 +1884,15 @@ class TelegramBotService:
                                         smart_model_router=smart_model_router,
                                         return_to_primary=False,
                                         max_smart_models=max_smart_models,
+                                        store=power_store,
+                                        user_id=str(chat_id),
+                                        channel="telegram",
+                                        enable_rag=bool(power_features_enabled and power_rag_enabled),
+                                        enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
+                                        enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
+                                        enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
+                                        daily_cost_limit_idr=float(daily_cost_limit_idr),
+                                        max_expensive_calls_per_day=int(max_expensive_calls_per_day),
                                     )
 
                                     if isinstance(retry_meta, dict):
