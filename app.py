@@ -331,6 +331,11 @@ return_to_primary_default = parse_bool(get_secret("RETURN_TO_PRIMARY_MODEL", Tru
 max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 model_health_check_interval = int(get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 90000) or 90000)
 model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
+# Health check model hanya boleh berjalan pada jendela tengah malam WIB.
+# Default: 00:00-00:59 WIB. Di luar jam ini sistem memakai cache/daftar fallback terakhir.
+model_health_midnight_only = parse_bool(get_secret("MODEL_HEALTH_MIDNIGHT_ONLY", True), default=True)
+model_health_hour_wib = int(get_secret("MODEL_HEALTH_HOUR_WIB", 0) or 0)
+model_health_window_minutes = int(get_secret("MODEL_HEALTH_WINDOW_MINUTES", 60) or 60)
 rotate_cheap_primary_default = parse_bool(get_secret("ROTATE_CHEAP_PRIMARY", True), default=True)
 use_streamlit_cache_memory_default = parse_bool(get_secret("USE_STREAMLIT_CACHE_MEMORY", True), default=True)
 streamlit_cache_memory_limit = int(get_secret("STREAMLIT_CACHE_MEMORY_LIMIT", 200) or 200)
@@ -483,6 +488,25 @@ def _wib_now_text() -> str:
     return datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
 
 
+def _health_window_label_wib() -> str:
+    """Label jendela health check model dalam WIB."""
+    hour = max(0, min(23, int(model_health_hour_wib or 0)))
+    window = max(1, min(60, int(model_health_window_minutes or 60)))
+    end_minute = window - 1
+    return f"{hour:02d}:00-{hour:02d}:{end_minute:02d} WIB"
+
+
+def is_model_health_check_allowed_now() -> bool:
+    """Batasi test health check model agar hanya berjalan pada tengah malam WIB."""
+    if not bool(model_health_midnight_only):
+        return True
+
+    now_wib = datetime.now(WIB_TZ)
+    hour = max(0, min(23, int(model_health_hour_wib or 0)))
+    window = max(1, min(60, int(model_health_window_minutes or 60)))
+    return now_wib.hour == hour and now_wib.minute < window
+
+
 def _timestamp_to_wib_text(timestamp_value: Any) -> str:
     try:
         return datetime.fromtimestamp(float(timestamp_value), WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
@@ -610,7 +634,12 @@ def check_single_model_health(model: str, timeout: int = 12) -> Dict[str, Any]:
 
 
 def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, Any]]:
-    """Cek model berkala. Streamlit tidak punya cron murni, jadi dicek saat app aktif/rerun/chat."""
+    """Cek model hanya pada jendela tengah malam WIB.
+
+    Streamlit tidak punya cron murni, jadi pengecekan tetap dipicu saat app aktif/rerun/chat,
+    tetapi request ping ke model hanya dijalankan jika waktu WIB sedang berada pada jendela
+    MODEL_HEALTH_HOUR_WIB + MODEL_HEALTH_WINDOW_MINUTES.
+    """
     if not api_key:
         st.session_state.last_model_health_error = "SLASHAI_API_KEY belum diisi."
         return st.session_state.model_health_cache
@@ -619,6 +648,13 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
     last_checked = float(st.session_state.get("model_health_checked_at") or 0)
     cache = st.session_state.get("model_health_cache") or {}
     interval = max(60, int(model_health_check_interval or 900))
+
+    if not is_model_health_check_allowed_now():
+        st.session_state.last_model_health_error = (
+            f"Health check model hanya dijalankan pukul {_health_window_label_wib()}. "
+            f"Di luar jam itu sistem memakai cache/daftar model aktif terakhir."
+        )
+        return cache
 
     if not force and cache and now - last_checked < interval:
         return cache
@@ -1645,6 +1681,9 @@ def start_telegram_if_needed() -> None:
                 "thinking_capable_models": route.get("active_expensive_models", []),
                 "speed_update_code": telegram_speed_update_code,
                 "model_health_timeout": int(model_health_timeout or 12),
+                "model_health_midnight_only": bool(model_health_midnight_only),
+                "model_health_hour_wib": int(model_health_hour_wib or 0),
+                "model_health_window_minutes": int(model_health_window_minutes or 60),
             }
         )
         restore_active_model_to_cheap(route.get("primary_model"))
@@ -1847,12 +1886,19 @@ def render_admin_settings() -> None:
                 st.warning("Tidak ada model hemat aktif. Request berikutnya langsung memakai model menengah/mahal aktif, lalu sistem akan kembali ke model hemat saat sudah aktif lagi.")
 
         st.markdown("#### Cek Berkala Model")
-        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Urutan default: thinking → model capable aktif; non-thinking → model hemat aktif tercepat → backup hemat aktif lain → model menengah/mahal jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif.")
+        health_window_open = is_model_health_check_allowed_now()
+        st.caption(
+            f"Health check model hanya berjalan pukul {_health_window_label_wib()}. "
+            "Di luar jam itu sistem tidak melakukan ping/test model dan tetap memakai cache/daftar model aktif terakhir. "
+            "Urutan default: thinking → model capable aktif; non-thinking → model hemat aktif tercepat → backup hemat aktif lain → model menengah/mahal jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif."
+        )
         col_health_check, col_health_info = st.columns([1, 2])
         with col_health_check:
-            if st.button("🔁 Cek model sekarang", use_container_width=True):
+            if st.button("🔁 Cek model sekarang", use_container_width=True, disabled=not health_window_open):
                 refresh_model_health_if_needed(force=True)
                 st.success("Cek model selesai.")
+            if not health_window_open:
+                st.caption(f"Tombol aktif hanya pukul {_health_window_label_wib()}.")
         with col_health_info:
             cheap_active, expensive_active = get_prioritized_fallback_models()
             st.info(f"Backup hemat aktif: {len(cheap_active)} | Backup menengah/mahal aktif: {len(expensive_active)}")
@@ -1922,7 +1968,7 @@ def render_admin_settings() -> None:
         st.warning("Mode aman aktif: TELEGRAM_AUTO_START disarankan FALSE. Jalankan bot hanya dari tombol admin agar Streamlit Online tidak membuat beberapa poller saat app rerun/restart.")
         st.info("Lock OS aktif untuk mencegah lebih dari satu worker dalam container yang sama. Jika tetap double/triple, berarti token bot masih hidup di deployment lama/lokal/VPS lain.")
         st.caption("Telegram dikirim sebagai plain text secara default agar kode/XML seperti <uses-permission> tidak dianggap tag HTML.")
-        st.caption(f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model dan memakai hanya model yang hidup.")
+        st.caption(f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model hanya pada pukul {_health_window_label_wib()} dan memakai hanya model yang hidup.")
 
         status = service.status()
         st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
@@ -1974,6 +2020,9 @@ def render_admin_settings() -> None:
             "thinking_capable_models": route.get("active_expensive_models", []),
             "speed_update_code": telegram_speed_update_code,
             "model_health_timeout": int(model_health_timeout or 12),
+            "model_health_midnight_only": bool(model_health_midnight_only),
+            "model_health_hour_wib": int(model_health_hour_wib or 0),
+            "model_health_window_minutes": int(model_health_window_minutes or 60),
         }
 
         col_start, col_stop = st.columns(2)
@@ -2170,8 +2219,11 @@ THINKING_MIN_CHARS = 180
 # Setelah request selesai, aplikasi kembali memilih model murah aktif sebagai default.
 ALLOW_EXPENSIVE_FALLBACK = true
 MAX_EXPENSIVE_MODELS = 1
-MODEL_HEALTH_CHECK_INTERVAL_SECONDS = 900
-MODEL_HEALTH_TIMEOUT_SECONDS = 12''',
+MODEL_HEALTH_CHECK_INTERVAL_SECONDS = 90000
+MODEL_HEALTH_TIMEOUT_SECONDS = 12
+MODEL_HEALTH_MIDNIGHT_ONLY = true
+MODEL_HEALTH_HOUR_WIB = 0
+MODEL_HEALTH_WINDOW_MINUTES = 60''',
             language="toml",
         )
         st.markdown(
