@@ -235,7 +235,12 @@ def build_telegram_model_note(
         if requested and requested != answering_model:
             info_lines.append(f"🚦 Model awal: {requested}")
 
-        if meta.get("telegram_thinking_mode"):
+        forced_mode = str(meta.get("telegram_forced_model_mode") or "").lower()
+        if forced_mode == "expensive":
+            info_lines.append("💎 Mode: paksa medium/mahal (/ubah mahal)")
+        elif forced_mode == "cheap":
+            info_lines.append("💸 Mode: paksa murah/cepat (/ubah murah)")
+        elif meta.get("telegram_thinking_mode"):
             info_lines.append("🧠 Mode: thinking/capable")
         elif meta.get("telegram_fast_normal_mode"):
             info_lines.append("⚡ Mode: normal cepat/model tercepat aktif")
@@ -243,7 +248,7 @@ def build_telegram_model_note(
             info_lines.append("🧭 Mode: normal/model murah aktif")
 
         if meta.get("telegram_speed_updated_at"):
-            info_lines.append(f"🧪 Update model terakhir: {meta.get("telegram_speed_updated_at")}")
+            info_lines.append(f"🧪 Update model terakhir: {meta.get('telegram_speed_updated_at')}")
 
         consulted = meta.get("consulted_models") or []
         if consulted:
@@ -321,6 +326,77 @@ def is_speed_update_command(text: str, expected_code: str = "4321") -> bool:
     if "@" in command:
         command = command.split("@", 1)[0]
     return command == "/speed" and code == str(expected_code or "4321")
+
+
+def parse_model_switch_command(text: str) -> str:
+    """Parse protected Telegram model switch command.
+
+    Returns:
+    - "expensive" for /ubah mahal
+    - "cheap" for /ubah murah
+    - "" for non-switch commands
+
+    Supports bot mentions such as /ubah@NamaBot mahal.
+    """
+    raw = str(text or "").strip()
+    parts = raw.split()
+    if len(parts) != 2:
+        return ""
+
+    command = parts[0].lower()
+    if "@" in command:
+        command = command.split("@", 1)[0]
+
+    if command != "/ubah":
+        return ""
+
+    target = parts[1].strip().lower()
+    if target in {"mahal", "medium", "menengah", "capable"}:
+        return "expensive"
+    if target in {"murah", "cheap", "cepat", "normal"}:
+        return "cheap"
+    return ""
+
+
+def build_model_switch_summary(mode: str, model: str, cheap_models: List[str], capable_models: List[str]) -> str:
+    """Build Telegram confirmation text after /ubah command."""
+    if mode == "expensive":
+        selected = pick_telegram_capable_model(
+            primary_model=model,
+            expensive_fallback_models=capable_models,
+            config={"thinking_capable_models": capable_models},
+        )
+        lines = [
+            "✅ Mode model diubah ke: MEDIUM/MAHAL.",
+            "",
+            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model capable terlebih dahulu.",
+            f"Model utama mode mahal: {selected or model}",
+        ]
+        if capable_models:
+            lines.append("Cadangan medium/mahal: " + ", ".join(str(item) for item in capable_models[:6]))
+        else:
+            lines.append("Catatan: daftar model medium/mahal belum tersedia. Jalankan /speed 4321 jika ingin cek model aktif terlebih dahulu.")
+        return "\n".join(lines)
+
+    if mode == "cheap":
+        selected = pick_fastest_telegram_normal_model(
+            primary_model=model,
+            fallback_models=cheap_models,
+            config={"fast_cheap_models": cheap_models, "active_cheap_models": cheap_models},
+        )
+        lines = [
+            "✅ Mode model diubah ke: MURAH/CEPAT.",
+            "",
+            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model murah/cepat terlebih dahulu.",
+            f"Model utama mode murah: {selected or model}",
+        ]
+        if cheap_models:
+            lines.append("Cadangan murah: " + ", ".join(str(item) for item in cheap_models[:8]))
+        else:
+            lines.append("Catatan: daftar model murah belum tersedia. Jalankan /speed 4321 jika ingin cek model aktif terlebih dahulu.")
+        return "\n".join(lines)
+
+    return "Format perintah: /ubah mahal atau /ubah murah"
 
 
 def check_telegram_single_model_health(api_url: str, api_key: str, model: str, timeout: int = 12) -> Dict[str, Any]:
@@ -493,6 +569,7 @@ class TelegramBotService:
         self._model_health_cache: Dict[str, Dict[str, Any]] = {}
         self._model_health_checked_at = ""
         self._runtime_primary_model = ""
+        self._forced_model_mode = "auto"
 
     def status(self) -> Dict[str, Any]:
         alive = self._thread is not None and self._thread.is_alive() and self._running
@@ -505,6 +582,7 @@ class TelegramBotService:
             "started_at": self._started_at,
             "worker_id": self._worker_id if alive else "",
             "runtime_primary_model": self._runtime_primary_model,
+            "telegram_forced_model_mode": self._forced_model_mode,
             "model_health_checked_at": self._model_health_checked_at,
             "model_health_active_count": sum(1 for item in self._model_health_cache.values() if item.get("active")),
         }
@@ -685,7 +763,11 @@ class TelegramBotService:
         model_health_timeout = int(config.get("model_health_timeout", 12) or 12)
         fast_cheap_models_runtime = _as_string_list(config.get("fast_cheap_models"))
         thinking_capable_models_runtime = _as_string_list(config.get("thinking_capable_models"))
+        forced_model_mode = str(config.get("telegram_model_mode") or "auto").strip().lower()
+        if forced_model_mode not in {"auto", "cheap", "expensive"}:
+            forced_model_mode = "auto"
         self._runtime_primary_model = model
+        self._forced_model_mode = forced_model_mode
 
         if not token:
             self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
@@ -754,7 +836,9 @@ class TelegramBotService:
                                 "Perintah:\n"
                                 "/start - mulai bot\n"
                                 "/help - bantuan\n"
-                                "/speed 4321 - update model aktif dan pilih yang tercepat\n\n"
+                                "/speed 4321 - update model aktif dan pilih yang tercepat\n"
+                                "/ubah mahal - pakai model medium/mahal\n"
+                                "/ubah murah - kembali pakai model murah/cepat\n\n"
                                 "Langsung kirim pertanyaan untuk dijawab AI.",
                                 parse_mode=telegram_parse_mode,
                             )
@@ -814,6 +898,42 @@ class TelegramBotService:
                             )
                             continue
 
+                        switch_mode = parse_model_switch_command(text)
+                        if switch_mode:
+                            forced_model_mode = switch_mode
+                            config["telegram_model_mode"] = switch_mode
+                            self._forced_model_mode = switch_mode
+
+                            if switch_mode == "expensive":
+                                allow_expensive_fallback = True
+                                thinking_model_router = False
+                                fast_normal_model_router = False
+                                # Keep the current cheap primary model intact, but subsequent answers
+                                # will request the capable model path first.
+                            elif switch_mode == "cheap":
+                                allow_expensive_fallback = False
+                                thinking_model_router = False
+                                fast_normal_model_router = True
+
+                            cheap_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or _as_string_list(config.get("fallback_models"))
+                            capable_pool = thinking_capable_models_runtime or _as_string_list(config.get("thinking_capable_models")) or _as_string_list(config.get("expensive_fallback_models"))
+                            self._send_message(
+                                token,
+                                chat_id,
+                                build_model_switch_summary(switch_mode, model, cheap_pool, capable_pool),
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if text_lower.startswith("/ubah"):
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "Format perintah salah. Gunakan: /ubah mahal atau /ubah murah",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
                         local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
                         if local_reply:
                             self._send_message(token, chat_id, local_reply, parse_mode=telegram_parse_mode)
@@ -829,10 +949,15 @@ class TelegramBotService:
                             self._send_typing(token, chat_id)
 
                         try:
-                            thinking_mode = bool(thinking_model_router) and is_thinking_telegram_question(
-                                text,
-                                history=history,
-                                min_chars=thinking_min_chars,
+                            manual_mode = str(forced_model_mode or "auto").lower()
+                            thinking_mode = (
+                                manual_mode == "auto"
+                                and bool(thinking_model_router)
+                                and is_thinking_telegram_question(
+                                    text,
+                                    history=history,
+                                    min_chars=thinking_min_chars,
+                                )
                             )
                             request_model = model
                             request_fallback_models = list(fallback_models or [])
@@ -842,7 +967,38 @@ class TelegramBotService:
 
                             fast_normal_mode = False
 
-                            if thinking_mode:
+                            if manual_mode == "expensive":
+                                capable_pool = thinking_capable_models_runtime or request_expensive_fallback_models
+                                capable_model = pick_telegram_capable_model(
+                                    primary_model=model,
+                                    expensive_fallback_models=capable_pool,
+                                    config=config,
+                                )
+                                if capable_model:
+                                    request_model = capable_model
+                                    request_fallback_models = []
+                                    request_expensive_fallback_models = [
+                                        item for item in capable_pool if item != request_model
+                                    ]
+                                request_allow_expensive = True
+                                request_return_to_primary = False
+                            elif manual_mode == "cheap":
+                                fast_model = pick_fastest_telegram_normal_model(
+                                    primary_model=model,
+                                    fallback_models=request_fallback_models,
+                                    config=config,
+                                )
+                                if fast_model:
+                                    fast_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or request_fallback_models
+                                    if fast_model not in fast_pool:
+                                        fast_pool = [fast_model] + fast_pool
+                                    request_model = fast_model
+                                    request_fallback_models = [item for item in fast_pool if item != request_model]
+                                    fast_normal_mode = True
+                                request_expensive_fallback_models = []
+                                request_allow_expensive = False
+                                request_return_to_primary = False
+                            elif thinking_mode:
                                 capable_model = pick_telegram_capable_model(
                                     primary_model=model,
                                     expensive_fallback_models=thinking_capable_models_runtime or request_expensive_fallback_models,
@@ -895,6 +1051,7 @@ class TelegramBotService:
                             if isinstance(meta, dict):
                                 meta["telegram_thinking_mode"] = thinking_mode
                                 meta["telegram_fast_normal_mode"] = fast_normal_mode
+                                meta["telegram_forced_model_mode"] = manual_mode
                                 meta["telegram_model_requested"] = request_model
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
