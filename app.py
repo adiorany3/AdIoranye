@@ -417,7 +417,7 @@ auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", False), default=False)
 drop_pending_updates = parse_bool(get_secret("TELEGRAM_DROP_PENDING_UPDATES", True), default=True)
 send_processing_message = parse_bool(get_secret("TELEGRAM_SEND_PROCESSING_MESSAGE", False), default=False)
 telegram_parse_mode = str(get_secret("TELEGRAM_PARSE_MODE", "") or "")
-telegram_lock_file = str(get_secret("TELEGRAM_LOCK_FILE", ".telegram_bot_worker.lock"))
+telegram_lock_file = str(get_secret("TELEGRAM_LOCK_FILE", "/tmp/adioranye_telegram_bot_worker.lock"))
 telegram_show_model_info = parse_bool(get_secret("TELEGRAM_SHOW_MODEL_INFO", True), default=True)
 telegram_speed_update_code = str(get_secret("TELEGRAM_SPEED_UPDATE_CODE", "4321") or "4321").strip()
 telegram_admin_chat_ids = str(get_secret("TELEGRAM_ADMIN_CHAT_IDS", "") or "").strip()
@@ -1370,6 +1370,10 @@ def render_answer_model_caption(meta: Dict[str, Any] | None, fallback: str = "",
     data = meta or {}
     caption_text = f"Model aktif: {model_name}"
 
+    kb_sources = data.get("power_kb_sources") or data.get("power_rag_sources") or []
+    if kb_sources:
+        caption_text += f" • KB: {len(kb_sources)} sumber"
+
     # Detail jalur routing hanya untuk admin agar tampilan publik tetap bersih.
     if admin_detail:
         consulted = data.get("consulted_models") or []
@@ -1377,6 +1381,14 @@ def render_answer_model_caption(meta: Dict[str, Any] | None, fallback: str = "",
             caption_text += " • konsultasi: " + ", ".join(str(item) for item in consulted[:4])
         if data.get("expensive_fallback_used"):
             caption_text += " • model menengah/mahal dipakai"
+        if kb_sources:
+            source_titles = []
+            for item in kb_sources[:3]:
+                label = str(item.get("citation") or item.get("title") or "").strip()
+                if label:
+                    source_titles.append(label[:80])
+            if source_titles:
+                caption_text += " • sumber: " + "; ".join(source_titles)
 
     st.caption(caption_text)
 
@@ -3094,8 +3106,13 @@ def render_admin_settings() -> None:
                         st.info("Bot sudah berjalan.")
                     else:
                         st.error("Bot Telegram gagal dijalankan.")
-                        if latest_status.get("last_error"):
-                            st.code(str(latest_status.get("last_error"))[:2000])
+                        detail_error = str(latest_status.get("last_error") or "Tidak ada detail error dari worker.")
+                        st.code(detail_error[:3000])
+                        st.info(
+                            "Langkah cepat: klik Tes koneksi Telegram. Jika token OK tetapi start gagal, "
+                            "klik Reset koneksi Telegram lalu Force reset lokal. Jika muncul 409 Conflict, "
+                            "token masih dipakai instance lain; revoke token di BotFather dan masukkan token baru."
+                        )
         with col_stop:
             if st.button("⏹️ Stop Bot", use_container_width=True, key="auto_btn_2954"):
                 service.stop()
@@ -3104,6 +3121,9 @@ def render_admin_settings() -> None:
         if st.button("🧯 Reset koneksi Telegram / hapus pending update", use_container_width=True, key="auto_btn_2958"):
             result = service.reset_telegram_session(bot_config)
             st.warning(result)
+
+        if st.button("🛠️ Force reset lokal worker Telegram", use_container_width=True, key="telegram_force_local_reset_btn"):
+            st.warning(service.force_local_reset())
 
         st.caption("Penting: tombol Stop hanya mematikan worker pada app ini. Jika ada deploy lama/laptop/VPS lain dengan token yang sama, revoke token dari BotFather lalu masukkan token baru di Secrets.")
 
@@ -3413,13 +3433,15 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
             tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark"])
             with tabs_power[0]:
                 kb_stats = power_store.knowledge_stats()
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Dokumen KB", kb_stats.get("documents", 0))
+                c1, c2, c3, c4, c5 = st.columns(5)
+                c1.metric("Dokumen", kb_stats.get("documents", 0))
                 c2.metric("Chunks", kb_stats.get("chunks", 0))
-                c3.metric("Karakter", kb_stats.get("characters", 0))
+                c3.metric("Koleksi", kb_stats.get("collections", 0))
+                c4.metric("Pinned", kb_stats.get("pinned", 0))
+                c5.metric("Karakter", kb_stats.get("characters", 0))
 
-                st.caption("Knowledge base dipakai otomatis sebagai konteks non-instruksi saat pertanyaan relevan dengan dokumen/file/sumber.")
-                kb_upload_tabs = st.tabs(["Upload File", "Tambah Manual", "Cari", "Kelola"] )
+                st.caption("Knowledge base premium: koleksi/workspace, tags, deduplikasi dokumen, hybrid search, sitasi sumber, dan pin dokumen penting.")
+                kb_upload_tabs = st.tabs(["Upload File", "Tambah Manual", "Cari", "Koleksi", "Kelola"] )
 
                 with kb_upload_tabs[0]:
                     uploaded_kb = st.file_uploader(
@@ -3429,6 +3451,13 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                         help="PDF/DOCX/XLSX membutuhkan library terkait. Jika tidak tersedia, sistem akan memberi pesan gagal ekstrak tanpa membuat app crash.",
                     )
                     source_label = st.text_input("Label sumber", value="streamlit-upload", key="kb_source_label")
+                    upload_collection = st.text_input("Koleksi/workspace", value="Default", key="kb_upload_collection")
+                    upload_tags = st.text_input("Tags", value="", placeholder="contoh: sop, produk, skripsi", key="kb_upload_tags")
+                    col_up1, col_up2 = st.columns(2)
+                    with col_up1:
+                        upload_replace = st.checkbox("Replace jika dokumen sama", value=False, key="kb_upload_replace")
+                    with col_up2:
+                        upload_pinned = st.checkbox("Pin/prioritaskan dokumen", value=False, key="kb_upload_pinned")
                     if uploaded_kb and st.button("➕ Masukkan file ke Knowledge Base", use_container_width=True, key="auto_btn_3286"):
                         added = []
                         max_bytes = max(1, int(power_kb_max_file_mb or 12)) * 1024 * 1024
@@ -3442,8 +3471,20 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                                 if not str(content or "").strip():
                                     added.append(f"{up.name}: gagal, tidak ada teks yang bisa diambil")
                                     continue
-                                doc_id, chunks = power_store.add_document(title=up.name, text=content, source=f"{source_label}:{kind}")
-                                added.append(f"{up.name}: doc {doc_id}, {chunks} chunk, tipe {kind}")
+                                doc_id, chunks = power_store.add_document(
+                                    title=up.name,
+                                    text=content,
+                                    source=f"{source_label}:{kind}",
+                                    collection=upload_collection,
+                                    tags=upload_tags,
+                                    metadata={"filename": up.name, "kind": kind, "size_bytes": len(raw_bytes)},
+                                    replace_existing=bool(upload_replace),
+                                    pinned=bool(upload_pinned),
+                                )
+                                if chunks == 0:
+                                    added.append(f"{up.name}: sudah ada sebagai doc {doc_id} (tidak diduplikasi)")
+                                else:
+                                    added.append(f"{up.name}: doc {doc_id}, {chunks} chunk, tipe {kind}")
                             except Exception as exc:
                                 added.append(f"{up.name}: gagal - {exc}")
                         st.success("\n".join(added))
@@ -3451,12 +3492,18 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                 with kb_upload_tabs[1]:
                     manual_title = st.text_input("Judul dokumen manual", key="kb_manual_title")
                     manual_source = st.text_input("Sumber manual", value="streamlit-manual", key="kb_manual_source")
+                    manual_collection = st.text_input("Koleksi/workspace", value="Default", key="kb_manual_collection")
+                    manual_tags = st.text_input("Tags", value="", key="kb_manual_tags")
+                    manual_pinned = st.checkbox("Pin/prioritaskan dokumen manual", value=False, key="kb_manual_pinned")
                     manual_text = st.text_area("Isi dokumen/manual knowledge", height=220, key="kb_manual_text")
                     if st.button("💾 Simpan manual ke Knowledge Base", use_container_width=True, key="auto_btn_3309") and manual_text.strip():
                         doc_id, chunks = power_store.add_document(
                             title=manual_title.strip() or "Catatan manual",
                             text=manual_text,
                             source=manual_source.strip() or "streamlit-manual",
+                            collection=manual_collection,
+                            tags=manual_tags,
+                            pinned=bool(manual_pinned),
                         )
                         if chunks:
                             st.success(f"Tersimpan. Doc ID: {doc_id}, chunks: {chunks}")
@@ -3464,19 +3511,31 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                             st.warning("Tidak ada teks yang bisa disimpan.")
 
                 with kb_upload_tabs[2]:
+                    collection_rows = power_store.knowledge_collections()
+                    collection_options = [""] + [str(row.get("collection") or "Default") for row in collection_rows]
                     kb_query = st.text_input("Cari isi knowledge base", key="power_kb_query")
+                    kb_collection = st.selectbox("Filter koleksi", collection_options, format_func=lambda x: "Semua koleksi" if not x else x, key="kb_search_collection")
                     kb_limit = st.slider("Jumlah hasil", 3, 15, int(power_rag_top_k or 5), key="kb_search_limit")
                     if kb_query:
-                        results = power_store.search_documents(kb_query, limit=kb_limit)
+                        results = power_store.search_documents(kb_query, limit=kb_limit, collection=kb_collection)
                         if not results:
                             st.info("Belum ada potongan knowledge base yang cocok.")
                         for item in results:
-                            with st.expander(f"Doc {item.get('doc_id')} · {item.get('title')} · chunk {item.get('chunk_index')} · score {item.get('score')}"):
-                                st.caption(f"Sumber: {item.get('source')}")
+                            citation = item.get("citation") or f"{item.get('title')} · chunk {item.get('chunk_index')}"
+                            with st.expander(f"{citation} · score {item.get('score')}"):
+                                st.caption(f"Koleksi: {item.get('collection') or 'Default'} | Sumber: {item.get('source')} | Tags: {item.get('tags') or '-'}")
                                 st.write(str(item.get("content") or "")[:1800])
 
                 with kb_upload_tabs[3]:
-                    docs = power_store.list_documents(limit=100)
+                    st.caption("Koleksi membantu memisahkan dokumen seperti SOP, produk, skripsi, e-learning, dan referensi internal.")
+                    collections = power_store.knowledge_collections()
+                    st.dataframe(collections, use_container_width=True, hide_index=True)
+
+                with kb_upload_tabs[4]:
+                    manage_cols = power_store.knowledge_collections()
+                    manage_options = [""] + [str(row.get("collection") or "Default") for row in manage_cols]
+                    manage_collection = st.selectbox("Tampilkan koleksi", manage_options, format_func=lambda x: "Semua koleksi" if not x else x, key="kb_manage_collection")
+                    docs = power_store.list_documents(limit=100, collection=manage_collection)
                     st.dataframe(docs, use_container_width=True, hide_index=True)
                     col_a, col_b = st.columns(2)
                     with col_a:
@@ -3494,6 +3553,27 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                                 st.text_area("Preview", value=str(doc.get("preview") or ""), height=260)
                             else:
                                 st.error("Doc ID tidak ditemukan.")
+                    st.markdown("**Metadata & Prioritas**")
+                    col_m1, col_m2, col_m3 = st.columns(3)
+                    with col_m1:
+                        meta_id = st.text_input("Doc ID metadata", key="kb_meta_doc_id")
+                    with col_m2:
+                        meta_collection = st.text_input("Koleksi baru", value="Default", key="kb_meta_collection")
+                    with col_m3:
+                        meta_tags = st.text_input("Tags baru", value="", key="kb_meta_tags")
+                    col_pin1, col_pin2, col_pin3 = st.columns(3)
+                    with col_pin1:
+                        if st.button("🏷️ Update metadata", use_container_width=True, key="kb_update_metadata_btn") and meta_id.strip():
+                            ok = power_store.update_document_metadata(int(meta_id), collection=meta_collection, tags=meta_tags) if meta_id.strip().isdigit() else False
+                            st.success("Metadata diperbarui.") if ok else st.error("Doc ID tidak ditemukan/gagal.")
+                    with col_pin2:
+                        if st.button("📌 Pin dokumen", use_container_width=True, key="kb_pin_doc_btn") and meta_id.strip():
+                            ok = power_store.set_document_pinned(int(meta_id), True) if meta_id.strip().isdigit() else False
+                            st.success("Dokumen diprioritaskan.") if ok else st.error("Doc ID tidak ditemukan/gagal.")
+                    with col_pin3:
+                        if st.button("📍 Unpin dokumen", use_container_width=True, key="kb_unpin_doc_btn") and meta_id.strip():
+                            ok = power_store.set_document_pinned(int(meta_id), False) if meta_id.strip().isdigit() else False
+                            st.success("Prioritas dilepas.") if ok else st.error("Doc ID tidak ditemukan/gagal.")
                     if st.button("🔁 Rebuild index Knowledge Base", use_container_width=True, key="auto_btn_3351"):
                         docs_count, chunks_count = power_store.rebuild_knowledge_index()
                         st.success(f"Index dibangun ulang. Dokumen: {docs_count}, chunks: {chunks_count}")
@@ -3628,7 +3708,12 @@ if user_input:
                 if (meta or {}).get("self_verified_by"):
                     caption_text += f" • self-check: {(meta or {}).get('self_verified_by')}"
                 if (meta or {}).get("power_kb_sources"):
-                    caption_text += f" • KB: {len((meta or {}).get('power_kb_sources') or [])} sumber"
+                    kb_sources = (meta or {}).get("power_kb_sources") or []
+                    caption_text += f" • KB: {len(kb_sources)} sumber"
+                    if st.session_state.admin_authenticated:
+                        titles = [str(item.get("citation") or item.get("title") or "")[:70] for item in kb_sources[:3] if str(item.get("citation") or item.get("title") or "").strip()]
+                        if titles:
+                            caption_text += " • sumber: " + "; ".join(titles)
                 if st.session_state.admin_authenticated:
                     consulted = (meta or {}).get("consulted_models") or []
                     expensive_used = (meta or {}).get("expensive_fallback_used", False)

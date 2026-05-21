@@ -144,6 +144,118 @@ def chunk_text(text: str, chunk_size: int = 1200, overlap: int = 160) -> List[st
 
 
 # =========================
+# Premium Knowledge Base helpers
+# =========================
+
+def _stable_hash(text: str) -> str:
+    return hashlib.sha256(str(text or "").encode("utf-8", "ignore")).hexdigest()
+
+
+def _normalize_collection(value: str) -> str:
+    clean = re.sub(r"\s+", " ", str(value or "Default")).strip()
+    return clean[:80] or "Default"
+
+
+def _normalize_tags(value: str) -> str:
+    raw = str(value or "")
+    items = []
+    for part in re.split(r"[,;#\n]", raw):
+        tag = re.sub(r"[^a-zA-Z0-9_\-\s]", "", part).strip().lower()
+        tag = re.sub(r"\s+", "-", tag)
+        if tag and tag not in items:
+            items.append(tag[:40])
+    return ",".join(items[:20])
+
+
+def _line_heading(line: str) -> str:
+    raw = str(line or "").strip()
+    if not raw:
+        return ""
+    if re.match(r"^#{1,6}\s+", raw):
+        return re.sub(r"^#{1,6}\s+", "", raw).strip()[:160]
+    if re.match(r"^(bab|chapter|section|seksi|bagian)\s+[0-9ivxlcdm\.\-]+", raw, flags=re.I):
+        return raw[:160]
+    if re.match(r"^\d+(\.\d+){0,4}\s+\S", raw) and len(raw) <= 160:
+        return raw[:160]
+    if raw.isupper() and 6 <= len(raw) <= 120:
+        return raw[:160]
+    return ""
+
+
+def chunk_text_records(text: str, chunk_size: int = 1400, overlap: int = 180) -> List[Dict[str, Any]]:
+    """Chunk documents with lightweight heading/page metadata for citation quality."""
+    clean = re.sub(r"\r\n?", "\n", str(text or "")).strip()
+    clean = re.sub(r"\n{4,}", "\n\n", clean)
+    if not clean:
+        return []
+    records: List[Dict[str, Any]] = []
+    heading = ""
+    page_label = ""
+    position = 0
+    buffer = ""
+    buffer_start = 0
+
+    def flush() -> None:
+        nonlocal buffer, buffer_start
+        piece = buffer.strip()
+        if piece:
+            records.append({"content": piece, "heading": heading, "page_label": page_label, "char_start": buffer_start, "char_end": buffer_start + len(piece)})
+        buffer = ""
+        buffer_start = position
+
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", clean) if p.strip()]
+    for para in paragraphs:
+        first_line = para.split("\n", 1)[0].strip()
+        if re.match(r"^\[Halaman\s+[^\]]+\]", first_line, flags=re.I):
+            page_label = first_line.strip("[]")[:80]
+        new_heading = _line_heading(first_line)
+        if new_heading:
+            heading = new_heading
+        para_len = len(para)
+        if not buffer:
+            buffer_start = position
+        if len(buffer) + para_len + 2 <= chunk_size:
+            buffer = (buffer + "\n\n" + para).strip()
+        else:
+            flush()
+            if para_len <= chunk_size:
+                buffer = para
+                buffer_start = position
+            else:
+                start = 0
+                while start < para_len:
+                    piece = para[start : start + chunk_size].strip()
+                    if piece:
+                        records.append({"content": piece, "heading": heading, "page_label": page_label, "char_start": position + start, "char_end": position + start + len(piece)})
+                    start += max(240, chunk_size - overlap)
+                buffer = ""
+                buffer_start = position + para_len
+        position += para_len + 2
+    flush()
+    return records[:5000]
+
+
+def _escape_fts_query(query: str) -> str:
+    terms = _tokenize(query)[:10]
+    return " OR ".join('"' + t.replace('"', '""') + '"' for t in terms) or str(query or "").replace('"', '""')
+
+
+def _format_kb_citation(item: Dict[str, Any]) -> str:
+    title = str(item.get("title") or "Dokumen").strip()
+    chunk_index = item.get("chunk_index")
+    page = str(item.get("page_label") or "").strip()
+    heading = str(item.get("heading") or "").strip()
+    parts = [title]
+    if page:
+        parts.append(page)
+    if heading:
+        parts.append(heading)
+    if chunk_index is not None:
+        parts.append(f"chunk {chunk_index}")
+    return " · ".join(parts)[:260]
+
+
+# =========================
 # Knowledge base file extraction helpers
 # =========================
 
@@ -492,8 +604,31 @@ class PowerStore:
             # Optional SQLite FTS5. Streamlit Cloud usually supports it, but keep fallback.
             try:
                 conn.execute(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(content, title, source, content='')"
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(content, title, source, collection, tags, heading, page_label, content='')"
                 )
+            except Exception:
+                pass
+
+            for ddl in [
+                "ALTER TABLE documents ADD COLUMN collection TEXT DEFAULT 'Default'",
+                "ALTER TABLE documents ADD COLUMN tags TEXT DEFAULT ''",
+                "ALTER TABLE documents ADD COLUMN doc_hash TEXT DEFAULT ''",
+                "ALTER TABLE documents ADD COLUMN metadata_json TEXT DEFAULT '{}'",
+                "ALTER TABLE documents ADD COLUMN pinned INTEGER DEFAULT 0",
+                "ALTER TABLE documents ADD COLUMN updated_at REAL DEFAULT 0",
+                "ALTER TABLE chunks ADD COLUMN heading TEXT DEFAULT ''",
+                "ALTER TABLE chunks ADD COLUMN page_label TEXT DEFAULT ''",
+                "ALTER TABLE chunks ADD COLUMN char_start INTEGER DEFAULT 0",
+                "ALTER TABLE chunks ADD COLUMN char_end INTEGER DEFAULT 0",
+            ]:
+                try:
+                    conn.execute(ddl)
+                except Exception:
+                    pass
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents(collection, created_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(doc_hash)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_pinned ON documents(pinned, created_at)")
             except Exception:
                 pass
 
@@ -539,95 +674,189 @@ class PowerStore:
         return [item for _, item in scored[: max(1, int(limit or 8))]]
 
     # Knowledge base / RAG
-    def add_document(self, title: str, text: str, source: str = "manual") -> Tuple[int, int]:
+    def add_document(
+        self,
+        title: str,
+        text: str,
+        source: str = "manual",
+        collection: str = "Default",
+        tags: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
+        replace_existing: bool = False,
+        pinned: bool = False,
+    ) -> Tuple[int, int]:
+        """Add a document with workspace/collection, tags, hashing, and citation-ready chunks."""
         title = str(title or "Dokumen tanpa judul").strip()[:240]
-        chunks = chunk_text(text)
-        if not chunks:
+        source = str(source or "manual").strip()[:500]
+        collection = _normalize_collection(collection)
+        tags = _normalize_tags(tags)
+        raw_text = str(text or "").strip()
+        records = chunk_text_records(raw_text)
+        if not records:
             return 0, 0
+        doc_hash = _stable_hash(title + "\n" + source + "\n" + raw_text[:2_000_000])
+        meta_json = _safe_json(metadata or {})
+        now = _utc_ts()
         with self._connect() as conn:
+            existing = conn.execute("SELECT id FROM documents WHERE doc_hash = ? LIMIT 1", (doc_hash,)).fetchone()
+            if existing and not replace_existing:
+                return int(existing["id"]), 0
+            if existing and replace_existing:
+                try:
+                    self.delete_document(int(existing["id"]))
+                except Exception:
+                    pass
             cur = conn.execute(
-                "INSERT INTO documents(title, source, created_at) VALUES (?, ?, ?)",
-                (title, str(source or "manual")[:500], _utc_ts()),
+                """
+                INSERT INTO documents(title, source, collection, tags, doc_hash, metadata_json, pinned, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (title, source, collection, tags, doc_hash, meta_json, 1 if pinned else 0, now, now),
             )
             doc_id = int(cur.lastrowid)
-            for idx, chunk in enumerate(chunks):
-                safe_chunk = sanitize_non_instruction_context(chunk, limit=6000)
-                terms = " ".join(sorted(set(_tokenize(safe_chunk)))[:500])
+            inserted = 0
+            for idx, record in enumerate(records):
+                safe_chunk = sanitize_non_instruction_context(record.get("content", ""), limit=6500)
+                if not safe_chunk:
+                    continue
+                terms = " ".join(sorted(set(_tokenize(safe_chunk + " " + title + " " + tags + " " + collection)))[:700])
                 cur_chunk = conn.execute(
-                    "INSERT INTO chunks(doc_id, chunk_index, content, terms, created_at) VALUES (?, ?, ?, ?, ?)",
-                    (doc_id, idx, safe_chunk, terms, _utc_ts()),
+                    """
+                    INSERT INTO chunks(doc_id, chunk_index, content, terms, heading, page_label, char_start, char_end, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (doc_id, idx, safe_chunk, terms, str(record.get("heading") or "")[:180], str(record.get("page_label") or "")[:80], int(record.get("char_start") or 0), int(record.get("char_end") or 0), now),
                 )
+                inserted += 1
                 try:
                     conn.execute(
-                        "INSERT INTO chunks_fts(rowid, content, title, source) VALUES (?, ?, ?, ?)",
-                        (int(cur_chunk.lastrowid), safe_chunk, title, str(source or "manual")[:500]),
+                        "INSERT INTO chunks_fts(rowid, content, title, source, collection, tags, heading, page_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (int(cur_chunk.lastrowid), safe_chunk, title, source, collection, tags, str(record.get("heading") or "")[:180], str(record.get("page_label") or "")[:80]),
                     )
                 except Exception:
                     pass
-            return doc_id, len(chunks)
+            return doc_id, inserted
 
-    def search_documents(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def search_documents(self, query: str, limit: int = 5, collection: str = "", min_score: float = 0.0, include_pinned: bool = True) -> List[Dict[str, Any]]:
+        """Hybrid KB search: FTS5 + lexical reranking + metadata weighting."""
         q = str(query or "").strip()
         if not q:
             return []
+        limit = max(1, int(limit or 5))
+        collection_filter = _normalize_collection(collection) if str(collection or "").strip() else ""
         results: Dict[int, Dict[str, Any]] = {}
-        # Try FTS5 first.
+        terms = _escape_fts_query(q)
         try:
-            terms = " OR ".join(_tokenize(q)[:8]) or q
             with self._connect() as conn:
-                rows = conn.execute(
-                    """
-                    SELECT c.id, c.doc_id, c.chunk_index, c.content, d.title, d.source, c.created_at,
-                           bm25(chunks_fts) AS fts_score
-                    FROM chunks_fts
-                    JOIN chunks c ON c.id = chunks_fts.rowid
-                    JOIN documents d ON d.id = c.doc_id
-                    WHERE chunks_fts MATCH ?
-                    ORDER BY fts_score ASC LIMIT ?
-                    """,
-                    (terms, max(1, int(limit or 5)) * 2),
-                ).fetchall()
+                if collection_filter:
+                    rows = conn.execute(
+                        """
+                        SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
+                               d.title, d.source, d.collection, d.tags, d.pinned, c.created_at,
+                               bm25(chunks_fts) AS fts_score
+                        FROM chunks_fts
+                        JOIN chunks c ON c.id = chunks_fts.rowid
+                        JOIN documents d ON d.id = c.doc_id
+                        WHERE chunks_fts MATCH ? AND d.collection = ?
+                        ORDER BY fts_score ASC LIMIT ?
+                        """,
+                        (terms, collection_filter, limit * 5),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """
+                        SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
+                               d.title, d.source, d.collection, d.tags, d.pinned, c.created_at,
+                               bm25(chunks_fts) AS fts_score
+                        FROM chunks_fts
+                        JOIN chunks c ON c.id = chunks_fts.rowid
+                        JOIN documents d ON d.id = c.doc_id
+                        WHERE chunks_fts MATCH ?
+                        ORDER BY fts_score ASC LIMIT ?
+                        """,
+                        (terms, limit * 5),
+                    ).fetchall()
             for row in rows:
                 item = dict(row)
-                item["score"] = round(1.0 / (1.0 + abs(float(item.get("fts_score") or 0))), 4)
-                results[int(item["id"])] = item
+                lexical = _score_text(q, f"{item.get('title','')} {item.get('heading','')} {item.get('content','')} {item.get('tags','')}")
+                fts_component = 1.0 / (1.0 + abs(float(item.get("fts_score") or 0)))
+                score = (fts_component * 1.35) + lexical
+                if item.get("pinned"):
+                    score += 0.08
+                item["score"] = round(score, 4)
+                item["citation"] = _format_kb_citation(item)
+                item["source_type"] = "fts5"
+                if score >= min_score:
+                    results[int(item["id"])] = item
         except Exception:
             pass
 
-        # Lexical fallback and supplement.
         with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT c.id, c.doc_id, c.chunk_index, c.content, d.title, d.source, c.created_at
-                FROM chunks c JOIN documents d ON d.id = c.doc_id
-                ORDER BY c.created_at DESC LIMIT 1600
-                """
-            ).fetchall()
+            if collection_filter:
+                rows = conn.execute(
+                    """
+                    SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
+                           d.title, d.source, d.collection, d.tags, d.pinned, c.created_at
+                    FROM chunks c JOIN documents d ON d.id = c.doc_id
+                    WHERE d.collection = ?
+                    ORDER BY d.pinned DESC, c.created_at DESC LIMIT 2500
+                    """,
+                    (collection_filter,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
+                           d.title, d.source, d.collection, d.tags, d.pinned, c.created_at
+                    FROM chunks c JOIN documents d ON d.id = c.doc_id
+                    ORDER BY d.pinned DESC, c.created_at DESC LIMIT 2500
+                    """
+                ).fetchall()
         scored: List[Tuple[float, Dict[str, Any]]] = []
         for row in rows:
             item = dict(row)
-            score = _score_text(q, item.get("content", "") + " " + item.get("title", ""))
-            if score > 0:
+            weighted_text = f"{item.get('title','')} {item.get('title','')} {item.get('heading','')} {item.get('tags','')} {item.get('collection','')} {item.get('content','')}"
+            score = _score_text(q, weighted_text)
+            if item.get("pinned"):
+                score += 0.08
+            if score > min_score:
                 item["score"] = round(score, 4)
+                item["citation"] = _format_kb_citation(item)
+                item["source_type"] = "lexical"
                 scored.append((score, item))
         scored.sort(key=lambda x: x[0], reverse=True)
-        for score, item in scored[: max(1, int(limit or 5)) * 3]:
-            results.setdefault(int(item["id"]), item)
+        for score, item in scored[: limit * 5]:
+            existing = results.get(int(item["id"]))
+            if not existing or float(item.get("score") or 0) > float(existing.get("score") or 0):
+                results[int(item["id"])] = item
         final = list(results.values())
-        final.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
-        return final[: max(1, int(limit or 5))]
+        final.sort(key=lambda x: (float(x.get("score") or 0), int(x.get("pinned") or 0)), reverse=True)
+        return final[:limit]
 
-    def list_documents(self, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_documents(self, limit: int = 20, collection: str = "") -> List[Dict[str, Any]]:
+        collection_filter = _normalize_collection(collection) if str(collection or "").strip() else ""
         with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT d.id, d.title, d.source, d.created_at, COUNT(c.id) AS chunks,
-                       COALESCE(SUM(LENGTH(c.content)), 0) AS characters
-                FROM documents d LEFT JOIN chunks c ON c.doc_id = d.id
-                GROUP BY d.id ORDER BY d.created_at DESC LIMIT ?
-                """,
-                (max(1, int(limit or 20)),),
-            ).fetchall()
+            if collection_filter:
+                rows = conn.execute(
+                    """
+                    SELECT d.id, d.title, d.source, d.collection, d.tags, d.pinned, d.created_at, d.updated_at,
+                           COUNT(c.id) AS chunks, COALESCE(SUM(LENGTH(c.content)), 0) AS characters
+                    FROM documents d LEFT JOIN chunks c ON c.doc_id = d.id
+                    WHERE d.collection = ?
+                    GROUP BY d.id ORDER BY d.pinned DESC, d.created_at DESC LIMIT ?
+                    """,
+                    (collection_filter, max(1, int(limit or 20))),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT d.id, d.title, d.source, d.collection, d.tags, d.pinned, d.created_at, d.updated_at,
+                           COUNT(c.id) AS chunks, COALESCE(SUM(LENGTH(c.content)), 0) AS characters
+                    FROM documents d LEFT JOIN chunks c ON c.doc_id = d.id
+                    GROUP BY d.id ORDER BY d.pinned DESC, d.created_at DESC LIMIT ?
+                    """,
+                    (max(1, int(limit or 20)),),
+                ).fetchall()
         out = []
         for row in rows:
             item = dict(row)
@@ -637,6 +866,20 @@ class PowerStore:
                 item["created_at_wib"] = ""
             out.append(item)
         return out
+
+    def knowledge_collections(self) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT COALESCE(NULLIF(collection, ''), 'Default') AS collection,
+                       COUNT(*) AS documents,
+                       COALESCE(SUM((SELECT COUNT(*) FROM chunks c WHERE c.doc_id = documents.id)), 0) AS chunks
+                FROM documents
+                GROUP BY COALESCE(NULLIF(collection, ''), 'Default')
+                ORDER BY documents DESC, collection ASC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def get_document(self, doc_id: int, max_chars: int = 8000) -> Dict[str, Any]:
         try:
@@ -648,7 +891,7 @@ class PowerStore:
             if not doc:
                 return {}
             chunks = conn.execute(
-                "SELECT chunk_index, content FROM chunks WHERE doc_id = ? ORDER BY chunk_index ASC",
+                "SELECT chunk_index, content, heading, page_label FROM chunks WHERE doc_id = ? ORDER BY chunk_index ASC",
                 (doc_id,),
             ).fetchall()
         item = dict(doc)
@@ -657,13 +900,38 @@ class PowerStore:
         total = 0
         for ch in chunks:
             text = str(ch["content"] or "")
+            heading = str(ch["heading"] or "").strip()
+            page = str(ch["page_label"] or "").strip()
+            label = f"[Chunk {ch['chunk_index']}" + (f" · {page}" if page else "") + (f" · {heading}" if heading else "") + "]"
             if total + len(text) > max_chars:
                 body_parts.append("[Dokumen dipotong untuk preview]")
                 break
-            body_parts.append(f"[Chunk {ch['chunk_index']}]\n{text}")
+            body_parts.append(f"{label}\n{text}")
             total += len(text)
         item["preview"] = "\n\n".join(body_parts)
         return item
+
+    def set_document_pinned(self, doc_id: int, pinned: bool = True) -> bool:
+        try:
+            doc_id = int(doc_id)
+        except Exception:
+            return False
+        with self._connect() as conn:
+            cur = conn.execute("UPDATE documents SET pinned = ?, updated_at = ? WHERE id = ?", (1 if pinned else 0, _utc_ts(), doc_id))
+            return bool(cur.rowcount)
+
+    def update_document_metadata(self, doc_id: int, collection: str = "", tags: str = "") -> bool:
+        try:
+            doc_id = int(doc_id)
+        except Exception:
+            return False
+        collection = _normalize_collection(collection) if collection else "Default"
+        tags = _normalize_tags(tags)
+        with self._connect() as conn:
+            cur = conn.execute("UPDATE documents SET collection = ?, tags = ?, updated_at = ? WHERE id = ?", (collection, tags, _utc_ts(), doc_id))
+            if cur.rowcount:
+                self.rebuild_knowledge_index()
+            return bool(cur.rowcount)
 
     def delete_document(self, doc_id: int) -> bool:
         try:
@@ -689,12 +957,12 @@ class PowerStore:
             except Exception:
                 try:
                     conn.execute("DROP TABLE IF EXISTS chunks_fts")
-                    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(content, title, source, content='')")
+                    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(content, title, source, collection, tags, heading, page_label, content='')")
                 except Exception:
                     pass
             rows = conn.execute(
                 """
-                SELECT c.id, c.content, d.title, d.source
+                SELECT c.id, c.content, c.heading, c.page_label, d.title, d.source, d.collection, d.tags
                 FROM chunks c JOIN documents d ON d.id = c.doc_id
                 ORDER BY c.id ASC
                 """
@@ -703,8 +971,8 @@ class PowerStore:
             for row in rows:
                 try:
                     conn.execute(
-                        "INSERT INTO chunks_fts(rowid, content, title, source) VALUES (?, ?, ?, ?)",
-                        (int(row["id"]), str(row["content"] or ""), str(row["title"] or ""), str(row["source"] or "")),
+                        "INSERT INTO chunks_fts(rowid, content, title, source, collection, tags, heading, page_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (int(row["id"]), str(row["content"] or ""), str(row["title"] or ""), str(row["source"] or ""), str(row["collection"] or "Default"), str(row["tags"] or ""), str(row["heading"] or ""), str(row["page_label"] or "")),
                     )
                     inserted += 1
                 except Exception:
@@ -717,228 +985,20 @@ class PowerStore:
             docs = int(conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0] or 0)
             chunks = int(conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] or 0)
             chars = int(conn.execute("SELECT COALESCE(SUM(LENGTH(content)), 0) FROM chunks").fetchone()[0] or 0)
-            latest = conn.execute("SELECT title, source, created_at FROM documents ORDER BY created_at DESC LIMIT 1").fetchone()
-        data = {"documents": docs, "chunks": chunks, "characters": chars}
+            pinned = int(conn.execute("SELECT COUNT(*) FROM documents WHERE pinned = 1").fetchone()[0] or 0)
+            collections = int(conn.execute("SELECT COUNT(DISTINCT COALESCE(NULLIF(collection, ''), 'Default')) FROM documents").fetchone()[0] or 0)
+            latest = conn.execute("SELECT title, source, collection, created_at FROM documents ORDER BY created_at DESC LIMIT 1").fetchone()
+        data = {"documents": docs, "chunks": chunks, "characters": chars, "pinned": pinned, "collections": collections}
         if latest:
             data["latest_title"] = latest["title"]
             data["latest_source"] = latest["source"]
+            data["latest_collection"] = latest["collection"]
             try:
                 data["latest_at_wib"] = datetime.fromtimestamp(float(latest["created_at"] or 0), WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
             except Exception:
                 data["latest_at_wib"] = ""
         return data
 
-    # Cache
-    def get_cached_response(self, cache_key: str) -> Optional[Tuple[str, Dict[str, Any]]]:
-        if not cache_key:
-            return None
-        now = _utc_ts()
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM response_cache WHERE cache_key = ?", (cache_key,)).fetchone()
-            if not row:
-                return None
-            if float(_row_value(row, "expires_at", 2, 0) or 0) < now:
-                conn.execute("DELETE FROM response_cache WHERE cache_key = ?", (cache_key,))
-                return None
-            answer = str(_row_value(row, "answer", 5, "") or "")
-            meta = _safe_json_loads(_row_value(row, "meta_json", 6, "{}"))
-            meta["power_response_cache_hit"] = True
-            return answer, meta
-
-    def set_cached_response(self, cache_key: str, answer: str, meta: Dict[str, Any], ttl_seconds: int = 1800) -> None:
-        if not cache_key or not str(answer or "").strip():
-            return
-        ttl = max(60, int(ttl_seconds or 1800))
-        now = _utc_ts()
-        with self._connect() as conn:
-            conn.execute("DELETE FROM response_cache WHERE expires_at < ?", (now,))
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO response_cache(cache_key, ts, expires_at, model, intent, answer, meta_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    cache_key,
-                    now,
-                    now + ttl,
-                    str((meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or "")[:160],
-                    str((meta or {}).get("power_intent") or "")[:80],
-                    str(answer)[:30000],
-                    _safe_json(meta)[:12000],
-                ),
-            )
-
-    # Circuit breaker
-    def is_model_blocked(self, model: str) -> bool:
-        if not model:
-            return False
-        with self._connect() as conn:
-            row = conn.execute("SELECT open_until FROM circuit_breakers WHERE model = ?", (model,)).fetchone()
-        return bool(row and float(_row_value(row, "open_until", 0, 0) or 0) > _utc_ts())
-
-    def filter_blocked_models(self, models: List[str]) -> List[str]:
-        unique = list(dict.fromkeys([m for m in models if m]))
-        available = [m for m in unique if not self.is_model_blocked(m)]
-        return available or unique
-
-    def register_model_failure(self, model: str, error: str = "", max_failures: int = 3, cooldown_seconds: int = 1800) -> None:
-        if not model:
-            return
-        now = _utc_ts()
-        with self._connect() as conn:
-            row = conn.execute("SELECT failure_count FROM circuit_breakers WHERE model = ?", (model,)).fetchone()
-            failures = int(_row_value(row, "failure_count", 0, 0) or 0) + 1
-            open_until = now + max(60, int(cooldown_seconds or 1800)) if failures >= max(1, int(max_failures or 3)) else 0
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO circuit_breakers(model, failure_count, open_until, last_error, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (model, failures, open_until, str(error or "")[:800], now),
-            )
-
-    def register_model_success(self, model: str) -> None:
-        if not model:
-            return
-        with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO circuit_breakers(model, failure_count, open_until, last_error, updated_at)
-                VALUES (?, 0, 0, '', ?)
-                """,
-                (model, _utc_ts()),
-            )
-
-    def circuit_breaker_status(self, limit: int = 80) -> List[Dict[str, Any]]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM circuit_breakers ORDER BY open_until DESC, failure_count DESC, updated_at DESC LIMIT ?",
-                (max(1, int(limit or 80)),),
-            ).fetchall()
-        out = []
-        now = _utc_ts()
-        for row in rows:
-            item = dict(row)
-            item["blocked"] = float(item.get("open_until") or 0) > now
-            item["open_until_wib"] = datetime.fromtimestamp(float(item.get("open_until") or 0), WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB") if item.get("open_until") else ""
-            out.append(item)
-        return out
-
-    # Adaptive model score
-    def update_model_score(self, model: str, intent: str, success: bool, latency_seconds: float, quality_score: float, cost_idr: float) -> None:
-        model = str(model or "").strip()
-        intent = str(intent or "general").strip() or "general"
-        if not model:
-            return
-        now = _utc_ts()
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM model_scores WHERE model = ? AND intent = ?", (model, intent)).fetchone()
-            if row:
-                conn.execute(
-                    """
-                    UPDATE model_scores
-                    SET total_requests = total_requests + 1,
-                        success_count = success_count + ?,
-                        error_count = error_count + ?,
-                        total_latency = total_latency + ?,
-                        total_quality = total_quality + ?,
-                        total_cost = total_cost + ?,
-                        last_success_at = CASE WHEN ? THEN ? ELSE last_success_at END,
-                        last_error_at = CASE WHEN ? THEN ? ELSE last_error_at END,
-                        updated_at = ?
-                    WHERE model = ? AND intent = ?
-                    """,
-                    (
-                        1 if success else 0,
-                        0 if success else 1,
-                        float(latency_seconds or 0),
-                        float(quality_score or 0),
-                        float(cost_idr or 0),
-                        1 if success else 0,
-                        now,
-                        0 if success else 1,
-                        now,
-                        now,
-                        model,
-                        intent,
-                    ),
-                )
-            else:
-                conn.execute(
-                    """
-                    INSERT INTO model_scores(model,intent,total_requests,success_count,error_count,total_latency,total_quality,total_cost,last_success_at,last_error_at,updated_at)
-                    VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        model,
-                        intent,
-                        1 if success else 0,
-                        0 if success else 1,
-                        float(latency_seconds or 0),
-                        float(quality_score or 0),
-                        float(cost_idr or 0),
-                        now if success else 0,
-                        0 if success else now,
-                        now,
-                    ),
-                )
-
-    def model_score_rows(self, intent: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
-        with self._connect() as conn:
-            if intent:
-                rows = conn.execute(
-                    "SELECT * FROM model_scores WHERE intent = ? ORDER BY updated_at DESC LIMIT ?",
-                    (intent, max(1, int(limit or 100))),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM model_scores ORDER BY updated_at DESC LIMIT ?",
-                    (max(1, int(limit or 100)),),
-                ).fetchall()
-        out = []
-        for row in rows:
-            item = dict(row)
-            req = max(1, int(item.get("total_requests") or 1))
-            item["success_rate"] = round(float(item.get("success_count") or 0) / req, 4)
-            item["avg_latency"] = round(float(item.get("total_latency") or 0) / req, 3)
-            item["avg_quality"] = round(float(item.get("total_quality") or 0) / req, 4)
-            item["avg_cost"] = round(float(item.get("total_cost") or 0) / req, 4)
-            item["computed_score"] = round(self.compute_model_score(item.get("model", ""), item.get("intent", "general")), 4)
-            out.append(item)
-        out.sort(key=lambda x: float(x.get("computed_score") or 0), reverse=True)
-        return out
-
-    def compute_model_score(self, model: str, intent: str) -> float:
-        model = str(model or "").strip()
-        intent = str(intent or "general").strip() or "general"
-        if not model:
-            return 0.0
-        if self.is_model_blocked(model):
-            return -10.0
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM model_scores WHERE model = ? AND intent = ?", (model, intent)).fetchone()
-            if not row and intent != "general":
-                row = conn.execute("SELECT * FROM model_scores WHERE model = ? AND intent = 'general'", (model,)).fetchone()
-        base = _base_model_bias(model, intent)
-        cost_penalty = _tier_cost_penalty(model)
-        if not row:
-            return max(0.01, base - cost_penalty)
-        req = max(1, int(_row_value(row, "total_requests", 2, 1) or 1))
-        success_rate = float(_row_value(row, "success_count", 3, 0) or 0) / req
-        error_rate = float(_row_value(row, "error_count", 4, 0) or 0) / req
-        avg_latency = float(_row_value(row, "total_latency", 5, 0) or 0) / req
-        avg_quality = float(_row_value(row, "total_quality", 6, 0) or 0) / req
-        avg_cost = float(_row_value(row, "total_cost", 7, 0) or 0) / req
-        latency_score = 1.0 / (1.0 + max(0.0, avg_latency) / 8.0)
-        cost_score = 1.0 / (1.0 + max(0.0, avg_cost) / 20.0)
-        confidence = min(1.0, req / 12.0)
-        learned = (success_rate * 0.34) + (avg_quality * 0.30) + (latency_score * 0.18) + (cost_score * 0.10) - (error_rate * 0.20)
-        blended = base * (1.0 - confidence) + learned * confidence
-        return max(-1.0, min(1.5, blended - cost_penalty))
-
-    def rank_models_for_intent(self, models: List[str], intent: str) -> List[str]:
-        unique = self.filter_blocked_models(list(dict.fromkeys([m for m in models if m])))
-        return sorted(unique, key=lambda m: self.compute_model_score(m, intent), reverse=True)
 
     # Usage / observability
     def log_interaction(
@@ -1430,16 +1490,23 @@ def generate_power_answer(
         final_model = str(meta.get("active_model_final") or meta.get("model_requested") or selected_model)
         meta["power_intent"] = intent
         meta["power_rag_enabled"] = bool(enable_rag)
-        meta["power_kb_sources"] = [
+        kb_source_items = [
             {
                 "doc_id": item.get("doc_id"),
                 "title": item.get("title"),
                 "source": item.get("source"),
+                "collection": item.get("collection"),
+                "tags": item.get("tags"),
+                "heading": item.get("heading"),
+                "page_label": item.get("page_label"),
                 "chunk_index": item.get("chunk_index"),
                 "score": item.get("score"),
+                "citation": item.get("citation") or _format_kb_citation(item),
             }
             for item in (rag_sources or [])[:5]
         ]
+        meta["power_kb_sources"] = kb_source_items
+        meta["power_rag_sources"] = kb_source_items
         meta["power_persistent_memory_enabled"] = bool(enable_persistent_memory)
         meta["power_prompt_template_enabled"] = bool(enable_prompt_templates)
         meta["power_adaptive_scoring_enabled"] = bool(enable_adaptive_scoring)
@@ -1534,6 +1601,10 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
             "• /kb detail <doc_id> — preview dokumen\n"
             "• /kb hapus <doc_id> — hapus dokumen\n"
             "• /kb rebuild — bangun ulang index FTS\n"
+            "• /kb koleksi — daftar koleksi/workspace KB\n"
+            "• /kb pin <doc_id> — prioritaskan dokumen\n"
+            "• /kb unpin <doc_id> — lepas prioritas dokumen\n"
+            "• /kb set <doc_id> <koleksi> | <tag1,tag2> — ubah metadata\n"
             "• /kb tambah <judul> lalu baris baru isi dokumen"
         )
 
@@ -1546,6 +1617,36 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
             f"Karakter: {stats.get('characters', 0)}\n"
             f"Terakhir: {stats.get('latest_title', '-')} {stats.get('latest_at_wib', '')}"
         )
+
+    if lower in {"/kb koleksi", "/rag koleksi", "/kb collections", "/rag collections"}:
+        cols = store.knowledge_collections()
+        if not cols:
+            return "Knowledge base masih kosong."
+        lines = ["📚 Koleksi Knowledge Base", ""]
+        for item in cols[:30]:
+            lines.append(f"• {item.get('collection')}: {item.get('documents')} dokumen | {item.get('chunks')} chunk")
+        return "\n".join(lines)
+
+    if lower.startswith(("/kb pin ", "/rag pin ", "/kb unpin ", "/rag unpin ")):
+        parts = raw.split()
+        if len(parts) < 3 or not parts[2].isdigit():
+            return "Format: /kb pin <doc_id> atau /kb unpin <doc_id>"
+        want_pin = parts[1].lower() == "pin"
+        ok = store.set_document_pinned(int(parts[2]), pinned=want_pin)
+        return ("✅ Dokumen diprioritaskan." if want_pin else "✅ Prioritas dokumen dilepas.") if ok else "Dokumen tidak ditemukan."
+
+    if lower.startswith(("/kb set ", "/rag set ")):
+        parts = raw.split(" ", 3)
+        if len(parts) < 4 or not parts[2].isdigit():
+            return "Format: /kb set <doc_id> <koleksi> | <tag1,tag2>"
+        doc_id = int(parts[2])
+        body = parts[3]
+        if "|" in body:
+            collection, tags = body.split("|", 1)
+        else:
+            collection, tags = body, ""
+        ok = store.update_document_metadata(doc_id, collection=collection.strip(), tags=tags.strip())
+        return "✅ Metadata dokumen diperbarui." if ok else "Dokumen tidak ditemukan."
 
     if lower in {"/kb list", "/rag list", "/kb daftar", "/rag daftar"}:
         docs = store.list_documents(limit=15)
@@ -1585,7 +1686,8 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
         lines = ["🔎 Hasil Knowledge Base:"]
         for idx, doc in enumerate(docs, start=1):
             snippet = re.sub(r"\s+", " ", doc.get("content", "")).strip()[:420]
-            lines.append(f"{idx}. Doc {doc.get('doc_id')} | {doc.get('title')} | chunk {doc.get('chunk_index')} | score {doc.get('score')}\n{snippet}")
+            citation = doc.get("citation") or _format_kb_citation(doc)
+            lines.append(f"{idx}. {citation} | koleksi {doc.get('collection') or 'Default'} | score {doc.get('score')}\n{snippet}")
         return "\n\n".join(lines)
 
     if lower.startswith(("/rag tambah", "/kb tambah")):
@@ -1594,7 +1696,7 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
             title, content = body.split("\n", 1)
         else:
             title, content = "Catatan manual", body
-        doc_id, chunks = store.add_document(title=title.strip() or "Catatan manual", text=content, source=f"telegram:{user_id}")
+        doc_id, chunks = store.add_document(title=title.strip() or "Catatan manual", text=content, source=f"telegram:{user_id}", collection="Telegram")
         if not chunks:
             return "Gagal menambahkan RAG: isi dokumen kosong."
         return f"✅ Knowledge base ditambahkan. Doc ID: {doc_id}, chunks: {chunks}."

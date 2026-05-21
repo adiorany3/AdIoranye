@@ -29,7 +29,7 @@ from power_features import get_power_store, handle_power_command, generate_power
 
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
-DEFAULT_LOCK_FILE = ".telegram_bot_worker.lock"
+DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
 DEFAULT_RUNTIME_STATE_FILE = ".telegram_runtime_state.json"
 LOCK_STALE_SECONDS = 180
 WIB_TZ = ZoneInfo("Asia/Jakarta")
@@ -328,7 +328,7 @@ def build_telegram_model_note(
         if meta.get("power_response_cache_hit") or meta.get("cache_hit"):
             footer_parts.append("Cache: hit")
 
-        rag_sources = meta.get("power_rag_sources") or meta.get("rag_sources") or []
+        rag_sources = meta.get("power_kb_sources") or meta.get("power_rag_sources") or meta.get("rag_sources") or []
         try:
             rag_count = len(rag_sources)
         except Exception:
@@ -1242,6 +1242,26 @@ class TelegramBotService:
             )
         self._send_message(token, chat_id, msg)
 
+    def force_local_reset(self) -> str:
+        """Reset worker/lock state only for the current Streamlit process/container.
+
+        This cannot stop another deployment/laptop/VPS that uses the same bot token,
+        but it helps when a previous Streamlit rerun left local state inconsistent.
+        """
+        try:
+            self.stop()
+            lock_path = os.path.abspath(self._lock_file or DEFAULT_LOCK_FILE)
+            if lock_path.startswith("/tmp/") and os.path.exists(lock_path):
+                try:
+                    os.remove(lock_path)
+                except OSError:
+                    pass
+            self._last_error = ""
+            return "Reset lokal selesai. Coba Start Bot lagi."
+        except Exception as exc:
+            self._last_error = f"Gagal reset lokal Telegram: {exc}"
+            return self._last_error
+
     def start(self, config: Dict[str, Any]) -> bool:
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
@@ -1258,8 +1278,16 @@ class TelegramBotService:
             # from showing a bot as started while the polling thread immediately dies.
             try:
                 self._telegram_post(token, "getMe", {}, timeout=12)
+                # Polling bot must not have an active webhook. Do this before the worker starts
+                # so failures are visible in the admin UI, not hidden inside the thread.
+                self._telegram_post(
+                    token,
+                    "deleteWebhook",
+                    {"drop_pending_updates": bool(config.get("drop_pending_updates", True))},
+                    timeout=20,
+                )
             except Exception as exc:
-                self._last_error = f"Gagal validasi token Telegram: {exc}"
+                self._last_error = f"Gagal validasi/koneksi Telegram: {exc}"
                 self._running = False
                 return False
 
@@ -1289,36 +1317,65 @@ class TelegramBotService:
             self._release_file_lock()
 
     def _acquire_file_lock(self) -> bool:
-        """Acquire an OS-level lock. This is stronger than only checking a file.
+        """Acquire an OS-level lock for the polling worker.
 
-        Streamlit can rerun the app and, in some deployments, create more than one
-        Python process. fcntl.flock prevents multiple pollers inside the same
-        container/filesystem from reading the same Telegram updates.
+        The default lock path is in /tmp because Streamlit Cloud deployments can
+        have stricter permissions in the source directory. If a custom lock path
+        fails because of permissions, the service falls back to /tmp automatically.
         """
-        try:
-            lock_path = os.path.abspath(self._lock_file)
-            self._lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-            fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            os.ftruncate(self._lock_fd, 0)
-            os.write(
-                self._lock_fd,
-                json.dumps({
-                    "worker_id": self._worker_id,
-                    "pid": os.getpid(),
-                    "started_at": time.time(),
-                }).encode("utf-8"),
-            )
-            self._has_file_lock = True
-            return True
-        except BlockingIOError:
-            self._last_error = (
-                "Bot Telegram sudah aktif di proses lain. Instance baru tidak dijalankan "
-                "agar jawaban tidak dobel."
-            )
-            return False
-        except Exception as exc:
-            self._last_error = f"Gagal membuat lock bot Telegram: {exc}"
-            return False
+        candidate_paths: List[str] = []
+        configured = str(self._lock_file or DEFAULT_LOCK_FILE).strip() or DEFAULT_LOCK_FILE
+        candidate_paths.append(configured)
+        if configured != DEFAULT_LOCK_FILE:
+            candidate_paths.append(DEFAULT_LOCK_FILE)
+        if "/tmp/" not in configured:
+            candidate_paths.append("/tmp/adioranye_telegram_bot_worker.lock")
+
+        last_exc = ""
+        for candidate_path in _as_string_list(candidate_paths):
+            try:
+                lock_path = os.path.abspath(candidate_path)
+                os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+                self._lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+                fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                os.ftruncate(self._lock_fd, 0)
+                os.write(
+                    self._lock_fd,
+                    json.dumps({
+                        "worker_id": self._worker_id,
+                        "pid": os.getpid(),
+                        "started_at": time.time(),
+                        "lock_path": lock_path,
+                    }).encode("utf-8"),
+                )
+                self._lock_file = lock_path
+                self._has_file_lock = True
+                return True
+            except BlockingIOError:
+                last_exc = (
+                    "Bot Telegram sudah aktif di proses/container lain. "
+                    "Jika Anda yakin tidak ada bot lain, klik Reset koneksi Telegram, "
+                    "lalu Force reset lokal. Jika masih gagal, revoke token di BotFather."
+                )
+                try:
+                    if self._lock_fd is not None:
+                        os.close(self._lock_fd)
+                except OSError:
+                    pass
+                self._lock_fd = None
+                break
+            except Exception as exc:
+                last_exc = f"Gagal membuat lock bot Telegram di {candidate_path}: {exc}"
+                try:
+                    if self._lock_fd is not None:
+                        os.close(self._lock_fd)
+                except OSError:
+                    pass
+                self._lock_fd = None
+                continue
+
+        self._last_error = last_exc or "Gagal membuat lock bot Telegram."
+        return False
 
     def _heartbeat_lock(self) -> None:
         # Lock is held by an open file descriptor; no heartbeat needed.
