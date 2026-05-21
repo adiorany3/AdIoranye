@@ -112,6 +112,8 @@ def init_state() -> None:
         st.session_state.active_thinking_model_router = parse_bool(get_secret("THINKING_MODEL_ROUTER", True), default=True)
     if "active_thinking_min_chars" not in st.session_state:
         st.session_state.active_thinking_min_chars = int(get_secret("THINKING_MIN_CHARS", 180) or 180)
+    if "active_fast_normal_model_router" not in st.session_state:
+        st.session_state.active_fast_normal_model_router = parse_bool(get_secret("FAST_NORMAL_MODEL_ROUTER", True), default=True)
 
 
 # =========================
@@ -178,6 +180,7 @@ streamlit_cache_memory_limit = int(get_secret("STREAMLIT_CACHE_MEMORY_LIMIT", 20
 thinking_model_router_default = parse_bool(get_secret("THINKING_MODEL_ROUTER", True), default=True)
 thinking_min_chars_default = int(get_secret("THINKING_MIN_CHARS", 180) or 180)
 thinking_capable_model_override = str(get_secret("THINKING_CAPABLE_MODEL", "") or "").strip()
+fast_normal_model_router_default = parse_bool(get_secret("FAST_NORMAL_MODEL_ROUTER", True), default=True)
 
 init_state()
 memory = MemoryStore(memory_file)
@@ -380,6 +383,18 @@ def prioritize_active_models(models: List[str], health_cache: Dict[str, Dict[str
         price = model_price(model)
         latency = float(health_cache.get(model, {}).get("latency_ms") or 999999)
         return (_tier_rank(model), int(price.get("output", 999999999)), latency, model)
+
+    return sorted(active_models, key=sort_key)
+
+
+def prioritize_fastest_active_models(models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> List[str]:
+    """Urutkan model aktif berdasarkan latency terendah untuk pertanyaan ringan/non-thinking."""
+    active_models = [model for model in unique_models(models) if health_cache.get(model, {}).get("active")]
+
+    def sort_key(model: str) -> Tuple[float, int, str]:
+        price = model_price(model)
+        latency = float(health_cache.get(model, {}).get("latency_ms") or 999999)
+        return (latency, int(price.get("output", 999999999)), model)
 
     return sorted(active_models, key=sort_key)
 
@@ -601,9 +616,10 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     """
     Routing default:
     1) Pertanyaan thinking/kompleks langsung memakai model capable aktif.
-    2) Pertanyaan biasa memakai model murah aktif secara round-robin.
-    3) Jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal aktif.
-    4) Setelah request selesai, state aplikasi tetap diarahkan kembali ke model murah aktif.
+    2) Pertanyaan ringan/non-thinking langsung memakai model murah aktif dengan latency tercepat.
+    3) Jika fast-normal dimatikan, pertanyaan biasa kembali ke rotasi model murah.
+    4) Jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal aktif.
+    5) Setelah request selesai, state aplikasi tetap diarahkan kembali ke model murah aktif.
     """
     active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
     selected_model = str(st.session_state.get("active_model") or default_model).strip()
@@ -612,11 +628,14 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     selected_is_cheap = _tier_rank(selected_model) == 0
     selected_is_active = bool(health_cache.get(selected_model, {}).get("active"))
     rotate_enabled = bool(st.session_state.get("active_rotate_cheap_primary", True))
+    fast_normal_enabled = bool(st.session_state.get("active_fast_normal_model_router", True))
+    fastest_cheap_models = prioritize_fastest_active_models(active_cheap_models, health_cache)
     thinking_mode = is_thinking_question(user_text)
     capable_primary = get_capable_primary_model(active_expensive_models, health_cache) if thinking_mode else ""
 
     direct_to_expensive = False
     thinking_direct_to_capable = False
+    normal_fast_mode = False
     rotated_primary = ""
 
     if thinking_mode and capable_primary:
@@ -625,8 +644,12 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
         direct_to_expensive = True
         thinking_direct_to_capable = True
     elif active_cheap_models:
-        if rotate_enabled:
-            # Setiap request sungguhan memakai model murah aktif berikutnya.
+        if fast_normal_enabled and fastest_cheap_models:
+            # Pertanyaan ringan/non-thinking harus secepat mungkin: gunakan model murah aktif tercepat.
+            primary_model = fastest_cheap_models[0]
+            normal_fast_mode = True
+        elif rotate_enabled:
+            # Jika fast-normal dimatikan, setiap request memakai model murah aktif berikutnya.
             # Render UI/admin hanya mengintip tanpa menggeser indeks.
             primary_model = get_rotating_cheap_primary(active_cheap_models, advance=advance_rotation)
             rotated_primary = primary_model
@@ -649,7 +672,8 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
         # gunakan model capable lain jika tersedia.
         cheap_fallback_models = []
     else:
-        cheap_fallback_models = [model for model in active_cheap_models if model != primary_model]
+        cheap_pool = fastest_cheap_models if normal_fast_mode and fastest_cheap_models else active_cheap_models
+        cheap_fallback_models = [model for model in cheap_pool if model != primary_model]
 
     expensive_fallback_models = [model for model in active_expensive_models if model != primary_model]
 
@@ -680,6 +704,8 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     if active_cheap_models:
         next_cheap_model = get_rotating_cheap_primary(active_cheap_models, advance=False)
 
+    fastest_cheap_primary = fastest_cheap_models[0] if fastest_cheap_models else ""
+
     return {
         "primary_model": primary_model,
         "cheap_fallback_models": unique_models(cheap_fallback_models),
@@ -691,15 +717,18 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
         "direct_to_expensive": direct_to_expensive,
         "thinking_mode": thinking_mode,
         "thinking_direct_to_capable": thinking_direct_to_capable,
+        "normal_fast_mode": normal_fast_mode,
         "capable_primary_model": capable_primary,
+        "fastest_cheap_primary_model": fastest_cheap_primary,
+        "fast_cheap_models": unique_models(fastest_cheap_models),
         "active_cheap_models": active_cheap_models,
         "active_expensive_models": active_expensive_models,
         "rotate_cheap_primary": rotate_enabled,
+        "fast_normal_model_router": fast_normal_enabled,
         "rotated_primary_model": rotated_primary,
         "next_cheap_primary_model": next_cheap_model,
         "cheap_rotation_index": int(st.session_state.get("cheap_model_rotation_index", 0) or 0),
     }
-
 
 def restore_active_model_to_cheap(preferred_model: str = "") -> None:
     """Kembalikan pilihan model aktif ke model murah yang hidup setelah request memakai expensive."""
@@ -1414,6 +1443,7 @@ def get_runtime_config() -> Dict[str, Any]:
         "default_memory_context": str(st.session_state.active_default_memory),
         "use_streamlit_cache_memory": bool(st.session_state.active_use_streamlit_cache_memory),
         "thinking_model_router": bool(st.session_state.active_thinking_model_router),
+        "fast_normal_model_router": bool(st.session_state.active_fast_normal_model_router),
     }
 
 
@@ -1448,6 +1478,9 @@ def start_telegram_if_needed() -> None:
                 "thinking_model_router": bool(st.session_state.get("active_thinking_model_router", True)),
                 "thinking_min_chars": int(st.session_state.get("active_thinking_min_chars", thinking_min_chars_default) or 180),
                 "thinking_capable_model": thinking_capable_model_override,
+                "fast_normal_model_router": bool(st.session_state.get("active_fast_normal_model_router", True)),
+                "fastest_cheap_model": route.get("fastest_cheap_primary_model", ""),
+                "fast_cheap_models": route.get("fast_cheap_models", []),
             }
         )
         restore_active_model_to_cheap(route.get("primary_model"))
@@ -1510,6 +1543,7 @@ def render_admin_status() -> None:
         f"Telegram: {telegram_status}\n\n"
         f"Rotasi murah: {'ON' if st.session_state.get('active_rotate_cheap_primary', True) else 'OFF'}\n\n"
         f"Thinking router: {'ON' if st.session_state.get('active_thinking_model_router', True) else 'OFF'}\n\n"
+        f"Fast normal: {'ON' if st.session_state.get('active_fast_normal_model_router', True) else 'OFF'}\n\n"
         f"Model aktif terdeteksi: {active_count}\n\n"
         f"Cek model terakhir: {checked_at}"
     ).replace(",", ".")
@@ -1590,6 +1624,14 @@ def render_admin_settings() -> None:
             20,
             disabled=not st.session_state.active_thinking_model_router,
         )
+        st.session_state.active_fast_normal_model_router = st.toggle(
+            "Untuk pertanyaan ringan, pakai model murah tercepat",
+            value=bool(st.session_state.active_fast_normal_model_router),
+            help="Jika aktif, pertanyaan non-thinking tidak memakai rotasi, tetapi langsung memakai model murah aktif dengan latency health check paling rendah.",
+        )
+        if st.session_state.active_fast_normal_model_router:
+            route_preview = build_model_routing_plan(user_text="halo")
+            st.caption(f"Model cepat untuk pertanyaan ringan: {route_preview.get('fastest_cheap_primary_model') or 'belum ada model murah aktif'}")
         st.session_state.active_persona = st.text_area(
             "System persona",
             value=st.session_state.active_persona,
@@ -1597,7 +1639,7 @@ def render_admin_settings() -> None:
         )
         st.session_state.show_debug = st.toggle("Tampilkan debug respons di chat", value=st.session_state.show_debug)
         st.markdown("#### Router Cepat & Akurat")
-        st.caption("Algoritma baru: pertanyaan thinking langsung memakai model capable aktif. Pertanyaan biasa memakai model murah aktif bergiliran. Jika jawaban kosong/kurang kuat/gagal, sistem mencoba backup sesuai jalur, lalu kembali ke model murah aktif setelah selesai.")
+        st.caption("Algoritma baru: pertanyaan thinking langsung memakai model capable aktif. Pertanyaan ringan/non-thinking memakai model murah aktif tercepat. Jika fast-normal dimatikan, sistem kembali memakai rotasi model murah. Jika jawaban kosong/kurang kuat/gagal, sistem mencoba backup sesuai jalur, lalu kembali ke model murah aktif setelah selesai.")
         st.session_state.active_smart_router = st.toggle(
             "Aktifkan router hanya jika jawaban kurang kuat",
             value=bool(st.session_state.active_smart_router),
@@ -1629,7 +1671,8 @@ def render_admin_settings() -> None:
             route = build_model_routing_plan()
             st.markdown("**Primary berikutnya:**")
             st.code(model_price_label(route["primary_model"]))
-            st.caption(f"Rotasi murah: {'ON' if route.get('rotate_cheap_primary') else 'OFF'} | thinking router: {'ON' if st.session_state.get('active_thinking_model_router', True) else 'OFF'} | indeks berikutnya: {route.get('cheap_rotation_index', 0)}")
+            st.caption(f"Fast normal: {'ON' if route.get('fast_normal_model_router') else 'OFF'} | Rotasi murah: {'ON' if route.get('rotate_cheap_primary') else 'OFF'} | thinking router: {'ON' if st.session_state.get('active_thinking_model_router', True) else 'OFF'} | indeks berikutnya: {route.get('cheap_rotation_index', 0)}")
+            st.caption(f"Model murah tercepat: {route.get('fastest_cheap_primary_model') or 'belum ada'}")
             st.markdown("**Model hemat aktif/prioritas backup:**")
             st.code("\n".join(model_price_label(m) for m in route["active_cheap_models"]) or "Belum ada model hemat aktif")
             st.markdown("**Model menengah/mahal aktif otomatis jika model hemat tidak cukup / pertanyaan thinking:**")
@@ -1640,7 +1683,7 @@ def render_admin_settings() -> None:
                 st.warning("Tidak ada model hemat aktif. Request berikutnya langsung memakai model menengah/mahal aktif, lalu sistem akan kembali ke model hemat saat sudah aktif lagi.")
 
         st.markdown("#### Cek Berkala Model")
-        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Urutan default: thinking → model capable aktif; non-thinking → rotasi model hemat aktif → backup hemat aktif lain → model menengah/mahal jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif.")
+        st.caption(f"Sistem mengecek ulang model setiap ±{int(model_health_check_interval or 900)} detik saat aplikasi aktif. Urutan default: thinking → model capable aktif; non-thinking → model hemat aktif tercepat → backup hemat aktif lain → model menengah/mahal jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif.")
         col_health_check, col_health_info = st.columns([1, 2])
         with col_health_check:
             if st.button("🔁 Cek model sekarang", use_container_width=True):
@@ -1703,6 +1746,7 @@ def render_admin_settings() -> None:
                 st.session_state.active_use_streamlit_cache_memory = use_streamlit_cache_memory_default
                 st.session_state.active_thinking_model_router = thinking_model_router_default
                 st.session_state.active_thinking_min_chars = thinking_min_chars_default
+                st.session_state.active_fast_normal_model_router = fast_normal_model_router_default
                 st.session_state.cheap_model_rotation_index = 0
                 st.session_state.last_rotated_primary_model = ""
                 st.rerun()
@@ -1751,6 +1795,9 @@ def render_admin_settings() -> None:
             "thinking_model_router": bool(st.session_state.get("active_thinking_model_router", True)),
             "thinking_min_chars": int(st.session_state.get("active_thinking_min_chars", thinking_min_chars_default) or 180),
             "thinking_capable_model": thinking_capable_model_override,
+            "fast_normal_model_router": bool(st.session_state.get("active_fast_normal_model_router", True)),
+            "fastest_cheap_model": route.get("fastest_cheap_primary_model", ""),
+            "fast_cheap_models": route.get("fast_cheap_models", []),
         }
 
         col_start, col_stop = st.columns(2)
@@ -1765,6 +1812,8 @@ def render_admin_settings() -> None:
                     "max_expensive_models": start_route["max_expensive_models"],
                     "return_to_primary": start_route["return_to_primary"],
                     "max_smart_models": start_route["max_smart_models"],
+                    "fastest_cheap_model": start_route.get("fastest_cheap_primary_model", ""),
+                    "fast_cheap_models": start_route.get("fast_cheap_models", []),
                 })
                 started = service.start(bot_config)
                 restore_active_model_to_cheap(start_route.get("primary_model"))
@@ -1926,6 +1975,7 @@ SMART_MODEL_ROUTER = true
 RETURN_TO_PRIMARY_MODEL = true
 MAX_SMART_MODELS = 2
 ROTATE_CHEAP_PRIMARY = true
+FAST_NORMAL_MODEL_ROUTER = true
 USE_STREAMLIT_CACHE_MEMORY = true
 STREAMLIT_CACHE_MEMORY_LIMIT = 200
 
@@ -1935,7 +1985,8 @@ THINKING_MIN_CHARS = 180
 # Opsional: paksa model capable tertentu jika aktif, contoh:
 # THINKING_CAPABLE_MODEL = "slashai/gpt-5.5"
 
-# Default aktif: model murah aktif dipakai bergiliran sebagai primary.
+# Default aktif: pertanyaan ringan/non-thinking memakai model murah aktif tercepat.
+# Jika FAST_NORMAL_MODEL_ROUTER dimatikan, model murah bisa dipakai bergiliran lewat ROTATE_CHEAP_PRIMARY.
 # Jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal.
 # Setelah request selesai, aplikasi kembali memilih model murah aktif sebagai default.
 ALLOW_EXPENSIVE_FALLBACK = true

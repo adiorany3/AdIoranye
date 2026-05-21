@@ -148,6 +148,35 @@ def pick_telegram_capable_model(
     return primary_model
 
 
+def pick_fastest_telegram_normal_model(
+    primary_model: str,
+    fallback_models: List[str],
+    config: Dict[str, Any],
+) -> str:
+    """Pick the fastest cheap/normal model for lightweight Telegram questions.
+
+    app.py passes fast_cheap_models already sorted by measured health-check latency.
+    If that list is unavailable, this falls back to the current primary model and
+    cheap fallback order so the bot remains compatible with older app.py files.
+    """
+    candidates: List[str] = []
+
+    explicit_fastest = str(config.get("fastest_cheap_model") or "").strip()
+    if explicit_fastest:
+        candidates.append(explicit_fastest)
+
+    candidates.extend(_as_string_list(config.get("fast_cheap_models")))
+    candidates.extend(_as_string_list(config.get("active_cheap_models")))
+    candidates.append(primary_model)
+    candidates.extend(_as_string_list(fallback_models))
+
+    for candidate in candidates:
+        if candidate:
+            return candidate
+
+    return primary_model
+
+
 def resolve_answering_model(meta: Any, fallback_model: str) -> str:
     """Return the best available model name that actually answered.
 
@@ -195,6 +224,8 @@ def build_telegram_model_note(
 
         if meta.get("telegram_thinking_mode"):
             info_lines.append("🧠 Mode: thinking/capable")
+        elif meta.get("telegram_fast_normal_mode"):
+            info_lines.append("⚡ Mode: normal cepat/model tercepat aktif")
         else:
             info_lines.append("🧭 Mode: normal/model murah aktif")
 
@@ -419,6 +450,7 @@ class TelegramBotService:
         max_smart_models = int(config.get("max_smart_models", 2) or 2)
         thinking_model_router = bool(config.get("thinking_model_router", True))
         thinking_min_chars = int(config.get("thinking_min_chars", 180) or 180)
+        fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
 
         if not token:
             self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
@@ -518,6 +550,8 @@ class TelegramBotService:
                             request_allow_expensive = allow_expensive_fallback
                             request_return_to_primary = return_to_primary
 
+                            fast_normal_mode = False
+
                             if thinking_mode:
                                 capable_model = pick_telegram_capable_model(
                                     primary_model=model,
@@ -534,6 +568,19 @@ class TelegramBotService:
                                     ]
                                     request_allow_expensive = True
                                     request_return_to_primary = True
+                            elif fast_normal_model_router:
+                                fast_model = pick_fastest_telegram_normal_model(
+                                    primary_model=model,
+                                    fallback_models=request_fallback_models,
+                                    config=config,
+                                )
+                                if fast_model:
+                                    fast_pool = _as_string_list(config.get("fast_cheap_models")) or request_fallback_models
+                                    if fast_model not in fast_pool:
+                                        fast_pool = [fast_model] + fast_pool
+                                    request_model = fast_model
+                                    request_fallback_models = [item for item in fast_pool if item != request_model]
+                                    fast_normal_mode = True
 
                             answer, meta = generate_answer(
                                 api_url=api_url,
@@ -557,6 +604,7 @@ class TelegramBotService:
 
                             if isinstance(meta, dict):
                                 meta["telegram_thinking_mode"] = thinking_mode
+                                meta["telegram_fast_normal_mode"] = fast_normal_mode
                                 meta["telegram_model_requested"] = request_model
 
                             history.append({"role": "user", "content": text})
