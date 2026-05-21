@@ -2496,7 +2496,7 @@ if user_input:
         try:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                placeholder.markdown("⏳ Siap! adioranye sedang berpikir...")
+                placeholder.markdown("⏳ Siap! adioranye sedang menyiapkan jawaban untukmu...")
                 route = build_model_routing_plan(advance_rotation=True, user_text=user_input)
                 answer, meta = generate_answer(
                     api_url=api_url,
