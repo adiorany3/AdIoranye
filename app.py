@@ -153,7 +153,7 @@ def make_answer_pdf_bytes(answer_text: str, title: str = "Jawaban Adioranye AI",
         stream_lines: List[str] = [
             "BT",
             f"/F1 16 Tf {left} {top} Td ({_pdf_escape(title_clean)}) Tj",
-            f"/F1 9 Tf 0 -18 Td ({_pdf_escape('Dibuat: ' + now_wib_text())}) Tj",
+            f"/F1 9 Tf 0 -18 Td ({_pdf_escape('Dibuat: ' + _wib_now_text())}) Tj",
         ]
         if meta_clean:
             stream_lines.append(f"0 -13 Td ({_pdf_escape(meta_clean[:120])}) Tj")
