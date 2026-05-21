@@ -1336,11 +1336,18 @@ class TelegramBotService:
         power_features_enabled = bool(config.get("power_features_enabled", True))
         power_db_path = str(config.get("power_db_path") or ".adioranye_power.db")
         power_rag_enabled = bool(config.get("power_rag_enabled", True))
+        power_rag_top_k = int(config.get("power_rag_top_k", 5) or 5)
         power_persistent_memory_enabled = bool(config.get("power_persistent_memory_enabled", True))
         power_prompt_templates_enabled = bool(config.get("power_prompt_templates_enabled", True))
         power_self_verification_enabled = bool(config.get("power_self_verification_enabled", False))
         daily_cost_limit_idr = float(config.get("daily_cost_limit_idr", 0) or 0)
         max_expensive_calls_per_day = int(config.get("max_expensive_calls_per_day", 0) or 0)
+        power_response_cache_enabled = bool(config.get("power_response_cache_enabled", True))
+        power_response_cache_ttl_seconds = int(config.get("power_response_cache_ttl_seconds", 1800) or 1800)
+        power_adaptive_scoring_enabled = bool(config.get("power_adaptive_scoring_enabled", True))
+        power_circuit_breaker_enabled = bool(config.get("power_circuit_breaker_enabled", True))
+        model_circuit_max_failures = int(config.get("model_circuit_max_failures", 3) or 3)
+        model_circuit_cooldown_seconds = int(config.get("model_circuit_cooldown_seconds", 1800) or 1800)
         fast_cheap_models_runtime = _as_string_list(config.get("fast_cheap_models"))
         thinking_capable_models_runtime = _as_string_list(config.get("thinking_capable_models"))
         forced_model_mode = str(config.get("telegram_model_mode") or "auto").strip().lower()
@@ -1810,11 +1817,18 @@ class TelegramBotService:
                                 user_id=str(chat_id),
                                 channel="telegram",
                                 enable_rag=bool(power_features_enabled and power_rag_enabled),
+                                rag_top_k=int(power_rag_top_k),
                                 enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
                                 enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
                                 enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
                                 daily_cost_limit_idr=float(daily_cost_limit_idr),
                                 max_expensive_calls_per_day=int(max_expensive_calls_per_day),
+                                enable_response_cache=bool(power_response_cache_enabled),
+                                response_cache_ttl_seconds=int(power_response_cache_ttl_seconds),
+                                enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
+                                enable_circuit_breaker=bool(power_circuit_breaker_enabled),
+                                circuit_max_failures=int(model_circuit_max_failures),
+                                circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
                             )
 
                             if isinstance(meta, dict):
@@ -1888,11 +1902,18 @@ class TelegramBotService:
                                         user_id=str(chat_id),
                                         channel="telegram",
                                         enable_rag=bool(power_features_enabled and power_rag_enabled),
+                                        rag_top_k=int(power_rag_top_k),
                                         enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
                                         enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
                                         enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
                                         daily_cost_limit_idr=float(daily_cost_limit_idr),
                                         max_expensive_calls_per_day=int(max_expensive_calls_per_day),
+                                        enable_response_cache=bool(power_response_cache_enabled),
+                                        response_cache_ttl_seconds=int(power_response_cache_ttl_seconds),
+                                        enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
+                                        enable_circuit_breaker=bool(power_circuit_breaker_enabled),
+                                        circuit_max_failures=int(model_circuit_max_failures),
+                                        circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
                                     )
 
                                     if isinstance(retry_meta, dict):

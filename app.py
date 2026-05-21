@@ -33,6 +33,7 @@ from power_features import (
     generate_power_answer,
     classify_intent_text,
     run_model_benchmark,
+    extract_text_from_file_bytes,
 )
 
 
@@ -369,12 +370,20 @@ model_discovery_interval = int(get_secret("MODEL_DISCOVERY_INTERVAL_SECONDS", 36
 power_features_enabled = parse_bool(get_secret("POWER_FEATURES_ENABLED", True), default=True)
 power_db_path = str(get_secret("POWER_DB_PATH", ".adioranye_power.db") or ".adioranye_power.db")
 power_rag_enabled = parse_bool(get_secret("POWER_RAG_ENABLED", True), default=True)
+power_rag_top_k = int(get_secret("POWER_RAG_TOP_K", 5) or 5)
+power_kb_max_file_mb = int(get_secret("POWER_KB_MAX_FILE_MB", 12) or 12)
 power_persistent_memory_enabled = parse_bool(get_secret("POWER_PERSISTENT_MEMORY_ENABLED", True), default=True)
 power_prompt_templates_enabled = parse_bool(get_secret("POWER_PROMPT_TEMPLATES_ENABLED", True), default=True)
 power_self_verification_enabled = parse_bool(get_secret("POWER_SELF_VERIFICATION_ENABLED", False), default=False)
 daily_cost_limit_idr = float(get_secret("DAILY_COST_LIMIT_IDR", 0) or 0)
 max_expensive_calls_per_day = int(get_secret("MAX_EXPENSIVE_CALLS_PER_DAY", 0) or 0)
 benchmark_max_models = int(get_secret("BENCHMARK_MAX_MODELS", 8) or 8)
+power_response_cache_enabled = parse_bool(get_secret("POWER_RESPONSE_CACHE_ENABLED", True), default=True)
+power_response_cache_ttl_seconds = int(get_secret("POWER_RESPONSE_CACHE_TTL_SECONDS", 1800) or 1800)
+power_adaptive_scoring_enabled = parse_bool(get_secret("POWER_ADAPTIVE_SCORING_ENABLED", True), default=True)
+power_circuit_breaker_enabled = parse_bool(get_secret("POWER_CIRCUIT_BREAKER_ENABLED", True), default=True)
+model_circuit_max_failures = int(get_secret("MODEL_CIRCUIT_MAX_FAILURES", 3) or 3)
+model_circuit_cooldown_seconds = int(get_secret("MODEL_CIRCUIT_COOLDOWN_SECONDS", 1800) or 1800)
 
 init_state()
 memory = MemoryStore(memory_file)
@@ -2039,11 +2048,19 @@ def get_runtime_config() -> Dict[str, Any]:
         "power_features_enabled": bool(power_features_enabled),
         "power_db_path": power_db_path,
         "power_rag_enabled": bool(power_rag_enabled),
+        "power_rag_top_k": int(power_rag_top_k),
+        "power_kb_max_file_mb": int(power_kb_max_file_mb),
         "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
         "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
         "power_self_verification_enabled": bool(power_self_verification_enabled),
         "daily_cost_limit_idr": float(daily_cost_limit_idr),
         "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
+        "power_response_cache_enabled": bool(power_response_cache_enabled),
+        "power_response_cache_ttl_seconds": int(power_response_cache_ttl_seconds),
+        "power_adaptive_scoring_enabled": bool(power_adaptive_scoring_enabled),
+        "power_circuit_breaker_enabled": bool(power_circuit_breaker_enabled),
+        "model_circuit_max_failures": int(model_circuit_max_failures),
+        "model_circuit_cooldown_seconds": int(model_circuit_cooldown_seconds),
     }
 
 
@@ -2089,14 +2106,20 @@ def start_telegram_if_needed() -> None:
                 "model_discovery_timeout": int(model_discovery_timeout or 12),
                 "model_health_workers": model_health_workers,
                 "model_health_retries": model_health_retries,
-            "power_features_enabled": bool(power_features_enabled),
-            "power_db_path": power_db_path,
-            "power_rag_enabled": bool(power_rag_enabled),
-            "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
-            "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
-            "power_self_verification_enabled": bool(power_self_verification_enabled),
-            "daily_cost_limit_idr": float(daily_cost_limit_idr),
-            "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
+                "power_features_enabled": bool(power_features_enabled),
+                "power_db_path": power_db_path,
+                "power_rag_enabled": bool(power_rag_enabled),
+                "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
+                "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
+                "power_self_verification_enabled": bool(power_self_verification_enabled),
+                "daily_cost_limit_idr": float(daily_cost_limit_idr),
+                "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
+                "power_response_cache_enabled": bool(power_response_cache_enabled),
+                "power_response_cache_ttl_seconds": int(power_response_cache_ttl_seconds),
+                "power_adaptive_scoring_enabled": bool(power_adaptive_scoring_enabled),
+                "power_circuit_breaker_enabled": bool(power_circuit_breaker_enabled),
+                "model_circuit_max_failures": int(model_circuit_max_failures),
+                "model_circuit_cooldown_seconds": int(model_circuit_cooldown_seconds),
                 "active_cheap_models": route.get("active_cheap_models", []),
                 "thinking_capable_models": route.get("active_expensive_models", []),
                 "speed_update_code": telegram_speed_update_code,
@@ -2441,14 +2464,14 @@ def render_admin_settings() -> None:
             "model_discovery_timeout": int(model_discovery_timeout or 12),
                 "model_health_workers": model_health_workers,
                 "model_health_retries": model_health_retries,
-            "power_features_enabled": bool(power_features_enabled),
-            "power_db_path": power_db_path,
-            "power_rag_enabled": bool(power_rag_enabled),
-            "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
-            "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
-            "power_self_verification_enabled": bool(power_self_verification_enabled),
-            "daily_cost_limit_idr": float(daily_cost_limit_idr),
-            "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
+                "power_features_enabled": bool(power_features_enabled),
+                "power_db_path": power_db_path,
+                "power_rag_enabled": bool(power_rag_enabled),
+                "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
+                "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
+                "power_self_verification_enabled": bool(power_self_verification_enabled),
+                "daily_cost_limit_idr": float(daily_cost_limit_idr),
+                "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
             "active_cheap_models": route.get("active_cheap_models", []),
             "thinking_capable_models": route.get("active_expensive_models", []),
             "speed_update_code": telegram_speed_update_code,
@@ -2774,26 +2797,93 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
         with col_c:
             st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
 
-        tabs_power = st.tabs(["Knowledge Base", "Memory", "Usage", "Benchmark"])
+        tabs_power = st.tabs(["Knowledge Base", "Memory", "Usage", "Optimizer", "Benchmark"])
         with tabs_power[0]:
-            uploaded_kb = st.file_uploader("Upload TXT/MD/CSV sederhana ke knowledge base", type=["txt", "md", "csv"], accept_multiple_files=True)
-            if uploaded_kb and st.button("➕ Masukkan file ke RAG", use_container_width=True):
-                added = []
-                for up in uploaded_kb:
-                    try:
-                        content = up.read().decode("utf-8", "ignore")
-                        doc_id, chunks = power_store.add_document(title=up.name, text=content, source="streamlit-upload")
-                        added.append(f"{up.name}: doc {doc_id}, {chunks} chunk")
-                    except Exception as exc:
-                        added.append(f"{up.name}: gagal - {exc}")
-                st.success("\n".join(added))
-            kb_query = st.text_input("Cari isi knowledge base", key="power_kb_query")
-            if kb_query:
-                for item in power_store.search_documents(kb_query, limit=5):
-                    st.markdown(f"**{item.get('title')}** · chunk {item.get('chunk_index')} · score {item.get('score')}")
-                    st.write(str(item.get("content") or "")[:800])
-            with st.expander("Dokumen terakhir"):
-                st.dataframe(power_store.list_documents(limit=20), use_container_width=True, hide_index=True)
+            kb_stats = power_store.knowledge_stats()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Dokumen KB", kb_stats.get("documents", 0))
+            c2.metric("Chunks", kb_stats.get("chunks", 0))
+            c3.metric("Karakter", kb_stats.get("characters", 0))
+
+            st.caption("Knowledge base dipakai otomatis sebagai konteks non-instruksi saat pertanyaan relevan dengan dokumen/file/sumber.")
+            kb_upload_tabs = st.tabs(["Upload File", "Tambah Manual", "Cari", "Kelola"] )
+
+            with kb_upload_tabs[0]:
+                uploaded_kb = st.file_uploader(
+                    "Upload file ke knowledge base",
+                    type=["txt", "md", "markdown", "csv", "json", "jsonl", "pdf", "docx", "xlsx", "xlsm", "log", "py", "js", "ts", "html", "css", "xml"],
+                    accept_multiple_files=True,
+                    help="PDF/DOCX/XLSX membutuhkan library terkait. Jika tidak tersedia, sistem akan memberi pesan gagal ekstrak tanpa membuat app crash.",
+                )
+                source_label = st.text_input("Label sumber", value="streamlit-upload", key="kb_source_label")
+                if uploaded_kb and st.button("➕ Masukkan file ke Knowledge Base", use_container_width=True):
+                    added = []
+                    max_bytes = max(1, int(power_kb_max_file_mb or 12)) * 1024 * 1024
+                    for up in uploaded_kb:
+                        try:
+                            raw_bytes = up.read()
+                            if len(raw_bytes) > max_bytes:
+                                added.append(f"{up.name}: dilewati, ukuran > {power_kb_max_file_mb} MB")
+                                continue
+                            content, kind = extract_text_from_file_bytes(up.name, raw_bytes)
+                            if not str(content or "").strip():
+                                added.append(f"{up.name}: gagal, tidak ada teks yang bisa diambil")
+                                continue
+                            doc_id, chunks = power_store.add_document(title=up.name, text=content, source=f"{source_label}:{kind}")
+                            added.append(f"{up.name}: doc {doc_id}, {chunks} chunk, tipe {kind}")
+                        except Exception as exc:
+                            added.append(f"{up.name}: gagal - {exc}")
+                    st.success("\n".join(added))
+
+            with kb_upload_tabs[1]:
+                manual_title = st.text_input("Judul dokumen manual", key="kb_manual_title")
+                manual_source = st.text_input("Sumber manual", value="streamlit-manual", key="kb_manual_source")
+                manual_text = st.text_area("Isi dokumen/manual knowledge", height=220, key="kb_manual_text")
+                if st.button("💾 Simpan manual ke Knowledge Base", use_container_width=True) and manual_text.strip():
+                    doc_id, chunks = power_store.add_document(
+                        title=manual_title.strip() or "Catatan manual",
+                        text=manual_text,
+                        source=manual_source.strip() or "streamlit-manual",
+                    )
+                    if chunks:
+                        st.success(f"Tersimpan. Doc ID: {doc_id}, chunks: {chunks}")
+                    else:
+                        st.warning("Tidak ada teks yang bisa disimpan.")
+
+            with kb_upload_tabs[2]:
+                kb_query = st.text_input("Cari isi knowledge base", key="power_kb_query")
+                kb_limit = st.slider("Jumlah hasil", 3, 15, int(power_rag_top_k or 5), key="kb_search_limit")
+                if kb_query:
+                    results = power_store.search_documents(kb_query, limit=kb_limit)
+                    if not results:
+                        st.info("Belum ada potongan knowledge base yang cocok.")
+                    for item in results:
+                        with st.expander(f"Doc {item.get('doc_id')} · {item.get('title')} · chunk {item.get('chunk_index')} · score {item.get('score')}"):
+                            st.caption(f"Sumber: {item.get('source')}")
+                            st.write(str(item.get("content") or "")[:1800])
+
+            with kb_upload_tabs[3]:
+                docs = power_store.list_documents(limit=100)
+                st.dataframe(docs, use_container_width=True, hide_index=True)
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    delete_id = st.text_input("Hapus Doc ID", key="kb_delete_doc_id")
+                    if st.button("🗑️ Hapus dokumen", use_container_width=True) and delete_id.strip():
+                        ok = power_store.delete_document(int(delete_id)) if delete_id.strip().isdigit() else False
+                        st.success(f"Dokumen ID {delete_id} dihapus.") if ok else st.error("Doc ID tidak ditemukan/gagal dihapus.")
+                with col_b:
+                    detail_id = st.text_input("Preview Doc ID", key="kb_detail_doc_id")
+                    if st.button("👁️ Preview dokumen", use_container_width=True) and detail_id.strip():
+                        doc = power_store.get_document(int(detail_id), max_chars=6000) if detail_id.strip().isdigit() else {}
+                        if doc:
+                            st.markdown(f"**{doc.get('title')}**")
+                            st.caption(f"Source: {doc.get('source')} | Chunks: {doc.get('chunks')}")
+                            st.text_area("Preview", value=str(doc.get("preview") or ""), height=260)
+                        else:
+                            st.error("Doc ID tidak ditemukan.")
+                if st.button("🔁 Rebuild index Knowledge Base", use_container_width=True):
+                    docs_count, chunks_count = power_store.rebuild_knowledge_index()
+                    st.success(f"Index dibangun ulang. Dokumen: {docs_count}, chunks: {chunks_count}")
 
         with tabs_power[1]:
             mem_text = st.text_area("Tambah memory permanen SQLite", height=100, placeholder="Contoh: User ingin jawaban profesional, praktis, dan kode siap tempel.")
@@ -2812,6 +2902,22 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
             st.caption(f"Limit harian: Rp{daily_cost_limit_idr:.0f} | Max expensive calls/hari: {max_expensive_calls_per_day}")
 
         with tabs_power[3]:
+            st.caption("Optimizer memakai data nyata: success rate, latency, quality score, biaya, dan circuit breaker.")
+            opt_intent = st.selectbox(
+                "Lihat skor untuk intent",
+                ["", "quick_chat", "coding", "academic", "calculation", "document_question", "research", "creative", "deep_reasoning", "general"],
+                format_func=lambda x: "semua intent" if x == "" else x,
+                key="power_optimizer_intent",
+            )
+            st.dataframe(power_store.model_score_rows(intent=opt_intent or None, limit=120), use_container_width=True, hide_index=True)
+            with st.expander("Circuit breaker / model yang sedang dikarantina"):
+                st.dataframe(power_store.circuit_breaker_status(limit=120), use_container_width=True, hide_index=True)
+            st.caption(
+                f"Response cache: {'ON' if power_response_cache_enabled else 'OFF'} | TTL {power_response_cache_ttl_seconds}s | "
+                f"Adaptive scoring: {'ON' if power_adaptive_scoring_enabled else 'OFF'} | Circuit breaker: {'ON' if power_circuit_breaker_enabled else 'OFF'}"
+            )
+
+        with tabs_power[4]:
             route_preview = build_model_routing_plan()
             bench_models = unique_models([route_preview.get("primary_model", "")] + route_preview.get("active_cheap_models", [])[:4] + route_preview.get("active_expensive_models", [])[:4])
             st.write("Model yang akan dites:")
@@ -2882,11 +2988,18 @@ if user_input:
                     user_id="web-admin" if st.session_state.get("admin_authenticated", False) else "web-public",
                     channel="web",
                     enable_rag=bool(power_features_enabled and power_rag_enabled),
+                    rag_top_k=int(power_rag_top_k),
                     enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
                     enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
                     enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
                     daily_cost_limit_idr=float(daily_cost_limit_idr),
                     max_expensive_calls_per_day=int(max_expensive_calls_per_day),
+                    enable_response_cache=bool(power_response_cache_enabled),
+                    response_cache_ttl_seconds=int(power_response_cache_ttl_seconds),
+                    enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
+                    enable_circuit_breaker=bool(power_circuit_breaker_enabled),
+                    circuit_max_failures=int(model_circuit_max_failures),
+                    circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
                 )
                 restore_active_model_to_cheap(route.get("primary_model"))
                 placeholder.markdown(answer)
@@ -2898,6 +3011,8 @@ if user_input:
                     caption_text += f" • intent: {(meta or {}).get('power_intent')}"
                 if (meta or {}).get("self_verified_by"):
                     caption_text += f" • self-check: {(meta or {}).get('self_verified_by')}"
+                if (meta or {}).get("power_kb_sources"):
+                    caption_text += f" • KB: {len((meta or {}).get('power_kb_sources') or [])} sumber"
                 if st.session_state.admin_authenticated:
                     consulted = (meta or {}).get("consulted_models") or []
                     expensive_used = (meta or {}).get("expensive_fallback_used", False)
