@@ -1022,6 +1022,84 @@ class PowerStore:
             if model_cost_tier(str(_row_value(row, "model", 0, "") or "")) in {"medium", "expensive", "ultra"}
         )
 
+    def database_overview(self) -> Dict[str, Any]:
+        """Return compact DB statistics for admin health center."""
+        with self._connect() as conn:
+            tables = {
+                "memories": "memories",
+                "documents": "documents",
+                "chunks": "chunks",
+                "interactions": "interactions",
+                "benchmarks": "benchmarks",
+                "response_cache": "response_cache",
+                "model_scores": "model_scores",
+                "circuit_breakers": "circuit_breakers",
+            }
+            out: Dict[str, Any] = {}
+            for key, table in tables.items():
+                try:
+                    out[key] = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] or 0)
+                except Exception:
+                    out[key] = 0
+        try:
+            size = Path(self.db_path).stat().st_size
+            units = ["B", "KB", "MB", "GB"]
+            value = float(size)
+            for unit in units:
+                if value < 1024 or unit == units[-1]:
+                    out["db_size"] = f"{value:.1f} {unit}"
+                    break
+                value /= 1024
+        except Exception:
+            out["db_size"] = "0 B"
+        return out
+
+    def cleanup_old_data(self, log_days: int = 30, cache_days: int = 7, benchmark_days: int = 14) -> Dict[str, int]:
+        """Delete old operational rows while preserving knowledge base and memories."""
+        now = _utc_ts()
+        deleted: Dict[str, int] = {}
+        with self._connect() as conn:
+            cur = conn.execute("DELETE FROM interactions WHERE ts < ?", (now - max(1, int(log_days or 30)) * 86400,))
+            deleted["interactions"] = int(cur.rowcount or 0)
+            cur = conn.execute("DELETE FROM response_cache WHERE expires_at < ? OR ts < ?", (now, now - max(1, int(cache_days or 7)) * 86400))
+            deleted["response_cache"] = int(cur.rowcount or 0)
+            cur = conn.execute("DELETE FROM benchmarks WHERE ts < ?", (now - max(1, int(benchmark_days or 14)) * 86400,))
+            deleted["benchmarks"] = int(cur.rowcount or 0)
+            try:
+                conn.execute("VACUUM")
+            except Exception:
+                pass
+        return deleted
+
+    def clear_usage_logs(self) -> int:
+        with self._connect() as conn:
+            cur = conn.execute("DELETE FROM interactions")
+            return int(cur.rowcount or 0)
+
+    def clear_response_cache(self) -> int:
+        with self._connect() as conn:
+            cur = conn.execute("DELETE FROM response_cache")
+            return int(cur.rowcount or 0)
+
+    def clear_memories_all(self) -> int:
+        with self._connect() as conn:
+            cur = conn.execute("DELETE FROM memories")
+            return int(cur.rowcount or 0)
+
+    def clear_knowledge_base(self) -> Dict[str, int]:
+        with self._connect() as conn:
+            counts = {
+                "documents": int(conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0] or 0),
+                "chunks": int(conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0] or 0),
+            }
+            conn.execute("DELETE FROM chunks")
+            conn.execute("DELETE FROM documents")
+            try:
+                conn.execute("DELETE FROM chunks_fts")
+            except Exception:
+                pass
+            return counts
+
     def add_benchmark(self, model: str, task: str, score: float, latency_seconds: float, success: bool, error: str = "", meta: Optional[Dict[str, Any]] = None) -> None:
         with self._connect() as conn:
             conn.execute(

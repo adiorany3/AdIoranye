@@ -1,5 +1,7 @@
 import hmac
 import html
+import os
+import shutil
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -73,6 +75,82 @@ def format_token_status(label: str, value: str) -> None:
         st.success(f"{label} terdeteksi")
     else:
         st.error(f"{label} belum diisi")
+
+
+def mask_secret_value(value: Any, keep_start: int = 4, keep_end: int = 4) -> str:
+    """Mask token/API key for admin UI."""
+    raw = str(value or "")
+    if not raw:
+        return "belum diisi"
+    if len(raw) <= keep_start + keep_end + 3:
+        return "•" * max(6, len(raw))
+    return raw[:keep_start] + "…" + raw[-keep_end:]
+
+
+def validate_runtime_secrets() -> List[Dict[str, Any]]:
+    """Return runtime config validation rows without exposing sensitive values."""
+    checks = [
+        ("ADMIN_USERNAME", admin_username, True, "Login admin web"),
+        ("ADMIN_PASSWORD", admin_password, True, "Login admin web"),
+        ("SLASHAI_API_KEY", api_key, True, "Wajib untuk memanggil model"),
+        ("SLASHAI_API_URL", api_url, True, "Endpoint chat completions"),
+        ("SLASHAI_MODEL", default_model, True, "Model default"),
+        ("TELEGRAM_BOT_TOKEN", telegram_token, bool(auto_start), "Wajib jika Telegram auto-start"),
+        ("TELEGRAM_ADMIN_CHAT_IDS", get_secret("TELEGRAM_ADMIN_CHAT_IDS", ""), False, "Disarankan agar command admin Telegram tidak terbuka"),
+        ("POWER_FEATURES_ENABLED", power_features_enabled, False, "Fitur memory/RAG/usage/optimizer"),
+        ("POWER_DB_PATH", power_db_path, False, "Database SQLite power features"),
+        ("POWER_RAG_ENABLED", power_rag_enabled, False, "Knowledge Base / RAG"),
+        ("POWER_RAG_TOP_K", power_rag_top_k, False, "Jumlah potongan KB yang dipakai"),
+        ("POWER_KB_MAX_FILE_MB", power_kb_max_file_mb, False, "Batas upload KB"),
+    ]
+    rows: List[Dict[str, Any]] = []
+    for name, value, required, note in checks:
+        ok = bool(value) if not isinstance(value, bool) else True
+        if name == "TELEGRAM_BOT_TOKEN" and not auto_start:
+            ok = True
+        if required and not value:
+            level = "error"
+        elif name == "TELEGRAM_ADMIN_CHAT_IDS" and not str(value or "").strip():
+            level = "warning"
+        else:
+            level = "ok" if ok else "warning"
+        rows.append({
+            "status": "✅ OK" if level == "ok" else ("⚠️ Perlu dicek" if level == "warning" else "❌ Kurang"),
+            "secret": name,
+            "nilai": mask_secret_value(value) if any(key in name for key in ["TOKEN", "KEY", "PASSWORD"]) else str(value),
+            "keterangan": note,
+        })
+    return rows
+
+
+def check_optional_dependency(module_name: str) -> bool:
+    try:
+        __import__(module_name)
+        return True
+    except Exception:
+        return False
+
+
+def file_size_label(path: str) -> str:
+    try:
+        size = os.path.getsize(path)
+    except Exception:
+        return "0 B"
+    units = ["B", "KB", "MB", "GB"]
+    value = float(size)
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            return f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{size} B"
+
+
+def read_file_bytes_safe(path: str) -> bytes:
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except Exception:
+        return b""
 
 
 def _pdf_escape(text: str) -> str:
@@ -293,6 +371,8 @@ def init_state() -> None:
         st.session_state.dynamic_model_discovery_error = ""
     if "dynamic_model_discovery_source" not in st.session_state:
         st.session_state.dynamic_model_discovery_source = ""
+    if "active_operation_mode" not in st.session_state:
+        st.session_state.active_operation_mode = str(get_secret("AI_OPERATION_MODE", "Seimbang") or "Seimbang")
 
 
 # =========================
@@ -340,6 +420,8 @@ telegram_parse_mode = str(get_secret("TELEGRAM_PARSE_MODE", "") or "")
 telegram_lock_file = str(get_secret("TELEGRAM_LOCK_FILE", ".telegram_bot_worker.lock"))
 telegram_show_model_info = parse_bool(get_secret("TELEGRAM_SHOW_MODEL_INFO", True), default=True)
 telegram_speed_update_code = str(get_secret("TELEGRAM_SPEED_UPDATE_CODE", "4321") or "4321").strip()
+telegram_admin_chat_ids = str(get_secret("TELEGRAM_ADMIN_CHAT_IDS", "") or "").strip()
+allow_unrestricted_model_commands = parse_bool(get_secret("ALLOW_UNRESTRICTED_MODEL_COMMANDS", False), default=False)
 admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
 admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
 smart_model_router_default = parse_bool(get_secret("SMART_MODEL_ROUTER", True), default=True)
@@ -384,6 +466,12 @@ power_adaptive_scoring_enabled = parse_bool(get_secret("POWER_ADAPTIVE_SCORING_E
 power_circuit_breaker_enabled = parse_bool(get_secret("POWER_CIRCUIT_BREAKER_ENABLED", True), default=True)
 model_circuit_max_failures = int(get_secret("MODEL_CIRCUIT_MAX_FAILURES", 3) or 3)
 model_circuit_cooldown_seconds = int(get_secret("MODEL_CIRCUIT_COOLDOWN_SECONDS", 1800) or 1800)
+
+# Operational safety / retention
+ai_operation_mode_default = str(get_secret("AI_OPERATION_MODE", "Seimbang") or "Seimbang")
+power_log_retention_days = int(get_secret("POWER_LOG_RETENTION_DAYS", 30) or 30)
+power_cache_retention_days = int(get_secret("POWER_CACHE_RETENTION_DAYS", 7) or 7)
+power_benchmark_retention_days = int(get_secret("POWER_BENCHMARK_RETENTION_DAYS", 14) or 14)
 
 init_state()
 memory = MemoryStore(memory_file)
@@ -1080,6 +1168,7 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     5) Setelah request selesai, state aplikasi tetap diarahkan kembali ke model murah aktif.
     """
     active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+    operation_mode = str(st.session_state.get("active_operation_mode", ai_operation_mode_default) or "Seimbang")
     selected_model = str(st.session_state.get("active_model") or default_model).strip()
     health_cache = st.session_state.get("model_health_cache") or {}
 
@@ -1089,14 +1178,19 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     fast_normal_enabled = bool(st.session_state.get("active_fast_normal_model_router", True))
     fastest_cheap_models = prioritize_fastest_active_models(active_cheap_models, health_cache)
     thinking_mode = is_thinking_question(user_text)
-    capable_primary = get_capable_primary_model(active_expensive_models, health_cache) if thinking_mode else ""
+    if operation_mode == "Hemat":
+        capable_primary = ""
+    elif operation_mode == "Maksimal":
+        capable_primary = get_capable_primary_model(active_expensive_models, health_cache)
+    else:
+        capable_primary = get_capable_primary_model(active_expensive_models, health_cache) if thinking_mode else ""
 
     direct_to_expensive = False
     thinking_direct_to_capable = False
     normal_fast_mode = False
     rotated_primary = ""
 
-    if thinking_mode and capable_primary:
+    if ((thinking_mode and capable_primary) or (operation_mode == "Maksimal" and capable_primary)):
         # Pertanyaan kompleks langsung dijalankan oleh model capable, bukan model murah.
         primary_model = capable_primary
         direct_to_expensive = True
@@ -1141,6 +1235,15 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     allow_expensive = bool(active_expensive_models) and (
         bool(st.session_state.get("allow_expensive_fallback", True)) or direct_to_expensive or thinking_direct_to_capable
     )
+    if operation_mode == "Hemat":
+        allow_expensive = False
+        expensive_fallback_models = []
+        if primary_model not in active_cheap_models and active_cheap_models:
+            primary_model = active_cheap_models[0]
+            direct_to_expensive = False
+            thinking_direct_to_capable = False
+    elif operation_mode == "Maksimal" and active_expensive_models:
+        allow_expensive = True
 
     max_expensive = int(st.session_state.get("max_expensive_models", 1) or 1)
     if expensive_fallback_models:
@@ -1186,6 +1289,7 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
         "rotated_primary_model": rotated_primary,
         "next_cheap_primary_model": next_cheap_model,
         "cheap_rotation_index": int(st.session_state.get("cheap_model_rotation_index", 0) or 0),
+        "operation_mode": operation_mode,
     }
 
 def restore_active_model_to_cheap(preferred_model: str = "") -> None:
@@ -2174,6 +2278,8 @@ def get_runtime_config() -> Dict[str, Any]:
         "max_completion_tokens": int(st.session_state.active_max_tokens),
         "memory_file": memory_file,
         "telegram_token": telegram_token,
+        "telegram_admin_chat_ids": telegram_admin_chat_ids,
+        "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
         "smart_model_router": bool(st.session_state.active_smart_router),
         "return_to_primary": bool(st.session_state.active_return_to_primary),
         "max_smart_models": int(st.session_state.active_max_smart_models),
@@ -2199,6 +2305,7 @@ def get_runtime_config() -> Dict[str, Any]:
         "power_circuit_breaker_enabled": bool(power_circuit_breaker_enabled),
         "model_circuit_max_failures": int(model_circuit_max_failures),
         "model_circuit_cooldown_seconds": int(model_circuit_cooldown_seconds),
+        "operation_mode": str(st.session_state.get("active_operation_mode", ai_operation_mode_default) or "Seimbang"),
     }
 
 
@@ -2209,6 +2316,8 @@ def start_telegram_if_needed() -> None:
         service.start(
             {
                 "telegram_token": telegram_token,
+        "telegram_admin_chat_ids": telegram_admin_chat_ids,
+        "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
                 "slashai_api_key": api_key,
                 "slashai_api_url": api_url,
                 "slashai_model": route["primary_model"],
@@ -2226,6 +2335,8 @@ def start_telegram_if_needed() -> None:
                 "send_processing_message": send_processing_message,
                 "telegram_parse_mode": telegram_parse_mode,
                 "lock_file": telegram_lock_file,
+                "telegram_admin_chat_ids": telegram_admin_chat_ids,
+                "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
                 "allow_memory_commands": False,
                 "smart_model_router": cfg["smart_model_router"],
                 "return_to_primary": route["return_to_primary"],
@@ -2258,6 +2369,7 @@ def start_telegram_if_needed() -> None:
                 "power_circuit_breaker_enabled": bool(power_circuit_breaker_enabled),
                 "model_circuit_max_failures": int(model_circuit_max_failures),
                 "model_circuit_cooldown_seconds": int(model_circuit_cooldown_seconds),
+        "operation_mode": str(st.session_state.get("active_operation_mode", ai_operation_mode_default) or "Seimbang"),
                 "active_cheap_models": route.get("active_cheap_models", []),
                 "thinking_capable_models": route.get("active_expensive_models", []),
                 "speed_update_code": telegram_speed_update_code,
@@ -2334,6 +2446,188 @@ def render_admin_status() -> None:
     st.info(status_text)
 
 
+
+def render_mode_selector() -> None:
+    st.markdown("#### Mode Operasional AI")
+    current = str(st.session_state.get("active_operation_mode", ai_operation_mode_default) or "Seimbang")
+    options = ["Hemat", "Seimbang", "Maksimal"]
+    if current not in options:
+        current = "Seimbang"
+    selected = st.radio(
+        "Pilih mode",
+        options,
+        index=options.index(current),
+        horizontal=True,
+        help="Hemat menahan model mahal. Seimbang murah dulu lalu mahal jika perlu. Maksimal lebih agresif memakai model capable.",
+    )
+    st.session_state.active_operation_mode = selected
+    if selected == "Hemat":
+        st.info("Mode Hemat: memprioritaskan model murah/cepat dan menahan fallback menengah/mahal.")
+    elif selected == "Maksimal":
+        st.warning("Mode Maksimal: lebih cepat memakai model capable. Biaya bisa lebih tinggi.")
+    else:
+        st.success("Mode Seimbang: murah dulu, naik ke model capable hanya jika diperlukan.")
+
+
+def render_secrets_validator_panel() -> None:
+    st.markdown("#### Validator Secrets")
+    st.caption("Panel ini membantu mengecek konfigurasi tanpa menampilkan token/API key penuh.")
+    rows = validate_runtime_secrets()
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    required_missing = [r for r in rows if r["status"].startswith("❌")]
+    warnings = [r for r in rows if r["status"].startswith("⚠️")]
+    if required_missing:
+        st.error("Ada secret wajib yang belum terisi. Chat/model bisa gagal sampai ini diperbaiki.")
+    elif warnings:
+        st.warning("Konfigurasi utama aman, tetapi ada beberapa saran keamanan/operasional.")
+    else:
+        st.success("Konfigurasi utama terlihat aman.")
+
+    st.markdown("#### Dependency Knowledge Base")
+    deps = [
+        {"fitur": "PDF", "module": "pypdf", "status": "✅ tersedia" if check_optional_dependency("pypdf") else "⚠️ belum ada"},
+        {"fitur": "DOCX", "module": "docx", "status": "✅ tersedia" if check_optional_dependency("docx") else "⚠️ belum ada"},
+        {"fitur": "XLSX", "module": "openpyxl", "status": "✅ tersedia" if check_optional_dependency("openpyxl") else "⚠️ belum ada"},
+        {"fitur": "DataFrame", "module": "pandas", "status": "✅ tersedia" if check_optional_dependency("pandas") else "⚠️ belum ada"},
+    ]
+    st.dataframe(deps, use_container_width=True, hide_index=True)
+
+
+def render_ai_health_center() -> None:
+    st.markdown("#### AI Health Center")
+    route = build_model_routing_plan(user_text="halo")
+    status = service.status()
+    usage = {}
+    db_info = {}
+    try:
+        usage = power_store.usage_summary(days=1) if power_features_enabled else {}
+        db_info = power_store.database_overview() if power_features_enabled else {}
+    except Exception as exc:
+        st.warning(f"Power Features belum bisa dibaca: {exc}")
+    health_cache = st.session_state.get("model_health_cache") or {}
+    active_total = sum(1 for item in health_cache.values() if item.get("active"))
+    checked_at = _timestamp_to_wib_text(st.session_state.model_health_checked_at) if st.session_state.get("model_health_checked_at") else "belum pernah"
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Mode", route.get("operation_mode", "Seimbang"))
+    c2.metric("Model aktif terdeteksi", active_total)
+    c3.metric("Request 24 jam", int((usage or {}).get("requests") or 0))
+    c4.metric("Biaya 24 jam", f"Rp{float((usage or {}).get('cost_idr') or 0):.2f}")
+
+    st.markdown("##### Status Ringkas")
+    rows = [
+        {"komponen": "SlashAI API Key", "status": "✅ siap" if api_key else "❌ kosong", "detail": mask_secret_value(api_key)},
+        {"komponen": "Telegram", "status": "✅ running" if status.get("running") else "⚪ off", "detail": status.get("last_error") or status.get("worker_id") or "-"},
+        {"komponen": "Primary berikutnya", "status": route.get("primary_model", "-"), "detail": model_price_label(route.get("primary_model", ""))},
+        {"komponen": "Model murah aktif", "status": str(len(route.get("active_cheap_models") or [])), "detail": ", ".join((route.get("active_cheap_models") or [])[:3])},
+        {"komponen": "Model capable aktif", "status": str(len(route.get("active_expensive_models") or [])), "detail": ", ".join((route.get("active_expensive_models") or [])[:3])},
+        {"komponen": "Cek model terakhir", "status": checked_at, "detail": st.session_state.get("last_model_health_error", "") or "-"},
+        {"komponen": "Knowledge Base", "status": f"{db_info.get('documents', 0)} dokumen" if db_info else "-", "detail": f"{db_info.get('chunks', 0)} chunks | {db_info.get('db_size', '-') if db_info else '-'}"},
+        {"komponen": "Response Cache", "status": f"{db_info.get('response_cache', 0)} item" if db_info else "-", "detail": "SQLite persistent cache"},
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("🔁 Cek model sekarang", use_container_width=True, disabled=not is_model_health_check_allowed_now()):
+            refresh_model_health_if_needed(force=True)
+            st.success("Cek model selesai.")
+            st.rerun()
+    with col_b:
+        if st.button("🧪 Tes jawaban cepat", use_container_width=True, disabled=not bool(api_key)):
+            try:
+                test_route = build_model_routing_plan(advance_rotation=True, user_text="halo")
+                ans, meta = generate_answer(
+                    api_url=api_url,
+                    api_key=api_key,
+                    model=test_route["primary_model"],
+                    system_prompt=st.session_state.active_persona,
+                    user_text="Jawab satu kata: aktif",
+                    memory_text="",
+                    recent_messages=[],
+                    fallback_models=test_route["cheap_fallback_models"],
+                    expensive_fallback_models=test_route["expensive_fallback_models"],
+                    allow_expensive_fallback=test_route["allow_expensive_fallback"],
+                    max_expensive_models=test_route["max_expensive_models"],
+                    temperature=0,
+                    max_completion_tokens=120,
+                    timeout=30,
+                    smart_model_router=True,
+                    return_to_primary=test_route["return_to_primary"],
+                    max_smart_models=test_route["max_smart_models"],
+                )
+                st.success(f"Tes berhasil: {ans[:160]}")
+                st.caption(f"Model: {(meta or {}).get('active_model_final') or (meta or {}).get('model_requested') or test_route['primary_model']}")
+            except Exception as exc:
+                st.error(f"Tes gagal: {exc}")
+
+
+def render_maintenance_tools() -> None:
+    st.markdown("#### Backup, Restore, dan Perawatan")
+    db_path = str(power_db_path or ".adioranye_power.db")
+    st.caption(f"Database power: {db_path} | ukuran: {file_size_label(db_path)}")
+
+    db_bytes = read_file_bytes_safe(db_path)
+    st.download_button(
+        "⬇️ Download backup database SQLite",
+        data=db_bytes or b"",
+        file_name=f"adioranye-power-backup-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.db",
+        mime="application/octet-stream",
+        use_container_width=True,
+        disabled=not bool(db_bytes),
+    )
+
+    uploaded_db = st.file_uploader("Restore database dari file .db", type=["db", "sqlite", "sqlite3"], key="restore_power_db")
+    confirm_restore = st.checkbox("Saya paham restore akan menimpa database power saat ini", key="confirm_restore_power_db")
+    if st.button("♻️ Restore database", use_container_width=True, disabled=not bool(uploaded_db and confirm_restore)):
+        try:
+            backup_path = db_path + f".before-restore-{int(time.time())}.bak"
+            if os.path.exists(db_path):
+                shutil.copyfile(db_path, backup_path)
+            with open(db_path, "wb") as f:
+                f.write(uploaded_db.read())
+            st.success(f"Restore berhasil. Backup database lama: {backup_path}")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Restore gagal: {exc}")
+
+    st.markdown("#### Auto-clean data lama")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        log_days = st.number_input("Simpan usage log (hari)", 1, 365, int(power_log_retention_days), 1)
+    with c2:
+        cache_days = st.number_input("Simpan response cache (hari)", 1, 90, int(power_cache_retention_days), 1)
+    with c3:
+        bench_days = st.number_input("Simpan benchmark (hari)", 1, 180, int(power_benchmark_retention_days), 1)
+    if st.button("🧹 Bersihkan data lama", use_container_width=True):
+        try:
+            deleted = power_store.cleanup_old_data(int(log_days), int(cache_days), int(bench_days))
+            st.success(f"Cleanup selesai: {deleted}")
+        except Exception as exc:
+            st.error(f"Cleanup gagal: {exc}")
+
+    st.markdown("#### Reset terarah")
+    confirm_reset = st.checkbox("Aktifkan tombol reset berisiko", key="confirm_dangerous_resets")
+    r1, r2, r3, r4 = st.columns(4)
+    with r1:
+        if st.button("Reset usage", use_container_width=True, disabled=not confirm_reset):
+            st.warning(f"Usage dihapus: {power_store.clear_usage_logs()}")
+            st.rerun()
+    with r2:
+        if st.button("Reset cache", use_container_width=True, disabled=not confirm_reset):
+            st.warning(f"Cache dihapus: {power_store.clear_response_cache()}")
+            st.rerun()
+    with r3:
+        if st.button("Reset KB", use_container_width=True, disabled=not confirm_reset):
+            st.warning(f"Knowledge base dihapus: {power_store.clear_knowledge_base()}")
+            st.rerun()
+    with r4:
+        if st.button("Reset memory", use_container_width=True, disabled=not confirm_reset):
+            st.warning(f"Memory permanen dihapus: {power_store.clear_memories_all()}")
+            st.rerun()
+
+
+
 def render_admin_settings() -> None:
     st.subheader("⚙️ Admin Settings")
     st.success(f"Login sebagai: {admin_username}")
@@ -2353,10 +2647,11 @@ def render_admin_settings() -> None:
         st.session_state.admin_authenticated = False
         st.rerun()
 
-    tab_ai, tab_bot, tab_memory, tab_setup = st.tabs(["AI", "Telegram", "Memory", "Setup"])
+    tab_ai, tab_bot, tab_memory, tab_health, tab_maint, tab_setup = st.tabs(["AI", "Telegram", "Memory", "Health", "Maintenance", "Setup"])
 
     with tab_ai:
         st.markdown("#### Model & Persona")
+        render_mode_selector()
         filter_choice = st.radio(
             "Tampilan model",
             ["Hemat saja", "Hemat + menengah/mahal"],
@@ -2576,6 +2871,8 @@ def render_admin_settings() -> None:
         route = build_model_routing_plan()
         bot_config = {
             "telegram_token": telegram_token,
+        "telegram_admin_chat_ids": telegram_admin_chat_ids,
+        "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
             "slashai_api_key": api_key,
             "slashai_api_url": api_url,
             "slashai_model": route["primary_model"],
@@ -2593,6 +2890,8 @@ def render_admin_settings() -> None:
             "send_processing_message": send_processing_message,
             "telegram_parse_mode": telegram_parse_mode,
             "lock_file": telegram_lock_file,
+            "telegram_admin_chat_ids": telegram_admin_chat_ids,
+            "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
             "allow_memory_commands": False,
             "smart_model_router": bool(st.session_state.active_smart_router),
             "return_to_primary": route["return_to_primary"],
@@ -2763,6 +3062,13 @@ def render_admin_settings() -> None:
                 st.warning("Semua memory file lokal dihapus.")
                 st.rerun()
 
+    with tab_health:
+        render_secrets_validator_panel()
+        render_ai_health_center()
+
+    with tab_maint:
+        render_maintenance_tools()
+
     with tab_setup:
         st.markdown("#### Secrets Streamlit Cloud")
         st.write("Masukkan konfigurasi berikut di menu **Streamlit Cloud → App → Settings → Secrets**.")
@@ -2798,6 +3104,8 @@ TELEGRAM_SEND_PROCESSING_MESSAGE = false
 TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
 TELEGRAM_SHOW_MODEL_INFO = true
 TELEGRAM_SPEED_UPDATE_CODE = "4321"
+TELEGRAM_ADMIN_CHAT_IDS = ""
+ALLOW_UNRESTRICTED_MODEL_COMMANDS = false
 
 # Opsional
 TEMPERATURE = 0.3
@@ -2826,7 +3134,21 @@ MODEL_HEALTH_CHECK_INTERVAL_SECONDS = 90000
 MODEL_HEALTH_TIMEOUT_SECONDS = 12
 MODEL_HEALTH_MIDNIGHT_ONLY = true
 MODEL_HEALTH_HOUR_WIB = 0
-MODEL_HEALTH_WINDOW_MINUTES = 60''',
+MODEL_HEALTH_WINDOW_MINUTES = 60
+
+# Power Features / Knowledge Base
+POWER_FEATURES_ENABLED = true
+POWER_DB_PATH = ".adioranye_power.db"
+POWER_RAG_ENABLED = true
+POWER_RAG_TOP_K = 5
+POWER_KB_MAX_FILE_MB = 12
+POWER_RESPONSE_CACHE_ENABLED = true
+POWER_ADAPTIVE_SCORING_ENABLED = true
+POWER_CIRCUIT_BREAKER_ENABLED = true
+AI_OPERATION_MODE = "Seimbang"
+POWER_LOG_RETENTION_DAYS = 30
+POWER_CACHE_RETENTION_DAYS = 7
+POWER_BENCHMARK_RETENTION_DAYS = 14''',
             language="toml",
         )
         st.markdown(
@@ -2935,155 +3257,159 @@ for idx, msg in enumerate(st.session_state.chat_messages):
 # Power Features Admin Panel
 # =========================
 if power_features_enabled and st.session_state.get("admin_authenticated", False):
-    with st.expander("⚡ Pusat Fitur Pintar: Knowledge Base, Memory, Biaya, Optimizer", expanded=True):
-        st.caption("Kelola fitur pintar dari satu tempat. Mulai dari Upload File untuk knowledge base, lalu pantau Usage dan Optimizer agar model tetap hemat dan stabil.")
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("RAG", "ON" if power_rag_enabled else "OFF")
-        with col_b:
-            st.metric("SQLite Memory", "ON" if power_persistent_memory_enabled else "OFF")
-        with col_c:
-            st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
+    try:
+        with st.expander("⚡ Pusat Fitur Pintar: Knowledge Base, Memory, Biaya, Optimizer", expanded=True):
+            st.caption("Kelola fitur pintar dari satu tempat. Mulai dari Upload File untuk knowledge base, lalu pantau Usage dan Optimizer agar model tetap hemat dan stabil.")
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                st.metric("RAG", "ON" if power_rag_enabled else "OFF")
+            with col_b:
+                st.metric("SQLite Memory", "ON" if power_persistent_memory_enabled else "OFF")
+            with col_c:
+                st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
 
-        tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark"])
-        with tabs_power[0]:
-            kb_stats = power_store.knowledge_stats()
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Dokumen KB", kb_stats.get("documents", 0))
-            c2.metric("Chunks", kb_stats.get("chunks", 0))
-            c3.metric("Karakter", kb_stats.get("characters", 0))
+            tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark"])
+            with tabs_power[0]:
+                kb_stats = power_store.knowledge_stats()
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Dokumen KB", kb_stats.get("documents", 0))
+                c2.metric("Chunks", kb_stats.get("chunks", 0))
+                c3.metric("Karakter", kb_stats.get("characters", 0))
 
-            st.caption("Knowledge base dipakai otomatis sebagai konteks non-instruksi saat pertanyaan relevan dengan dokumen/file/sumber.")
-            kb_upload_tabs = st.tabs(["Upload File", "Tambah Manual", "Cari", "Kelola"] )
+                st.caption("Knowledge base dipakai otomatis sebagai konteks non-instruksi saat pertanyaan relevan dengan dokumen/file/sumber.")
+                kb_upload_tabs = st.tabs(["Upload File", "Tambah Manual", "Cari", "Kelola"] )
 
-            with kb_upload_tabs[0]:
-                uploaded_kb = st.file_uploader(
-                    "Upload file ke knowledge base",
-                    type=["txt", "md", "markdown", "csv", "json", "jsonl", "pdf", "docx", "xlsx", "xlsm", "log", "py", "js", "ts", "html", "css", "xml"],
-                    accept_multiple_files=True,
-                    help="PDF/DOCX/XLSX membutuhkan library terkait. Jika tidak tersedia, sistem akan memberi pesan gagal ekstrak tanpa membuat app crash.",
-                )
-                source_label = st.text_input("Label sumber", value="streamlit-upload", key="kb_source_label")
-                if uploaded_kb and st.button("➕ Masukkan file ke Knowledge Base", use_container_width=True):
-                    added = []
-                    max_bytes = max(1, int(power_kb_max_file_mb or 12)) * 1024 * 1024
-                    for up in uploaded_kb:
-                        try:
-                            raw_bytes = up.read()
-                            if len(raw_bytes) > max_bytes:
-                                added.append(f"{up.name}: dilewati, ukuran > {power_kb_max_file_mb} MB")
-                                continue
-                            content, kind = extract_text_from_file_bytes(up.name, raw_bytes)
-                            if not str(content or "").strip():
-                                added.append(f"{up.name}: gagal, tidak ada teks yang bisa diambil")
-                                continue
-                            doc_id, chunks = power_store.add_document(title=up.name, text=content, source=f"{source_label}:{kind}")
-                            added.append(f"{up.name}: doc {doc_id}, {chunks} chunk, tipe {kind}")
-                        except Exception as exc:
-                            added.append(f"{up.name}: gagal - {exc}")
-                    st.success("\n".join(added))
-
-            with kb_upload_tabs[1]:
-                manual_title = st.text_input("Judul dokumen manual", key="kb_manual_title")
-                manual_source = st.text_input("Sumber manual", value="streamlit-manual", key="kb_manual_source")
-                manual_text = st.text_area("Isi dokumen/manual knowledge", height=220, key="kb_manual_text")
-                if st.button("💾 Simpan manual ke Knowledge Base", use_container_width=True) and manual_text.strip():
-                    doc_id, chunks = power_store.add_document(
-                        title=manual_title.strip() or "Catatan manual",
-                        text=manual_text,
-                        source=manual_source.strip() or "streamlit-manual",
+                with kb_upload_tabs[0]:
+                    uploaded_kb = st.file_uploader(
+                        "Upload file ke knowledge base",
+                        type=["txt", "md", "markdown", "csv", "json", "jsonl", "pdf", "docx", "xlsx", "xlsm", "log", "py", "js", "ts", "html", "css", "xml"],
+                        accept_multiple_files=True,
+                        help="PDF/DOCX/XLSX membutuhkan library terkait. Jika tidak tersedia, sistem akan memberi pesan gagal ekstrak tanpa membuat app crash.",
                     )
-                    if chunks:
-                        st.success(f"Tersimpan. Doc ID: {doc_id}, chunks: {chunks}")
-                    else:
-                        st.warning("Tidak ada teks yang bisa disimpan.")
+                    source_label = st.text_input("Label sumber", value="streamlit-upload", key="kb_source_label")
+                    if uploaded_kb and st.button("➕ Masukkan file ke Knowledge Base", use_container_width=True):
+                        added = []
+                        max_bytes = max(1, int(power_kb_max_file_mb or 12)) * 1024 * 1024
+                        for up in uploaded_kb:
+                            try:
+                                raw_bytes = up.read()
+                                if len(raw_bytes) > max_bytes:
+                                    added.append(f"{up.name}: dilewati, ukuran > {power_kb_max_file_mb} MB")
+                                    continue
+                                content, kind = extract_text_from_file_bytes(up.name, raw_bytes)
+                                if not str(content or "").strip():
+                                    added.append(f"{up.name}: gagal, tidak ada teks yang bisa diambil")
+                                    continue
+                                doc_id, chunks = power_store.add_document(title=up.name, text=content, source=f"{source_label}:{kind}")
+                                added.append(f"{up.name}: doc {doc_id}, {chunks} chunk, tipe {kind}")
+                            except Exception as exc:
+                                added.append(f"{up.name}: gagal - {exc}")
+                        st.success("\n".join(added))
 
-            with kb_upload_tabs[2]:
-                kb_query = st.text_input("Cari isi knowledge base", key="power_kb_query")
-                kb_limit = st.slider("Jumlah hasil", 3, 15, int(power_rag_top_k or 5), key="kb_search_limit")
-                if kb_query:
-                    results = power_store.search_documents(kb_query, limit=kb_limit)
-                    if not results:
-                        st.info("Belum ada potongan knowledge base yang cocok.")
-                    for item in results:
-                        with st.expander(f"Doc {item.get('doc_id')} · {item.get('title')} · chunk {item.get('chunk_index')} · score {item.get('score')}"):
-                            st.caption(f"Sumber: {item.get('source')}")
-                            st.write(str(item.get("content") or "")[:1800])
-
-            with kb_upload_tabs[3]:
-                docs = power_store.list_documents(limit=100)
-                st.dataframe(docs, use_container_width=True, hide_index=True)
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    delete_id = st.text_input("Hapus Doc ID", key="kb_delete_doc_id")
-                    if st.button("🗑️ Hapus dokumen", use_container_width=True) and delete_id.strip():
-                        ok = power_store.delete_document(int(delete_id)) if delete_id.strip().isdigit() else False
-                        st.success(f"Dokumen ID {delete_id} dihapus.") if ok else st.error("Doc ID tidak ditemukan/gagal dihapus.")
-                with col_b:
-                    detail_id = st.text_input("Preview Doc ID", key="kb_detail_doc_id")
-                    if st.button("👁️ Preview dokumen", use_container_width=True) and detail_id.strip():
-                        doc = power_store.get_document(int(detail_id), max_chars=6000) if detail_id.strip().isdigit() else {}
-                        if doc:
-                            st.markdown(f"**{doc.get('title')}**")
-                            st.caption(f"Source: {doc.get('source')} | Chunks: {doc.get('chunks')}")
-                            st.text_area("Preview", value=str(doc.get("preview") or ""), height=260)
+                with kb_upload_tabs[1]:
+                    manual_title = st.text_input("Judul dokumen manual", key="kb_manual_title")
+                    manual_source = st.text_input("Sumber manual", value="streamlit-manual", key="kb_manual_source")
+                    manual_text = st.text_area("Isi dokumen/manual knowledge", height=220, key="kb_manual_text")
+                    if st.button("💾 Simpan manual ke Knowledge Base", use_container_width=True) and manual_text.strip():
+                        doc_id, chunks = power_store.add_document(
+                            title=manual_title.strip() or "Catatan manual",
+                            text=manual_text,
+                            source=manual_source.strip() or "streamlit-manual",
+                        )
+                        if chunks:
+                            st.success(f"Tersimpan. Doc ID: {doc_id}, chunks: {chunks}")
                         else:
-                            st.error("Doc ID tidak ditemukan.")
-                if st.button("🔁 Rebuild index Knowledge Base", use_container_width=True):
-                    docs_count, chunks_count = power_store.rebuild_knowledge_index()
-                    st.success(f"Index dibangun ulang. Dokumen: {docs_count}, chunks: {chunks_count}")
+                            st.warning("Tidak ada teks yang bisa disimpan.")
 
-        with tabs_power[1]:
-            mem_text = st.text_area("Tambah memory permanen SQLite", height=100, placeholder="Contoh: User ingin jawaban profesional, praktis, dan kode siap tempel.")
-            if st.button("💾 Simpan memory permanen", use_container_width=True) and mem_text.strip():
-                mem_id = power_store.add_memory(mem_text, user_id="global", tags="streamlit-admin")
-                st.success(f"Memory tersimpan. ID: {mem_id}")
-            mem_query = st.text_input("Cari memory", key="power_mem_query")
-            if mem_query:
-                st.dataframe(power_store.search_memories(mem_query, user_id="global", limit=20), use_container_width=True, hide_index=True)
+                with kb_upload_tabs[2]:
+                    kb_query = st.text_input("Cari isi knowledge base", key="power_kb_query")
+                    kb_limit = st.slider("Jumlah hasil", 3, 15, int(power_rag_top_k or 5), key="kb_search_limit")
+                    if kb_query:
+                        results = power_store.search_documents(kb_query, limit=kb_limit)
+                        if not results:
+                            st.info("Belum ada potongan knowledge base yang cocok.")
+                        for item in results:
+                            with st.expander(f"Doc {item.get('doc_id')} · {item.get('title')} · chunk {item.get('chunk_index')} · score {item.get('score')}"):
+                                st.caption(f"Sumber: {item.get('source')}")
+                                st.write(str(item.get("content") or "")[:1800])
 
-        with tabs_power[2]:
-            usage = power_store.usage_summary(days=1)
-            st.metric("Estimasi biaya 24 jam", f"Rp{usage.get('cost_idr', 0):.2f}")
-            st.metric("Request 24 jam", usage.get("requests", 0))
-            st.dataframe(usage.get("by_model", []), use_container_width=True, hide_index=True)
-            st.caption(f"Limit harian: Rp{daily_cost_limit_idr:.0f} | Max expensive calls/hari: {max_expensive_calls_per_day}")
+                with kb_upload_tabs[3]:
+                    docs = power_store.list_documents(limit=100)
+                    st.dataframe(docs, use_container_width=True, hide_index=True)
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        delete_id = st.text_input("Hapus Doc ID", key="kb_delete_doc_id")
+                        if st.button("🗑️ Hapus dokumen", use_container_width=True) and delete_id.strip():
+                            ok = power_store.delete_document(int(delete_id)) if delete_id.strip().isdigit() else False
+                            st.success(f"Dokumen ID {delete_id} dihapus.") if ok else st.error("Doc ID tidak ditemukan/gagal dihapus.")
+                    with col_b:
+                        detail_id = st.text_input("Preview Doc ID", key="kb_detail_doc_id")
+                        if st.button("👁️ Preview dokumen", use_container_width=True) and detail_id.strip():
+                            doc = power_store.get_document(int(detail_id), max_chars=6000) if detail_id.strip().isdigit() else {}
+                            if doc:
+                                st.markdown(f"**{doc.get('title')}**")
+                                st.caption(f"Source: {doc.get('source')} | Chunks: {doc.get('chunks')}")
+                                st.text_area("Preview", value=str(doc.get("preview") or ""), height=260)
+                            else:
+                                st.error("Doc ID tidak ditemukan.")
+                    if st.button("🔁 Rebuild index Knowledge Base", use_container_width=True):
+                        docs_count, chunks_count = power_store.rebuild_knowledge_index()
+                        st.success(f"Index dibangun ulang. Dokumen: {docs_count}, chunks: {chunks_count}")
 
-        with tabs_power[3]:
-            st.caption("Optimizer memakai data nyata: success rate, latency, quality score, biaya, dan circuit breaker.")
-            opt_intent = st.selectbox(
-                "Lihat skor untuk intent",
-                ["", "quick_chat", "coding", "academic", "calculation", "document_question", "research", "creative", "deep_reasoning", "general"],
-                format_func=lambda x: "semua intent" if x == "" else x,
-                key="power_optimizer_intent",
-            )
-            st.dataframe(power_store.model_score_rows(intent=opt_intent or None, limit=120), use_container_width=True, hide_index=True)
-            with st.expander("Circuit breaker / model yang sedang dikarantina"):
-                st.dataframe(power_store.circuit_breaker_status(limit=120), use_container_width=True, hide_index=True)
-            st.caption(
-                f"Response cache: {'ON' if power_response_cache_enabled else 'OFF'} | TTL {power_response_cache_ttl_seconds}s | "
-                f"Adaptive scoring: {'ON' if power_adaptive_scoring_enabled else 'OFF'} | Circuit breaker: {'ON' if power_circuit_breaker_enabled else 'OFF'}"
-            )
+            with tabs_power[1]:
+                mem_text = st.text_area("Tambah memory permanen SQLite", height=100, placeholder="Contoh: User ingin jawaban profesional, praktis, dan kode siap tempel.")
+                if st.button("💾 Simpan memory permanen", use_container_width=True) and mem_text.strip():
+                    mem_id = power_store.add_memory(mem_text, user_id="global", tags="streamlit-admin")
+                    st.success(f"Memory tersimpan. ID: {mem_id}")
+                mem_query = st.text_input("Cari memory", key="power_mem_query")
+                if mem_query:
+                    st.dataframe(power_store.search_memories(mem_query, user_id="global", limit=20), use_container_width=True, hide_index=True)
 
-        with tabs_power[4]:
-            route_preview = build_model_routing_plan()
-            bench_models = unique_models([route_preview.get("primary_model", "")] + route_preview.get("active_cheap_models", [])[:4] + route_preview.get("active_expensive_models", [])[:4])
-            st.write("Model yang akan dites:")
-            st.code("\n".join(bench_models[:benchmark_max_models]) or "Belum ada model aktif")
-            if st.button("🧪 Jalankan benchmark ringan", use_container_width=True, disabled=not bool(api_key and bench_models)):
-                results = run_model_benchmark(
-                    store=power_store,
-                    api_url=api_url,
-                    api_key=api_key,
-                    models=bench_models,
-                    system_prompt=st.session_state.active_persona,
-                    timeout=45,
-                    max_models=benchmark_max_models,
+            with tabs_power[2]:
+                usage = power_store.usage_summary(days=1)
+                st.metric("Estimasi biaya 24 jam", f"Rp{usage.get('cost_idr', 0):.2f}")
+                st.metric("Request 24 jam", usage.get("requests", 0))
+                st.dataframe(usage.get("by_model", []), use_container_width=True, hide_index=True)
+                st.caption(f"Limit harian: Rp{daily_cost_limit_idr:.0f} | Max expensive calls/hari: {max_expensive_calls_per_day}")
+
+            with tabs_power[3]:
+                st.caption("Optimizer memakai data nyata: success rate, latency, quality score, biaya, dan circuit breaker.")
+                opt_intent = st.selectbox(
+                    "Lihat skor untuk intent",
+                    ["", "quick_chat", "coding", "academic", "calculation", "document_question", "research", "creative", "deep_reasoning", "general"],
+                    format_func=lambda x: "semua intent" if x == "" else x,
+                    key="power_optimizer_intent",
                 )
-                st.dataframe(results, use_container_width=True, hide_index=True)
-            with st.expander("Riwayat benchmark"):
-                st.dataframe(power_store.latest_benchmarks(limit=80), use_container_width=True, hide_index=True)
+                st.dataframe(power_store.model_score_rows(intent=opt_intent or None, limit=120), use_container_width=True, hide_index=True)
+                with st.expander("Circuit breaker / model yang sedang dikarantina"):
+                    st.dataframe(power_store.circuit_breaker_status(limit=120), use_container_width=True, hide_index=True)
+                st.caption(
+                    f"Response cache: {'ON' if power_response_cache_enabled else 'OFF'} | TTL {power_response_cache_ttl_seconds}s | "
+                    f"Adaptive scoring: {'ON' if power_adaptive_scoring_enabled else 'OFF'} | Circuit breaker: {'ON' if power_circuit_breaker_enabled else 'OFF'}"
+                )
 
+            with tabs_power[4]:
+                route_preview = build_model_routing_plan()
+                bench_models = unique_models([route_preview.get("primary_model", "")] + route_preview.get("active_cheap_models", [])[:4] + route_preview.get("active_expensive_models", [])[:4])
+                st.write("Model yang akan dites:")
+                st.code("\n".join(bench_models[:benchmark_max_models]) or "Belum ada model aktif")
+                if st.button("🧪 Jalankan benchmark ringan", use_container_width=True, disabled=not bool(api_key and bench_models)):
+                    results = run_model_benchmark(
+                        store=power_store,
+                        api_url=api_url,
+                        api_key=api_key,
+                        models=bench_models,
+                        system_prompt=st.session_state.active_persona,
+                        timeout=45,
+                        max_models=benchmark_max_models,
+                    )
+                    st.dataframe(results, use_container_width=True, hide_index=True)
+                with st.expander("Riwayat benchmark"):
+                    st.dataframe(power_store.latest_benchmarks(limit=80), use_container_width=True, hide_index=True)
+
+    except Exception as exc:
+        st.error("Power Features gagal dimuat, tetapi chat utama tetap aktif.")
+        st.code(str(exc)[:2000])
 # Spacer is rendered at the very end so it also protects newly generated messages.
 typed_input = st.chat_input("Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode...")
 user_input = st.session_state.pending_prompt or typed_input
