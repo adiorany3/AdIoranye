@@ -2414,7 +2414,7 @@ st.markdown(
         <div class="app-logo">🤖</div>
         <div>
             <h3 class="app-title">Adioranye AI</h3>
-            <p class="app-subtitle">Tulis pesan Anda. Adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. Terdapat {len(cheap_active)} model hemat aktif dan {len(expensive_active)} model standby untuk menjawab pertanyaan Anda.</p>
+            <p class="app-subtitle">Tulis pesan Anda. Adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. Terdapat {len(cheap_active)} model AI live dan {len(expensive_active)} model standby untuk menjawab pertanyaan Anda.</p>
         </div>
     </div>
     <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
