@@ -3178,8 +3178,6 @@ cfg = get_runtime_config()
 public_route_preview = build_model_routing_plan(user_text="halo")
 cheap_active = public_route_preview.get("active_cheap_models") or []
 expensive_active = public_route_preview.get("active_expensive_models") or []
-last_public_meta = st.session_state.get("last_answer_meta", {}) or {}
-
 st.markdown(
     f"""
     <div class="mac-windowbar">
@@ -3199,8 +3197,6 @@ st.markdown(
         </div>
     </div>
     <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
-    {build_public_model_status_html(public_route_preview, last_public_meta)}
-    {build_quick_help_html(bool(st.session_state.get("admin_authenticated", False)))}
     """,
     unsafe_allow_html=True,
 )
