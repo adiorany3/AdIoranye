@@ -1963,12 +1963,138 @@ st.markdown(
         }
     }
 
-    code, pre,
-    div[data-testid="stMarkdownContainer"] code {
-        border-radius: 14px !important;
-        white-space: pre-wrap !important;
+    /* =========================
+       Code block readability
+       ========================= */
+    pre,
+    div[data-testid="stMarkdownContainer"] pre,
+    div[data-testid="stCodeBlock"] pre {
+        position: relative !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding: 1rem 1.08rem !important;
+        margin: 0.86rem 0 !important;
+        border-radius: 18px !important;
+        border: 1px solid rgba(148, 163, 184, 0.24) !important;
+        background:
+            linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96)) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.08),
+            0 16px 34px rgba(15, 23, 42, 0.18) !important;
+        backdrop-filter: blur(18px) saturate(160%) !important;
+        -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.50) transparent;
+    }
+
+    pre::before,
+    div[data-testid="stMarkdownContainer"] pre::before,
+    div[data-testid="stCodeBlock"] pre::before {
+        content: "CODE";
+        display: block;
+        width: fit-content;
+        margin: -0.2rem 0 0.72rem;
+        padding: 0.22rem 0.52rem;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        background: rgba(255,255,255,0.06);
+        color: rgba(226, 232, 240, 0.72) !important;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+    }
+
+    pre::-webkit-scrollbar,
+    div[data-testid="stMarkdownContainer"] pre::-webkit-scrollbar,
+    div[data-testid="stCodeBlock"] pre::-webkit-scrollbar {
+        height: 10px;
+    }
+
+    pre::-webkit-scrollbar-track,
+    div[data-testid="stMarkdownContainer"] pre::-webkit-scrollbar-track,
+    div[data-testid="stCodeBlock"] pre::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    pre::-webkit-scrollbar-thumb,
+    div[data-testid="stMarkdownContainer"] pre::-webkit-scrollbar-thumb,
+    div[data-testid="stCodeBlock"] pre::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.46);
+        border: 3px solid rgba(2, 6, 23, 0.96);
+    }
+
+    pre code,
+    div[data-testid="stMarkdownContainer"] pre code,
+    div[data-testid="stCodeBlock"] pre code {
+        display: block !important;
+        min-width: max-content !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        background: transparent !important;
+        color: #e5e7eb !important;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+        font-size: clamp(0.78rem, 2.65vw, 0.92rem) !important;
+        line-height: 1.68 !important;
+        white-space: pre !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        tab-size: 4;
+    }
+
+    div[data-testid="stMarkdownContainer"] :not(pre) > code,
+    div[data-testid="stMarkdownContainer"] p code,
+    div[data-testid="stMarkdownContainer"] li code {
+        display: inline-block !important;
+        max-width: 100% !important;
+        padding: 0.12rem 0.42rem !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(148, 163, 184, 0.28) !important;
+        background: rgba(15, 23, 42, 0.08) !important;
+        color: var(--mac-text) !important;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+        font-size: 0.92em !important;
+        line-height: 1.45 !important;
+        white-space: normal !important;
         word-break: break-word !important;
-        border: 1px solid var(--mac-border) !important;
+    }
+
+    @media (prefers-color-scheme: dark) {
+        div[data-testid="stMarkdownContainer"] :not(pre) > code,
+        div[data-testid="stMarkdownContainer"] p code,
+        div[data-testid="stMarkdownContainer"] li code {
+            background: rgba(255, 255, 255, 0.09) !important;
+            border-color: rgba(255, 255, 255, 0.16) !important;
+            color: #f8fafc !important;
+        }
+    }
+
+    @media (max-width: 760px) {
+        pre,
+        div[data-testid="stMarkdownContainer"] pre,
+        div[data-testid="stCodeBlock"] pre {
+            margin-left: -0.1rem !important;
+            margin-right: -0.1rem !important;
+            padding: 0.86rem 0.88rem !important;
+            border-radius: 16px !important;
+        }
+
+        pre code,
+        div[data-testid="stMarkdownContainer"] pre code,
+        div[data-testid="stCodeBlock"] pre code {
+            font-size: 0.78rem !important;
+            line-height: 1.62 !important;
+        }
+    }
+
+    div[data-testid="stDataFrame"],
+    div[data-testid="stTable"] {
+        max-width: 100% !important;
+        overflow-x: auto !important;
     }
 
     textarea,
