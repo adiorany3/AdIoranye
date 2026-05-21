@@ -157,7 +157,31 @@ MODEL_PRICE_IDR.update({
     'slashai/Step-3.5-Flash': {"input": 50, "output": 200},
 })
 
-ALL_SLASHAI_MODELS = _unique_ordered([item["model"] for item in SLASHAI_MODEL_CATALOG])
+# Model yang terlihat dominan pada dashboard penggunaan terbaru pengguna.
+# Beberapa endpoint/provider memakai nama base tanpa suffix (:fast/:slow/:medium).
+TOP_USAGE_MODEL_CANDIDATES = _unique_ordered([
+    "slashai/gpt-5-nano",
+    "slashai/deepseek-v4-flash",
+    "slashai/gpt-5-mini",
+    "slashai/claude-haiku-4.5",
+    "slashai/deepseek-v3.2",
+    "slashai/gpt-5.4-nano",
+    "slashai/Kimi-K2.5",
+    "slashai/Qwen3.6-Plus",
+    "bai/deepseek-v4-flash",
+    "slashai/qwen3-coder-next",
+])
+
+MODEL_PRICE_IDR.update({
+    "slashai/deepseek-v4-flash": {"input": 50, "output": 200},
+    "bai/deepseek-v4-flash": {"input": 50, "output": 200},
+    "slashai/claude-haiku-4.5": {"input": 50, "output": 200},
+    "slashai/Kimi-K2.5": {"input": 500, "output": 2000},
+    "slashai/Qwen3.6-Plus": {"input": 500, "output": 2000},
+    "slashai/qwen3-coder-next": {"input": 500, "output": 2000},
+})
+
+ALL_SLASHAI_MODELS = _unique_ordered([item["model"] for item in SLASHAI_MODEL_CATALOG] + TOP_USAGE_MODEL_CANDIDATES)
 ALL_CHEAP_MODELS = _unique_ordered([
     item["model"] for item in SLASHAI_MODEL_CATALOG
     if _tier_from_price(int(item["input"]), int(item["output"])) == "cheap"
@@ -174,6 +198,9 @@ ALL_CAPABLE_MODELS = _unique_ordered(ALL_MEDIUM_MODELS + ALL_EXPENSIVE_MODELS)
 
 # Jalur murah: banyak opsi agar /rotate dan health-check bisa memilih yang hidup/tercepat.
 DEFAULT_CHEAP_FALLBACK_MODELS = _unique_ordered([
+    "slashai/deepseek-v4-flash",
+    "slashai/claude-haiku-4.5",
+    "bai/deepseek-v4-flash",
     "slashai/gemini-3-flash",
     "slashai/gpt-5-nano",
     "slashai/gpt-5-mini",
@@ -194,6 +221,9 @@ DEFAULT_CHEAP_FALLBACK_MODELS = _unique_ordered([
 
 # Jalur menengah/mahal: dipakai oleh /ubah mahal, thinking router, atau fallback saat murah kurang cukup.
 DEFAULT_EXPENSIVE_FALLBACK_MODELS = _unique_ordered([
+    "slashai/Qwen3.6-Plus",
+    "slashai/Kimi-K2.5",
+    "slashai/qwen3-coder-next",
     "slashai/qwen3.6-plus",
     "slashai/claude-sonnet-4.5:fast",
     "slashai/deepseek-3.2:fast",
@@ -217,18 +247,118 @@ DEFAULT_FALLBACK_MODELS = DEFAULT_CHEAP_FALLBACK_MODELS
 
 
 def model_price(model: str) -> Dict[str, int]:
+    """Return price for a model, tolerant to case, aliases, suffixes, and base names."""
     model_name = str(model or "").strip()
+    if not model_name:
+        return {"input": 0, "output": 0}
     if model_name in MODEL_PRICE_IDR:
         return MODEL_PRICE_IDR[model_name]
-    lowered = model_name.lower()
-    if lowered in MODEL_PRICE_IDR:
-        return MODEL_PRICE_IDR[lowered]
+    lower_name = model_name.lower()
+    if lower_name in MODEL_PRICE_IDR:
+        return MODEL_PRICE_IDR[lower_name]
+    for key, value in MODEL_PRICE_IDR.items():
+        if str(key).lower() == lower_name:
+            return value
+    base_name = model_name.split(":", 1)[0]
+    if base_name != model_name:
+        if base_name in MODEL_PRICE_IDR:
+            return MODEL_PRICE_IDR[base_name]
+        lower_base = base_name.lower()
+        for key, value in MODEL_PRICE_IDR.items():
+            if str(key).lower().split(":", 1)[0] == lower_base:
+                return value
+    if "deepseek-v4-flash" in lower_name:
+        return {"input": 50, "output": 200}
+    if "deepseek-v4-pro" in lower_name:
+        return {"input": 5000, "output": 25000}
+    if "haiku-4.5" in lower_name:
+        return {"input": 50, "output": 200}
+    if "qwen3.6-plus" in lower_name or "qwen3-coder-next" in lower_name or "kimi-k2.5" in lower_name:
+        return {"input": 500, "output": 2000}
     return {"input": 0, "output": 0}
-
 
 def model_cost_tier(model: str) -> str:
     price = model_price(model)
     return _tier_from_price(int(price.get("input", 0) or 0), int(price.get("output", 0) or 0))
+
+
+def _unique_strings(items: List[Any]) -> List[str]:
+    return _unique_ordered([str(item or "").strip() for item in items if str(item or "").strip()])
+
+
+def _candidate_models_api_urls(api_url: str, models_api_url: str = "") -> List[str]:
+    """Build likely OpenAI-compatible model-list endpoints from chat URL."""
+    urls: List[str] = []
+    explicit = str(models_api_url or "").strip()
+    if explicit:
+        urls.append(explicit)
+    base = str(api_url or "").strip()
+    if base:
+        no_query = base.split("?", 1)[0].rstrip("/")
+        if no_query.endswith("/chat/completions"):
+            urls.append(no_query[: -len("/chat/completions")] + "/models")
+        if "/v1/" in no_query:
+            urls.append(no_query.split("/v1/", 1)[0].rstrip("/") + "/v1/models")
+        else:
+            urls.append(no_query.rstrip("/") + "/models")
+    return _unique_ordered(urls)
+
+
+def _extract_model_ids_from_any(payload: Any) -> List[str]:
+    """Extract model ids from common /v1/models payload shapes."""
+    found: List[str] = []
+    def walk(value: Any, depth: int = 0) -> None:
+        if depth > 5:
+            return
+        if isinstance(value, str):
+            candidate = value.strip()
+            if "/" in candidate and len(candidate) <= 120 and not candidate.lower().startswith("http"):
+                found.append(candidate)
+            return
+        if isinstance(value, list):
+            for item in value:
+                walk(item, depth + 1)
+            return
+        if isinstance(value, dict):
+            for key in ("id", "model", "name"):
+                item = value.get(key)
+                if isinstance(item, str):
+                    walk(item, depth + 1)
+            for key in ("data", "models", "items", "result", "results"):
+                if key in value:
+                    walk(value.get(key), depth + 1)
+    walk(payload)
+    return _unique_strings(found)
+
+
+def discover_available_models_from_api(api_url: str, api_key: str, models_api_url: str = "", timeout: int = 12) -> Dict[str, Any]:
+    """Read current available model IDs from provider API when supported.
+
+    If /v1/models is unavailable, the function returns top dashboard models so the
+    health checker can still verify those names directly.
+    """
+    if not api_url or not api_key:
+        return {"ok": False, "models": TOP_USAGE_MODEL_CANDIDATES.copy(), "source_url": "", "error": "api_url/api_key belum tersedia", "raw_count": 0}
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    errors: List[str] = []
+    for url in _candidate_models_api_urls(api_url, models_api_url=models_api_url):
+        try:
+            response = requests.get(url, headers=headers, timeout=max(3, int(timeout or 12)))
+            if response.status_code != 200:
+                errors.append(f"{url} -> HTTP {response.status_code}: {response.text[:220]}")
+                continue
+            try:
+                payload = response.json()
+            except Exception:
+                errors.append(f"{url} -> respons bukan JSON: {response.text[:220]}")
+                continue
+            models = _extract_model_ids_from_any(payload)
+            if models:
+                return {"ok": True, "models": _unique_ordered(models + TOP_USAGE_MODEL_CANDIDATES), "source_url": url, "error": "", "raw_count": len(models)}
+            errors.append(f"{url} -> JSON valid tetapi tidak ada model id terbaca")
+        except Exception as exc:
+            errors.append(f"{url} -> {str(exc)[:220]}")
+    return {"ok": False, "models": TOP_USAGE_MODEL_CANDIDATES.copy(), "source_url": "", "error": " | ".join(errors[-4:])[:1200] if errors else "endpoint model tidak tersedia", "raw_count": 0}
 
 
 def model_price_label(model: str) -> str:

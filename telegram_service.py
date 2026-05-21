@@ -15,6 +15,8 @@ from ai_core import (
     ALL_SLASHAI_MODELS,
     ALL_CHEAP_MODELS,
     ALL_CAPABLE_MODELS,
+    TOP_USAGE_MODEL_CANDIDATES,
+    discover_available_models_from_api,
     DEFAULT_CHEAP_FALLBACK_MODELS,
     DEFAULT_EXPENSIVE_FALLBACK_MODELS,
     generate_answer,
@@ -409,6 +411,7 @@ def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dic
         declared_capable.append(capable_override)
 
     extra = _as_string_list(config.get("all_model_candidates"))
+    extra.extend(_as_string_list(TOP_USAGE_MODEL_CANDIDATES))
     extra.extend(_as_string_list(ALL_SLASHAI_MODELS))
     all_candidates = _as_string_list([current_model] + declared_cheap + declared_capable + extra)
 
@@ -882,6 +885,19 @@ def refresh_telegram_runtime_models(
     if not api_url or not api_key:
         raise RuntimeError("SLASHAI_API_URL atau SLASHAI_API_KEY belum tersedia.")
 
+    discovery_meta: Dict[str, Any] = {"ok": False, "models": [], "source_url": "", "error": ""}
+    if bool(config.get("model_discovery_enabled", True)):
+        discovery_meta = discover_available_models_from_api(
+            api_url=api_url,
+            api_key=api_key,
+            models_api_url=str(config.get("models_api_url") or ""),
+            timeout=int(config.get("model_discovery_timeout", timeout) or timeout),
+        )
+        discovered_models = _as_string_list(discovery_meta.get("models") or [])
+        if discovered_models:
+            config = dict(config)
+            config["all_model_candidates"] = _as_string_list(config.get("all_model_candidates")) + discovered_models + _as_string_list(TOP_USAGE_MODEL_CANDIDATES)
+
     pools = _split_candidates_by_tier(current_model=current_model, config=config)
     cheap_candidates = pools["cheap"]
     capable_candidates = pools["capable"]
@@ -889,7 +905,7 @@ def refresh_telegram_runtime_models(
     candidates = pools["all"]
 
     if not candidates:
-        candidates = _as_string_list([current_model] + ALL_SLASHAI_MODELS + DEFAULT_CHEAP_FALLBACK_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS)
+        candidates = _as_string_list([current_model] + TOP_USAGE_MODEL_CANDIDATES + ALL_SLASHAI_MODELS + DEFAULT_CHEAP_FALLBACK_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS)
 
     max_workers = int(config.get("model_health_workers", 6) or 6)
     max_workers = max(1, min(max_workers, len(candidates), 10))
@@ -965,6 +981,8 @@ def refresh_telegram_runtime_models(
         "thinking_capable_models": active_capable,
         "active_unknown_models": active_unknown,
         "health_cache": health_cache,
+        "api_model_discovery": discovery_meta,
+        "api_discovered_model_count": len(discovery_meta.get("models") or []),
         "active_total": len(active_all),
         "transient_total": transient_total,
         "dead_total": dead_total,

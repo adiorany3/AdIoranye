@@ -14,6 +14,8 @@ from ai_core import (
     ALL_SLASHAI_MODELS,
     ALL_CHEAP_MODELS,
     ALL_CAPABLE_MODELS,
+    TOP_USAGE_MODEL_CANDIDATES,
+    discover_available_models_from_api,
     DEFAULT_CHEAP_FALLBACK_MODELS,
     DEFAULT_EXPENSIVE_FALLBACK_MODELS,
     DEFAULT_FALLBACK_MODELS,
@@ -275,6 +277,14 @@ def init_state() -> None:
         st.session_state.active_thinking_min_chars = int(get_secret("THINKING_MIN_CHARS", 180) or 180)
     if "active_fast_normal_model_router" not in st.session_state:
         st.session_state.active_fast_normal_model_router = parse_bool(get_secret("FAST_NORMAL_MODEL_ROUTER", True), default=True)
+    if "dynamic_api_models" not in st.session_state:
+        st.session_state.dynamic_api_models = []
+    if "dynamic_api_models_checked_at" not in st.session_state:
+        st.session_state.dynamic_api_models_checked_at = 0.0
+    if "dynamic_model_discovery_error" not in st.session_state:
+        st.session_state.dynamic_model_discovery_error = ""
+    if "dynamic_model_discovery_source" not in st.session_state:
+        st.session_state.dynamic_model_discovery_source = ""
 
 
 # =========================
@@ -305,7 +315,7 @@ Memory default Adioranye:
 
 CHEAP_MODEL_OPTIONS = list(dict.fromkeys(ALL_CHEAP_MODELS or DEFAULT_CHEAP_FALLBACK_MODELS.copy()))
 EXPENSIVE_MODEL_OPTIONS = list(dict.fromkeys(ALL_CAPABLE_MODELS or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()))
-MODEL_OPTIONS = list(dict.fromkeys(ALL_SLASHAI_MODELS + CHEAP_MODEL_OPTIONS + EXPENSIVE_MODEL_OPTIONS))
+MODEL_OPTIONS = list(dict.fromkeys(ALL_SLASHAI_MODELS + TOP_USAGE_MODEL_CANDIDATES + CHEAP_MODEL_OPTIONS + EXPENSIVE_MODEL_OPTIONS))
 
 # Secrets
 api_key = str(get_secret("SLASHAI_API_KEY", ""))
@@ -343,6 +353,10 @@ thinking_model_router_default = parse_bool(get_secret("THINKING_MODEL_ROUTER", T
 thinking_min_chars_default = int(get_secret("THINKING_MIN_CHARS", 180) or 180)
 thinking_capable_model_override = str(get_secret("THINKING_CAPABLE_MODEL", "") or "").strip()
 fast_normal_model_router_default = parse_bool(get_secret("FAST_NORMAL_MODEL_ROUTER", True), default=True)
+model_discovery_enabled = parse_bool(get_secret("MODEL_DISCOVERY_ENABLED", True), default=True)
+models_api_url = str(get_secret("SLASHAI_MODELS_API_URL", "") or "").strip()
+model_discovery_timeout = int(get_secret("MODEL_DISCOVERY_TIMEOUT_SECONDS", 12) or 12)
+model_discovery_interval = int(get_secret("MODEL_DISCOVERY_INTERVAL_SECONDS", 3600) or 3600)
 
 init_state()
 memory = MemoryStore(memory_file)
@@ -789,6 +803,33 @@ def check_single_model_health(model: str, timeout: int = 12, retries: int = 1) -
     }
 
 
+def discover_api_model_candidates(force: bool = False) -> List[str]:
+    """Ambil daftar model terbaru dari endpoint API provider jika tersedia."""
+    if not bool(model_discovery_enabled):
+        return TOP_USAGE_MODEL_CANDIDATES.copy()
+    if not api_key:
+        st.session_state.dynamic_model_discovery_error = "SLASHAI_API_KEY belum diisi. Memakai katalog lokal."
+        return TOP_USAGE_MODEL_CANDIDATES.copy()
+    now = time.time()
+    cached = st.session_state.get("dynamic_api_models") or []
+    last_checked = float(st.session_state.get("dynamic_api_models_checked_at") or 0)
+    interval = max(300, int(model_discovery_interval or 3600))
+    if not force and cached and now - last_checked < interval:
+        return unique_models(cached + TOP_USAGE_MODEL_CANDIDATES)
+    result = discover_available_models_from_api(
+        api_url=api_url,
+        api_key=api_key,
+        models_api_url=models_api_url,
+        timeout=int(model_discovery_timeout or 12),
+    )
+    models = unique_models((result.get("models") or []) + TOP_USAGE_MODEL_CANDIDATES)
+    st.session_state.dynamic_api_models = models
+    st.session_state.dynamic_api_models_checked_at = now
+    st.session_state.dynamic_model_discovery_source = str(result.get("source_url") or "")
+    st.session_state.dynamic_model_discovery_error = "" if result.get("ok") else str(result.get("error") or "")[:1200]
+    return models
+
+
 def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, Any]]:
     """Refresh health model.
 
@@ -814,8 +855,11 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
     if not force and cache and now - last_checked < interval:
         return cache
 
+    api_discovered_models = discover_api_model_candidates(force=force)
     models_to_check = unique_models(
         [st.session_state.get("active_model") or default_model, default_model]
+        + api_discovered_models
+        + TOP_USAGE_MODEL_CANDIDATES
         + MODEL_OPTIONS
         + CHEAP_MODEL_OPTIONS
         + EXPENSIVE_MODEL_OPTIONS
@@ -849,8 +893,8 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
                     "error": str(exc)[:500],
                 }
 
-    active_cheap = prioritize_active_models(CHEAP_MODEL_OPTIONS, fresh_cache)
-    active_expensive = prioritize_active_models(EXPENSIVE_MODEL_OPTIONS, fresh_cache)
+    active_cheap = prioritize_active_models(CHEAP_MODEL_OPTIONS + TOP_USAGE_MODEL_CANDIDATES + api_discovered_models, fresh_cache)
+    active_expensive = prioritize_active_models(EXPENSIVE_MODEL_OPTIONS + TOP_USAGE_MODEL_CANDIDATES + api_discovered_models, fresh_cache)
 
     st.session_state.model_health_cache = fresh_cache
     st.session_state.model_health_checked_at = now
@@ -2003,7 +2047,10 @@ def start_telegram_if_needed() -> None:
                 "fast_cheap_models": route.get("fast_cheap_models", []),
                 "all_cheap_models": CHEAP_MODEL_OPTIONS,
                 "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
-                "all_model_candidates": MODEL_OPTIONS,
+                "all_model_candidates": unique_models(MODEL_OPTIONS + TOP_USAGE_MODEL_CANDIDATES + (st.session_state.get("dynamic_api_models") or [])),
+                "model_discovery_enabled": bool(model_discovery_enabled),
+                "models_api_url": models_api_url,
+                "model_discovery_timeout": int(model_discovery_timeout or 12),
                 "model_health_workers": model_health_workers,
                 "model_health_retries": model_health_retries,
                 "active_cheap_models": route.get("active_cheap_models", []),
@@ -2344,7 +2391,10 @@ def render_admin_settings() -> None:
             "fast_cheap_models": route.get("fast_cheap_models", []),
             "all_cheap_models": CHEAP_MODEL_OPTIONS,
             "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
-            "all_model_candidates": MODEL_OPTIONS,
+            "all_model_candidates": unique_models(MODEL_OPTIONS + TOP_USAGE_MODEL_CANDIDATES + (st.session_state.get("dynamic_api_models") or [])),
+            "model_discovery_enabled": bool(model_discovery_enabled),
+            "models_api_url": models_api_url,
+            "model_discovery_timeout": int(model_discovery_timeout or 12),
                 "model_health_workers": model_health_workers,
                 "model_health_retries": model_health_retries,
             "active_cheap_models": route.get("active_cheap_models", []),

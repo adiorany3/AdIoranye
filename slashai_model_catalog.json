@@ -443,5 +443,47 @@
     "model": "slashai/step-3.5-flash",
     "input_per_1m": 50,
     "output_per_1m": 200
+  },
+  {
+    "model": "slashai/deepseek-v4-flash",
+    "aliases": [],
+    "input": 50,
+    "output": 200,
+    "source": "dashboard-top-model"
+  },
+  {
+    "model": "slashai/claude-haiku-4.5",
+    "aliases": [],
+    "input": 50,
+    "output": 200,
+    "source": "dashboard-top-model"
+  },
+  {
+    "model": "slashai/Kimi-K2.5",
+    "aliases": [],
+    "input": 500,
+    "output": 2000,
+    "source": "dashboard-top-model"
+  },
+  {
+    "model": "slashai/Qwen3.6-Plus",
+    "aliases": [],
+    "input": 500,
+    "output": 2000,
+    "source": "dashboard-top-model"
+  },
+  {
+    "model": "bai/deepseek-v4-flash",
+    "aliases": [],
+    "input": 50,
+    "output": 200,
+    "source": "dashboard-top-model"
+  },
+  {
+    "model": "slashai/qwen3-coder-next",
+    "aliases": [],
+    "input": 500,
+    "output": 2000,
+    "source": "dashboard-top-model"
   }
 ]
