@@ -1044,18 +1044,6 @@ def build_public_model_status_html(route: Dict[str, Any], last_meta: Dict[str, A
     )
 
     return f"""
-    <div class="model-status-panel">
-        <div class="model-status-title">🟢 Model aktif terlihat</div>
-        <div class="model-status-grid">
-            <div class="model-status-pill">Model yang akan dipakai: <strong>{_html_escape(next_model)}</strong></div>
-            {last_model_html}
-            {fast_model_html}
-            {capable_model_html}
-            <div class="model-status-pill">Hemat aktif: <strong>{cheap_count}</strong></div>
-            <div class="model-status-pill">Menengah/mahal aktif: <strong>{expensive_count}</strong></div>
-            <div class="model-status-pill">Cek terakhir: <strong>{_html_escape(checked_at)}</strong></div>
-        </div>
-    </div>
     """
 
 
