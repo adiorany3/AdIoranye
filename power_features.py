@@ -40,6 +40,44 @@ def _safe_json(data: Any) -> str:
         return "{}"
 
 
+
+
+def _row_value(row: Any, key: str, index: int = 0, default: Any = None) -> Any:
+    """Read a value safely from sqlite3.Row, dict, tuple/list, or None.
+
+    Streamlit Cloud can keep an older SQLite connection/state during reruns, and
+    sqlite3.Row behaves like a mapping but does not provide .get(). This helper
+    prevents usage/admin panels from crashing when aggregate queries return Row
+    objects, tuples, or empty results.
+    """
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except Exception:
+        pass
+    try:
+        return row[index]
+    except Exception:
+        return default
+
+
+def _row_to_dict(row: Any, columns: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Convert sqlite rows safely for UI/table rendering."""
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return dict(row)
+    try:
+        return dict(row)
+    except Exception:
+        pass
+    if columns and isinstance(row, (tuple, list)):
+        return {columns[i]: row[i] if i < len(row) else None for i in range(len(columns))}
+    return {}
+
 def _tokenize(text: str) -> List[str]:
     words = re.findall(r"[a-zA-Z0-9_\-]{3,}", str(text or "").lower())
     stop = {
@@ -302,33 +340,40 @@ class PowerStore:
             )
 
     def usage_summary(self, days: int = 1) -> Dict[str, Any]:
+        """Return usage summary without assuming sqlite rows support .get()."""
         since = _utc_ts() - max(1, int(days or 1)) * 86400
+        by_model_columns = ["model", "requests", "input_tokens", "output_tokens", "cost_idr", "avg_latency"]
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT model, COUNT(*) AS requests, SUM(input_tokens) AS input_tokens,
-                       SUM(output_tokens) AS output_tokens, SUM(cost_idr) AS cost_idr,
-                       AVG(latency_seconds) AS avg_latency
+                SELECT model, COUNT(*) AS requests, COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                       COALESCE(SUM(output_tokens), 0) AS output_tokens, COALESCE(SUM(cost_idr), 0) AS cost_idr,
+                       COALESCE(AVG(latency_seconds), 0) AS avg_latency
                 FROM interactions WHERE ts >= ? GROUP BY model ORDER BY cost_idr DESC
                 """,
                 (since,),
             ).fetchall()
             total = conn.execute(
-                "SELECT COUNT(*) AS requests, SUM(cost_idr) AS cost_idr FROM interactions WHERE ts >= ?",
+                "SELECT COUNT(*) AS requests, COALESCE(SUM(cost_idr), 0) AS cost_idr FROM interactions WHERE ts >= ?",
                 (since,),
             ).fetchone()
+
         return {
-            "days": days,
-            "requests": int((total or {}).get("requests") or 0),
-            "cost_idr": float((total or {}).get("cost_idr") or 0),
-            "by_model": [dict(row) for row in rows],
+            "days": int(days or 1),
+            "requests": int(_row_value(total, "requests", 0, 0) or 0),
+            "cost_idr": float(_row_value(total, "cost_idr", 1, 0) or 0),
+            "by_model": [_row_to_dict(row, by_model_columns) for row in rows],
         }
 
     def count_expensive_calls_today(self) -> int:
         start = datetime.now(WIB_TZ).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         with self._connect() as conn:
             rows = conn.execute("SELECT model FROM interactions WHERE ts >= ?", (start,)).fetchall()
-        return sum(1 for row in rows if model_cost_tier(str(row["model"] or "")) in {"medium", "expensive", "ultra"})
+        return sum(
+            1
+            for row in rows
+            if model_cost_tier(str(_row_value(row, "model", 0, "") or "")) in {"medium", "expensive", "ultra"}
+        )
 
     def add_benchmark(self, model: str, task: str, score: float, latency_seconds: float, success: bool, error: str = "", meta: Optional[Dict[str, Any]] = None) -> None:
         with self._connect() as conn:
@@ -338,9 +383,10 @@ class PowerStore:
             )
 
     def latest_benchmarks(self, limit: int = 50) -> List[Dict[str, Any]]:
+        columns = ["id", "ts", "model", "task", "score", "latency_seconds", "success", "error", "meta_json"]
         with self._connect() as conn:
             rows = conn.execute("SELECT * FROM benchmarks ORDER BY ts DESC LIMIT ?", (max(1, int(limit or 50)),)).fetchall()
-        return [dict(row) for row in rows]
+        return [_row_to_dict(row, columns) for row in rows]
 
 
 _STORE_CACHE: Dict[str, PowerStore] = {}
