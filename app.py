@@ -2284,13 +2284,13 @@ st.markdown(
             <span class="mac-min"></span>
             <span class="mac-max"></span>
         </div>
-        <div class="mac-window-title">Adioranye AI by Galuh Adi Insani</div>
+        <div class="mac-window-title">Adioranye AI</div>
         <div class="mac-window-actions">Online</div>
     </div>
     <div class="app-hero">
         <div class="app-logo">🤖</div>
         <div>
-            <h1 class="app-title">Adioranye AI</h1>
+            <h3 class="app-title">Adioranye AI</h3>
             <p class="app-subtitle">Tulis pesan Anda. Adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis.</p>
         </div>
     </div>
