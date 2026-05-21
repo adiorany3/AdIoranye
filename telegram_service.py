@@ -41,6 +41,113 @@ def normalize_telegram_text(text: str) -> str:
     return "".join(ch for ch in text if ch in "\n\r\t" or ord(ch) >= 32)
 
 
+def _as_string_list(value: Any) -> List[str]:
+    """Normalize config values into a clean list of model names."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        raw_items = value
+    else:
+        raw_items = str(value).replace("\n", ",").split(",")
+    result: List[str] = []
+    for item in raw_items:
+        item_text = str(item or "").strip()
+        if item_text and item_text not in result:
+            result.append(item_text)
+    return result
+
+
+def _contains_any(text: str, keywords: List[str]) -> bool:
+    lowered = f" {str(text or '').lower()} "
+    return any(keyword in lowered for keyword in keywords)
+
+
+def is_thinking_telegram_question(text: str, history: Optional[List[Dict[str, str]]] = None, min_chars: int = 180) -> bool:
+    """Detect Telegram questions that should use a more capable model.
+
+    Conservative routing: short/simple chat remains on the cheap model path,
+    while analytical, coding, debugging, academic, strategic, or long multi-step
+    prompts are routed directly to the capable model path.
+    """
+    prompt = str(text or "").strip()
+    if not prompt:
+        return False
+
+    lowered = prompt.lower()
+    word_count = len(prompt.split())
+    try:
+        min_chars = int(min_chars or 180)
+    except Exception:
+        min_chars = 180
+
+    strong_keywords = [
+        "thinking", "reasoning", "berpikir", "nalar", "logika", "analisis", "analisa",
+        "evaluasi", "bandingkan", "pertimbangkan", "strategi", "arsitektur", "algoritma",
+        "debug", "error", "traceback", "exception", "bug", "refactor", "optimasi",
+        "optimize", "perbaiki kode", "cek kode", "skripsi", "tesis", "jurnal", "riset",
+        "metodologi", "smartpls", "statistik", "regresi", "sentimen", "indobert",
+        "buatkan alur", "bagan alur", "step by step", "langkah-langkah", "kenapa", "mengapa",
+        "apa penyebab", "solusi terbaik", "rekomendasi terbaik", "prioritaskan",
+        "model yang capable", "jawaban mendalam", "berpikir dalam", "jelaskan detail",
+    ]
+    code_or_log_markers = [
+        "```", "def ", "class ", "import ", "from ", "return ", "npm ", "vercel",
+        "status code", "response:", "build failed", "failed", "unauthorized", "creditsdepleted",
+        "<html", "<script", "streamlit", "session_state", "generate_answer", "telegram_service",
+    ]
+
+    if _contains_any(lowered, strong_keywords):
+        return True
+    if _contains_any(lowered, code_or_log_markers):
+        return True
+    if len(prompt) >= min_chars and word_count >= 24:
+        return True
+    if prompt.count("?") >= 2 and word_count >= 18:
+        return True
+    if any(token in lowered for token in ["1.", "2.", "3.", "- "]) and word_count >= 25:
+        return True
+
+    # If the current message is short but follows a technical/analytical exchange,
+    # keep using the capable route for follow-up questions such as "lanjut" or "patch itu".
+    history = history or []
+    recent_context = "\n".join(str(item.get("content", "")) for item in history[-4:]).lower()
+    followup_markers = {"lanjut", "patch", "perbaiki", "ubah", "tambahkan", "error", "kode"}
+    if word_count <= 12 and any(marker in lowered for marker in followup_markers):
+        if _contains_any(recent_context, strong_keywords + code_or_log_markers):
+            return True
+
+    return False
+
+
+def pick_telegram_capable_model(
+    primary_model: str,
+    expensive_fallback_models: List[str],
+    config: Dict[str, Any],
+) -> str:
+    """Pick a capable model for Telegram thinking mode.
+
+    Priority:
+    1) THINKING_CAPABLE_MODEL / config['thinking_capable_model'] if provided.
+    2) Any explicit thinking_capable_models list.
+    3) Active expensive fallback models already passed by app.py.
+    4) Primary model as last resort.
+    """
+    candidates: List[str] = []
+    override = str(config.get("thinking_capable_model") or "").strip()
+    if override:
+        candidates.append(override)
+
+    candidates.extend(_as_string_list(config.get("thinking_capable_models")))
+    candidates.extend(_as_string_list(config.get("capable_models")))
+    candidates.extend(_as_string_list(expensive_fallback_models))
+
+    for candidate in candidates:
+        if candidate and candidate != primary_model:
+            return candidate
+
+    return primary_model
+
+
 class TelegramBotService:
     """Singleton polling service for Streamlit.
 
@@ -248,6 +355,8 @@ class TelegramBotService:
         smart_model_router = bool(config.get("smart_model_router", True))
         return_to_primary = bool(config.get("return_to_primary", True))
         max_smart_models = int(config.get("max_smart_models", 2) or 2)
+        thinking_model_router = bool(config.get("thinking_model_router", True))
+        thinking_min_chars = int(config.get("thinking_min_chars", 180) or 180)
 
         if not token:
             self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
@@ -336,32 +445,64 @@ class TelegramBotService:
                             self._send_typing(token, chat_id)
 
                         try:
+                            thinking_mode = bool(thinking_model_router) and is_thinking_telegram_question(
+                                text,
+                                history=history,
+                                min_chars=thinking_min_chars,
+                            )
+                            request_model = model
+                            request_fallback_models = list(fallback_models or [])
+                            request_expensive_fallback_models = list(expensive_fallback_models or [])
+                            request_allow_expensive = allow_expensive_fallback
+                            request_return_to_primary = return_to_primary
+
+                            if thinking_mode:
+                                capable_model = pick_telegram_capable_model(
+                                    primary_model=model,
+                                    expensive_fallback_models=request_expensive_fallback_models,
+                                    config=config,
+                                )
+                                if capable_model:
+                                    request_model = capable_model
+                                    # For thinking prompts, do not route back down to cheap models first.
+                                    # Use capable/expensive models as the main path, then return to cheap on the next message.
+                                    request_fallback_models = []
+                                    request_expensive_fallback_models = [
+                                        item for item in request_expensive_fallback_models if item != request_model
+                                    ]
+                                    request_allow_expensive = True
+                                    request_return_to_primary = True
+
                             answer, meta = generate_answer(
                                 api_url=api_url,
                                 api_key=api_key,
-                                model=model,
+                                model=request_model,
                                 system_prompt=persona,
                                 user_text=text,
                                 memory_text=memory_text,
                                 recent_messages=history,
-                                fallback_models=fallback_models,
-                                expensive_fallback_models=expensive_fallback_models,
-                                allow_expensive_fallback=allow_expensive_fallback,
+                                fallback_models=request_fallback_models,
+                                expensive_fallback_models=request_expensive_fallback_models,
+                                allow_expensive_fallback=request_allow_expensive,
                                 max_expensive_models=max_expensive_models,
                                 temperature=float(config.get("temperature", 0.3)),
                                 max_completion_tokens=int(config.get("max_completion_tokens", 1800)),
                                 timeout=int(config.get("timeout", 60)),
                                 smart_model_router=smart_model_router,
-                                return_to_primary=return_to_primary,
+                                return_to_primary=request_return_to_primary,
                                 max_smart_models=max_smart_models,
                             )
+
+                            if isinstance(meta, dict):
+                                meta["telegram_thinking_mode"] = thinking_mode
+                                meta["telegram_model_requested"] = request_model
 
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})
                             self._histories[key] = history[-8:]
                             show_model = bool(config.get("show_model_info", True))
                             if show_model and isinstance(meta, dict):
-                                final_model = meta.get("active_model_final") or meta.get("model_requested") or model
+                                final_model = meta.get("active_model_final") or meta.get("telegram_model_requested") or meta.get("model_requested") or model
                                 consulted = meta.get("consulted_models") or []
                                 expensive_used = meta.get("expensive_fallback_used", False)
                                 info = f"\n\n—\nModel aktif: {final_model}"
@@ -369,6 +510,8 @@ class TelegramBotService:
                                     info += "\nKonsultasi model: " + ", ".join(consulted[:4])
                                 if expensive_used:
                                     info += "\nModel menengah/mahal dipakai karena model hemat belum cukup."
+                                if meta.get("telegram_thinking_mode"):
+                                    info += "\nMode thinking: aktif, memakai model capable untuk pertanyaan kompleks."
                                 answer_to_send = answer + info
                             else:
                                 answer_to_send = answer
