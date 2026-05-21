@@ -2529,12 +2529,12 @@ def render_ai_health_center() -> None:
 
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("🔁 Cek model sekarang", use_container_width=True, disabled=not is_model_health_check_allowed_now()):
+        if st.button("🔁 Cek model sekarang", use_container_width=True, disabled=not is_model_health_check_allowed_now(), key="auto_btn_2532"):
             refresh_model_health_if_needed(force=True)
             st.success("Cek model selesai.")
             st.rerun()
     with col_b:
-        if st.button("🧪 Tes jawaban cepat", use_container_width=True, disabled=not bool(api_key)):
+        if st.button("🧪 Tes jawaban cepat", use_container_width=True, disabled=not bool(api_key), key="auto_btn_2537"):
             try:
                 test_route = build_model_routing_plan(advance_rotation=True, user_text="halo")
                 ans, meta = generate_answer(
@@ -2579,7 +2579,7 @@ def render_maintenance_tools() -> None:
 
     uploaded_db = st.file_uploader("Restore database dari file .db", type=["db", "sqlite", "sqlite3"], key="restore_power_db")
     confirm_restore = st.checkbox("Saya paham restore akan menimpa database power saat ini", key="confirm_restore_power_db")
-    if st.button("♻️ Restore database", use_container_width=True, disabled=not bool(uploaded_db and confirm_restore)):
+    if st.button("♻️ Restore database", use_container_width=True, disabled=not bool(uploaded_db and confirm_restore), key="auto_btn_2582"):
         try:
             backup_path = db_path + f".before-restore-{int(time.time())}.bak"
             if os.path.exists(db_path):
@@ -2599,7 +2599,7 @@ def render_maintenance_tools() -> None:
         cache_days = st.number_input("Simpan response cache (hari)", 1, 90, int(power_cache_retention_days), 1)
     with c3:
         bench_days = st.number_input("Simpan benchmark (hari)", 1, 180, int(power_benchmark_retention_days), 1)
-    if st.button("🧹 Bersihkan data lama", use_container_width=True):
+    if st.button("🧹 Bersihkan data lama", use_container_width=True, key="auto_btn_2602"):
         try:
             deleted = power_store.cleanup_old_data(int(log_days), int(cache_days), int(bench_days))
             st.success(f"Cleanup selesai: {deleted}")
@@ -2610,19 +2610,19 @@ def render_maintenance_tools() -> None:
     confirm_reset = st.checkbox("Aktifkan tombol reset berisiko", key="confirm_dangerous_resets")
     r1, r2, r3, r4 = st.columns(4)
     with r1:
-        if st.button("Reset usage", use_container_width=True, disabled=not confirm_reset):
+        if st.button("Reset usage", use_container_width=True, disabled=not confirm_reset, key="auto_btn_2613"):
             st.warning(f"Usage dihapus: {power_store.clear_usage_logs()}")
             st.rerun()
     with r2:
-        if st.button("Reset cache", use_container_width=True, disabled=not confirm_reset):
+        if st.button("Reset cache", use_container_width=True, disabled=not confirm_reset, key="auto_btn_2617"):
             st.warning(f"Cache dihapus: {power_store.clear_response_cache()}")
             st.rerun()
     with r3:
-        if st.button("Reset KB", use_container_width=True, disabled=not confirm_reset):
+        if st.button("Reset KB", use_container_width=True, disabled=not confirm_reset, key="auto_btn_2621"):
             st.warning(f"Knowledge base dihapus: {power_store.clear_knowledge_base()}")
             st.rerun()
     with r4:
-        if st.button("Reset memory", use_container_width=True, disabled=not confirm_reset):
+        if st.button("Reset memory", use_container_width=True, disabled=not confirm_reset, key="auto_btn_2625"):
             st.warning(f"Memory permanen dihapus: {power_store.clear_memories_all()}")
             st.rerun()
 
@@ -2643,7 +2643,7 @@ def render_admin_settings() -> None:
 
     render_admin_status()
 
-    if st.button("🚪 Logout Admin", use_container_width=True):
+    if st.button("🚪 Logout Admin", use_container_width=True, key="auto_btn_2646"):
         st.session_state.admin_authenticated = False
         st.rerun()
 
@@ -2695,7 +2695,7 @@ def render_admin_settings() -> None:
             cheap_for_sync, _ = get_prioritized_fallback_models()
             next_rotation_model = get_rotating_cheap_primary(cheap_for_sync, advance=False) if cheap_for_sync else ""
             st.caption(f"Model murah berikutnya: {next_rotation_model or 'belum ada model murah aktif'}")
-            if st.button("Mulai rotasi dari model yang dipilih", use_container_width=True):
+            if st.button("Mulai rotasi dari model yang dipilih", use_container_width=True, key="auto_btn_2698"):
                 sync_rotation_index_to_selected_model(cheap_for_sync)
                 st.success("Titik awal rotasi disesuaikan dengan model murah yang dipilih.")
 
@@ -2779,7 +2779,7 @@ def render_admin_settings() -> None:
         )
         col_health_check, col_health_info = st.columns([1, 2])
         with col_health_check:
-            if st.button("🔁 Cek model sekarang", use_container_width=True, disabled=not health_window_open):
+            if st.button("🔁 Cek model sekarang", use_container_width=True, disabled=not health_window_open, key="auto_btn_2782"):
                 refresh_model_health_if_needed(force=True)
                 st.success("Cek model selesai.")
             if not health_window_open:
@@ -2792,7 +2792,7 @@ def render_admin_settings() -> None:
 
         col_test, col_reset = st.columns(2)
         with col_test:
-            if st.button("🧪 Tes AI", use_container_width=True):
+            if st.button("🧪 Tes AI", use_container_width=True, key="auto_btn_2795"):
                 try:
                     route = build_model_routing_plan(advance_rotation=True)
                     answer, meta = generate_answer(
@@ -2820,7 +2820,7 @@ def render_admin_settings() -> None:
                 except Exception as exc:
                     st.error(str(exc))
         with col_reset:
-            if st.button("↩️ Reset dari Secrets", use_container_width=True):
+            if st.button("↩️ Reset dari Secrets", use_container_width=True, key="auto_btn_2823"):
                 st.session_state.active_model = default_model
                 st.session_state.active_persona = persona_from_secret
                 st.session_state.active_default_memory = default_memory_context_from_secret
@@ -2929,7 +2929,7 @@ def render_admin_settings() -> None:
 
         col_start, col_stop = st.columns(2)
         with col_start:
-            if st.button("▶️ Start Bot", use_container_width=True):
+            if st.button("▶️ Start Bot", use_container_width=True, key="auto_btn_2932"):
                 start_route = build_model_routing_plan(advance_rotation=True)
                 bot_config.update({
                     "slashai_model": start_route["primary_model"],
@@ -2951,11 +2951,11 @@ def render_admin_settings() -> None:
                 else:
                     st.info("Bot sudah berjalan.")
         with col_stop:
-            if st.button("⏹️ Stop Bot", use_container_width=True):
+            if st.button("⏹️ Stop Bot", use_container_width=True, key="auto_btn_2954"):
                 service.stop()
                 st.warning("Bot Telegram dihentikan pada instance Streamlit ini.")
 
-        if st.button("🧯 Reset koneksi Telegram / hapus pending update", use_container_width=True):
+        if st.button("🧯 Reset koneksi Telegram / hapus pending update", use_container_width=True, key="auto_btn_2958"):
             result = service.reset_telegram_session(bot_config)
             st.warning(result)
 
@@ -3001,7 +3001,7 @@ def render_admin_settings() -> None:
         )
         col_cache_save, col_cache_save_both = st.columns(2)
         with col_cache_save:
-            if st.button("Simpan ke cache Streamlit", use_container_width=True):
+            if st.button("Simpan ke cache Streamlit", use_container_width=True, key="auto_btn_3004"):
                 saved = add_streamlit_cache_memory(new_cache_memory, source="streamlit-admin-cache")
                 if saved:
                     st.success("Memory disimpan ke cache Streamlit.")
@@ -3009,7 +3009,7 @@ def render_admin_settings() -> None:
                     st.info("Memory kosong atau sudah ada di cache.")
                 st.rerun()
         with col_cache_save_both:
-            if st.button("Simpan ke cache + file lokal", use_container_width=True):
+            if st.button("Simpan ke cache + file lokal", use_container_width=True, key="auto_btn_3012"):
                 saved_cache = add_streamlit_cache_memory(new_cache_memory, source="streamlit-admin-cache")
                 if new_cache_memory.strip():
                     memory.add(new_cache_memory.strip(), source="streamlit-admin-file")
@@ -3022,12 +3022,12 @@ def render_admin_settings() -> None:
         forget_cache_keyword = st.text_input("Hapus memory cache yang mengandung kata")
         col_cache_forget, col_cache_reset = st.columns(2)
         with col_cache_forget:
-            if st.button("Hapus dari cache berdasarkan kata", use_container_width=True):
+            if st.button("Hapus dari cache berdasarkan kata", use_container_width=True, key="auto_btn_3025"):
                 count = forget_streamlit_cache_memory_contains(forget_cache_keyword)
                 st.warning(f"{count} memory cache dihapus.")
                 st.rerun()
         with col_cache_reset:
-            if st.button("Reset semua memory cache", use_container_width=True):
+            if st.button("Reset semua memory cache", use_container_width=True, key="auto_btn_3030"):
                 count = reset_streamlit_cache_memory()
                 st.warning(f"{count} memory cache dihapus.")
                 st.rerun()
@@ -3041,7 +3041,7 @@ def render_admin_settings() -> None:
             st.write("Belum ada memory file lokal.")
 
         new_file_memory = st.text_input("Tambah memory ke file lokal")
-        if st.button("Simpan ke file lokal", use_container_width=True):
+        if st.button("Simpan ke file lokal", use_container_width=True, key="auto_btn_3044"):
             if new_file_memory.strip():
                 memory.add(new_file_memory.strip(), source="streamlit-admin-file")
                 st.success("Memory disimpan ke file lokal.")
@@ -3052,12 +3052,12 @@ def render_admin_settings() -> None:
         forget_keyword = st.text_input("Hapus memory file lokal yang mengandung kata")
         col_forget, col_reset_memory = st.columns(2)
         with col_forget:
-            if st.button("Hapus file lokal berdasarkan kata", use_container_width=True):
+            if st.button("Hapus file lokal berdasarkan kata", use_container_width=True, key="auto_btn_3055"):
                 count = memory.forget_contains(forget_keyword)
                 st.warning(f"{count} memory file lokal dihapus.")
                 st.rerun()
         with col_reset_memory:
-            if st.button("Reset semua memory file lokal", use_container_width=True):
+            if st.button("Reset semua memory file lokal", use_container_width=True, key="auto_btn_3060"):
                 memory.reset()
                 st.warning("Semua memory file lokal dihapus.")
                 st.rerun()
@@ -3206,7 +3206,7 @@ if not api_key:
 
 col_new_chat, col_info = st.columns([1, 4])
 with col_new_chat:
-    if st.button("🧹 Chat baru", use_container_width=True):
+    if st.button("🧹 Chat baru", use_container_width=True, key="auto_btn_3209"):
         st.session_state.chat_messages = []
         st.session_state.pending_prompt = ""
         st.rerun()
@@ -3283,7 +3283,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                         help="PDF/DOCX/XLSX membutuhkan library terkait. Jika tidak tersedia, sistem akan memberi pesan gagal ekstrak tanpa membuat app crash.",
                     )
                     source_label = st.text_input("Label sumber", value="streamlit-upload", key="kb_source_label")
-                    if uploaded_kb and st.button("➕ Masukkan file ke Knowledge Base", use_container_width=True):
+                    if uploaded_kb and st.button("➕ Masukkan file ke Knowledge Base", use_container_width=True, key="auto_btn_3286"):
                         added = []
                         max_bytes = max(1, int(power_kb_max_file_mb or 12)) * 1024 * 1024
                         for up in uploaded_kb:
@@ -3306,7 +3306,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                     manual_title = st.text_input("Judul dokumen manual", key="kb_manual_title")
                     manual_source = st.text_input("Sumber manual", value="streamlit-manual", key="kb_manual_source")
                     manual_text = st.text_area("Isi dokumen/manual knowledge", height=220, key="kb_manual_text")
-                    if st.button("💾 Simpan manual ke Knowledge Base", use_container_width=True) and manual_text.strip():
+                    if st.button("💾 Simpan manual ke Knowledge Base", use_container_width=True, key="auto_btn_3309") and manual_text.strip():
                         doc_id, chunks = power_store.add_document(
                             title=manual_title.strip() or "Catatan manual",
                             text=manual_text,
@@ -3335,12 +3335,12 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                     col_a, col_b = st.columns(2)
                     with col_a:
                         delete_id = st.text_input("Hapus Doc ID", key="kb_delete_doc_id")
-                        if st.button("🗑️ Hapus dokumen", use_container_width=True) and delete_id.strip():
+                        if st.button("🗑️ Hapus dokumen", use_container_width=True, key="auto_btn_3338") and delete_id.strip():
                             ok = power_store.delete_document(int(delete_id)) if delete_id.strip().isdigit() else False
                             st.success(f"Dokumen ID {delete_id} dihapus.") if ok else st.error("Doc ID tidak ditemukan/gagal dihapus.")
                     with col_b:
                         detail_id = st.text_input("Preview Doc ID", key="kb_detail_doc_id")
-                        if st.button("👁️ Preview dokumen", use_container_width=True) and detail_id.strip():
+                        if st.button("👁️ Preview dokumen", use_container_width=True, key="auto_btn_3343") and detail_id.strip():
                             doc = power_store.get_document(int(detail_id), max_chars=6000) if detail_id.strip().isdigit() else {}
                             if doc:
                                 st.markdown(f"**{doc.get('title')}**")
@@ -3348,13 +3348,13 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                                 st.text_area("Preview", value=str(doc.get("preview") or ""), height=260)
                             else:
                                 st.error("Doc ID tidak ditemukan.")
-                    if st.button("🔁 Rebuild index Knowledge Base", use_container_width=True):
+                    if st.button("🔁 Rebuild index Knowledge Base", use_container_width=True, key="auto_btn_3351"):
                         docs_count, chunks_count = power_store.rebuild_knowledge_index()
                         st.success(f"Index dibangun ulang. Dokumen: {docs_count}, chunks: {chunks_count}")
 
             with tabs_power[1]:
                 mem_text = st.text_area("Tambah memory permanen SQLite", height=100, placeholder="Contoh: User ingin jawaban profesional, praktis, dan kode siap tempel.")
-                if st.button("💾 Simpan memory permanen", use_container_width=True) and mem_text.strip():
+                if st.button("💾 Simpan memory permanen", use_container_width=True, key="auto_btn_3357") and mem_text.strip():
                     mem_id = power_store.add_memory(mem_text, user_id="global", tags="streamlit-admin")
                     st.success(f"Memory tersimpan. ID: {mem_id}")
                 mem_query = st.text_input("Cari memory", key="power_mem_query")
@@ -3389,7 +3389,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                 bench_models = unique_models([route_preview.get("primary_model", "")] + route_preview.get("active_cheap_models", [])[:4] + route_preview.get("active_expensive_models", [])[:4])
                 st.write("Model yang akan dites:")
                 st.code("\n".join(bench_models[:benchmark_max_models]) or "Belum ada model aktif")
-                if st.button("🧪 Jalankan benchmark ringan", use_container_width=True, disabled=not bool(api_key and bench_models)):
+                if st.button("🧪 Jalankan benchmark ringan", use_container_width=True, disabled=not bool(api_key and bench_models), key="auto_btn_3392"):
                     results = run_model_benchmark(
                         store=power_store,
                         api_url=api_url,
