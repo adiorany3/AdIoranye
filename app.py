@@ -1302,6 +1302,31 @@ st.markdown(
         letter-spacing: -0.008em;
     }
 
+    .developer-credit {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 0 16px;
+        color: var(--mac-muted);
+        font-size: 0.84rem;
+        font-weight: 720;
+        letter-spacing: -0.01em;
+    }
+
+    .developer-credit span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 7px 13px;
+        border-radius: 999px;
+        border: 1px solid var(--mac-border);
+        background: var(--mac-panel-soft);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
+    }
+
     @media (max-width: 760px) {
         .app-hero {
             gap: 12px;
@@ -2269,6 +2294,7 @@ st.markdown(
             <p class="app-subtitle">Tulis pesan Anda. Adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis.</p>
         </div>
     </div>
+    <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
     """,
     unsafe_allow_html=True,
 )
