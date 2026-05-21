@@ -4,6 +4,7 @@ import threading
 import fcntl
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, List, Optional, Deque, Set
@@ -22,6 +23,7 @@ from memory_store import MemoryStore, handle_local_memory_command
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = ".telegram_bot_worker.lock"
+DEFAULT_RUNTIME_STATE_FILE = ".telegram_runtime_state.json"
 LOCK_STALE_SECONDS = 180
 WIB_TZ = ZoneInfo("Asia/Jakarta")
 
@@ -266,7 +268,7 @@ def build_telegram_model_note(
 
 
 def _model_tier_rank(model: str) -> int:
-    """Cheap first, then medium, then expensive/unknown."""
+    """Sort models by cost tier: cheap -> medium -> expensive -> ultra -> unknown."""
     try:
         tier = str(model_cost_tier(model) or "").lower()
     except Exception:
@@ -275,7 +277,11 @@ def _model_tier_rank(model: str) -> int:
         return 0
     if tier in {"medium", "menengah"}:
         return 1
-    return 2
+    if tier in {"expensive", "mahal"}:
+        return 2
+    if tier in {"ultra", "ultra_expensive", "ultra mahal"}:
+        return 3
+    return 4
 
 
 def _model_output_price(model: str) -> int:
@@ -309,6 +315,150 @@ def _prioritize_fastest_telegram_models(models: List[str], health_cache: Dict[st
         ),
     )
 
+
+
+
+TRANSIENT_HEALTH_HTTP_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def _is_gpt5_health_model(model: str) -> bool:
+    return "gpt-5" in str(model or "").lower()
+
+
+def _extract_health_content(data: Any) -> str:
+    """Extract assistant text from common OpenAI-compatible response shapes."""
+    if not isinstance(data, dict):
+        return ""
+    choices = data.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return ""
+
+    choice = choices[0]
+    message = choice.get("message") or {}
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: List[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                parts.append(str(item.get("text") or item.get("content") or ""))
+            else:
+                parts.append(str(item or ""))
+        return "\n".join(part for part in parts if part.strip()).strip()
+
+    text = choice.get("text")
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+
+    delta = choice.get("delta") or {}
+    delta_content = delta.get("content")
+    if isinstance(delta_content, str):
+        return delta_content.strip()
+    return ""
+
+
+def _build_health_payload(model: str) -> Dict[str, Any]:
+    """Use a tiny safe prompt that proves the model can return assistant content."""
+    max_tokens = 64 if _is_gpt5_health_model(model) else 16
+    payload: Dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Balas hanya satu kata: OK."},
+            {"role": "user", "content": "OK?"},
+        ],
+        "temperature": 0,
+        "max_completion_tokens": max_tokens,
+        "stream": False,
+    }
+    if _is_gpt5_health_model(model):
+        # GPT-5-family models can spend completion budget on reasoning. Minimal reasoning
+        # avoids false negatives where HTTP 200 returns choices but no visible content.
+        payload["reasoning_effort"] = "minimal"
+    return payload
+
+
+def _candidate_tier(model: str) -> str:
+    try:
+        return str(model_cost_tier(model) or "unknown").lower()
+    except Exception:
+        return "unknown"
+
+
+def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Build robust model pools from defaults, config, and dynamically classified candidates."""
+    default_cheap = _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS)
+    default_expensive = _as_string_list(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
+
+    declared_cheap = []
+    declared_cheap.extend(_as_string_list(config.get("all_cheap_models")) or default_cheap)
+    declared_cheap.extend(_as_string_list(config.get("fallback_models")))
+    declared_cheap.extend(_as_string_list(config.get("fast_cheap_models")))
+    declared_cheap.extend(_as_string_list(config.get("active_cheap_models")))
+
+    declared_capable = []
+    declared_capable.extend(_as_string_list(config.get("all_expensive_models")) or default_expensive)
+    declared_capable.extend(_as_string_list(config.get("expensive_fallback_models")))
+    declared_capable.extend(_as_string_list(config.get("thinking_capable_models")))
+    declared_capable.extend(_as_string_list(config.get("capable_models")))
+    capable_override = str(config.get("thinking_capable_model") or "").strip()
+    if capable_override:
+        declared_capable.append(capable_override)
+
+    extra = _as_string_list(config.get("all_model_candidates"))
+    all_candidates = _as_string_list([current_model] + declared_cheap + declared_capable + extra)
+
+    dynamic_cheap: List[str] = []
+    dynamic_capable: List[str] = []
+    dynamic_unknown: List[str] = []
+    for candidate in all_candidates:
+        tier = _candidate_tier(candidate)
+        if tier == "cheap":
+            dynamic_cheap.append(candidate)
+        elif tier in {"medium", "expensive", "ultra"}:
+            dynamic_capable.append(candidate)
+        else:
+            dynamic_unknown.append(candidate)
+
+    return {
+        "cheap": _as_string_list(declared_cheap + dynamic_cheap),
+        "capable": _as_string_list(declared_capable + dynamic_capable),
+        "unknown": _as_string_list(dynamic_unknown),
+        "all": all_candidates,
+    }
+
+
+def _select_primary_by_mode(
+    preferred_mode: str,
+    current_model: str,
+    active_cheap_fast: List[str],
+    active_capable: List[str],
+    active_unknown: List[str],
+    active_all: List[str],
+) -> str:
+    """Select primary model from live health-check results."""
+    mode = str(preferred_mode or "auto").strip().lower()
+    if mode in {"cheap", "murah"}:
+        if active_cheap_fast:
+            return active_cheap_fast[0]
+        if active_capable:
+            return active_capable[0]
+    elif mode in {"expensive", "mahal", "medium", "menengah"}:
+        if active_capable:
+            return active_capable[0]
+        if active_cheap_fast:
+            return active_cheap_fast[0]
+    else:
+        if active_cheap_fast:
+            return active_cheap_fast[0]
+        if active_capable:
+            return active_capable[0]
+
+    if active_unknown:
+        return active_unknown[0]
+    if active_all:
+        return active_all[0]
+    return current_model
 
 def is_speed_update_command(text: str, expected_code: str = "4321") -> bool:
     """Return True only for the protected /speed command.
@@ -371,7 +521,7 @@ def build_model_switch_summary(mode: str, model: str, cheap_models: List[str], c
         lines = [
             "✅ Mode model diubah ke: MEDIUM/MAHAL.",
             "",
-            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model capable terlebih dahulu.",
+            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model medium/mahal yang sedang aktif.",
             f"Model utama mode mahal: {selected or model}",
         ]
         if capable_models:
@@ -389,7 +539,7 @@ def build_model_switch_summary(mode: str, model: str, cheap_models: List[str], c
         lines = [
             "✅ Mode model diubah ke: MURAH/CEPAT.",
             "",
-            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model murah/cepat terlebih dahulu.",
+            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model murah/cepat yang sedang aktif.",
             f"Model utama mode murah: {selected or model}",
         ]
         if cheap_models:
@@ -515,7 +665,8 @@ def build_rotate_summary(result: Dict[str, Any], rotation: Dict[str, Any], previ
         f"Mode aktif: {mode_label}",
         f"Model sebelumnya: {previous_model or 'tidak diketahui'}",
         f"Model sekarang: {selected_model}",
-        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)}",
+        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)} | Sementara error: {result.get('transient_total', 0)} | Mati: {result.get('dead_total', 0)}",
+        f"Metode cek: paralel {result.get('health_workers', 1)} worker | retry {result.get('health_retries', 0)}x",
     ]
 
     if selected_model in health_cache:
@@ -546,110 +697,276 @@ def build_rotate_summary(result: Dict[str, Any], rotation: Dict[str, Any], previ
 
     return "\n".join(lines)
 
-def check_telegram_single_model_health(api_url: str, api_key: str, model: str, timeout: int = 12) -> Dict[str, Any]:
-    """Check whether one model can answer a tiny OpenAI-compatible request."""
+def check_telegram_single_model_health(api_url: str, api_key: str, model: str, timeout: int = 12, retries: int = 1) -> Dict[str, Any]:
+    """Check whether one model is truly usable right now.
+
+    A model is marked active only when it returns HTTP 200, has at least one
+    choice, and produces non-empty assistant content. Temporary provider errors
+    such as 429/5xx are retried once and reported as transient instead of being
+    treated as a confirmed dead model.
+    """
     started = time.time()
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "Jawab sangat singkat."},
-            {"role": "user", "content": "ping"},
-        ],
-        "temperature": 0,
-        "max_completion_tokens": 8,
-    }
-    try:
-        response = requests.post(api_url, headers=headers, json=payload, timeout=timeout)
-        latency_ms = round((time.time() - started) * 1000, 1)
-        if response.status_code != 200:
+    attempts = max(1, int(retries or 0) + 1)
+    last_error = ""
+    last_status = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.post(
+                api_url,
+                headers=headers,
+                json=_build_health_payload(model),
+                timeout=timeout,
+            )
+            latency_ms = round((time.time() - started) * 1000, 1)
+            last_status = response.status_code
+
+            if response.status_code != 200:
+                is_transient = response.status_code in TRANSIENT_HEALTH_HTTP_CODES
+                last_error = response.text[:500]
+                if is_transient and attempt < attempts:
+                    time.sleep(min(1.2, 0.35 * attempt))
+                    continue
+                return {
+                    "active": False,
+                    "health_status": "transient" if is_transient else "dead",
+                    "error_class": "transient_http" if is_transient else "http_error",
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "attempts": attempt,
+                    "checked_at": _wib_now_text(),
+                    "tier": _candidate_tier(model),
+                    "error": last_error,
+                }
+
+            try:
+                data = response.json()
+            except Exception:
+                last_error = (response.text or "")[:500]
+                return {
+                    "active": False,
+                    "health_status": "dead",
+                    "error_class": "invalid_json",
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "attempts": attempt,
+                    "checked_at": _wib_now_text(),
+                    "tier": _candidate_tier(model),
+                    "error": "Respons 200 tetapi bukan JSON valid: " + last_error,
+                }
+
+            choices = data.get("choices") or [] if isinstance(data, dict) else []
+            content = _extract_health_content(data)
+            finish_reason = ""
+            if choices and isinstance(choices[0], dict):
+                finish_reason = str(choices[0].get("finish_reason") or "")
+
+            if choices and content:
+                return {
+                    "active": True,
+                    "health_status": "active",
+                    "error_class": "",
+                    "status_code": response.status_code,
+                    "latency_ms": latency_ms,
+                    "attempts": attempt,
+                    "checked_at": _wib_now_text(),
+                    "tier": _candidate_tier(model),
+                    "finish_reason": finish_reason,
+                    "sample": content[:80],
+                    "error": "",
+                }
+
+            # HTTP 200 but no readable assistant content should not be considered active.
+            usage = data.get("usage") if isinstance(data, dict) else None
+            details = (usage or {}).get("completion_tokens_details") if isinstance(usage, dict) else None
+            reasoning_tokens = (details or {}).get("reasoning_tokens") if isinstance(details, dict) else None
+            last_error = "Response 200 tetapi choices/content kosong"
+            if reasoning_tokens:
+                last_error += f"; reasoning_tokens={reasoning_tokens}"
             return {
                 "active": False,
+                "health_status": "dead",
+                "error_class": "empty_content",
                 "status_code": response.status_code,
                 "latency_ms": latency_ms,
+                "attempts": attempt,
                 "checked_at": _wib_now_text(),
-                "error": response.text[:300],
+                "tier": _candidate_tier(model),
+                "finish_reason": finish_reason,
+                "error": last_error,
             }
-        data = response.json()
-        choices = data.get("choices") or []
-        content = ""
-        if choices:
-            content = str((choices[0].get("message") or {}).get("content") or "").strip()
-        return {
-            "active": bool(choices),
-            "status_code": response.status_code,
-            "latency_ms": latency_ms,
-            "checked_at": _wib_now_text(),
-            "sample": content[:60],
-            "error": "" if choices else "Response 200 tetapi choices kosong",
-        }
-    except Exception as exc:
-        return {
-            "active": False,
-            "status_code": None,
-            "latency_ms": round((time.time() - started) * 1000, 1),
-            "checked_at": _wib_now_text(),
-            "error": str(exc)[:300],
-        }
+
+        except requests.Timeout as exc:
+            last_error = str(exc)[:500]
+            if attempt < attempts:
+                time.sleep(min(1.2, 0.35 * attempt))
+                continue
+            return {
+                "active": False,
+                "health_status": "transient",
+                "error_class": "timeout",
+                "status_code": last_status,
+                "latency_ms": round((time.time() - started) * 1000, 1),
+                "attempts": attempt,
+                "checked_at": _wib_now_text(),
+                "tier": _candidate_tier(model),
+                "error": last_error,
+            }
+        except requests.RequestException as exc:
+            last_error = str(exc)[:500]
+            if attempt < attempts:
+                time.sleep(min(1.2, 0.35 * attempt))
+                continue
+            return {
+                "active": False,
+                "health_status": "transient",
+                "error_class": "request_exception",
+                "status_code": last_status,
+                "latency_ms": round((time.time() - started) * 1000, 1),
+                "attempts": attempt,
+                "checked_at": _wib_now_text(),
+                "tier": _candidate_tier(model),
+                "error": last_error,
+            }
+        except Exception as exc:
+            last_error = str(exc)[:500]
+            return {
+                "active": False,
+                "health_status": "dead",
+                "error_class": "unexpected_error",
+                "status_code": last_status,
+                "latency_ms": round((time.time() - started) * 1000, 1),
+                "attempts": attempt,
+                "checked_at": _wib_now_text(),
+                "tier": _candidate_tier(model),
+                "error": last_error,
+            }
+
+    return {
+        "active": False,
+        "health_status": "dead",
+        "error_class": "unknown",
+        "status_code": last_status,
+        "latency_ms": round((time.time() - started) * 1000, 1),
+        "attempts": attempts,
+        "checked_at": _wib_now_text(),
+        "tier": _candidate_tier(model),
+        "error": last_error or "Health check gagal tanpa detail.",
+    }
 
 
-def refresh_telegram_runtime_models(api_url: str, api_key: str, current_model: str, config: Dict[str, Any], timeout: int = 12) -> Dict[str, Any]:
-    """Refresh Telegram runtime routing so only active models are used."""
+def refresh_telegram_runtime_models(
+    api_url: str,
+    api_key: str,
+    current_model: str,
+    config: Dict[str, Any],
+    timeout: int = 12,
+    preferred_mode: str = "auto",
+) -> Dict[str, Any]:
+    """Refresh Telegram runtime routing so only currently-active models are used.
+
+    Improvements over the previous checker:
+    - candidate pools are deduplicated and classified by actual price tier;
+    - checks run in parallel with bounded workers;
+    - temporary 429/5xx/timeouts are retried and reported separately;
+    - active means the model returned non-empty assistant content, not merely HTTP 200.
+    """
     if not api_url or not api_key:
         raise RuntimeError("SLASHAI_API_URL atau SLASHAI_API_KEY belum tersedia.")
 
-    cheap_candidates = _as_string_list(config.get("all_cheap_models")) or _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS)
-    cheap_candidates.extend(_as_string_list(config.get("fallback_models")))
-    cheap_candidates.extend(_as_string_list(config.get("fast_cheap_models")))
-    cheap_candidates.extend(_as_string_list(config.get("active_cheap_models")))
+    pools = _split_candidates_by_tier(current_model=current_model, config=config)
+    cheap_candidates = pools["cheap"]
+    capable_candidates = pools["capable"]
+    unknown_candidates = pools["unknown"]
+    candidates = pools["all"]
 
-    expensive_candidates = _as_string_list(config.get("all_expensive_models")) or _as_string_list(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
-    expensive_candidates.extend(_as_string_list(config.get("expensive_fallback_models")))
-    expensive_candidates.extend(_as_string_list(config.get("thinking_capable_models")))
-    capable_override = str(config.get("thinking_capable_model") or "").strip()
-    if capable_override:
-        expensive_candidates.append(capable_override)
+    if not candidates:
+        candidates = _as_string_list([current_model] + DEFAULT_CHEAP_FALLBACK_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS)
 
-    all_model_candidates = _as_string_list(config.get("all_model_candidates"))
-    candidates = _as_string_list([current_model] + cheap_candidates + expensive_candidates + all_model_candidates)
+    max_workers = int(config.get("model_health_workers", 6) or 6)
+    max_workers = max(1, min(max_workers, len(candidates), 10))
+    retries = int(config.get("model_health_retries", 1) or 1)
+    retries = max(0, min(retries, 2))
 
     health_cache: Dict[str, Dict[str, Any]] = {}
-    for candidate in candidates:
-        health_cache[candidate] = check_telegram_single_model_health(
-            api_url=api_url,
-            api_key=api_key,
-            model=candidate,
-            timeout=timeout,
-        )
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(
+                check_telegram_single_model_health,
+                api_url,
+                api_key,
+                candidate,
+                timeout,
+                retries,
+            ): candidate
+            for candidate in candidates
+        }
+        for future in as_completed(future_map):
+            candidate = future_map[future]
+            try:
+                health_cache[candidate] = future.result()
+            except Exception as exc:
+                health_cache[candidate] = {
+                    "active": False,
+                    "health_status": "dead",
+                    "error_class": "future_error",
+                    "status_code": None,
+                    "latency_ms": None,
+                    "attempts": 0,
+                    "checked_at": _wib_now_text(),
+                    "tier": _candidate_tier(candidate),
+                    "error": str(exc)[:500],
+                }
 
     active_cheap_priority = _prioritize_active_telegram_models(cheap_candidates, health_cache)
     active_cheap_fast = _prioritize_fastest_telegram_models(cheap_candidates, health_cache)
-    active_expensive = _prioritize_active_telegram_models(expensive_candidates, health_cache)
+    active_capable = _prioritize_active_telegram_models(capable_candidates, health_cache)
+    active_unknown = _prioritize_fastest_telegram_models(unknown_candidates, health_cache)
     active_all = [model for model in candidates if health_cache.get(model, {}).get("active")]
 
-    if active_cheap_fast:
-        primary_model = active_cheap_fast[0]
-    elif active_expensive:
-        primary_model = active_expensive[0]
-    elif active_all:
-        primary_model = active_all[0]
+    primary_model = _select_primary_by_mode(
+        preferred_mode=preferred_mode,
+        current_model=current_model,
+        active_cheap_fast=active_cheap_fast,
+        active_capable=active_capable,
+        active_unknown=active_unknown,
+        active_all=active_all,
+    )
+
+    if primary_model in active_cheap_fast:
+        fallback_models = [model for model in active_cheap_fast if model != primary_model]
+        expensive_fallback_models = active_capable
+    elif primary_model in active_capable:
+        fallback_models = active_cheap_fast
+        expensive_fallback_models = [model for model in active_capable if model != primary_model]
     else:
-        primary_model = current_model
+        fallback_models = active_cheap_fast
+        expensive_fallback_models = active_capable
+
+    transient_total = sum(1 for item in health_cache.values() if item.get("health_status") == "transient")
+    dead_total = sum(1 for item in health_cache.values() if item.get("health_status") == "dead")
 
     return {
         "primary_model": primary_model,
+        "preferred_mode": preferred_mode,
         "active_cheap_models": active_cheap_priority,
         "fast_cheap_models": active_cheap_fast,
-        "fallback_models": [model for model in active_cheap_fast if model != primary_model],
-        "active_expensive_models": active_expensive,
-        "expensive_fallback_models": [model for model in active_expensive if model != primary_model],
-        "thinking_capable_models": active_expensive,
+        "fallback_models": fallback_models,
+        "active_expensive_models": active_capable,
+        "expensive_fallback_models": expensive_fallback_models,
+        "thinking_capable_models": active_capable,
+        "active_unknown_models": active_unknown,
         "health_cache": health_cache,
         "active_total": len(active_all),
+        "transient_total": transient_total,
+        "dead_total": dead_total,
         "checked_total": len(candidates),
+        "health_workers": max_workers,
+        "health_retries": retries,
     }
 
 
@@ -665,7 +982,8 @@ def build_speed_update_summary(result: Dict[str, Any]) -> str:
         f"Model utama sekarang: {primary}",
         f"Model murah aktif: {len(fast_cheap)}",
         f"Model menengah/mahal aktif: {len(active_expensive)}",
-        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)}",
+        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)} | Sementara error: {result.get('transient_total', 0)} | Mati: {result.get('dead_total', 0)}",
+        f"Metode cek: paralel {result.get('health_workers', 1)} worker | retry {result.get('health_retries', 0)}x",
     ]
     if fast_cheap:
         lines.append("")
@@ -735,6 +1053,88 @@ class TelegramBotService:
             "model_health_checked_at": self._model_health_checked_at,
             "model_health_active_count": sum(1 for item in self._model_health_cache.values() if item.get("active")),
         }
+
+    def _runtime_state_path(self, config: Dict[str, Any]) -> str:
+        """Return the file path used to persist Telegram model routing state."""
+        raw_path = str(config.get("telegram_runtime_state_file") or DEFAULT_RUNTIME_STATE_FILE).strip()
+        return os.path.abspath(raw_path or DEFAULT_RUNTIME_STATE_FILE)
+
+    def _load_runtime_state(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Load persisted runtime model state from disk.
+
+        The app can restart frequently on Streamlit/Vercel-like environments. This
+        keeps /ubah, /rotate, and the last known active model from disappearing on
+        every rerun. Invalid/corrupt state is ignored safely.
+        """
+        path = self._runtime_state_path(config)
+        try:
+            if not os.path.exists(path):
+                return {}
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            if not isinstance(data, dict):
+                return {}
+            return data
+        except Exception as exc:
+            self._last_error = f"Gagal membaca runtime state Telegram: {exc}"
+            return {}
+
+    def _save_runtime_state(self, config: Dict[str, Any], state: Dict[str, Any]) -> None:
+        """Persist runtime model state atomically enough for a single-process app."""
+        path = self._runtime_state_path(config)
+        try:
+            safe_state = dict(state or {})
+            safe_state["saved_at"] = _wib_now_text()
+            tmp_path = path + ".tmp"
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(tmp_path, "w", encoding="utf-8") as fh:
+                json.dump(safe_state, fh, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, path)
+        except Exception as exc:
+            self._last_error = f"Gagal menyimpan runtime state Telegram: {exc}"
+
+    def _admin_chat_ids(self, config: Dict[str, Any]) -> Set[str]:
+        """Read admin chat IDs from config or environment.
+
+        Supported keys/env:
+        - telegram_admin_chat_ids
+        - admin_chat_ids
+        - TELEGRAM_ADMIN_CHAT_IDS
+        - ADMIN_CHAT_IDS
+        """
+        raw_values: List[str] = []
+        raw_values.extend(_as_string_list(config.get("telegram_admin_chat_ids")))
+        raw_values.extend(_as_string_list(config.get("admin_chat_ids")))
+        raw_values.extend(_as_string_list(os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")))
+        raw_values.extend(_as_string_list(os.getenv("ADMIN_CHAT_IDS", "")))
+        return {str(item).strip() for item in raw_values if str(item).strip()}
+
+    def _is_admin_chat(self, chat_id: Any, config: Dict[str, Any]) -> bool:
+        """Return True when the chat can run model-management commands.
+
+        Secure default: if no admin IDs are configured, model-management commands
+        are blocked. Set allow_unrestricted_model_commands=True only for private
+        testing.
+        """
+        admin_ids = self._admin_chat_ids(config)
+        if not admin_ids:
+            return bool(config.get("allow_unrestricted_model_commands", False))
+        return str(chat_id).strip() in admin_ids
+
+    def _send_admin_required(self, token: str, chat_id: int, config: Dict[str, Any]) -> None:
+        admin_ids = self._admin_chat_ids(config)
+        if admin_ids:
+            msg = "Perintah ini hanya untuk admin bot."
+        else:
+            msg = (
+                "Perintah model hanya untuk admin, tetapi admin_chat_ids belum diatur.\n\n"
+                "Tambahkan salah satu konfigurasi ini:\n"
+                "- telegram_admin_chat_ids\n"
+                "- admin_chat_ids\n"
+                "- TELEGRAM_ADMIN_CHAT_IDS\n\n"
+                f"Chat ID Anda: {chat_id}"
+            )
+        self._send_message(token, chat_id, msg)
 
     def start(self, config: Dict[str, Any]) -> bool:
         with self._lock:
@@ -915,6 +1315,32 @@ class TelegramBotService:
         forced_model_mode = str(config.get("telegram_model_mode") or "auto").strip().lower()
         if forced_model_mode not in {"auto", "cheap", "expensive"}:
             forced_model_mode = "auto"
+
+        # Restore last runtime routing state after Streamlit/App restart.
+        runtime_state = self._load_runtime_state(config)
+        if runtime_state:
+            model = str(runtime_state.get("primary_model") or runtime_state.get("slashai_model") or model).strip() or model
+            fallback_models = _as_string_list(runtime_state.get("fallback_models")) or fallback_models
+            expensive_fallback_models = _as_string_list(runtime_state.get("expensive_fallback_models")) or expensive_fallback_models
+            fast_cheap_models_runtime = _as_string_list(runtime_state.get("fast_cheap_models")) or fast_cheap_models_runtime
+            thinking_capable_models_runtime = _as_string_list(runtime_state.get("thinking_capable_models")) or thinking_capable_models_runtime
+            restored_mode = str(runtime_state.get("telegram_model_mode") or forced_model_mode).strip().lower()
+            if restored_mode in {"auto", "cheap", "expensive"}:
+                forced_model_mode = restored_mode
+            allow_expensive_fallback = bool(runtime_state.get("allow_expensive_fallback", bool(expensive_fallback_models)))
+            self._model_health_checked_at = str(runtime_state.get("model_health_checked_at") or "")
+            self._last_model_update_source = str(runtime_state.get("last_model_update_source") or "runtime_state")
+            config.update({
+                "slashai_model": model,
+                "telegram_model_mode": forced_model_mode,
+                "fallback_models": fallback_models,
+                "expensive_fallback_models": expensive_fallback_models,
+                "fast_cheap_models": fast_cheap_models_runtime,
+                "fastest_cheap_model": fast_cheap_models_runtime[0] if fast_cheap_models_runtime else "",
+                "thinking_capable_models": thinking_capable_models_runtime,
+                "allow_expensive_fallback": allow_expensive_fallback,
+            })
+
         self._runtime_primary_model = model
         self._forced_model_mode = forced_model_mode
 
@@ -926,6 +1352,70 @@ class TelegramBotService:
 
         memory = MemoryStore(memory_file)
         offset = None
+
+        def persist_current_runtime_state(source: str) -> None:
+            self._save_runtime_state(config, {
+                "primary_model": model,
+                "slashai_model": model,
+                "telegram_model_mode": forced_model_mode,
+                "fallback_models": fallback_models,
+                "expensive_fallback_models": expensive_fallback_models,
+                "active_cheap_models": config.get("active_cheap_models") or [],
+                "fast_cheap_models": fast_cheap_models_runtime,
+                "thinking_capable_models": thinking_capable_models_runtime,
+                "active_expensive_models": thinking_capable_models_runtime,
+                "allow_expensive_fallback": bool(allow_expensive_fallback),
+                "model_health_checked_at": self._model_health_checked_at,
+                "last_model_update_source": source,
+            })
+
+        def apply_rotation_result(rotation_result: Dict[str, Any], rotation: Dict[str, Any], source: str) -> None:
+            nonlocal model, fallback_models, expensive_fallback_models, fast_cheap_models_runtime
+            nonlocal thinking_capable_models_runtime, allow_expensive_fallback, max_smart_models
+            nonlocal forced_model_mode, thinking_model_router, fast_normal_model_router
+
+            model = rotation.get("selected_model") or model
+            # Keep the requested mode stable. select_rotated_runtime_model may use a
+            # temporary safety fallback, but /ubah murah should still mean cheap-first
+            # on the next rotate when cheap models return.
+            selected_mode = str(rotation.get("requested_mode") or rotation.get("selected_mode") or forced_model_mode or "auto").lower()
+            if selected_mode in {"auto", "cheap", "expensive"}:
+                forced_model_mode = selected_mode
+
+            fallback_models = rotation.get("fallback_models") or []
+            expensive_fallback_models = rotation.get("expensive_fallback_models") or []
+            fast_cheap_models_runtime = rotation.get("fast_cheap_models") or []
+            thinking_capable_models_runtime = rotation.get("active_expensive_models") or []
+            allow_expensive_fallback = bool(rotation.get("allow_expensive_fallback"))
+            max_smart_models = max(int(max_smart_models or 1), len(fallback_models), 1)
+
+            if forced_model_mode == "cheap":
+                thinking_model_router = False
+                fast_normal_model_router = True
+            elif forced_model_mode == "expensive":
+                thinking_model_router = False
+                fast_normal_model_router = False
+            else:
+                thinking_model_router = bool(config.get("thinking_model_router", True))
+                fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
+
+            config.update({
+                "slashai_model": model,
+                "telegram_model_mode": forced_model_mode,
+                "fallback_models": fallback_models,
+                "expensive_fallback_models": expensive_fallback_models,
+                "active_cheap_models": rotation.get("active_cheap_models") or [],
+                "fast_cheap_models": fast_cheap_models_runtime,
+                "fastest_cheap_model": fast_cheap_models_runtime[0] if fast_cheap_models_runtime else "",
+                "thinking_capable_models": thinking_capable_models_runtime,
+                "allow_expensive_fallback": allow_expensive_fallback,
+            })
+            self._model_health_cache = rotation_result.get("health_cache") or {}
+            self._model_health_checked_at = _wib_now_text()
+            self._last_model_update_source = source
+            self._runtime_primary_model = model
+            self._forced_model_mode = forced_model_mode
+            persist_current_runtime_state(source)
 
         try:
             # drop_pending_updates=True prevents old messages from being answered twice
@@ -985,16 +1475,19 @@ class TelegramBotService:
                                 "Perintah:\n"
                                 "/start - mulai bot\n"
                                 "/help - bantuan\n"
-                                "/speed 4321 - update model aktif dan pilih yang tercepat\n"
-                                "/rotate - cek ulang kondisi model dan ganti ke model aktif terbaik saat ini\n"
-                                "/ubah mahal - pakai model medium/mahal\n"
-                                "/ubah murah - kembali pakai model murah/cepat\n\n"
+                                "/speed 4321 - admin: update model aktif dan pilih yang tercepat\n"
+                                "/rotate - admin: cek ulang kondisi model dan ganti ke model aktif terbaik saat ini\n"
+                                "/ubah mahal - admin: pakai model medium/mahal aktif\n"
+                                "/ubah murah - admin: kembali pakai model murah/cepat aktif\n\n"
                                 "Langsung kirim pertanyaan untuk dijawab AI.",
                                 parse_mode=telegram_parse_mode,
                             )
                             continue
 
                         if is_speed_update_command(text, expected_code=speed_update_code):
+                            if not self._is_admin_chat(chat_id, config):
+                                self._send_admin_required(token, chat_id, config)
+                                continue
                             self._send_message(
                                 token,
                                 chat_id,
@@ -1008,13 +1501,14 @@ class TelegramBotService:
                                     current_model=model,
                                     config=config,
                                     timeout=model_health_timeout,
+                                    preferred_mode="auto",
                                 )
                                 model = speed_result.get("primary_model") or model
                                 fallback_models = speed_result.get("fallback_models") or []
                                 expensive_fallback_models = speed_result.get("expensive_fallback_models") or []
                                 fast_cheap_models_runtime = speed_result.get("fast_cheap_models") or []
                                 thinking_capable_models_runtime = speed_result.get("thinking_capable_models") or []
-                                allow_expensive_fallback = bool(expensive_fallback_models) or bool(config.get("allow_expensive_fallback", True))
+                                allow_expensive_fallback = bool(expensive_fallback_models)
                                 max_smart_models = max(int(max_smart_models or 1), len(fallback_models), 1)
 
                                 config["slashai_model"] = model
@@ -1029,6 +1523,8 @@ class TelegramBotService:
                                 self._model_health_checked_at = _wib_now_text()
                                 self._last_model_update_source = "speed"
                                 self._runtime_primary_model = model
+                                config["allow_expensive_fallback"] = allow_expensive_fallback
+                                persist_current_runtime_state("speed")
                                 self._send_message(token, chat_id, build_speed_update_summary(speed_result), parse_mode=telegram_parse_mode)
                             except Exception as exc:
                                 self._last_error = str(exc)
@@ -1050,6 +1546,9 @@ class TelegramBotService:
                             continue
 
                         if is_rotate_model_command(text):
+                            if not self._is_admin_chat(chat_id, config):
+                                self._send_admin_required(token, chat_id, config)
+                                continue
                             self._send_message(
                                 token,
                                 chat_id,
@@ -1064,6 +1563,7 @@ class TelegramBotService:
                                     current_model=model,
                                     config=config,
                                     timeout=model_health_timeout,
+                                    preferred_mode=forced_model_mode,
                                 )
                                 rotation = select_rotated_runtime_model(
                                     result=rotate_result,
@@ -1071,40 +1571,8 @@ class TelegramBotService:
                                     current_model=model,
                                 )
 
-                                model = rotation.get("selected_model") or model
-                                forced_model_mode = rotation.get("selected_mode") or forced_model_mode or "auto"
-                                fallback_models = rotation.get("fallback_models") or []
-                                expensive_fallback_models = rotation.get("expensive_fallback_models") or []
-                                fast_cheap_models_runtime = rotation.get("fast_cheap_models") or []
-                                thinking_capable_models_runtime = rotation.get("active_expensive_models") or []
-                                allow_expensive_fallback = bool(rotation.get("allow_expensive_fallback"))
-                                max_smart_models = max(int(max_smart_models or 1), len(fallback_models), 1)
-
-                                # Restore routers according to the selected mode.
-                                if forced_model_mode == "cheap":
-                                    thinking_model_router = False
-                                    fast_normal_model_router = True
-                                elif forced_model_mode == "expensive":
-                                    thinking_model_router = False
-                                    fast_normal_model_router = False
-                                else:
-                                    thinking_model_router = bool(config.get("thinking_model_router", True))
-                                    fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
-
-                                config["slashai_model"] = model
-                                config["telegram_model_mode"] = forced_model_mode
-                                config["fallback_models"] = fallback_models
-                                config["expensive_fallback_models"] = expensive_fallback_models
-                                config["active_cheap_models"] = rotation.get("active_cheap_models") or []
-                                config["fast_cheap_models"] = fast_cheap_models_runtime
-                                config["fastest_cheap_model"] = fast_cheap_models_runtime[0] if fast_cheap_models_runtime else ""
-                                config["thinking_capable_models"] = thinking_capable_models_runtime
-
-                                self._model_health_cache = rotate_result.get("health_cache") or {}
-                                self._model_health_checked_at = _wib_now_text()
-                                self._last_model_update_source = "rotate"
-                                self._runtime_primary_model = model
-                                self._forced_model_mode = forced_model_mode
+                                rotation["requested_mode"] = forced_model_mode
+                                apply_rotation_result(rotate_result, rotation, "rotate")
                                 self._send_message(
                                     token,
                                     chat_id,
@@ -1132,30 +1600,46 @@ class TelegramBotService:
 
                         switch_mode = parse_model_switch_command(text)
                         if switch_mode:
-                            forced_model_mode = switch_mode
-                            config["telegram_model_mode"] = switch_mode
-                            self._forced_model_mode = switch_mode
-                            self._last_model_update_source = "manual"
-
-                            if switch_mode == "expensive":
-                                allow_expensive_fallback = True
-                                thinking_model_router = False
-                                fast_normal_model_router = False
-                                # Keep the current cheap primary model intact, but subsequent answers
-                                # will request the capable model path first.
-                            elif switch_mode == "cheap":
-                                allow_expensive_fallback = False
-                                thinking_model_router = False
-                                fast_normal_model_router = True
-
-                            cheap_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or _as_string_list(config.get("fallback_models"))
-                            capable_pool = thinking_capable_models_runtime or _as_string_list(config.get("thinking_capable_models")) or _as_string_list(config.get("expensive_fallback_models"))
+                            if not self._is_admin_chat(chat_id, config):
+                                self._send_admin_required(token, chat_id, config)
+                                continue
                             self._send_message(
                                 token,
                                 chat_id,
-                                build_model_switch_summary(switch_mode, model, cheap_pool, capable_pool),
+                                "⏳ Mengubah mode dan mengecek model aktif saat ini...",
                                 parse_mode=telegram_parse_mode,
                             )
+                            try:
+                                previous_model = model
+                                switch_result = refresh_telegram_runtime_models(
+                                    api_url=api_url,
+                                    api_key=api_key,
+                                    current_model=model,
+                                    config=config,
+                                    timeout=model_health_timeout,
+                                    preferred_mode=switch_mode,
+                                )
+                                rotation = select_rotated_runtime_model(
+                                    result=switch_result,
+                                    current_mode=switch_mode,
+                                    current_model=model,
+                                )
+                                rotation["requested_mode"] = switch_mode
+                                apply_rotation_result(switch_result, rotation, "ubah")
+
+                                cheap_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or _as_string_list(config.get("fallback_models"))
+                                capable_pool = thinking_capable_models_runtime or _as_string_list(config.get("thinking_capable_models")) or _as_string_list(config.get("expensive_fallback_models"))
+                                message = build_model_switch_summary(switch_mode, model, cheap_pool, capable_pool)
+                                message += "\n\n" + build_rotate_summary(switch_result, rotation, previous_model)
+                                self._send_message(token, chat_id, message, parse_mode=telegram_parse_mode)
+                            except Exception as exc:
+                                self._last_error = str(exc)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "Gagal mengubah mode model.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
                             continue
 
                         if text_lower.startswith("/ubah"):
@@ -1307,11 +1791,79 @@ class TelegramBotService:
                             self._send_message(token, chat_id, answer_to_send, parse_mode=telegram_parse_mode)
 
                         except Exception as exc:
-                            self._last_error = str(exc)
+                            original_error = str(exc)
+                            self._last_error = original_error
+
+                            if bool(config.get("auto_rotate_on_model_error", True)):
+                                try:
+                                    self._send_typing(token, chat_id)
+                                    retry_result = refresh_telegram_runtime_models(
+                                        api_url=api_url,
+                                        api_key=api_key,
+                                        current_model=model,
+                                        config=config,
+                                        timeout=model_health_timeout,
+                                        preferred_mode=manual_mode,
+                                    )
+                                    retry_rotation = select_rotated_runtime_model(
+                                        result=retry_result,
+                                        current_mode=manual_mode,
+                                        current_model=model,
+                                    )
+                                    retry_rotation["requested_mode"] = manual_mode
+                                    retry_previous_model = model
+                                    apply_rotation_result(retry_result, retry_rotation, "auto_retry")
+
+                                    retry_answer, retry_meta = generate_answer(
+                                        api_url=api_url,
+                                        api_key=api_key,
+                                        model=model,
+                                        system_prompt=persona,
+                                        user_text=text,
+                                        memory_text=memory_text,
+                                        recent_messages=history,
+                                        fallback_models=fallback_models,
+                                        expensive_fallback_models=expensive_fallback_models,
+                                        allow_expensive_fallback=allow_expensive_fallback,
+                                        max_expensive_models=max_expensive_models,
+                                        temperature=float(config.get("temperature", 0.3)),
+                                        max_completion_tokens=int(config.get("max_completion_tokens", 1800)),
+                                        timeout=int(config.get("timeout", 60)),
+                                        smart_model_router=smart_model_router,
+                                        return_to_primary=False,
+                                        max_smart_models=max_smart_models,
+                                    )
+
+                                    if isinstance(retry_meta, dict):
+                                        retry_meta["telegram_auto_rotated_after_error"] = True
+                                        retry_meta["telegram_previous_error"] = original_error[:500]
+                                        retry_meta["telegram_previous_model"] = retry_previous_model
+                                        retry_meta["telegram_forced_model_mode"] = manual_mode
+                                        retry_meta["telegram_model_requested"] = model
+                                        retry_meta["telegram_speed_updated_at"] = self._model_health_checked_at
+
+                                    history.append({"role": "user", "content": text})
+                                    history.append({"role": "assistant", "content": retry_answer})
+                                    self._histories[key] = history[-8:]
+                                    show_model = bool(config.get("show_model_info", True))
+                                    if show_model:
+                                        retry_answer_to_send = retry_answer + build_telegram_model_note(
+                                            meta=retry_meta,
+                                            requested_model=model,
+                                            default_model=model,
+                                        )
+                                        retry_answer_to_send += "\n♻️ Catatan: model awal gagal, lalu bot otomatis rotate ke model aktif dan mengulang jawaban."
+                                    else:
+                                        retry_answer_to_send = retry_answer
+                                    self._send_message(token, chat_id, retry_answer_to_send, parse_mode=telegram_parse_mode)
+                                    continue
+                                except Exception as retry_exc:
+                                    self._last_error = f"{original_error} | Auto-rotate retry gagal: {retry_exc}"
+
                             self._send_message(
                                 token,
                                 chat_id,
-                                "Maaf, bot belum bisa menjawab.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                "Maaf, bot belum bisa menjawab.\n\nDetail ringkas:\n" + self._last_error[:1200],
                                 parse_mode=telegram_parse_mode,
                             )
 
