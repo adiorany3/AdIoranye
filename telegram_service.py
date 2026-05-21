@@ -4,17 +4,30 @@ import threading
 import fcntl
 import time
 from collections import deque
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, List, Optional, Deque, Set
 
 import requests
 
-from ai_core import generate_answer
+from ai_core import (
+    DEFAULT_CHEAP_FALLBACK_MODELS,
+    DEFAULT_EXPENSIVE_FALLBACK_MODELS,
+    generate_answer,
+    model_cost_tier,
+    model_price,
+)
 from memory_store import MemoryStore, handle_local_memory_command
 
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = ".telegram_bot_worker.lock"
 LOCK_STALE_SECONDS = 180
+WIB_TZ = ZoneInfo("Asia/Jakarta")
+
+
+def _wib_now_text() -> str:
+    return datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
 
 
 def split_telegram_message(text: str, max_len: int = 3900) -> List[str]:
@@ -229,6 +242,9 @@ def build_telegram_model_note(
         else:
             info_lines.append("🧭 Mode: normal/model murah aktif")
 
+        if meta.get("telegram_speed_updated_at"):
+            info_lines.append(f"🧪 Update model terakhir: {meta.get("telegram_speed_updated_at")}")
+
         consulted = meta.get("consulted_models") or []
         if consulted:
             info_lines.append("🔁 Konsultasi model: " + ", ".join(str(item) for item in consulted[:4]))
@@ -239,6 +255,214 @@ def build_telegram_model_note(
         info_lines.append("🧭 Mode: normal")
 
     return "\n".join(info_lines)
+
+
+
+def _model_tier_rank(model: str) -> int:
+    """Cheap first, then medium, then expensive/unknown."""
+    try:
+        tier = str(model_cost_tier(model) or "").lower()
+    except Exception:
+        tier = ""
+    if tier == "cheap":
+        return 0
+    if tier in {"medium", "menengah"}:
+        return 1
+    return 2
+
+
+def _model_output_price(model: str) -> int:
+    try:
+        return int((model_price(model) or {}).get("output", 999999999))
+    except Exception:
+        return 999999999
+
+
+def _prioritize_active_telegram_models(models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> List[str]:
+    active = [model for model in _as_string_list(models) if health_cache.get(model, {}).get("active")]
+    return sorted(
+        active,
+        key=lambda item: (
+            _model_tier_rank(item),
+            _model_output_price(item),
+            float(health_cache.get(item, {}).get("latency_ms") or 999999),
+            item,
+        ),
+    )
+
+
+def _prioritize_fastest_telegram_models(models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> List[str]:
+    active = [model for model in _as_string_list(models) if health_cache.get(model, {}).get("active")]
+    return sorted(
+        active,
+        key=lambda item: (
+            float(health_cache.get(item, {}).get("latency_ms") or 999999),
+            _model_output_price(item),
+            item,
+        ),
+    )
+
+
+def is_speed_update_command(text: str, expected_code: str = "4321") -> bool:
+    """Return True only for the protected /speed command.
+
+    Supports:
+    - /speed 4321
+    - /speed@NamaBot 4321
+    """
+    raw = str(text or "").strip()
+    parts = raw.split()
+    if len(parts) != 2:
+        return False
+    command = parts[0].lower()
+    code = parts[1].strip()
+    if not command.startswith("/speed"):
+        return False
+    if "@" in command:
+        command = command.split("@", 1)[0]
+    return command == "/speed" and code == str(expected_code or "4321")
+
+
+def check_telegram_single_model_health(api_url: str, api_key: str, model: str, timeout: int = 12) -> Dict[str, Any]:
+    """Check whether one model can answer a tiny OpenAI-compatible request."""
+    started = time.time()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "Jawab sangat singkat."},
+            {"role": "user", "content": "ping"},
+        ],
+        "temperature": 0,
+        "max_completion_tokens": 8,
+    }
+    try:
+        response = requests.post(api_url, headers=headers, json=payload, timeout=timeout)
+        latency_ms = round((time.time() - started) * 1000, 1)
+        if response.status_code != 200:
+            return {
+                "active": False,
+                "status_code": response.status_code,
+                "latency_ms": latency_ms,
+                "checked_at": _wib_now_text(),
+                "error": response.text[:300],
+            }
+        data = response.json()
+        choices = data.get("choices") or []
+        content = ""
+        if choices:
+            content = str((choices[0].get("message") or {}).get("content") or "").strip()
+        return {
+            "active": bool(choices),
+            "status_code": response.status_code,
+            "latency_ms": latency_ms,
+            "checked_at": _wib_now_text(),
+            "sample": content[:60],
+            "error": "" if choices else "Response 200 tetapi choices kosong",
+        }
+    except Exception as exc:
+        return {
+            "active": False,
+            "status_code": None,
+            "latency_ms": round((time.time() - started) * 1000, 1),
+            "checked_at": _wib_now_text(),
+            "error": str(exc)[:300],
+        }
+
+
+def refresh_telegram_runtime_models(api_url: str, api_key: str, current_model: str, config: Dict[str, Any], timeout: int = 12) -> Dict[str, Any]:
+    """Refresh Telegram runtime routing so only active models are used."""
+    if not api_url or not api_key:
+        raise RuntimeError("SLASHAI_API_URL atau SLASHAI_API_KEY belum tersedia.")
+
+    cheap_candidates = _as_string_list(config.get("all_cheap_models")) or _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS)
+    cheap_candidates.extend(_as_string_list(config.get("fallback_models")))
+    cheap_candidates.extend(_as_string_list(config.get("fast_cheap_models")))
+    cheap_candidates.extend(_as_string_list(config.get("active_cheap_models")))
+
+    expensive_candidates = _as_string_list(config.get("all_expensive_models")) or _as_string_list(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
+    expensive_candidates.extend(_as_string_list(config.get("expensive_fallback_models")))
+    expensive_candidates.extend(_as_string_list(config.get("thinking_capable_models")))
+    capable_override = str(config.get("thinking_capable_model") or "").strip()
+    if capable_override:
+        expensive_candidates.append(capable_override)
+
+    all_model_candidates = _as_string_list(config.get("all_model_candidates"))
+    candidates = _as_string_list([current_model] + cheap_candidates + expensive_candidates + all_model_candidates)
+
+    health_cache: Dict[str, Dict[str, Any]] = {}
+    for candidate in candidates:
+        health_cache[candidate] = check_telegram_single_model_health(
+            api_url=api_url,
+            api_key=api_key,
+            model=candidate,
+            timeout=timeout,
+        )
+
+    active_cheap_priority = _prioritize_active_telegram_models(cheap_candidates, health_cache)
+    active_cheap_fast = _prioritize_fastest_telegram_models(cheap_candidates, health_cache)
+    active_expensive = _prioritize_active_telegram_models(expensive_candidates, health_cache)
+    active_all = [model for model in candidates if health_cache.get(model, {}).get("active")]
+
+    if active_cheap_fast:
+        primary_model = active_cheap_fast[0]
+    elif active_expensive:
+        primary_model = active_expensive[0]
+    elif active_all:
+        primary_model = active_all[0]
+    else:
+        primary_model = current_model
+
+    return {
+        "primary_model": primary_model,
+        "active_cheap_models": active_cheap_priority,
+        "fast_cheap_models": active_cheap_fast,
+        "fallback_models": [model for model in active_cheap_fast if model != primary_model],
+        "active_expensive_models": active_expensive,
+        "expensive_fallback_models": [model for model in active_expensive if model != primary_model],
+        "thinking_capable_models": active_expensive,
+        "health_cache": health_cache,
+        "active_total": len(active_all),
+        "checked_total": len(candidates),
+    }
+
+
+def build_speed_update_summary(result: Dict[str, Any]) -> str:
+    """Human-readable Telegram summary after /speed command."""
+    primary = result.get("primary_model") or "tidak ada"
+    fast_cheap = result.get("fast_cheap_models") or []
+    active_expensive = result.get("active_expensive_models") or []
+    health_cache = result.get("health_cache") or {}
+    lines = [
+        "✅ Update model selesai.",
+        "",
+        f"Model utama sekarang: {primary}",
+        f"Model murah aktif: {len(fast_cheap)}",
+        f"Model menengah/mahal aktif: {len(active_expensive)}",
+        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)}",
+    ]
+    if fast_cheap:
+        lines.append("")
+        lines.append("⚡ Urutan model murah tercepat:")
+        for model_name in fast_cheap[:8]:
+            latency = health_cache.get(model_name, {}).get("latency_ms")
+            lines.append(f"- {model_name} ({latency} ms)")
+    if active_expensive:
+        lines.append("")
+        lines.append("🧠 Model capable aktif:")
+        for model_name in active_expensive[:5]:
+            latency = health_cache.get(model_name, {}).get("latency_ms")
+            lines.append(f"- {model_name} ({latency} ms)")
+    if not fast_cheap and active_expensive:
+        lines.append("")
+        lines.append("Catatan: tidak ada model murah yang hidup, jadi bot sementara memakai model menengah/mahal aktif.")
+    elif not fast_cheap and not active_expensive:
+        lines.append("")
+        lines.append("Peringatan: tidak ada model yang lolos health check. Bot tetap memakai model terakhir agar error tetap terlihat.")
+    return "\n".join(lines)
 
 
 class TelegramBotService:
@@ -266,6 +490,9 @@ class TelegramBotService:
         self._lock_file = DEFAULT_LOCK_FILE
         self._has_file_lock = False
         self._lock_fd = None
+        self._model_health_cache: Dict[str, Dict[str, Any]] = {}
+        self._model_health_checked_at = ""
+        self._runtime_primary_model = ""
 
     def status(self) -> Dict[str, Any]:
         alive = self._thread is not None and self._thread.is_alive() and self._running
@@ -277,6 +504,9 @@ class TelegramBotService:
             "duplicates_skipped": self._duplicates_skipped,
             "started_at": self._started_at,
             "worker_id": self._worker_id if alive else "",
+            "runtime_primary_model": self._runtime_primary_model,
+            "model_health_checked_at": self._model_health_checked_at,
+            "model_health_active_count": sum(1 for item in self._model_health_cache.values() if item.get("active")),
         }
 
     def start(self, config: Dict[str, Any]) -> bool:
@@ -292,7 +522,7 @@ class TelegramBotService:
 
             self._stop_event.clear()
             self._last_error = ""
-            self._started_at = time.strftime("%Y-%m-%d %H:%M:%S")
+            self._started_at = _wib_now_text()
             self._worker_id = f"{os.getpid()}-{int(time.time())}"
             self._thread = threading.Thread(
                 target=self._run_loop,
@@ -451,6 +681,11 @@ class TelegramBotService:
         thinking_model_router = bool(config.get("thinking_model_router", True))
         thinking_min_chars = int(config.get("thinking_min_chars", 180) or 180)
         fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
+        speed_update_code = str(config.get("speed_update_code") or "4321").strip()
+        model_health_timeout = int(config.get("model_health_timeout", 12) or 12)
+        fast_cheap_models_runtime = _as_string_list(config.get("fast_cheap_models"))
+        thinking_capable_models_runtime = _as_string_list(config.get("thinking_capable_models"))
+        self._runtime_primary_model = model
 
         if not token:
             self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
@@ -518,8 +753,63 @@ class TelegramBotService:
                                 chat_id,
                                 "Perintah:\n"
                                 "/start - mulai bot\n"
-                                "/help - bantuan\n\n"
+                                "/help - bantuan\n"
+                                "/speed 4321 - update model aktif dan pilih yang tercepat\n\n"
                                 "Langsung kirim pertanyaan untuk dijawab AI.",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if is_speed_update_command(text, expected_code=speed_update_code):
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "⏳ Mengecek semua model. Setelah selesai, hanya model yang hidup yang akan dipakai...",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            try:
+                                speed_result = refresh_telegram_runtime_models(
+                                    api_url=api_url,
+                                    api_key=api_key,
+                                    current_model=model,
+                                    config=config,
+                                    timeout=model_health_timeout,
+                                )
+                                model = speed_result.get("primary_model") or model
+                                fallback_models = speed_result.get("fallback_models") or []
+                                expensive_fallback_models = speed_result.get("expensive_fallback_models") or []
+                                fast_cheap_models_runtime = speed_result.get("fast_cheap_models") or []
+                                thinking_capable_models_runtime = speed_result.get("thinking_capable_models") or []
+                                allow_expensive_fallback = bool(expensive_fallback_models) or bool(config.get("allow_expensive_fallback", True))
+                                max_smart_models = max(int(max_smart_models or 1), len(fallback_models), 1)
+
+                                config["slashai_model"] = model
+                                config["fallback_models"] = fallback_models
+                                config["expensive_fallback_models"] = expensive_fallback_models
+                                config["active_cheap_models"] = speed_result.get("active_cheap_models") or []
+                                config["fast_cheap_models"] = fast_cheap_models_runtime
+                                config["fastest_cheap_model"] = fast_cheap_models_runtime[0] if fast_cheap_models_runtime else ""
+                                config["thinking_capable_models"] = thinking_capable_models_runtime
+
+                                self._model_health_cache = speed_result.get("health_cache") or {}
+                                self._model_health_checked_at = _wib_now_text()
+                                self._runtime_primary_model = model
+                                self._send_message(token, chat_id, build_speed_update_summary(speed_result), parse_mode=telegram_parse_mode)
+                            except Exception as exc:
+                                self._last_error = str(exc)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "Gagal update model.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            continue
+
+                        if text_lower.startswith("/speed"):
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "Kode /speed salah. Gunakan format: /speed 4321",
                                 parse_mode=telegram_parse_mode,
                             )
                             continue
@@ -555,7 +845,7 @@ class TelegramBotService:
                             if thinking_mode:
                                 capable_model = pick_telegram_capable_model(
                                     primary_model=model,
-                                    expensive_fallback_models=request_expensive_fallback_models,
+                                    expensive_fallback_models=thinking_capable_models_runtime or request_expensive_fallback_models,
                                     config=config,
                                 )
                                 if capable_model:
@@ -575,7 +865,7 @@ class TelegramBotService:
                                     config=config,
                                 )
                                 if fast_model:
-                                    fast_pool = _as_string_list(config.get("fast_cheap_models")) or request_fallback_models
+                                    fast_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or request_fallback_models
                                     if fast_model not in fast_pool:
                                         fast_pool = [fast_model] + fast_pool
                                     request_model = fast_model
@@ -606,6 +896,8 @@ class TelegramBotService:
                                 meta["telegram_thinking_mode"] = thinking_mode
                                 meta["telegram_fast_normal_mode"] = fast_normal_mode
                                 meta["telegram_model_requested"] = request_model
+                                if self._model_health_checked_at:
+                                    meta["telegram_speed_updated_at"] = self._model_health_checked_at
 
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})

@@ -323,6 +323,7 @@ send_processing_message = parse_bool(get_secret("TELEGRAM_SEND_PROCESSING_MESSAG
 telegram_parse_mode = str(get_secret("TELEGRAM_PARSE_MODE", "") or "")
 telegram_lock_file = str(get_secret("TELEGRAM_LOCK_FILE", ".telegram_bot_worker.lock"))
 telegram_show_model_info = parse_bool(get_secret("TELEGRAM_SHOW_MODEL_INFO", True), default=True)
+telegram_speed_update_code = str(get_secret("TELEGRAM_SPEED_UPDATE_CODE", "4321") or "4321").strip()
 admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
 admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
 smart_model_router_default = parse_bool(get_secret("SMART_MODEL_ROUTER", True), default=True)
@@ -1637,6 +1638,13 @@ def start_telegram_if_needed() -> None:
                 "fast_normal_model_router": bool(st.session_state.get("active_fast_normal_model_router", True)),
                 "fastest_cheap_model": route.get("fastest_cheap_primary_model", ""),
                 "fast_cheap_models": route.get("fast_cheap_models", []),
+                "all_cheap_models": CHEAP_MODEL_OPTIONS,
+                "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
+                "all_model_candidates": MODEL_OPTIONS,
+                "active_cheap_models": route.get("active_cheap_models", []),
+                "thinking_capable_models": route.get("active_expensive_models", []),
+                "speed_update_code": telegram_speed_update_code,
+                "model_health_timeout": int(model_health_timeout or 12),
             }
         )
         restore_active_model_to_cheap(route.get("primary_model"))
@@ -1914,6 +1922,7 @@ def render_admin_settings() -> None:
         st.warning("Mode aman aktif: TELEGRAM_AUTO_START disarankan FALSE. Jalankan bot hanya dari tombol admin agar Streamlit Online tidak membuat beberapa poller saat app rerun/restart.")
         st.info("Lock OS aktif untuk mencegah lebih dari satu worker dalam container yang sama. Jika tetap double/triple, berarti token bot masih hidup di deployment lama/lokal/VPS lain.")
         st.caption("Telegram dikirim sebagai plain text secara default agar kode/XML seperti <uses-permission> tidak dianggap tag HTML.")
+        st.caption(f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model dan memakai hanya model yang hidup.")
 
         status = service.status()
         st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
@@ -1923,6 +1932,10 @@ def render_admin_settings() -> None:
         if status.get("worker_id"):
             st.caption(f"Worker: {status['worker_id']}")
         st.caption(f"Duplikat dicegah: {status.get('duplicates_skipped', 0)}")
+        if status.get("runtime_primary_model"):
+            st.caption(f"Primary runtime Telegram: {status.get('runtime_primary_model')}")
+        if status.get("model_health_checked_at"):
+            st.caption(f"Update model Telegram terakhir: {_to_wib_display_text(status.get('model_health_checked_at'))} | aktif: {status.get('model_health_active_count', 0)}")
 
         route = build_model_routing_plan()
         bot_config = {
@@ -1954,6 +1967,13 @@ def render_admin_settings() -> None:
             "fast_normal_model_router": bool(st.session_state.get("active_fast_normal_model_router", True)),
             "fastest_cheap_model": route.get("fastest_cheap_primary_model", ""),
             "fast_cheap_models": route.get("fast_cheap_models", []),
+            "all_cheap_models": CHEAP_MODEL_OPTIONS,
+            "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
+            "all_model_candidates": MODEL_OPTIONS,
+            "active_cheap_models": route.get("active_cheap_models", []),
+            "thinking_capable_models": route.get("active_expensive_models", []),
+            "speed_update_code": telegram_speed_update_code,
+            "model_health_timeout": int(model_health_timeout or 12),
         }
 
         col_start, col_stop = st.columns(2)
@@ -1970,6 +1990,8 @@ def render_admin_settings() -> None:
                     "max_smart_models": start_route["max_smart_models"],
                     "fastest_cheap_model": start_route.get("fastest_cheap_primary_model", ""),
                     "fast_cheap_models": start_route.get("fast_cheap_models", []),
+                    "active_cheap_models": start_route.get("active_cheap_models", []),
+                    "thinking_capable_models": start_route.get("active_expensive_models", []),
                 })
                 started = service.start(bot_config)
                 restore_active_model_to_cheap(start_route.get("primary_model"))
@@ -2123,6 +2145,7 @@ TELEGRAM_DROP_PENDING_UPDATES = true
 TELEGRAM_SEND_PROCESSING_MESSAGE = false
 TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
 TELEGRAM_SHOW_MODEL_INFO = true
+TELEGRAM_SPEED_UPDATE_CODE = "4321"
 
 # Opsional
 TEMPERATURE = 0.3
@@ -2265,7 +2288,7 @@ if user_input:
         try:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                placeholder.markdown("⏳ siap! adioranye sedang berpikir...")
+                placeholder.markdown("⏳ adioranye sedang berpikir dalam...")
                 route = build_model_routing_plan(advance_rotation=True, user_text=user_input)
                 answer, meta = generate_answer(
                     api_url=api_url,
