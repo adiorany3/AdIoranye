@@ -23,7 +23,7 @@ from telegram_service import get_telegram_service
 
 
 st.set_page_config(
-    page_title="Adioranye AI bu Galuh Adi Insani",
+    page_title="Adioranye AI by Galuh Adi Insani",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -2284,7 +2284,7 @@ st.markdown(
             <span class="mac-min"></span>
             <span class="mac-max"></span>
         </div>
-        <div class="mac-window-title">Adioranye AI</div>
+        <div class="mac-window-title">Adioranye AI by Galuh Adi Insani</div>
         <div class="mac-window-actions">Online</div>
     </div>
     <div class="app-hero">
