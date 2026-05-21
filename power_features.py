@@ -41,6 +41,15 @@ def _utc_ts() -> float:
     return time.time()
 
 
+def _timestamp_to_wib(ts: float) -> str:
+    try:
+        if not ts:
+            return ""
+        return datetime.fromtimestamp(float(ts), WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
+    except Exception:
+        return ""
+
+
 def _safe_json(data: Any) -> str:
     try:
         return json.dumps(data or {}, ensure_ascii=False, default=str)
@@ -1159,6 +1168,304 @@ class PowerStore:
             except Exception:
                 pass
             return counts
+
+
+    # Persistent response cache
+    def get_cached_response(self, cache_key: str) -> Optional[Tuple[str, Dict[str, Any]]]:
+        """Return cached answer if present and not expired."""
+        key = str(cache_key or "").strip()
+        if not key:
+            return None
+        now = _utc_ts()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT answer, meta_json, expires_at FROM response_cache WHERE cache_key = ? LIMIT 1",
+                (key,),
+            ).fetchone()
+            if not row:
+                return None
+            expires_at = float(_row_value(row, "expires_at", 2, 0) or 0)
+            if expires_at and expires_at < now:
+                conn.execute("DELETE FROM response_cache WHERE cache_key = ?", (key,))
+                return None
+            answer = str(_row_value(row, "answer", 0, "") or "")
+            meta = _safe_json_loads(_row_value(row, "meta_json", 1, "{}"))
+            meta["power_response_cache_hit"] = True
+            return answer, meta
+
+    def set_cached_response(self, cache_key: str, answer: str, meta: Optional[Dict[str, Any]] = None, ttl_seconds: int = 1800) -> None:
+        """Store a response cache row in SQLite."""
+        key = str(cache_key or "").strip()
+        body = str(answer or "").strip()
+        if not key or not body:
+            return
+        meta = meta or {}
+        now = _utc_ts()
+        expires_at = now + max(60, int(ttl_seconds or 1800))
+        model = str(meta.get("active_model_final") or meta.get("model_requested") or meta.get("model") or "")[:180]
+        intent = str(meta.get("power_intent") or meta.get("intent") or "")[:80]
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO response_cache(cache_key,ts,expires_at,model,intent,answer,meta_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (key, now, expires_at, model, intent, body, _safe_json(meta)[:12000]),
+            )
+
+    # Adaptive scoring and circuit breaker
+    def update_model_score(
+        self,
+        model: str,
+        intent: str = "general",
+        success: bool = True,
+        latency_seconds: float = 0,
+        quality_score: float = 0,
+        cost_idr: float = 0,
+    ) -> None:
+        """Accumulate model performance per intent for adaptive routing."""
+        model_name = str(model or "").strip()
+        if not model_name:
+            return
+        intent_name = str(intent or "general").strip()[:80] or "general"
+        now = _utc_ts()
+        ok = 1 if success else 0
+        err = 0 if success else 1
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO model_scores(
+                    model,intent,total_requests,success_count,error_count,total_latency,total_quality,total_cost,
+                    last_success_at,last_error_at,updated_at
+                ) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(model,intent) DO UPDATE SET
+                    total_requests = total_requests + 1,
+                    success_count = success_count + excluded.success_count,
+                    error_count = error_count + excluded.error_count,
+                    total_latency = total_latency + excluded.total_latency,
+                    total_quality = total_quality + excluded.total_quality,
+                    total_cost = total_cost + excluded.total_cost,
+                    last_success_at = CASE WHEN excluded.success_count > 0 THEN excluded.last_success_at ELSE last_success_at END,
+                    last_error_at = CASE WHEN excluded.error_count > 0 THEN excluded.last_error_at ELSE last_error_at END,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    model_name,
+                    intent_name,
+                    ok,
+                    err,
+                    max(0.0, float(latency_seconds or 0)),
+                    max(0.0, min(1.0, float(quality_score or 0))),
+                    max(0.0, float(cost_idr or 0)),
+                    now if success else 0,
+                    now if not success else 0,
+                    now,
+                ),
+            )
+
+    def register_model_success(self, model: str) -> None:
+        """Close/reset circuit breaker after a successful response."""
+        model_name = str(model or "").strip()
+        if not model_name:
+            return
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO circuit_breakers(model,failure_count,open_until,last_error,updated_at)
+                VALUES (?, 0, 0, '', ?)
+                ON CONFLICT(model) DO UPDATE SET
+                    failure_count = 0,
+                    open_until = 0,
+                    last_error = '',
+                    updated_at = excluded.updated_at
+                """,
+                (model_name, _utc_ts()),
+            )
+
+    def register_model_failure(
+        self,
+        model: str,
+        error: str = "",
+        max_failures: int = 3,
+        cooldown_seconds: int = 1800,
+    ) -> None:
+        """Increase model failure count and open the circuit if failures pass the threshold."""
+        model_name = str(model or "").strip()
+        if not model_name:
+            return
+        now = _utc_ts()
+        max_failures = max(1, int(max_failures or 3))
+        cooldown = max(60, int(cooldown_seconds or 1800))
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT failure_count FROM circuit_breakers WHERE model = ? LIMIT 1",
+                (model_name,),
+            ).fetchone()
+            next_failures = int(_row_value(row, "failure_count", 0, 0) or 0) + 1
+            open_until = now + cooldown if next_failures >= max_failures else 0
+            conn.execute(
+                """
+                INSERT INTO circuit_breakers(model,failure_count,open_until,last_error,updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(model) DO UPDATE SET
+                    failure_count = excluded.failure_count,
+                    open_until = excluded.open_until,
+                    last_error = excluded.last_error,
+                    updated_at = excluded.updated_at
+                """,
+                (model_name, next_failures, open_until, str(error or "")[:1000], now),
+            )
+
+    def is_model_blocked(self, model: str) -> bool:
+        model_name = str(model or "").strip()
+        if not model_name:
+            return False
+        now = _utc_ts()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT open_until FROM circuit_breakers WHERE model = ? LIMIT 1",
+                (model_name,),
+            ).fetchone()
+        return bool(float(_row_value(row, "open_until", 0, 0) or 0) > now)
+
+    def filter_blocked_models(self, models: List[str]) -> List[str]:
+        """Remove models with open circuit breaker. If all are blocked, return original list so errors remain visible."""
+        original = [str(m).strip() for m in (models or []) if str(m or "").strip()]
+        if not original:
+            return []
+        now = _utc_ts()
+        with self._connect() as conn:
+            rows = conn.execute("SELECT model, open_until FROM circuit_breakers WHERE open_until > ?", (now,)).fetchall()
+        blocked = {str(_row_value(row, "model", 0, "")) for row in rows}
+        filtered = [m for m in original if m not in blocked]
+        return filtered or original
+
+    def _computed_model_score(self, row: Dict[str, Any], model_name: str = "") -> float:
+        total = max(1, int(row.get("total_requests") or 0))
+        success_rate = float(row.get("success_count") or 0) / total
+        error_rate = float(row.get("error_count") or 0) / total
+        avg_latency = float(row.get("total_latency") or 0) / total
+        avg_quality = float(row.get("total_quality") or 0) / total
+        avg_cost = float(row.get("total_cost") or 0) / total
+        tier = model_cost_tier(model_name or str(row.get("model") or ""))
+        tier_bonus = {"cheap": 0.08, "medium": 0.03, "expensive": 0.0, "ultra": -0.12}.get(tier, -0.03)
+        latency_penalty = min(avg_latency / 30.0, 0.35)
+        cost_penalty = min(avg_cost / 50.0, 0.25)
+        score = (success_rate * 0.42) + (avg_quality * 0.32) + tier_bonus - (error_rate * 0.25) - latency_penalty - cost_penalty
+        if total < 3:
+            score -= 0.04
+        return round(max(0.0, min(1.0, score)), 4)
+
+    def rank_models_for_intent(self, models: List[str], intent: str = "general") -> List[str]:
+        """Rank candidate models using per-intent history, fallbacks, cost tier, and circuit breaker state."""
+        candidates = [str(m).strip() for m in (models or []) if str(m or "").strip()]
+        candidates = list(dict.fromkeys(candidates))
+        if not candidates:
+            return []
+        intent_name = str(intent or "general").strip()[:80] or "general"
+        unblocked = self.filter_blocked_models(candidates)
+        now = _utc_ts()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM model_scores WHERE model IN (%s) AND intent IN (?, 'general')" % ",".join("?" for _ in candidates),
+                tuple(candidates) + (intent_name,),
+            ).fetchall()
+        by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for row in rows:
+            item = _row_to_dict(row)
+            by_key[(str(item.get("model") or ""), str(item.get("intent") or ""))] = item
+
+        def cold_start_score(model_name: str) -> float:
+            tier = model_cost_tier(model_name)
+            price = model_price(model_name)
+            out_price = int(price.get("output") or 999999)
+            # Intent hints; these help before enough history exists.
+            lower = model_name.lower()
+            score = 0.50
+            if tier == "cheap":
+                score += 0.10
+            elif tier == "medium":
+                score += 0.05
+            elif tier == "ultra":
+                score -= 0.18
+            if intent_name in {"coding"} and any(k in lower for k in ["coder", "codex", "deepseek", "qwen"]):
+                score += 0.13
+            if intent_name in {"academic", "research", "deep_reasoning", "document_question"} and any(k in lower for k in ["sonnet", "qwen", "gpt-5.2", "gpt-5.4", "gpt-5.5", "glm", "kimi"]):
+                score += 0.10
+            if intent_name in {"quick_chat", "creative", "general"} and any(k in lower for k in ["nano", "mini", "flash", "haiku", "fast"]):
+                score += 0.08
+            score -= min(out_price / 25000.0, 1.0) * 0.08
+            return round(max(0.0, min(1.0, score)), 4)
+
+        def score_candidate(model_name: str) -> Tuple[float, int, int, str]:
+            blocked_penalty = -1.0 if model_name not in unblocked else 0.0
+            specific = by_key.get((model_name, intent_name))
+            general = by_key.get((model_name, "general"))
+            if specific:
+                score = self._computed_model_score(specific, model_name)
+            elif general:
+                score = self._computed_model_score(general, model_name) * 0.92
+            else:
+                score = cold_start_score(model_name)
+            tier = model_cost_tier(model_name)
+            tier_rank = {"cheap": 0, "medium": 1, "expensive": 2, "ultra": 3}.get(tier, 4)
+            output_price = int(model_price(model_name).get("output") or 999999999)
+            return (score + blocked_penalty, -tier_rank, -output_price, model_name)
+
+        # Sort descending score while keeping deterministic tie-breakers.
+        return sorted(candidates, key=score_candidate, reverse=True)
+
+    def model_score_rows(self, intent: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Rows for admin/Telegram adaptive model score dashboard."""
+        params: Tuple[Any, ...]
+        where = ""
+        if intent:
+            where = "WHERE intent = ?"
+            params = (str(intent)[:80], max(1, int(limit or 100)))
+        else:
+            params = (max(1, int(limit or 100)),)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM model_scores {where} ORDER BY updated_at DESC LIMIT ?",
+                params,
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            item = _row_to_dict(row)
+            total = max(1, int(item.get("total_requests") or 0))
+            item["success_rate"] = round(float(item.get("success_count") or 0) / total, 3)
+            item["error_rate"] = round(float(item.get("error_count") or 0) / total, 3)
+            item["avg_latency"] = round(float(item.get("total_latency") or 0) / total, 3)
+            item["avg_quality"] = round(float(item.get("total_quality") or 0) / total, 3)
+            item["avg_cost"] = round(float(item.get("total_cost") or 0) / total, 4)
+            item["computed_score"] = self._computed_model_score(item, str(item.get("model") or ""))
+            item["tier"] = model_cost_tier(str(item.get("model") or ""))
+            item["last_success_wib"] = _timestamp_to_wib(float(item.get("last_success_at") or 0)) if float(item.get("last_success_at") or 0) else ""
+            item["last_error_wib"] = _timestamp_to_wib(float(item.get("last_error_at") or 0)) if float(item.get("last_error_at") or 0) else ""
+            item["updated_wib"] = _timestamp_to_wib(float(item.get("updated_at") or 0)) if float(item.get("updated_at") or 0) else ""
+            out.append(item)
+        out.sort(key=lambda x: float(x.get("computed_score") or 0), reverse=True)
+        return out[: max(1, int(limit or 100))]
+
+    def circuit_breaker_status(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Return circuit breaker rows for dashboard/Telegram."""
+        now = _utc_ts()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM circuit_breakers ORDER BY open_until DESC, failure_count DESC, updated_at DESC LIMIT ?",
+                (max(1, int(limit or 100)),),
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            item = _row_to_dict(row)
+            open_until = float(item.get("open_until") or 0)
+            item["blocked"] = bool(open_until > now)
+            item["open_until_wib"] = _timestamp_to_wib(open_until) if open_until else ""
+            item["updated_wib"] = _timestamp_to_wib(float(item.get("updated_at") or 0)) if float(item.get("updated_at") or 0) else ""
+            item["tier"] = model_cost_tier(str(item.get("model") or ""))
+            item["last_error"] = str(item.get("last_error") or "")[:180]
+            out.append(item)
+        return out
 
     def add_benchmark(self, model: str, task: str, score: float, latency_seconds: float, success: bool, error: str = "", meta: Optional[Dict[str, Any]] = None) -> None:
         with self._connect() as conn:
