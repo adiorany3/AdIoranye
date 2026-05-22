@@ -253,3 +253,16 @@ Versi ini juga menyertakan `hallucination_guard.py` dan dokumentasi `ANTI_HALUSI
 Guard ini membuat sistem lebih konservatif untuk pertanyaan kritis/terkini seperti berita terbaru, kesehatan, hukum, regulasi, jurnal Q-level, harga, politik, dan klaim validasi.
 
 Jika sumber Knowledge Base belum cukup, Adioranye akan menolak mengarang jawaban dan mencatatnya sebagai Knowledge Gap. Untuk memperbarui sumber, jalankan `/update` dari Telegram atau workflow GitHub Actions.
+
+---
+
+## Patch anti-annotation GitHub Actions
+
+Versi ini mengurangi annotation GitHub Actions dengan cara:
+
+- tidak memakai `actions/checkout@v4` dan `actions/setup-python@v5`, sehingga warning Node.js 20 tidak muncul dari workflow ini;
+- membatasi proses update menjadi batch/shard kecil supaya tidak melewati 20 menit;
+- menambah `--time-budget-seconds`, `--source-limit`, `--source-offset`, `--quiet`, dan `--report-file` pada `daily_kb_scraper.py`;
+- menyimpan cursor sumber pada `.adioranye_kb_scrape_state.json`, sehingga update harian akan melanjutkan kelompok sumber berikutnya.
+
+Lihat juga `GITHUB_ACTIONS_ANNOTATION_FIX.md`.

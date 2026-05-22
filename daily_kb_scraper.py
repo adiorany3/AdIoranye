@@ -852,13 +852,42 @@ def run_daily_kb_update(
     backup_dir: str = ".db_backups",
     max_backups: int = 10,
     skip_db_backup: bool = False,
+    time_budget_seconds: int = 0,
+    source_limit: int = 0,
+    source_offset: Optional[int] = None,
+    auto_rotate_sources: bool = True,
 ) -> Dict[str, Any]:
     """Run the daily update and return a serializable report."""
+    started_monotonic = time.monotonic()
+    time_budget_seconds = max(0, int(time_budget_seconds or 0))
+    deadline_monotonic = started_monotonic + time_budget_seconds if time_budget_seconds > 0 else 0.0
+
+    def budget_exceeded() -> bool:
+        return bool(deadline_monotonic and time.monotonic() >= deadline_monotonic)
+
     raw_sources = load_sources(sources_path)
     sources = [normalize_source(item) for item in raw_sources]
-    enabled_sources = [s for s in sources if s.enabled and s.url]
+    enabled_sources_all = [s for s in sources if s.enabled and s.url]
     state = load_state(state_path)
     processed: Dict[str, Any] = state.setdefault("processed", {})
+
+    # GitHub Actions/Streamlit free environments should not process hundreds of feeds in one run.
+    # This shard selector processes a small rotating window of sources and stores the cursor in state.
+    source_limit = max(0, int(source_limit or 0))
+    total_enabled = len(enabled_sources_all)
+    selected_offset = 0
+    if total_enabled and source_limit and source_limit < total_enabled:
+        if source_offset is not None and int(source_offset) >= 0:
+            selected_offset = int(source_offset) % total_enabled
+        elif auto_rotate_sources:
+            selected_offset = int(state.get("source_cursor", 0) or 0) % total_enabled
+        ordered_sources = enabled_sources_all[selected_offset:] + enabled_sources_all[:selected_offset]
+        enabled_sources = ordered_sources[:source_limit]
+        if auto_rotate_sources and source_offset is None:
+            state["source_cursor"] = (selected_offset + len(enabled_sources)) % total_enabled
+    else:
+        enabled_sources = enabled_sources_all
+
     session = make_session(timeout=timeout, user_agent=user_agent)
 
     db_guard_report: Dict[str, Any] = {"enabled": not dry_run and not skip_db_backup}
@@ -884,7 +913,13 @@ def run_daily_kb_update(
         "dry_run": dry_run,
         "force": force,
         "sources_total": len(raw_sources),
-        "sources_enabled": len(enabled_sources),
+        "sources_enabled": len(enabled_sources_all),
+        "sources_selected": len(enabled_sources),
+        "source_limit": source_limit,
+        "source_offset": selected_offset,
+        "source_cursor_next": state.get("source_cursor", 0),
+        "time_budget_seconds": time_budget_seconds,
+        "stopped_by_time_budget": False,
         "added_documents": 0,
         "added_chunks": 0,
         "skipped_existing": 0,
@@ -904,6 +939,10 @@ def run_daily_kb_update(
         report["watchlist"] = []
 
     for source in enabled_sources:
+        if budget_exceeded():
+            report["stopped_by_time_budget"] = True
+            report["stop_reason"] = "time_budget_before_source"
+            break
         try:
             articles = scrape_source(session, source, max_items_override=max_items_per_source)
         except Exception as exc:
@@ -918,6 +957,10 @@ def run_daily_kb_update(
             continue
 
         for article in articles:
+            if budget_exceeded():
+                report["stopped_by_time_budget"] = True
+                report["stop_reason"] = "time_budget_inside_source"
+                break
             key = processed_key(article, source)
             title = clean_spaces(article.get("title") or "Artikel tanpa judul")[:240]
             url = canonical_url(article.get("url", "") or source.url)
@@ -1009,6 +1052,7 @@ def run_daily_kb_update(
 
     report["finished_at"] = now_iso()
     report["finished_at_wib"] = now_wib_text()
+    report["elapsed_seconds"] = round(time.monotonic() - started_monotonic, 2)
     state.setdefault("runs", []).append({
         "finished_at": report["finished_at"],
         "added_documents": report["added_documents"],
@@ -1056,6 +1100,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--backup-dir", default=os.getenv("DB_BACKUP_DIR", ".db_backups"), help="Folder backup SQLite.")
     parser.add_argument("--max-backups", type=int, default=int(os.getenv("DB_BACKUP_MAX_COUNT", "10") or 10), help="Jumlah backup SQLite yang disimpan.")
     parser.add_argument("--skip-db-backup", action="store_true", help="Lewati backup/checkpoint database.")
+    parser.add_argument("--time-budget-seconds", type=int, default=int(os.getenv("KB_UPDATE_TIME_BUDGET_SECONDS", "0") or 0), help="Batas waktu proses update dalam detik. 0 = tanpa batas internal.")
+    parser.add_argument("--source-limit", type=int, default=int(os.getenv("KB_SCRAPER_SOURCE_LIMIT", "0") or 0), help="Batasi jumlah sumber yang diproses per run. 0 = semua sumber.")
+    parser.add_argument("--source-offset", type=int, default=None if not os.getenv("KB_SCRAPER_SOURCE_OFFSET") else int(os.getenv("KB_SCRAPER_SOURCE_OFFSET", "0") or 0), help="Offset sumber awal untuk sharding manual.")
+    parser.add_argument("--no-source-rotation", action="store_true", help="Matikan rotasi otomatis cursor sumber.")
+    parser.add_argument("--report-file", default=os.getenv("KB_SCRAPER_REPORT_FILE", ""), help="Simpan laporan JSON penuh ke file ini agar log GitHub tidak terlalu besar.")
+    parser.add_argument("--quiet", action="store_true", help="Cetak ringkasan saja, bukan laporan penuh.")
     args = parser.parse_args(argv)
 
     try:
@@ -1072,6 +1122,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             backup_dir=args.backup_dir,
             max_backups=args.max_backups,
             skip_db_backup=bool(args.skip_db_backup),
+            time_budget_seconds=int(args.time_budget_seconds or 0),
+            source_limit=int(args.source_limit or 0),
+            source_offset=args.source_offset,
+            auto_rotate_sources=not bool(args.no_source_rotation),
         )
     except Exception as exc:
         restore_result = None
@@ -1089,11 +1143,38 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(error_report, ensure_ascii=False, indent=2))
         return 3
 
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-    # Non-zero only if every enabled source failed. One or two bad feeds should not break deploy.
+    if args.report_file:
+        try:
+            Path(args.report_file).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as write_exc:
+            print(json.dumps({"warning": "failed_to_write_report_file", "error": str(write_exc)[:300]}, ensure_ascii=False))
+
+    if args.quiet:
+        summary = {
+            "ok": True,
+            "started_at_wib": report.get("started_at_wib"),
+            "finished_at_wib": report.get("finished_at_wib"),
+            "elapsed_seconds": report.get("elapsed_seconds"),
+            "sources_enabled": report.get("sources_enabled"),
+            "sources_selected": report.get("sources_selected"),
+            "source_offset": report.get("source_offset"),
+            "source_cursor_next": report.get("source_cursor_next"),
+            "added_documents": report.get("added_documents"),
+            "added_chunks": report.get("added_chunks"),
+            "skipped_existing": report.get("skipped_existing"),
+            "skipped_short": report.get("skipped_short"),
+            "errors": report.get("errors"),
+            "stopped_by_time_budget": report.get("stopped_by_time_budget"),
+            "stop_reason": report.get("stop_reason", ""),
+        }
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    # Non-zero only if every selected source failed. One or two bad feeds should not break deploy.
     if report.get("db_guard_error"):
         return 3
-    if report.get("sources_enabled", 0) > 0 and report.get("errors", 0) >= report.get("sources_enabled", 0):
+    selected_count = int(report.get("sources_selected") or report.get("sources_enabled") or 0)
+    if selected_count > 0 and int(report.get("errors", 0) or 0) >= selected_count:
         return 2
     return 0
 
