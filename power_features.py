@@ -94,6 +94,41 @@ except Exception:  # keep app alive if the quality layer is absent
     def mode_help_text(current_mode: str = "auto") -> str:
         return "Mode jawaban belum tersedia."
 
+
+try:
+    from performance_optimizer import (
+        QueryPlan,
+        build_performance_report,
+        latency_budget_seconds,
+        retrieval_precision_estimate,
+        rerank_sources,
+        rewrite_query,
+        semantic_similarity,
+    )
+except Exception:  # keep older deployments alive if performance layer is absent
+    class QueryPlan:  # type: ignore
+        def __init__(self, original_query='', rewritten_query='', extra_terms=None, is_casual=False, should_use_rag=True, reason='fallback'):
+            self.original_query = original_query
+            self.rewritten_query = rewritten_query or original_query
+            self.extra_terms = extra_terms or []
+            self.is_casual = is_casual
+            self.should_use_rag = should_use_rag
+            self.reason = reason
+        def to_dict(self):
+            return dict(original_query=self.original_query, rewritten_query=self.rewritten_query, extra_terms=self.extra_terms, is_casual=self.is_casual, should_use_rag=self.should_use_rag, reason=self.reason)
+    def rewrite_query(user_text: str, intent: str = '', answer_mode: str = 'auto', max_terms: int = 16):
+        return QueryPlan(user_text, user_text, [], False, True, 'performance_layer_unavailable')
+    def rerank_sources(query: str, sources=None, limit: int = 5, diversity: bool = True):
+        return list(sources or [])[:limit]
+    def semantic_similarity(a, b):
+        return 0.0
+    def retrieval_precision_estimate(query: str, sources):
+        return {'precision': 0.0, 'avg_similarity': 0.0, 'relevant_count': 0, 'source_count': len(sources or [])}
+    def latency_budget_seconds(answer_mode: str = 'auto', intent: str = '', user_text: str = ''):
+        return 60
+    def build_performance_report(metrics):
+        return str(metrics)
+
 try:
     from hallucination_guard import (
         append_guard_note,
@@ -805,6 +840,63 @@ class PowerStore:
                     meta_json TEXT DEFAULT '{}'
                 );
                 CREATE INDEX IF NOT EXISTS idx_response_cache_expires ON response_cache(expires_at);
+
+                CREATE TABLE IF NOT EXISTS semantic_response_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    expires_at REAL NOT NULL,
+                    user_id TEXT DEFAULT 'public',
+                    channel TEXT DEFAULT 'web',
+                    intent TEXT DEFAULT '',
+                    question TEXT NOT NULL,
+                    question_terms TEXT DEFAULT '',
+                    answer TEXT NOT NULL,
+                    meta_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_semantic_cache_intent ON semantic_response_cache(intent, expires_at);
+                CREATE INDEX IF NOT EXISTS idx_semantic_cache_ts ON semantic_response_cache(ts);
+
+                CREATE TABLE IF NOT EXISTS retrieval_eval_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    user_id TEXT DEFAULT 'public',
+                    channel TEXT DEFAULT 'web',
+                    intent TEXT DEFAULT '',
+                    question TEXT DEFAULT '',
+                    search_query TEXT DEFAULT '',
+                    source_count INTEGER DEFAULT 0,
+                    precision_estimate REAL DEFAULT 0,
+                    avg_similarity REAL DEFAULT 0,
+                    latency_seconds REAL DEFAULT 0,
+                    meta_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_retrieval_eval_ts ON retrieval_eval_reports(ts);
+                CREATE INDEX IF NOT EXISTS idx_retrieval_eval_intent ON retrieval_eval_reports(intent, ts);
+
+                CREATE TABLE IF NOT EXISTS source_runtime_stats (
+                    source TEXT PRIMARY KEY,
+                    total_requests INTEGER DEFAULT 0,
+                    success_count INTEGER DEFAULT 0,
+                    failure_count INTEGER DEFAULT 0,
+                    total_latency REAL DEFAULT 0,
+                    total_quality REAL DEFAULT 0,
+                    last_error TEXT DEFAULT '',
+                    last_seen_at REAL DEFAULT 0,
+                    status TEXT DEFAULT 'active',
+                    updated_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_source_runtime_status ON source_runtime_stats(status, updated_at);
+
+                CREATE TABLE IF NOT EXISTS performance_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    event_type TEXT DEFAULT '',
+                    severity TEXT DEFAULT 'info',
+                    title TEXT DEFAULT '',
+                    detail TEXT DEFAULT '',
+                    meta_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_performance_events_ts ON performance_events(ts);
 
                 CREATE TABLE IF NOT EXISTS model_scores (
                     model TEXT NOT NULL,
@@ -2185,6 +2277,229 @@ class PowerStore:
                 (key, now, expires_at, model, intent, body, _safe_json(meta)[:12000]),
             )
 
+    # Performance optimizer: semantic cache, retrieval eval, observability, maintenance
+    def _semantic_terms(self, text: str) -> str:
+        try:
+            return " ".join(_tokenize(text)[:80])
+        except Exception:
+            return str(text or "")[:500]
+
+    def get_semantic_cached_response(
+        self,
+        question: str,
+        intent: str = "",
+        threshold: float = 0.76,
+        ttl_seconds: int = 86400,
+        user_id: str = "public",
+        channel: str = "web",
+    ) -> Optional[Tuple[str, Dict[str, Any]]]:
+        """Return a cached answer for semantically similar questions.
+
+        This is intentionally lightweight: it compares recent cached questions by
+        token overlap, so it works on Streamlit Cloud without embedding services.
+        """
+        q = str(question or "").strip()
+        if not q or len(q) < 12:
+            return None
+        now = _utc_ts()
+        threshold = max(0.35, min(0.95, float(threshold or 0.76)))
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, question, answer, meta_json, expires_at, intent, user_id, channel
+                FROM semantic_response_cache
+                WHERE expires_at > ? AND (? = '' OR intent = ? OR intent = '')
+                ORDER BY ts DESC LIMIT 180
+                """,
+                (now, str(intent or "")[:80], str(intent or "")[:80]),
+            ).fetchall()
+        best: Optional[Tuple[float, Any]] = None
+        for row in rows:
+            candidate_q = str(_row_value(row, "question", 1, "") or "")
+            sim = semantic_similarity(q, candidate_q)
+            if sim >= threshold and (best is None or sim > best[0]):
+                best = (sim, row)
+        if not best:
+            return None
+        sim, row = best
+        answer = str(_row_value(row, "answer", 2, "") or "")
+        meta = _safe_json_loads(_row_value(row, "meta_json", 3, "{}"))
+        meta["semantic_cache_hit"] = True
+        meta["semantic_cache_similarity"] = round(float(sim), 4)
+        meta["semantic_cache_question"] = str(_row_value(row, "question", 1, "") or "")[:500]
+        meta["power_response_cache_hit"] = True
+        return answer, meta
+
+    def set_semantic_cached_response(
+        self,
+        question: str,
+        answer: str,
+        meta: Optional[Dict[str, Any]] = None,
+        intent: str = "",
+        ttl_seconds: int = 86400,
+        user_id: str = "public",
+        channel: str = "web",
+    ) -> None:
+        q = str(question or "").strip()
+        body = str(answer or "").strip()
+        if not q or not body or len(q) < 10:
+            return
+        meta = meta or {}
+        now = _utc_ts()
+        expires_at = now + max(600, int(ttl_seconds or 86400))
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO semantic_response_cache(ts, expires_at, user_id, channel, intent, question, question_terms, answer, meta_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (now, expires_at, str(user_id or "public")[:120], str(channel or "web")[:40], str(intent or "")[:80], q[:2000], self._semantic_terms(q), body, _safe_json(meta)[:12000]),
+            )
+            # Keep the table compact.
+            conn.execute(
+                "DELETE FROM semantic_response_cache WHERE expires_at < ? OR id NOT IN (SELECT id FROM semantic_response_cache ORDER BY ts DESC LIMIT 1000)",
+                (now,),
+            )
+
+    def record_retrieval_eval(
+        self,
+        question: str,
+        search_query: str,
+        sources: List[Dict[str, Any]],
+        intent: str = "",
+        user_id: str = "public",
+        channel: str = "web",
+        latency_seconds: float = 0.0,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        metrics = retrieval_precision_estimate(search_query or question, sources or [])
+        now = _utc_ts()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO retrieval_eval_reports(ts, user_id, channel, intent, question, search_query, source_count, precision_estimate, avg_similarity, latency_seconds, meta_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    now,
+                    str(user_id or "public")[:120],
+                    str(channel or "web")[:40],
+                    str(intent or "")[:80],
+                    str(question or "")[:2000],
+                    str(search_query or "")[:2000],
+                    int(metrics.get("source_count") or 0),
+                    float(metrics.get("precision") or 0),
+                    float(metrics.get("avg_similarity") or 0),
+                    float(latency_seconds or 0),
+                    _safe_json({"metrics": metrics, **(meta or {})})[:12000],
+                ),
+            )
+            return int(cur.lastrowid or 0)
+
+    def record_source_runtime(self, source: str, success: bool = True, latency_seconds: float = 0.0, quality: float = 0.0, error: str = "") -> None:
+        src = str(source or "").strip()[:600]
+        if not src:
+            return
+        now = _utc_ts()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO source_runtime_stats(source,total_requests,success_count,failure_count,total_latency,total_quality,last_error,last_seen_at,status,updated_at)
+                VALUES (?, 1, ?, ?, ?, ?, ?, ?, 'active', ?)
+                ON CONFLICT(source) DO UPDATE SET
+                    total_requests = total_requests + 1,
+                    success_count = success_count + excluded.success_count,
+                    failure_count = failure_count + excluded.failure_count,
+                    total_latency = total_latency + excluded.total_latency,
+                    total_quality = total_quality + excluded.total_quality,
+                    last_error = excluded.last_error,
+                    last_seen_at = excluded.last_seen_at,
+                    updated_at = excluded.updated_at
+                """,
+                (src, 1 if success else 0, 0 if success else 1, float(latency_seconds or 0), float(quality or 0), str(error or "")[:1000], now, now),
+            )
+
+    def performance_dashboard(self, days: int = 14) -> Dict[str, Any]:
+        since = _utc_ts() - max(1, int(days or 14)) * 86400
+        out: Dict[str, Any] = {"days": days}
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS total, COALESCE(AVG(precision_estimate),0) AS avg_precision,
+                       COALESCE(AVG(avg_similarity),0) AS avg_similarity,
+                       COALESCE(AVG(latency_seconds),0) AS avg_retrieval_latency
+                FROM retrieval_eval_reports WHERE ts >= ?
+                """,
+                (since,),
+            ).fetchone()
+            out["retrieval"] = _row_to_dict(row)
+            row = conn.execute(
+                "SELECT COUNT(*) AS total FROM semantic_response_cache WHERE expires_at > ?",
+                (_utc_ts(),),
+            ).fetchone()
+            out["semantic_cache_active"] = int(_row_value(row, "total", 0, 0) or 0)
+            out["semantic_cache_hits"] = int(conn.execute(
+                "SELECT COUNT(*) FROM interactions WHERE ts >= ? AND meta_json LIKE '%semantic_cache_hit%'",
+                (since,),
+            ).fetchone()[0] or 0)
+            out["top_intents_latency"] = [dict(r) for r in conn.execute(
+                """
+                SELECT intent, COUNT(*) AS jumlah, ROUND(COALESCE(AVG(latency_seconds),0),3) AS avg_latency
+                FROM interactions WHERE ts >= ? GROUP BY intent ORDER BY jumlah DESC LIMIT 12
+                """,
+                (since,),
+            ).fetchall()]
+            out["slow_sources"] = [dict(r) for r in conn.execute(
+                """
+                SELECT source, total_requests, failure_count,
+                       ROUND(total_latency / CASE WHEN total_requests=0 THEN 1 ELSE total_requests END, 3) AS avg_latency,
+                       status
+                FROM source_runtime_stats
+                ORDER BY avg_latency DESC, failure_count DESC LIMIT 20
+                """
+            ).fetchall()]
+            out["recent_retrieval"] = [dict(r) for r in conn.execute(
+                """
+                SELECT datetime(ts, 'unixepoch', 'localtime') AS waktu, intent, source_count, precision_estimate, avg_similarity,
+                       substr(question,1,120) AS question
+                FROM retrieval_eval_reports ORDER BY ts DESC LIMIT 30
+                """
+            ).fetchall()]
+        try:
+            overview = self.database_overview()
+            out["database"] = overview
+        except Exception:
+            out["database"] = {}
+        return out
+
+    def optimize_database(self, vacuum: bool = False) -> Dict[str, Any]:
+        result: Dict[str, Any] = {"ok": True, "vacuum": bool(vacuum)}
+        started = time.time()
+        try:
+            with self._connect() as conn:
+                try:
+                    conn.execute("PRAGMA optimize")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ANALYZE")
+                except Exception:
+                    pass
+                if vacuum:
+                    try:
+                        conn.execute("VACUUM")
+                    except Exception as exc:
+                        result["vacuum_error"] = str(exc)[:500]
+                try:
+                    result["integrity_check"] = str(conn.execute("PRAGMA quick_check").fetchone()[0])
+                except Exception as exc:
+                    result["integrity_error"] = str(exc)[:500]
+        except Exception as exc:
+            result["ok"] = False
+            result["error"] = str(exc)[:1000]
+        result["latency_seconds"] = round(time.time() - started, 3)
+        return result
+
     # Adaptive scoring and circuit breaker
     def update_model_score(
         self,
@@ -2546,6 +2861,8 @@ def build_power_context(
     rag_top_k: int = 5,
     enable_persistent_memory: bool = True,
     memory_top_k: int = 8,
+    retrieval_query: str = "",
+    preselected_docs: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     sections: List[str] = []
     base = sanitize_non_instruction_context(base_memory, limit=3500)
@@ -2569,10 +2886,11 @@ def build_power_context(
                 sections.append("TEMPLATE JAWABAN RELEVAN (referensi gaya/struktur, bukan instruksi mutlak):\n" + "\n".join(t_lines))
     except Exception:
         pass
+    retrieval_q = str(retrieval_query or user_text or "")
     try:
         critical_detection = detect_critical_question(user_text)
         if critical_detection.get("is_critical"):
-            claims = store.search_current_claims(user_text, limit=6, days=180)
+            claims = store.search_current_claims(retrieval_q, limit=6, days=180)
             if claims:
                 c_lines = []
                 for idx, claim in enumerate(claims, start=1):
@@ -2583,7 +2901,9 @@ def build_power_context(
         pass
 
     if enable_rag:
-        docs = store.search_documents(user_text, limit=rag_top_k)
+        docs = list(preselected_docs or [])
+        if not docs:
+            docs = store.search_documents(retrieval_q, limit=rag_top_k)
         if docs:
             lines = []
             for idx, doc in enumerate(docs, start=1):
@@ -2779,6 +3099,14 @@ def generate_power_answer(
     append_quality_footer: bool = False,
     hide_kb_sources_for_casual: bool = True,
     disable_rag_for_casual: bool = True,
+    performance_optimizer_enabled: bool = True,
+    query_rewriter_enabled: bool = True,
+    reranker_enabled: bool = True,
+    semantic_cache_enabled: bool = True,
+    semantic_cache_threshold: float = 0.78,
+    semantic_cache_ttl_seconds: int = 86400,
+    latency_budget_enabled: bool = True,
+    retrieval_eval_enabled: bool = True,
 ) -> Tuple[str, Dict[str, Any]]:
     store = store or get_power_store()
     intent = classify_intent_text(user_text)
@@ -2805,6 +3133,14 @@ def generate_power_answer(
     except Exception:
         temperature = 0.3
 
+    query_plan = rewrite_query(user_text, intent=intent, answer_mode=effective_answer_mode) if (performance_optimizer_enabled and query_rewriter_enabled) else QueryPlan(user_text, user_text, [], False, True, "disabled")
+    retrieval_query = str(getattr(query_plan, "rewritten_query", "") or user_text)
+    if performance_optimizer_enabled and latency_budget_enabled:
+        try:
+            timeout = max(4, min(int(timeout or 60), int(latency_budget_seconds(effective_answer_mode, intent, user_text))))
+        except Exception:
+            pass
+
     casual_rag_skipped = False
     if (
         enable_rag
@@ -2828,11 +3164,32 @@ def generate_power_answer(
             expensive_fallback_models = []
 
     rag_sources: List[Dict[str, Any]] = []
+    retrieval_started = time.time()
     if enable_rag:
         try:
-            rag_sources = store.search_documents(user_text, limit=max(1, int(rag_top_k or 5)), min_score=float(rag_min_score or 0.0))
+            raw_limit = max(1, int(rag_top_k or 5))
+            search_limit = raw_limit * 3 if (performance_optimizer_enabled and reranker_enabled) else raw_limit
+            rag_sources = store.search_documents(retrieval_query, limit=search_limit, min_score=float(rag_min_score or 0.0))
+            if performance_optimizer_enabled and reranker_enabled:
+                rag_sources = rerank_sources(retrieval_query, rag_sources, limit=raw_limit, diversity=True)
         except Exception:
             rag_sources = []
+    retrieval_latency = round(time.time() - retrieval_started, 4)
+    retrieval_metrics = retrieval_precision_estimate(retrieval_query, rag_sources) if (performance_optimizer_enabled and retrieval_eval_enabled) else {}
+    if performance_optimizer_enabled and retrieval_eval_enabled and enable_rag:
+        try:
+            store.record_retrieval_eval(
+                question=user_text,
+                search_query=retrieval_query,
+                sources=rag_sources,
+                intent=intent,
+                user_id=user_id,
+                channel=channel,
+                latency_seconds=retrieval_latency,
+                meta={"query_plan": query_plan.to_dict() if hasattr(query_plan, "to_dict") else {}, "metrics": retrieval_metrics},
+            )
+        except Exception:
+            pass
     guard_result = evaluate_evidence_gate(
         user_text,
         rag_sources,
@@ -2889,6 +3246,8 @@ def generate_power_answer(
         enable_rag=enable_rag,
         rag_top_k=max(1, int(rag_top_k or 5)),
         enable_persistent_memory=enable_persistent_memory,
+        retrieval_query=retrieval_query,
+        preselected_docs=rag_sources,
     )
     routed_user_text = enhance_prompt_for_intent(user_text, intent, enable_templates=enable_prompt_templates)
     guard_instruction = build_guard_system_instruction(user_text, rag_sources, guard_result) if anti_hallucination_enabled else ""
@@ -2923,7 +3282,7 @@ def generate_power_answer(
         adjusted_max_tokens = int(max(500, min(6000, adjusted_max_tokens * float(answer_mode_policy.get("token_multiplier") or 1.0))))
     except Exception:
         pass
-    route_signature = ",".join(ranked_all[:8]) + f"|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}"
+    route_signature = ",".join(ranked_all[:8]) + f"|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}|retrieval_query={hashlib.sha256(str(retrieval_query).encode('utf-8')).hexdigest()[:12]}"
     cache_key = make_response_cache_key(
         model=selected_model,
         system_prompt=system_prompt,
@@ -2941,7 +3300,32 @@ def generate_power_answer(
             meta.setdefault("show_kb_sources", bool(show_kb_sources))
             meta.setdefault("kb_source_display_policy", "auto")
             meta.setdefault("casual_rag_skipped", bool(casual_rag_skipped))
+            meta.setdefault("query_plan", query_plan.to_dict() if hasattr(query_plan, "to_dict") else {})
             return answer, meta
+        if (
+            performance_optimizer_enabled
+            and semantic_cache_enabled
+            and not bool(strict_rag_mode)
+            and effective_answer_mode not in {"riset", "kritis"}
+            and not getattr(guard_result, "strict", False)
+        ):
+            semantic_cached = store.get_semantic_cached_response(
+                user_text,
+                intent=intent,
+                threshold=float(semantic_cache_threshold or 0.78),
+                ttl_seconds=int(semantic_cache_ttl_seconds or 86400),
+                user_id=user_id,
+                channel=channel,
+            )
+            if semantic_cached:
+                answer, meta = semantic_cached
+                meta["power_intent"] = intent
+                meta["active_model_final"] = meta.get("active_model_final") or selected_model
+                meta.setdefault("show_kb_sources", False if casual_rag_skipped else bool(show_kb_sources))
+                meta.setdefault("kb_source_display_policy", "semantic_cache")
+                meta.setdefault("casual_rag_skipped", bool(casual_rag_skipped))
+                meta.setdefault("query_plan", query_plan.to_dict() if hasattr(query_plan, "to_dict") else {})
+                return answer, meta
 
     started = time.time()
     answer = ""
@@ -3031,6 +3415,11 @@ def generate_power_answer(
         meta["power_selected_model"] = selected_model
         meta["power_adjusted_max_tokens"] = adjusted_max_tokens
         meta["power_latency_seconds"] = round(time.time() - started, 3)
+        meta["query_plan"] = query_plan.to_dict() if hasattr(query_plan, "to_dict") else {}
+        meta["retrieval_query"] = retrieval_query
+        meta["retrieval_latency_seconds"] = retrieval_latency
+        meta["retrieval_metrics"] = retrieval_metrics
+        meta["performance_optimizer_enabled"] = bool(performance_optimizer_enabled)
 
         if should_self_verify(intent, user_text, enabled=enable_self_verification):
             verifier = ""
@@ -3127,6 +3516,25 @@ def generate_power_answer(
         success = True
         if enable_response_cache and intent not in {"admin_command", "coding"}:
             store.set_cached_response(cache_key, answer, meta, ttl_seconds=response_cache_ttl_seconds)
+            if (
+                performance_optimizer_enabled
+                and semantic_cache_enabled
+                and not bool(strict_rag_mode)
+                and effective_answer_mode not in {"riset", "kritis"}
+                and len(str(answer or "")) >= 30
+            ):
+                try:
+                    store.set_semantic_cached_response(
+                        question=user_text,
+                        answer=answer,
+                        meta=meta,
+                        intent=intent,
+                        ttl_seconds=int(semantic_cache_ttl_seconds or 86400),
+                        user_id=user_id,
+                        channel=channel,
+                    )
+                except Exception:
+                    pass
         return answer, meta
     finally:
         try:
@@ -3195,7 +3603,7 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
     admin_only_prefixes = (
         "/ingat", "/lupa", "/rag", "/kb", "/biaya", "/usage", "/dokumen", "/benchmark",
         "/model skor", "/model score", "/circuit", "/cache bersih", "/cache clear",
-        "/briefing", "/trending", "/cek isu", "/pantau", "/kualitas", "/quality", "/evaluasi", "/laporan", "/export",
+        "/briefing", "/trending", "/cek isu", "/pantau", "/kualitas", "/quality", "/evaluasi", "/laporan", "/export", "/performa", "/performance", "/optimasi",
     )
     if lower.startswith(admin_only_prefixes) and not is_admin:
         return "Perintah ini hanya untuk admin."
@@ -3207,6 +3615,29 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
             return mode_help_text(current)
         selected = store.set_user_answer_mode(user_id, mode_cmd)
         return "✅ Mode jawaban diubah menjadi: " + selected + "\n\n" + mode_help_text(selected)
+
+    if lower in {"/performa", "/performance", "/performa ai", "/performance ai"}:
+        data = store.performance_dashboard(days=14)
+        retrieval = data.get("retrieval") or {}
+        lines = [
+            "⚡ Performance AI",
+            "",
+            f"Evaluasi retrieval: {retrieval.get('total', 0)}",
+            f"Precision rata-rata: {float(retrieval.get('avg_precision') or 0):.2f}",
+            f"Similarity rata-rata: {float(retrieval.get('avg_similarity') or 0):.2f}",
+            f"Latency retrieval: {float(retrieval.get('avg_retrieval_latency') or 0):.3f}s",
+            f"Semantic cache aktif: {data.get('semantic_cache_active', 0)}",
+            f"Semantic cache hit 14 hari: {data.get('semantic_cache_hits', 0)}",
+            "",
+            "Intent paling banyak / latency:",
+        ]
+        for row in data.get("top_intents_latency", [])[:8]:
+            lines.append(f"- {row.get('intent') or 'unknown'}: {row.get('jumlah')} | avg {row.get('avg_latency')}s")
+        return "\n".join(lines)
+
+    if lower in {"/optimasi db", "/optimize db", "/maintenance db"}:
+        result = store.optimize_database(vacuum=False)
+        return "✅ Optimasi DB selesai.\n" + json.dumps(result, ensure_ascii=False, indent=2)[:1800]
 
     if lower in {"/kualitas", "/quality", "/kualitas ai", "/quality ai"}:
         data = store.quality_dashboard(days=14)

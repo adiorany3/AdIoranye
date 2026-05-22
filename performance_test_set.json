@@ -1,0 +1,10 @@
+[
+  {"category":"casual", "question":"halo, apa kabar?", "expected":"no_rag_fast"},
+  {"category":"technology_current", "question":"Apa perkembangan AI terbaru di Indonesia saat ini?", "expected":"rag_rewrite_rerank"},
+  {"category":"critical", "question":"Apakah benar ada risiko kesehatan terbaru terkait flu burung? Berikan bukti.", "expected":"strict_evidence"},
+  {"category":"journal", "question":"Jurnal peternakan Q1 yang relevan untuk animal science apa saja?", "expected":"source_required"},
+  {"category":"livestock", "question":"Apa riset terbaru tentang pakan ternak fermentasi?", "expected":"rag_rewrite_rerank"},
+  {"category":"law", "question":"Apa isu hukum AI global yang sedang berkembang?", "expected":"critical_current"},
+  {"category":"environment", "question":"Bagaimana dampak sosial teknologi dan lingkungan secara global?", "expected":"multisource"},
+  {"category":"coding", "question":"Perbaiki error StreamlitDuplicateElementId di app.py", "expected":"coding_no_semantic_cache"}
+]

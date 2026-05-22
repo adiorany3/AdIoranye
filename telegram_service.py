@@ -307,6 +307,10 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
             "• /kualitas — statistik kualitas jawaban",
             "• /laporan mingguan — evaluasi kualitas 7 hari",
             "",
+            "Performance:",
+            "• /performa — statistik retrieval/cache/latency",
+            "• /optimasi db — optimasi SQLite ringan",
+            "",
             "Memory & biaya:",
             "• /ingat <teks> — simpan memory permanen",
             "• /lupa <keyword> — hapus memory sesuai keyword",
@@ -1729,6 +1733,14 @@ class TelegramBotService:
         power_quality_append_footer = bool(config.get("power_quality_append_footer", False))
         power_hide_kb_sources_for_casual = bool(config.get("power_hide_kb_sources_for_casual", True))
         power_disable_rag_for_casual = bool(config.get("power_disable_rag_for_casual", True))
+        power_performance_optimizer_enabled = bool(config.get("power_performance_optimizer_enabled", True))
+        power_query_rewriter_enabled = bool(config.get("power_query_rewriter_enabled", True))
+        power_reranker_enabled = bool(config.get("power_reranker_enabled", True))
+        power_semantic_cache_enabled = bool(config.get("power_semantic_cache_enabled", True))
+        power_semantic_cache_threshold = float(config.get("power_semantic_cache_threshold", 0.78) or 0.78)
+        power_semantic_cache_ttl_seconds = int(config.get("power_semantic_cache_ttl_seconds", 86400) or 86400)
+        power_latency_budget_enabled = bool(config.get("power_latency_budget_enabled", True))
+        power_retrieval_eval_enabled = bool(config.get("power_retrieval_eval_enabled", True))
         power_default_answer_mode = str(config.get("power_default_answer_mode") or "auto").strip().lower()
         daily_cost_limit_idr = float(config.get("daily_cost_limit_idr", 0) or 0)
         max_expensive_calls_per_day = int(config.get("max_expensive_calls_per_day", 0) or 0)
@@ -2251,6 +2263,14 @@ class TelegramBotService:
                                 append_quality_footer=bool(power_quality_append_footer),
                                 hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
                                 disable_rag_for_casual=bool(power_disable_rag_for_casual),
+                                performance_optimizer_enabled=bool(power_performance_optimizer_enabled),
+                                query_rewriter_enabled=bool(power_query_rewriter_enabled),
+                                reranker_enabled=bool(power_reranker_enabled),
+                                semantic_cache_enabled=bool(power_semantic_cache_enabled),
+                                semantic_cache_threshold=float(power_semantic_cache_threshold),
+                                semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
+                                latency_budget_enabled=bool(power_latency_budget_enabled),
+                                retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
                             )
 
                             if isinstance(meta, dict):
@@ -2353,6 +2373,14 @@ class TelegramBotService:
                                         append_quality_footer=bool(power_quality_append_footer),
                                         hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
                                         disable_rag_for_casual=bool(power_disable_rag_for_casual),
+                                        performance_optimizer_enabled=bool(power_performance_optimizer_enabled),
+                                        query_rewriter_enabled=bool(power_query_rewriter_enabled),
+                                        reranker_enabled=bool(power_reranker_enabled),
+                                        semantic_cache_enabled=bool(power_semantic_cache_enabled),
+                                        semantic_cache_threshold=float(power_semantic_cache_threshold),
+                                        semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
+                                        latency_budget_enabled=bool(power_latency_budget_enabled),
+                                        retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
                                     )
 
                                     if isinstance(retry_meta, dict):

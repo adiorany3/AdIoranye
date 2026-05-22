@@ -497,6 +497,14 @@ power_quality_append_footer = parse_bool(get_secret("POWER_QUALITY_APPEND_FOOTER
 power_default_answer_mode = str(get_secret("POWER_DEFAULT_ANSWER_MODE", "auto") or "auto").strip().lower()
 power_hide_kb_sources_for_casual = parse_bool(get_secret("POWER_HIDE_KB_SOURCES_FOR_CASUAL", True), default=True)
 power_disable_rag_for_casual = parse_bool(get_secret("POWER_DISABLE_RAG_FOR_CASUAL", True), default=True)
+power_performance_optimizer_enabled = parse_bool(get_secret("POWER_PERFORMANCE_OPTIMIZER_ENABLED", True), default=True)
+power_query_rewriter_enabled = parse_bool(get_secret("POWER_QUERY_REWRITER_ENABLED", True), default=True)
+power_reranker_enabled = parse_bool(get_secret("POWER_RERANKER_ENABLED", True), default=True)
+power_semantic_cache_enabled = parse_bool(get_secret("POWER_SEMANTIC_CACHE_ENABLED", True), default=True)
+power_semantic_cache_threshold = float(get_secret("POWER_SEMANTIC_CACHE_THRESHOLD", 0.78) or 0.78)
+power_semantic_cache_ttl_seconds = int(get_secret("POWER_SEMANTIC_CACHE_TTL_SECONDS", 86400) or 86400)
+power_latency_budget_enabled = parse_bool(get_secret("POWER_LATENCY_BUDGET_ENABLED", True), default=True)
+power_retrieval_eval_enabled = parse_bool(get_secret("POWER_RETRIEVAL_EVAL_ENABLED", True), default=True)
 daily_cost_limit_idr = float(get_secret("DAILY_COST_LIMIT_IDR", 0) or 0)
 max_expensive_calls_per_day = int(get_secret("MAX_EXPENSIVE_CALLS_PER_DAY", 0) or 0)
 benchmark_max_models = int(get_secret("BENCHMARK_MAX_MODELS", 8) or 8)
@@ -2640,6 +2648,14 @@ def start_telegram_if_needed() -> None:
                 "power_quality_append_footer": bool(power_quality_append_footer),
                 "power_hide_kb_sources_for_casual": bool(power_hide_kb_sources_for_casual),
                 "power_disable_rag_for_casual": bool(power_disable_rag_for_casual),
+                "power_performance_optimizer_enabled": bool(power_performance_optimizer_enabled),
+                "power_query_rewriter_enabled": bool(power_query_rewriter_enabled),
+                "power_reranker_enabled": bool(power_reranker_enabled),
+                "power_semantic_cache_enabled": bool(power_semantic_cache_enabled),
+                "power_semantic_cache_threshold": float(power_semantic_cache_threshold),
+                "power_semantic_cache_ttl_seconds": int(power_semantic_cache_ttl_seconds),
+                "power_latency_budget_enabled": bool(power_latency_budget_enabled),
+                "power_retrieval_eval_enabled": bool(power_retrieval_eval_enabled),
                 "power_default_answer_mode": power_default_answer_mode,
                 "daily_cost_limit_idr": float(daily_cost_limit_idr),
                 "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
@@ -3238,6 +3254,14 @@ def render_admin_settings() -> None:
                 "power_quality_append_footer": bool(power_quality_append_footer),
                 "power_hide_kb_sources_for_casual": bool(power_hide_kb_sources_for_casual),
                 "power_disable_rag_for_casual": bool(power_disable_rag_for_casual),
+                "power_performance_optimizer_enabled": bool(power_performance_optimizer_enabled),
+                "power_query_rewriter_enabled": bool(power_query_rewriter_enabled),
+                "power_reranker_enabled": bool(power_reranker_enabled),
+                "power_semantic_cache_enabled": bool(power_semantic_cache_enabled),
+                "power_semantic_cache_threshold": float(power_semantic_cache_threshold),
+                "power_semantic_cache_ttl_seconds": int(power_semantic_cache_ttl_seconds),
+                "power_latency_budget_enabled": bool(power_latency_budget_enabled),
+                "power_retrieval_eval_enabled": bool(power_retrieval_eval_enabled),
                 "power_default_answer_mode": power_default_answer_mode,
                 "daily_cost_limit_idr": float(daily_cost_limit_idr),
                 "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
@@ -3608,7 +3632,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
             with col_c:
                 st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
 
-            tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark", "🧠 Learning Loop", "✅ Quality Control"])
+            tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark", "🧠 Learning Loop", "✅ Quality Control", "⚡ Performance"])
             with tabs_power[0]:
                 kb_stats = power_store.knowledge_stats()
                 c1, c2, c3, c4, c5 = st.columns(5)
@@ -3962,6 +3986,44 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                 st.info(f"Default dari secrets: {power_default_answer_mode}. Pengguna Telegram dapat mengubah mode sendiri dengan /mode hemat|pintar|riset|kritis|auto.")
                 st.caption(f"Quality Control: {'ON' if power_quality_control_enabled else 'OFF'} | Verifier: {'ON' if power_quality_verifier_enabled else 'OFF'} | Min score: {power_quality_min_score}")
 
+            with tabs_power[7]:
+                st.caption("Performance Optimizer memantau retrieval, reranker, semantic cache, latency, dan maintenance SQLite.")
+                perf_days = st.slider("Rentang Performance", 1, 60, 14, key="perf_dash_days")
+                perf = power_store.performance_dashboard(days=int(perf_days))
+                retrieval = perf.get("retrieval") or {}
+                p1, p2, p3, p4 = st.columns(4)
+                p1.metric("Retrieval eval", retrieval.get("total", 0))
+                p2.metric("Precision avg", f"{float(retrieval.get('avg_precision') or 0):.2f}")
+                p3.metric("Similarity avg", f"{float(retrieval.get('avg_similarity') or 0):.2f}")
+                p4.metric("Semantic cache", perf.get("semantic_cache_active", 0))
+
+                st.markdown("**Latency per intent**")
+                st.dataframe(perf.get("top_intents_latency", []), use_container_width=True, hide_index=True)
+                st.markdown("**Retrieval terbaru**")
+                st.dataframe(perf.get("recent_retrieval", []), use_container_width=True, hide_index=True)
+                st.markdown("**Sumber lambat/bermasalah**")
+                st.dataframe(perf.get("slow_sources", []), use_container_width=True, hide_index=True)
+
+                st.markdown("#### Maintenance")
+                m1, m2, m3 = st.columns(3)
+                with m1:
+                    if st.button("⚡ PRAGMA optimize + ANALYZE", use_container_width=True, key="perf_optimize_btn"):
+                        st.json(power_store.optimize_database(vacuum=False))
+                with m2:
+                    if st.button("🧹 Bersihkan cache respons", use_container_width=True, key="perf_clear_cache_btn"):
+                        st.success(f"Cache dihapus: {power_store.clear_response_cache()}")
+                with m3:
+                    if st.button("🧱 VACUUM DB", use_container_width=True, key="perf_vacuum_btn"):
+                        st.json(power_store.optimize_database(vacuum=True))
+
+                st.markdown("#### Konfigurasi aktif")
+                st.code(
+                    f"PERFORMANCE={power_performance_optimizer_enabled} | REWRITE={power_query_rewriter_enabled} | "
+                    f"RERANK={power_reranker_enabled} | SEMANTIC_CACHE={power_semantic_cache_enabled} | "
+                    f"THRESHOLD={power_semantic_cache_threshold} | LATENCY_BUDGET={power_latency_budget_enabled}",
+                    language="text",
+                )
+
 
     except Exception as exc:
         st.error("Power Features gagal dimuat, tetapi chat utama tetap aktif.")
@@ -4047,6 +4109,14 @@ if user_input:
                     append_quality_footer=bool(power_quality_append_footer),
                     hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
                     disable_rag_for_casual=bool(power_disable_rag_for_casual),
+                    performance_optimizer_enabled=bool(power_performance_optimizer_enabled),
+                    query_rewriter_enabled=bool(power_query_rewriter_enabled),
+                    reranker_enabled=bool(power_reranker_enabled),
+                    semantic_cache_enabled=bool(power_semantic_cache_enabled),
+                    semantic_cache_threshold=float(power_semantic_cache_threshold),
+                    semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
+                    latency_budget_enabled=bool(power_latency_budget_enabled),
+                    retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
                 )
                 restore_active_model_to_cheap(route.get("primary_model"))
                 placeholder.markdown(answer)
