@@ -264,6 +264,384 @@
       "topic": "climate tech carbon removal battery hydrogen global Indonesia",
       "category": "climate-tech",
       "priority": 2
+    },
+    {
+      "id": 1,
+      "topic": "ketahanan pangan global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 2,
+      "topic": "krisis pangan dan harga komoditas dunia",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 3,
+      "topic": "smart farming dan pertanian presisi",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 4,
+      "topic": "climate-smart agriculture",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 5,
+      "topic": "regenerative agriculture dan soil health",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 6,
+      "topic": "irigasi presisi dan manajemen air pertanian",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 7,
+      "topic": "hama penyakit tanaman global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 8,
+      "topic": "teknologi benih dan crop biotechnology",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 9,
+      "topic": "peternakan global dan penyakit hewan",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 10,
+      "topic": "avian influenza global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 11,
+      "topic": "foot and mouth disease PMK global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 12,
+      "topic": "African swine fever",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 13,
+      "topic": "pakan ternak alternatif dan methane reduction",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 14,
+      "topic": "One Health dan antimicrobial resistance pada ternak",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 15,
+      "topic": "animal welfare dan sustainable livestock",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 16,
+      "topic": "teknik pertanian dan biosistem",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 17,
+      "topic": "postharvest technology dan cold chain pertanian",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 18,
+      "topic": "sensor IoT drone remote sensing pertanian",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 19,
+      "topic": "greenhouse automation vertical farming",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 20,
+      "topic": "biomass bioenergy agricultural waste",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 21,
+      "topic": "climate change biodiversity pollution",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 22,
+      "topic": "plastic pollution treaty",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 23,
+      "topic": "carbon market climate finance",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 24,
+      "topic": "deforestation forest restoration",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 25,
+      "topic": "water security global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 26,
+      "topic": "disaster risk climate adaptation early warning",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 27,
+      "topic": "aquaculture blue economy",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 28,
+      "topic": "shrimp farming seaweed aquaculture aquafeed",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 29,
+      "topic": "fish disease aquaculture biosecurity",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 30,
+      "topic": "marine heatwave fisheries overfishing",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 31,
+      "topic": "international law human rights rule of law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 32,
+      "topic": "climate litigation environmental law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 33,
+      "topic": "AI regulation digital law cyber law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 34,
+      "topic": "data protection and privacy law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 35,
+      "topic": "intellectual property technology law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 36,
+      "topic": "UNESCO heritage intangible culture",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 37,
+      "topic": "digital culture creative economy",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 38,
+      "topic": "language preservation indigenous culture",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 39,
+      "topic": "museum technology cultural heritage digitization",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 40,
+      "topic": "frontier AI robotics quantum computing",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 41,
+      "topic": "biotech synthetic biology gene editing",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 42,
+      "topic": "semiconductor data center cybersecurity",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 43,
+      "topic": "battery EV clean energy climate tech",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 44,
+      "topic": "AI social impact labor automation inequality",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 45,
+      "topic": "digital divide global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 46,
+      "topic": "migration humanitarian conflict displacement",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 47,
+      "topic": "misinformation civic trust social media harms",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 48,
+      "topic": "public health social impact climate health",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 49,
+      "topic": "dampak sosial teknologi di Indonesia",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 50,
+      "topic": "pertanian Indonesia dan ketahanan pangan",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 51,
+      "topic": "peternakan Indonesia penyakit ternak dan pakan",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 52,
+      "topic": "akuakultur Indonesia udang ikan rumput laut",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 53,
+      "topic": "hukum teknologi dan lingkungan Indonesia",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 54,
+      "topic": "budaya Indonesia dan ekonomi kreatif",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ]
 }

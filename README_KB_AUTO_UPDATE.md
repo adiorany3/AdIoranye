@@ -241,3 +241,8 @@ Versi ini juga menambahkan `kb_sources_global_tech_indonesia_research.json` dan 
 Fokusnya adalah berita teknologi global terbaru, perkembangan teknologi Indonesia, dan riset/publikasi terbaru melalui RSS, Google News, GDELT, arXiv, OpenAlex, serta sumber resmi Indonesia seperti Komdigi, BRIN, dan Kemdiktisaintek.
 
 Lihat panduan lengkap di `GLOBAL_TECH_INDONESIA_RESEARCH_SOURCES.md`.
+
+
+## Tambahan Global Lintas Bidang
+
+Versi ini juga menyertakan `kb_sources_agro_livestock_biosystem_environment_aquaculture_law_culture_social_global.json` untuk memperkaya knowledge base dengan isu terbaru dunia tentang agro, peternakan, teknik pertanian/biosistem, lingkungan, akuakultur, hukum, budaya, perkembangan teknologi terbaru, dan dampak sosial global.
