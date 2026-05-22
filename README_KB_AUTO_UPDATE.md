@@ -171,3 +171,26 @@ Catatan penting untuk Q-level:
 Versi ini sudah ditambah fitur feedback, knowledge gap detector, source quality ranking, strict RAG mode, auto summarizer hasil scraper, template jawaban, dan mode domain peternakan/kesehatan.
 
 Baca panduan lengkap di `AI_SMART_LEARNING_LOOP.md`.
+
+
+## Perintah Telegram `/update`
+
+Paket ini sudah menambahkan command admin-only `/update` untuk memicu workflow GitHub Actions `daily-kb-update.yml` secara manual dari Telegram.
+
+Konfigurasi Streamlit yang diperlukan:
+
+```toml
+GITHUB_ACTIONS_TOKEN = "ISI_TOKEN_GITHUB_UNTUK_WORKFLOW_DISPATCH"
+GITHUB_REPO = "username/nama-repo"
+GITHUB_WORKFLOW_FILE = "daily-kb-update.yml"
+GITHUB_BRANCH = "main"
+```
+
+Konfigurasi GitHub Actions untuk notifikasi selesai/gagal:
+
+```text
+TELEGRAM_BOT_TOKEN
+TELEGRAM_ADMIN_CHAT_ID
+```
+
+Lihat `TELEGRAM_UPDATE_COMMAND.md` untuk panduan lengkap.

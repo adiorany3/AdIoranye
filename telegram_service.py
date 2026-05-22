@@ -287,6 +287,7 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
             "• /circuit — lihat model yang dikarantina",
             "",
             "Knowledge Base:",
+            "• /update — jalankan update Knowledge Base sekarang",
             "• /kb bantuan — daftar perintah KB",
             "• /kb statistik — statistik dokumen",
             "• /kb list — daftar dokumen terakhir",
@@ -652,6 +653,99 @@ def is_rotate_model_command(text: str) -> bool:
     if "@" in command:
         command = command.split("@", 1)[0]
     return command == "/rotate"
+
+
+
+
+def is_update_command(text: str) -> bool:
+    """Return True for /update command.
+
+    Supports:
+    - /update
+    - /update@NamaBot
+    """
+    raw = str(text or "").strip()
+    parts = raw.split()
+    if len(parts) != 1:
+        return False
+    command = parts[0].lower()
+    if "@" in command:
+        command = command.split("@", 1)[0]
+    return command == "/update"
+
+
+def trigger_github_kb_update(config: Dict[str, Any], chat_id: int) -> str:
+    """Trigger GitHub Actions workflow_dispatch untuk update Knowledge Base.
+
+    Perintah ini hanya memicu workflow. Proses scraping/update tetap dijalankan
+    oleh GitHub Actions agar tidak membebani worker Streamlit/Telegram.
+    """
+    github_token = str(config.get("github_actions_token") or os.getenv("GITHUB_ACTIONS_TOKEN", "") or "").strip()
+    repo = str(config.get("github_repo") or os.getenv("GITHUB_REPO", "") or "").strip()
+    workflow_file = str(config.get("github_workflow_file") or os.getenv("GITHUB_WORKFLOW_FILE", "daily-kb-update.yml") or "daily-kb-update.yml").strip()
+    branch = str(config.get("github_branch") or os.getenv("GITHUB_BRANCH", "main") or "main").strip()
+
+    if not github_token:
+        return (
+            "❌ GITHUB_ACTIONS_TOKEN belum diisi.\n\n"
+            "Tambahkan secret ini di Streamlit/hosting app:\n"
+            "GITHUB_ACTIONS_TOKEN = \"token_github_kamu\""
+        )
+
+    if not repo or "/" not in repo:
+        return (
+            "❌ GITHUB_REPO belum benar.\n\n"
+            "Format yang benar:\n"
+            "GITHUB_REPO = \"username/nama-repo\""
+        )
+
+    workflow_file = workflow_file or "daily-kb-update.yml"
+    branch = branch or "main"
+    url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_file}/dispatches"
+
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "ref": branch,
+        "inputs": {
+            "source": "telegram",
+            "chat_id": str(chat_id),
+            "requested_at": _wib_now_text(),
+        },
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+    except requests.Timeout:
+        return "❌ Gagal trigger update KB: request ke GitHub timeout."
+    except requests.RequestException as exc:
+        return f"❌ Gagal trigger update KB: {exc}"
+
+    if response.status_code in {200, 201, 202, 204}:
+        return (
+            "✅ Perintah update Knowledge Base diterima.\n\n"
+            f"Repo: {repo}\n"
+            f"Workflow: {workflow_file}\n"
+            f"Branch: {branch}\n"
+            f"Waktu: {_wib_now_text()}\n\n"
+            "GitHub Actions sedang menjalankan update. "
+            "Jika workflow sudah memakai notifikasi Telegram, kamu akan mendapat pesan lagi saat selesai."
+        )
+
+    detail = response.text[:1200]
+    return (
+        "❌ GitHub menolak perintah update KB.\n\n"
+        f"HTTP: {response.status_code}\n"
+        f"Repo: {repo}\n"
+        f"Workflow: {workflow_file}\n"
+        f"Branch: {branch}\n\n"
+        f"Detail:\n{detail}"
+    )
 
 
 def select_rotated_runtime_model(result: Dict[str, Any], current_mode: str, current_model: str) -> Dict[str, Any]:
@@ -1910,6 +2004,32 @@ class TelegramBotService:
                                 token,
                                 chat_id,
                                 "Format perintah salah. Gunakan: /ubah mahal atau /ubah murah",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if is_update_command(text):
+                            if not self._is_admin_chat(chat_id, config):
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "⏳ Memulai update Knowledge Base via GitHub Actions...",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            try:
+                                update_reply = trigger_github_kb_update(config, chat_id)
+                            except Exception as exc:
+                                update_reply = "❌ Gagal menjalankan /update.\n\nDetail ringkas:\n" + str(exc)[:1200]
+                            self._send_message(token, chat_id, update_reply, parse_mode=telegram_parse_mode)
+                            continue
+
+                        if text_lower.startswith("/update"):
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "Format perintah salah. Gunakan: /update",
                                 parse_mode=telegram_parse_mode,
                             )
                             continue
