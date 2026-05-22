@@ -1,0 +1,53 @@
+name: Daily Knowledge Base Update
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Jalan setiap hari jam 00:10 WIB
+    - cron: "10 0 * * *"
+      timezone: "Asia/Jakarta"
+
+permissions:
+  contents: write
+
+jobs:
+  update-knowledge-base:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily KB scraper
+        env:
+          SLASHAI_API_KEY: ${{ secrets.SLASHAI_API_KEY }}
+          SLASHAI_API_URL: ${{ secrets.SLASHAI_API_URL }}
+        run: |
+          python daily_kb_scraper.py \
+            --sources kb_sources.json \
+            --db .adioranye_power.db \
+            --max-items 10
+
+      - name: Commit updated knowledge base
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .adioranye_power.db kb_sources.json || true
+
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan knowledge base."
+          else
+            git commit -m "Update knowledge base otomatis"
+            git push
+          fi
