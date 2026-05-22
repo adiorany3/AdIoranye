@@ -710,17 +710,28 @@ def trigger_github_kb_update(config: Dict[str, Any], chat_id: int) -> str:
         "Content-Type": "application/json",
     }
 
-    payload = {
+    requested_at = _wib_now_text()
+    payload_with_inputs = {
         "ref": branch,
         "inputs": {
             "source": "telegram",
             "chat_id": str(chat_id),
-            "requested_at": _wib_now_text(),
+            "requested_at": requested_at,
         },
     }
+    payload_without_inputs = {"ref": branch}
+
+    def _dispatch(payload: Dict[str, Any]) -> requests.Response:
+        return requests.post(url, headers=headers, json=payload, timeout=30)
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response = _dispatch(payload_with_inputs)
+
+        # GitHub mengembalikan HTTP 422 jika workflow_dispatch belum mendefinisikan
+        # input source/chat_id/requested_at. Agar command /update tetap berjalan
+        # pada workflow lama, ulangi request tanpa inputs.
+        if response.status_code == 422 and "Unexpected inputs" in response.text:
+            response = _dispatch(payload_without_inputs)
     except requests.Timeout:
         return "❌ Gagal trigger update KB: request ke GitHub timeout."
     except requests.RequestException as exc:
@@ -732,7 +743,7 @@ def trigger_github_kb_update(config: Dict[str, Any], chat_id: int) -> str:
             f"Repo: {repo}\n"
             f"Workflow: {workflow_file}\n"
             f"Branch: {branch}\n"
-            f"Waktu: {_wib_now_text()}\n\n"
+            f"Waktu: {requested_at}\n\n"
             "GitHub Actions sedang menjalankan update. "
             "Jika workflow sudah memakai notifikasi Telegram, kamu akan mendapat pesan lagi saat selesai."
         )
@@ -744,6 +755,11 @@ def trigger_github_kb_update(config: Dict[str, Any], chat_id: int) -> str:
         f"Repo: {repo}\n"
         f"Workflow: {workflow_file}\n"
         f"Branch: {branch}\n\n"
+        "Penyebab umum:\n"
+        "1. Workflow file belum ada di branch tersebut.\n"
+        "2. workflow_dispatch belum aktif.\n"
+        "3. GITHUB_ACTIONS_TOKEN belum punya permission Actions: Read and write.\n"
+        "4. Nama workflow file di secret GITHUB_WORKFLOW_FILE tidak sama.\n\n"
         f"Detail:\n{detail}"
     )
 

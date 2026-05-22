@@ -43,3 +43,20 @@ Kirim ke bot Telegram:
 ```
 
 Jika konfigurasi benar, bot akan membalas bahwa update KB diterima dan GitHub Actions sedang berjalan.
+
+
+## Perbaikan error HTTP 422 Unexpected inputs
+
+Versi ini sudah memperbaiki error seperti berikut:
+
+```text
+HTTP: 422
+Unexpected inputs provided: ["source", "chat_id", "requested_at"]
+```
+
+Paket ini memperbaikinya dari dua sisi:
+
+1. `.github/workflows/daily-kb-update.yml` sudah mendefinisikan input `source`, `chat_id`, dan `requested_at`.
+2. `telegram_service.py` punya fallback otomatis: jika GitHub masih menolak input karena workflow lama belum ter-update, bot akan mencoba ulang request tanpa `inputs`.
+
+Tetap pastikan file workflow terbaru sudah masuk ke branch yang dipakai, misalnya `main`.
