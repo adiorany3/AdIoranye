@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   update-knowledge-base:
     runs-on: ubuntu-latest
@@ -31,7 +34,7 @@ jobs:
       - name: Run daily KB scraper
         env:
           SLASHAI_API_KEY: ${{ secrets.SLASHAI_API_KEY }}
-          SLASHAI_API_URL: ${{ secrets.SLASHAI_API_URL }}
+          SLASHAI_API_URL: "https://api.slashai.my.id/v1/chat/completions"
         run: |
           python daily_kb_scraper.py \
             --sources kb_sources.json \
