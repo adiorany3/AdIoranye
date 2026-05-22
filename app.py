@@ -489,6 +489,14 @@ power_kb_max_file_mb = int(get_secret("POWER_KB_MAX_FILE_MB", 12) or 12)
 power_persistent_memory_enabled = parse_bool(get_secret("POWER_PERSISTENT_MEMORY_ENABLED", True), default=True)
 power_prompt_templates_enabled = parse_bool(get_secret("POWER_PROMPT_TEMPLATES_ENABLED", True), default=True)
 power_self_verification_enabled = parse_bool(get_secret("POWER_SELF_VERIFICATION_ENABLED", False), default=False)
+power_quality_control_enabled = parse_bool(get_secret("POWER_QUALITY_CONTROL_ENABLED", True), default=True)
+power_quality_verifier_enabled = parse_bool(get_secret("POWER_QUALITY_VERIFIER_ENABLED", True), default=True)
+power_quality_verifier_model = str(get_secret("POWER_QUALITY_VERIFIER_MODEL", "") or "").strip()
+power_quality_min_score = float(get_secret("POWER_QUALITY_MIN_SCORE", 0.72) or 0.72)
+power_quality_append_footer = parse_bool(get_secret("POWER_QUALITY_APPEND_FOOTER", False), default=False)
+power_default_answer_mode = str(get_secret("POWER_DEFAULT_ANSWER_MODE", "auto") or "auto").strip().lower()
+power_hide_kb_sources_for_casual = parse_bool(get_secret("POWER_HIDE_KB_SOURCES_FOR_CASUAL", True), default=True)
+power_disable_rag_for_casual = parse_bool(get_secret("POWER_DISABLE_RAG_FOR_CASUAL", True), default=True)
 daily_cost_limit_idr = float(get_secret("DAILY_COST_LIMIT_IDR", 0) or 0)
 max_expensive_calls_per_day = int(get_secret("MAX_EXPENSIVE_CALLS_PER_DAY", 0) or 0)
 benchmark_max_models = int(get_secret("BENCHMARK_MAX_MODELS", 8) or 8)
@@ -1420,7 +1428,8 @@ def render_answer_model_caption(meta: Dict[str, Any] | None, fallback: str = "",
     caption_text = f"Model aktif: {model_name}"
 
     kb_sources = data.get("power_kb_sources") or data.get("power_rag_sources") or []
-    if kb_sources:
+    show_kb_sources = bool(data.get("show_kb_sources", False))
+    if kb_sources and (show_kb_sources or admin_detail):
         caption_text += f" • KB: {len(kb_sources)} sumber"
 
     # Detail jalur routing hanya untuk admin agar tampilan publik tetap bersih.
@@ -2533,6 +2542,12 @@ def get_runtime_config() -> Dict[str, Any]:
         "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
         "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
         "power_self_verification_enabled": bool(power_self_verification_enabled),
+        "power_quality_control_enabled": bool(power_quality_control_enabled),
+        "power_quality_verifier_enabled": bool(power_quality_verifier_enabled),
+        "power_quality_verifier_model": power_quality_verifier_model,
+        "power_quality_min_score": float(power_quality_min_score),
+        "power_quality_append_footer": bool(power_quality_append_footer),
+        "power_default_answer_mode": power_default_answer_mode,
         "daily_cost_limit_idr": float(daily_cost_limit_idr),
         "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
         "power_response_cache_enabled": bool(power_response_cache_enabled),
@@ -2618,6 +2633,14 @@ def start_telegram_if_needed() -> None:
                 "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
                 "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
                 "power_self_verification_enabled": bool(power_self_verification_enabled),
+                "power_quality_control_enabled": bool(power_quality_control_enabled),
+                "power_quality_verifier_enabled": bool(power_quality_verifier_enabled),
+                "power_quality_verifier_model": power_quality_verifier_model,
+                "power_quality_min_score": float(power_quality_min_score),
+                "power_quality_append_footer": bool(power_quality_append_footer),
+                "power_hide_kb_sources_for_casual": bool(power_hide_kb_sources_for_casual),
+                "power_disable_rag_for_casual": bool(power_disable_rag_for_casual),
+                "power_default_answer_mode": power_default_answer_mode,
                 "daily_cost_limit_idr": float(daily_cost_limit_idr),
                 "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
                 "power_response_cache_enabled": bool(power_response_cache_enabled),
@@ -3208,6 +3231,14 @@ def render_admin_settings() -> None:
                 "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
                 "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
                 "power_self_verification_enabled": bool(power_self_verification_enabled),
+                "power_quality_control_enabled": bool(power_quality_control_enabled),
+                "power_quality_verifier_enabled": bool(power_quality_verifier_enabled),
+                "power_quality_verifier_model": power_quality_verifier_model,
+                "power_quality_min_score": float(power_quality_min_score),
+                "power_quality_append_footer": bool(power_quality_append_footer),
+                "power_hide_kb_sources_for_casual": bool(power_hide_kb_sources_for_casual),
+                "power_disable_rag_for_casual": bool(power_disable_rag_for_casual),
+                "power_default_answer_mode": power_default_answer_mode,
                 "daily_cost_limit_idr": float(daily_cost_limit_idr),
                 "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
             "active_cheap_models": route.get("active_cheap_models", []),
@@ -3577,7 +3608,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
             with col_c:
                 st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
 
-            tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark", "🧠 Learning Loop"])
+            tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark", "🧠 Learning Loop", "✅ Quality Control"])
             with tabs_power[0]:
                 kb_stats = power_store.knowledge_stats()
                 c1, c2, c3, c4, c5 = st.columns(5)
@@ -3875,6 +3906,62 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                         tid = power_store.save_answer_template(title=tmpl_title or "Template manual", trigger_query=tmpl_trigger, answer=tmpl_body, intent=tmpl_intent, tags="manual")
                         st.success(f"Template tersimpan #{tid}")
 
+            with tabs_power[6]:
+                st.caption("Quality Control memantau skor jawaban, mode jawaban, verifier model, export/import KB, dan evaluasi mingguan.")
+                q_days = st.slider("Rentang Quality Control", 1, 60, 14, key="quality_dash_days")
+                qdash = power_store.quality_dashboard(days=int(q_days))
+                q1, q2, q3, q4 = st.columns(4)
+                q1.metric("Jawaban dinilai", qdash.get("total", 0))
+                q2.metric("Skor rata-rata", qdash.get("avg_score", 0))
+                q3.metric("Skor rendah", qdash.get("low_count", 0))
+                q4.metric("Diverifikasi", qdash.get("verified_count", 0))
+
+                st.markdown("**Kualitas per mode**")
+                st.dataframe(qdash.get("by_mode", []), use_container_width=True, hide_index=True)
+                st.markdown("**Kualitas per intent**")
+                st.dataframe(qdash.get("by_intent", []), use_container_width=True, hide_index=True)
+                with st.expander("Jawaban skor rendah / perlu perbaikan", expanded=False):
+                    st.dataframe(qdash.get("low_quality", []), use_container_width=True, hide_index=True)
+
+                st.markdown("#### Evaluasi mingguan")
+                if st.button("📊 Buat laporan evaluasi 7 hari", use_container_width=True, key="quality_weekly_eval_btn"):
+                    report = power_store.weekly_quality_evaluation(days=7, save=True)
+                    st.text_area("Laporan evaluasi", value=report, height=320, key="quality_weekly_report_text")
+
+                st.markdown("#### Export / Import Knowledge Base")
+                ex1, ex2 = st.columns(2)
+                with ex1:
+                    kb_jsonl = power_store.export_knowledge_base_jsonl(limit=5000)
+                    st.download_button(
+                        "⬇️ Export KB JSONL",
+                        data=kb_jsonl.encode("utf-8"),
+                        file_name=f"adioranye-kb-export-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.jsonl",
+                        mime="application/jsonl",
+                        use_container_width=True,
+                    )
+                with ex2:
+                    inter_jsonl = power_store.export_interactions_jsonl(days=30, limit=5000)
+                    st.download_button(
+                        "⬇️ Export log interaksi JSONL",
+                        data=inter_jsonl.encode("utf-8"),
+                        file_name=f"adioranye-interactions-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.jsonl",
+                        mime="application/jsonl",
+                        use_container_width=True,
+                    )
+
+                import_file = st.file_uploader("Import KB dari JSONL", type=["jsonl", "txt"], key="quality_import_kb_jsonl")
+                if import_file and st.button("⬆️ Import JSONL ke Knowledge Base", use_container_width=True, key="quality_import_kb_btn"):
+                    try:
+                        text = import_file.read().decode("utf-8", "ignore")
+                        result = power_store.import_knowledge_base_jsonl(text, collection_prefix="Imported")
+                        st.success(f"Import selesai: {result}")
+                    except Exception as exc:
+                        st.error(f"Import gagal: {exc}")
+
+                st.markdown("#### Mode jawaban default")
+                st.info(f"Default dari secrets: {power_default_answer_mode}. Pengguna Telegram dapat mengubah mode sendiri dengan /mode hemat|pintar|riset|kritis|auto.")
+                st.caption(f"Quality Control: {'ON' if power_quality_control_enabled else 'OFF'} | Verifier: {'ON' if power_quality_verifier_enabled else 'OFF'} | Min score: {power_quality_min_score}")
+
 
     except Exception as exc:
         st.error("Power Features gagal dimuat, tetapi chat utama tetap aktif.")
@@ -3952,6 +4039,14 @@ if user_input:
                     strict_rag_mode=bool(power_strict_rag_mode),
                     rag_min_sources=int(power_rag_min_sources),
                     rag_min_score=float(power_rag_min_score),
+                    quality_control_enabled=bool(power_quality_control_enabled),
+                    quality_verifier_enabled=bool(power_quality_verifier_enabled),
+                    quality_verifier_model=power_quality_verifier_model,
+                    quality_min_score=float(power_quality_min_score),
+                    answer_mode=power_default_answer_mode,
+                    append_quality_footer=bool(power_quality_append_footer),
+                    hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
+                    disable_rag_for_casual=bool(power_disable_rag_for_casual),
                 )
                 restore_active_model_to_cheap(route.get("primary_model"))
                 placeholder.markdown(answer)
@@ -3963,7 +4058,7 @@ if user_input:
                     caption_text += f" • intent: {(meta or {}).get('power_intent')}"
                 if (meta or {}).get("self_verified_by"):
                     caption_text += f" • self-check: {(meta or {}).get('self_verified_by')}"
-                if (meta or {}).get("power_kb_sources"):
+                if (meta or {}).get("power_kb_sources") and (bool((meta or {}).get("show_kb_sources", False)) or st.session_state.admin_authenticated):
                     kb_sources = (meta or {}).get("power_kb_sources") or []
                     caption_text += f" • KB: {len(kb_sources)} sumber"
                     if st.session_state.admin_authenticated:

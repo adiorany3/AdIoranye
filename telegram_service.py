@@ -274,6 +274,7 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
         "Perintah umum:",
         "• /start — mulai bot",
         "• /help — bantuan",
+        "• /mode — pilih mode jawaban",
     ]
     if is_admin:
         lines.extend([
@@ -299,6 +300,12 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
             "• /cek isu <topik> — cek isu dengan klaim + dokumen pendukung",
             "• /pantau <topik> — tambah topik watchlist",
             "• /pantau list — daftar topik watchlist",
+            "",
+            "Quality Control:",
+            "• /mode — lihat/pilih mode jawaban",
+            "• /mode hemat|pintar|riset|kritis|auto",
+            "• /kualitas — statistik kualitas jawaban",
+            "• /laporan mingguan — evaluasi kualitas 7 hari",
             "",
             "Memory & biaya:",
             "• /ingat <teks> — simpan memory permanen",
@@ -332,6 +339,19 @@ def build_telegram_model_note(
         if intent:
             footer_parts.append(f"Intent: {intent}")
 
+        answer_mode = str(meta.get("answer_mode") or "").strip()
+        if answer_mode:
+            footer_parts.append(f"Jawab: {answer_mode}")
+
+        quality = meta.get("answer_quality_after_verifier") or meta.get("answer_quality") or {}
+        if isinstance(quality, dict) and quality.get("score") is not None:
+            try:
+                footer_parts.append(f"QC: {float(quality.get('score') or 0):.2f}")
+            except Exception:
+                pass
+        if meta.get("quality_verified_by"):
+            footer_parts.append(f"Verifier: {meta.get('quality_verified_by')}")
+
         if meta.get("power_response_cache_hit") or meta.get("cache_hit"):
             footer_parts.append("Cache: hit")
 
@@ -340,7 +360,7 @@ def build_telegram_model_note(
             rag_count = len(rag_sources)
         except Exception:
             rag_count = 0
-        if rag_count:
+        if rag_count and bool(meta.get("show_kb_sources", False)):
             footer_parts.append(f"KB: {rag_count} sumber")
 
         consulted = meta.get("consulted_models") or []
@@ -1702,6 +1722,14 @@ class TelegramBotService:
         power_persistent_memory_enabled = bool(config.get("power_persistent_memory_enabled", True))
         power_prompt_templates_enabled = bool(config.get("power_prompt_templates_enabled", True))
         power_self_verification_enabled = bool(config.get("power_self_verification_enabled", False))
+        power_quality_control_enabled = bool(config.get("power_quality_control_enabled", True))
+        power_quality_verifier_enabled = bool(config.get("power_quality_verifier_enabled", True))
+        power_quality_verifier_model = str(config.get("power_quality_verifier_model") or "").strip()
+        power_quality_min_score = float(config.get("power_quality_min_score", 0.72) or 0.72)
+        power_quality_append_footer = bool(config.get("power_quality_append_footer", False))
+        power_hide_kb_sources_for_casual = bool(config.get("power_hide_kb_sources_for_casual", True))
+        power_disable_rag_for_casual = bool(config.get("power_disable_rag_for_casual", True))
+        power_default_answer_mode = str(config.get("power_default_answer_mode") or "auto").strip().lower()
         daily_cost_limit_idr = float(config.get("daily_cost_limit_idr", 0) or 0)
         max_expensive_calls_per_day = int(config.get("max_expensive_calls_per_day", 0) or 0)
         power_response_cache_enabled = bool(config.get("power_response_cache_enabled", True))
@@ -2215,6 +2243,14 @@ class TelegramBotService:
                                 strict_rag_mode=bool(power_strict_rag_mode),
                                 rag_min_sources=int(power_rag_min_sources),
                                 rag_min_score=float(power_rag_min_score),
+                                quality_control_enabled=bool(power_quality_control_enabled),
+                                quality_verifier_enabled=bool(power_quality_verifier_enabled),
+                                quality_verifier_model=power_quality_verifier_model,
+                                quality_min_score=float(power_quality_min_score),
+                                answer_mode=power_default_answer_mode,
+                                append_quality_footer=bool(power_quality_append_footer),
+                                hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
+                                disable_rag_for_casual=bool(power_disable_rag_for_casual),
                             )
 
                             if isinstance(meta, dict):
@@ -2309,6 +2345,14 @@ class TelegramBotService:
                                         strict_rag_mode=bool(power_strict_rag_mode),
                                         rag_min_sources=int(power_rag_min_sources),
                                         rag_min_score=float(power_rag_min_score),
+                                        quality_control_enabled=bool(power_quality_control_enabled),
+                                        quality_verifier_enabled=bool(power_quality_verifier_enabled),
+                                        quality_verifier_model=power_quality_verifier_model,
+                                        quality_min_score=float(power_quality_min_score),
+                                        answer_mode=power_default_answer_mode,
+                                        append_quality_footer=bool(power_quality_append_footer),
+                                        hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
+                                        disable_rag_for_casual=bool(power_disable_rag_for_casual),
                                     )
 
                                     if isinstance(retry_meta, dict):

@@ -53,6 +53,47 @@ except Exception:  # keep older deployments alive if the helper file is missing
     def format_issue_report(query: str, claims: List[Dict[str, Any]], docs: Optional[List[Dict[str, Any]]] = None) -> str:
         return "Belum ada data KB yang cukup untuk isu: " + str(query)
 
+
+try:
+    from ai_quality_control import (
+        build_mode_system_instruction,
+        build_quality_footer,
+        infer_answer_mode,
+        mode_help_text,
+        mode_policy,
+        normalize_answer_mode,
+        parse_mode_command,
+        score_answer_quality,
+        verify_and_repair_answer,
+    )
+except Exception:  # keep app alive if the quality layer is absent
+    def normalize_answer_mode(value: Any = "auto") -> str:
+        return "auto"
+    def infer_answer_mode(user_text: str, requested_mode: str = "auto", intent: str = "") -> str:
+        return "auto"
+    def mode_policy(mode: str) -> Dict[str, Any]:
+        return {"temperature_cap": 0.3, "token_multiplier": 1.0, "force_rag": False, "strict_rag": False, "verifier": False, "min_sources": 0}
+    def build_mode_system_instruction(mode: str, user_text: str = "") -> str:
+        return ""
+    def score_answer_quality(**kwargs: Any) -> Any:
+        class _Q:
+            score = 0.7
+            level = "cukup"
+            needs_verification = False
+            reasons = ["quality_layer_unavailable"]
+            metrics = {}
+            def to_dict(self) -> Dict[str, Any]:
+                return {"score": self.score, "level": self.level, "needs_verification": False, "reasons": self.reasons, "metrics": {}}
+        return _Q()
+    def build_quality_footer(result: Any, mode: str) -> str:
+        return ""
+    def verify_and_repair_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+        return str(kwargs.get("answer") or ""), {"skipped": True}
+    def parse_mode_command(text: str) -> Optional[str]:
+        return None
+    def mode_help_text(current_mode: str = "auto") -> str:
+        return "Mode jawaban belum tersedia."
+
 try:
     from hallucination_guard import (
         append_guard_note,
@@ -833,6 +874,54 @@ class PowerStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_answer_templates_intent ON answer_templates(intent, active, updated_at);
 
+                CREATE TABLE IF NOT EXISTS user_profiles (
+                    user_id TEXT PRIMARY KEY,
+                    answer_mode TEXT DEFAULT 'auto',
+                    preferences_json TEXT DEFAULT '{}',
+                    notes TEXT DEFAULT '',
+                    updated_at REAL NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS answer_quality_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    interaction_id INTEGER DEFAULT 0,
+                    user_id TEXT DEFAULT 'public',
+                    channel TEXT DEFAULT 'web',
+                    intent TEXT DEFAULT '',
+                    answer_mode TEXT DEFAULT 'auto',
+                    score REAL DEFAULT 0,
+                    level TEXT DEFAULT '',
+                    needs_verification INTEGER DEFAULT 0,
+                    verifier_model TEXT DEFAULT '',
+                    verified INTEGER DEFAULT 0,
+                    reasons_json TEXT DEFAULT '[]',
+                    metrics_json TEXT DEFAULT '{}',
+                    question_preview TEXT DEFAULT '',
+                    answer_preview TEXT DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS idx_answer_quality_ts ON answer_quality_reports(ts);
+                CREATE INDEX IF NOT EXISTS idx_answer_quality_score ON answer_quality_reports(score, ts);
+                CREATE INDEX IF NOT EXISTS idx_answer_quality_user ON answer_quality_reports(user_id, ts);
+
+                CREATE TABLE IF NOT EXISTS weekly_evaluations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    days INTEGER DEFAULT 7,
+                    report TEXT NOT NULL,
+                    metrics_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_weekly_evaluations_ts ON weekly_evaluations(ts);
+
+                CREATE TABLE IF NOT EXISTS exported_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    snapshot_type TEXT NOT NULL,
+                    filename TEXT DEFAULT '',
+                    rows_count INTEGER DEFAULT 0,
+                    meta_json TEXT DEFAULT '{}'
+                );
+
                 CREATE TABLE IF NOT EXISTS source_quality_rules (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     pattern TEXT NOT NULL UNIQUE,
@@ -1475,6 +1564,253 @@ class PowerStore:
             "gap_status": [_row_to_dict(row) for row in gaps],
             "feedback": self.feedback_summary(days=days),
         }
+
+    # Quality control / user profile / export helpers
+    def get_user_profile(self, user_id: str = "public") -> Dict[str, Any]:
+        uid = str(user_id or "public")[:120]
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM user_profiles WHERE user_id = ?", (uid,)).fetchone()
+        if not row:
+            return {"user_id": uid, "answer_mode": "auto", "preferences": {}, "notes": ""}
+        item = _row_to_dict(row)
+        item["preferences"] = _safe_json_loads(item.get("preferences_json"))
+        return item
+
+    def set_user_answer_mode(self, user_id: str = "public", answer_mode: str = "auto") -> str:
+        uid = str(user_id or "public")[:120]
+        mode = normalize_answer_mode(answer_mode)
+        now = _utc_ts()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO user_profiles(user_id,answer_mode,preferences_json,notes,updated_at)
+                VALUES (?, ?, '{}', '', ?)
+                ON CONFLICT(user_id) DO UPDATE SET answer_mode=excluded.answer_mode, updated_at=excluded.updated_at
+                """,
+                (uid, mode, now),
+            )
+        return mode
+
+    def get_user_answer_mode(self, user_id: str = "public", default: str = "auto") -> str:
+        try:
+            profile = self.get_user_profile(user_id)
+            return normalize_answer_mode(profile.get("answer_mode") or default)
+        except Exception:
+            return normalize_answer_mode(default)
+
+    def add_user_profile_note(self, user_id: str, note: str, key: str = "note") -> bool:
+        uid = str(user_id or "public")[:120]
+        clean = sanitize_non_instruction_context(note, limit=1500)
+        if not clean:
+            return False
+        now = _utc_ts()
+        with self._connect() as conn:
+            row = conn.execute("SELECT preferences_json, notes FROM user_profiles WHERE user_id = ?", (uid,)).fetchone()
+            prefs = _safe_json_loads(_row_value(row, "preferences_json", 0, "{}")) if row else {}
+            notes = str(_row_value(row, "notes", 1, "") or "") if row else ""
+            history = prefs.get("notes_history") or []
+            if not isinstance(history, list):
+                history = []
+            history.append({"ts": now, "key": str(key or "note")[:80], "text": clean[:500]})
+            prefs["notes_history"] = history[-30:]
+            combined_notes = (notes + "\n" + clean).strip()[-4000:]
+            conn.execute(
+                """
+                INSERT INTO user_profiles(user_id,answer_mode,preferences_json,notes,updated_at)
+                VALUES (?, 'auto', ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET preferences_json=excluded.preferences_json, notes=excluded.notes, updated_at=excluded.updated_at
+                """,
+                (uid, _safe_json(prefs), combined_notes, now),
+            )
+        return True
+
+    def record_answer_quality(
+        self,
+        *,
+        interaction_id: int = 0,
+        user_id: str = "public",
+        channel: str = "web",
+        intent: str = "general",
+        answer_mode: str = "auto",
+        score: float = 0,
+        level: str = "",
+        needs_verification: bool = False,
+        verifier_model: str = "",
+        verified: bool = False,
+        reasons: Optional[List[str]] = None,
+        metrics: Optional[Dict[str, Any]] = None,
+        question: str = "",
+        answer: str = "",
+    ) -> int:
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO answer_quality_reports(
+                    ts,interaction_id,user_id,channel,intent,answer_mode,score,level,needs_verification,
+                    verifier_model,verified,reasons_json,metrics_json,question_preview,answer_preview
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    _utc_ts(), int(interaction_id or 0), str(user_id or "public")[:120], str(channel or "web")[:40],
+                    str(intent or "general")[:80], normalize_answer_mode(answer_mode), float(score or 0), str(level or "")[:40],
+                    1 if needs_verification else 0, str(verifier_model or "")[:160], 1 if verified else 0,
+                    _safe_json(reasons or [])[:3000], _safe_json(metrics or {})[:5000],
+                    sanitize_non_instruction_context(question, limit=700), sanitize_non_instruction_context(answer, limit=900),
+                ),
+            )
+            return int(cur.lastrowid)
+
+    def quality_dashboard(self, days: int = 14) -> Dict[str, Any]:
+        since = _utc_ts() - max(1, int(days or 14)) * 86400
+        with self._connect() as conn:
+            total = conn.execute(
+                """
+                SELECT COUNT(*) AS n, COALESCE(AVG(score),0) AS avg_score,
+                       COALESCE(SUM(CASE WHEN score < 0.58 THEN 1 ELSE 0 END),0) AS low_count,
+                       COALESCE(SUM(CASE WHEN verified = 1 THEN 1 ELSE 0 END),0) AS verified_count
+                FROM answer_quality_reports WHERE ts >= ?
+                """,
+                (since,),
+            ).fetchone()
+            by_mode = conn.execute(
+                "SELECT answer_mode, COUNT(*) AS jumlah, COALESCE(AVG(score),0) AS avg_score FROM answer_quality_reports WHERE ts >= ? GROUP BY answer_mode ORDER BY jumlah DESC",
+                (since,),
+            ).fetchall()
+            by_intent = conn.execute(
+                "SELECT intent, COUNT(*) AS jumlah, COALESCE(AVG(score),0) AS avg_score FROM answer_quality_reports WHERE ts >= ? GROUP BY intent ORDER BY jumlah DESC LIMIT 15",
+                (since,),
+            ).fetchall()
+            low = conn.execute(
+                """
+                SELECT id, ts, user_id, channel, intent, answer_mode, score, level, reasons_json, question_preview
+                FROM answer_quality_reports WHERE ts >= ? AND score < 0.70 ORDER BY score ASC, ts DESC LIMIT 30
+                """,
+                (since,),
+            ).fetchall()
+        low_items = []
+        for row in low:
+            item = _row_to_dict(row)
+            item["ts_wib"] = _timestamp_to_wib(float(item.get("ts") or 0))
+            item["reasons"] = _safe_json_loads("{}")
+            try:
+                item["reasons"] = json.loads(str(item.get("reasons_json") or "[]"))
+            except Exception:
+                item["reasons"] = []
+            low_items.append(item)
+        return {
+            "days": days,
+            "total": int(_row_value(total, "n", 0, 0) or 0),
+            "avg_score": round(float(_row_value(total, "avg_score", 1, 0) or 0), 3),
+            "low_count": int(_row_value(total, "low_count", 2, 0) or 0),
+            "verified_count": int(_row_value(total, "verified_count", 3, 0) or 0),
+            "by_mode": [_row_to_dict(row) for row in by_mode],
+            "by_intent": [_row_to_dict(row) for row in by_intent],
+            "low_quality": low_items,
+        }
+
+    def weekly_quality_evaluation(self, days: int = 7, save: bool = True) -> str:
+        days = max(1, int(days or 7))
+        dash = self.quality_dashboard(days=days)
+        learning = self.learning_dashboard(days=days)
+        usage = self.usage_summary(days=days)
+        gaps = self.list_knowledge_gaps(status="open", limit=10)
+        lines = [
+            f"📊 Evaluasi Kualitas Adioranye {days} Hari Terakhir",
+            "",
+            f"Total jawaban dinilai: {dash.get('total', 0)}",
+            f"Rata-rata skor kualitas: {dash.get('avg_score', 0)}",
+            f"Jawaban skor rendah: {dash.get('low_count', 0)}",
+            f"Jawaban diverifikasi: {dash.get('verified_count', 0)}",
+            f"Estimasi biaya: Rp{float(usage.get('cost_idr') or 0):,.2f}",
+            "",
+            "Mode jawaban:",
+        ]
+        for row in dash.get("by_mode", [])[:8]:
+            lines.append(f"- {row.get('answer_mode')}: {row.get('jumlah')} jawaban | avg {float(row.get('avg_score') or 0):.2f}")
+        lines.append("")
+        lines.append("Intent paling sering:")
+        for row in dash.get("by_intent", [])[:8]:
+            lines.append(f"- {row.get('intent')}: {row.get('jumlah')} | avg {float(row.get('avg_score') or 0):.2f}")
+        lines.append("")
+        lines.append("Knowledge gap terbuka:")
+        if gaps:
+            for gap in gaps[:8]:
+                lines.append(f"- #{gap.get('id')} [{gap.get('priority')}] {gap.get('question')[:120]}")
+        else:
+            lines.append("- Tidak ada gap terbuka yang tercatat.")
+        lines.append("")
+        lines.append("Rekomendasi:")
+        if dash.get("avg_score", 0) < 0.70:
+            lines.append("- Aktifkan mode riset/kritis untuk topik faktual dan tambah sumber KB prioritas.")
+        if dash.get("low_count", 0):
+            lines.append("- Periksa daftar jawaban skor rendah di dashboard Quality Control.")
+        if gaps:
+            lines.append("- Tambahkan sumber untuk knowledge gap terbuka, lalu tandai selesai.")
+        if not gaps and dash.get("avg_score", 0) >= 0.75:
+            lines.append("- Kualitas relatif stabil. Lanjutkan update KB sekuensial dan pantau feedback negatif.")
+        report = "\n".join(lines)
+        if save:
+            with self._connect() as conn:
+                conn.execute(
+                    "INSERT INTO weekly_evaluations(ts,days,report,metrics_json) VALUES (?, ?, ?, ?)",
+                    (_utc_ts(), days, report, _safe_json({"quality": dash, "learning": learning, "usage": usage})[:8000]),
+                )
+        return report
+
+    def export_knowledge_base_jsonl(self, limit: int = 5000) -> str:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT d.id AS doc_id, d.title, d.source, d.collection, d.tags, d.created_at, d.updated_at,
+                       c.chunk_index, c.heading, c.page_label, c.content
+                FROM documents d LEFT JOIN chunks c ON c.doc_id = d.id
+                ORDER BY d.updated_at DESC, c.chunk_index ASC LIMIT ?
+                """,
+                (max(1, int(limit or 5000)),),
+            ).fetchall()
+        lines = []
+        for row in rows:
+            item = _row_to_dict(row)
+            lines.append(json.dumps(item, ensure_ascii=False, default=str))
+        return "\n".join(lines)
+
+    def export_interactions_jsonl(self, days: int = 30, limit: int = 5000) -> str:
+        since = _utc_ts() - max(1, int(days or 30)) * 86400
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM interactions WHERE ts >= ? ORDER BY ts DESC LIMIT ?",
+                (since, max(1, int(limit or 5000))),
+            ).fetchall()
+        lines = []
+        for row in rows:
+            item = _row_to_dict(row)
+            item["ts_wib"] = _timestamp_to_wib(float(item.get("ts") or 0))
+            lines.append(json.dumps(item, ensure_ascii=False, default=str))
+        return "\n".join(lines)
+
+    def import_knowledge_base_jsonl(self, jsonl_text: str, collection_prefix: str = "Imported") -> Dict[str, Any]:
+        added = 0
+        skipped = 0
+        errors = 0
+        for line in str(jsonl_text or "").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                item = json.loads(line)
+                title = str(item.get("title") or "Imported document")[:220]
+                source = str(item.get("source") or "jsonl-import")[:500]
+                content = str(item.get("content") or item.get("answer") or item.get("text") or "").strip()
+                if not content:
+                    skipped += 1
+                    continue
+                collection = str(item.get("collection") or collection_prefix or "Imported")[:80]
+                tags = str(item.get("tags") or "import,jsonl")[:300]
+                self.add_document(title=title, text=content, source=source, collection=collection, tags=tags)
+                added += 1
+            except Exception:
+                errors += 1
+        return {"added": added, "skipped": skipped, "errors": errors}
 
     def list_documents(self, limit: int = 20, collection: str = "") -> List[Dict[str, Any]]:
         collection_filter = _normalize_collection(collection) if str(collection or "").strip() else ""
@@ -2257,6 +2593,78 @@ def build_power_context(
     return "\n\n".join([s for s in sections if s.strip()])[:10000]
 
 
+
+CASUAL_CHAT_PATTERNS = {
+    "halo", "hai", "hi", "hello", "pagi", "siang", "sore", "malam",
+    "apa kabar", "terima kasih", "makasih", "thanks", "thank you", "oke", "ok",
+    "siap", "mantap", "lanjut", "iya", "tidak", "tes", "test",
+}
+
+SOURCE_REQUEST_TERMS = [
+    "sumber", "source", "referensi", "rujukan", "bukti", "validasi", "cek fakta",
+    "berdasarkan kb", "berdasarkan knowledge", "berdasarkan dokumen", "berdasarkan file",
+    "kutipan", "sitasi", "citation", "jurnal", "q1", "q2", "q3", "q4", "sinta", "scopus",
+]
+
+SOURCE_WORTHY_INTENTS = {
+    "research", "academic", "health", "livestock", "critical_current", "document_question",
+}
+
+
+def is_casual_or_light_chat(user_text: str, intent: str = "", answer_mode: str = "") -> bool:
+    """Return True for greetings/light conversation that should not use or display KB sources."""
+    text = re.sub(r"\s+", " ", str(user_text or "").lower()).strip()
+    if not text:
+        return True
+    word_count = len(text.split())
+    if any(term in text for term in SOURCE_REQUEST_TERMS):
+        return False
+    try:
+        risk = detect_high_risk_question(text, intent=intent)
+        if risk.get("is_high_risk"):
+            return False
+    except Exception:
+        pass
+    if str(answer_mode or "") in {"riset", "kritis"}:
+        return False
+    if str(intent or "") == "quick_chat" and word_count <= 18:
+        return True
+    if text in CASUAL_CHAT_PATTERNS:
+        return True
+    if word_count <= 5 and any(text.startswith(prefix) for prefix in ["halo", "hai", "hi", "hello", "pagi", "siang", "sore", "malam", "makasih", "thanks"]):
+        return True
+    return False
+
+
+def should_show_kb_sources_for_answer(
+    user_text: str,
+    intent: str = "",
+    answer_mode: str = "auto",
+    guard: Any = None,
+    *,
+    strict_rag_mode: bool = False,
+    hide_for_casual: bool = True,
+) -> bool:
+    """Decide whether KB source details should be displayed to the user."""
+    mode = normalize_answer_mode(answer_mode or "auto")
+    lower = str(user_text or "").lower()
+    if mode in {"riset", "kritis"}:
+        return True
+    if strict_rag_mode:
+        return True
+    try:
+        if guard is not None and bool(getattr(guard, "is_high_risk", False)):
+            return True
+    except Exception:
+        pass
+    if any(term in lower for term in SOURCE_REQUEST_TERMS):
+        return True
+    if str(intent or "") in SOURCE_WORTHY_INTENTS:
+        return True
+    if hide_for_casual and is_casual_or_light_chat(user_text, intent=intent, answer_mode=mode):
+        return False
+    return False
+
 def estimate_cost_idr(meta: Dict[str, Any], model: str = "") -> float:
     meta = meta or {}
     model_name = str(model or meta.get("active_model_final") or meta.get("model_requested") or meta.get("model") or "")
@@ -2363,9 +2771,49 @@ def generate_power_answer(
     strict_rag_mode: bool = False,
     rag_min_sources: int = 1,
     rag_min_score: float = 0.0,
+    quality_control_enabled: bool = True,
+    quality_verifier_enabled: bool = True,
+    quality_verifier_model: str = "",
+    quality_min_score: float = 0.72,
+    answer_mode: str = "auto",
+    append_quality_footer: bool = False,
+    hide_kb_sources_for_casual: bool = True,
+    disable_rag_for_casual: bool = True,
 ) -> Tuple[str, Dict[str, Any]]:
     store = store or get_power_store()
     intent = classify_intent_text(user_text)
+    stored_mode = "auto"
+    try:
+        stored_mode = store.get_user_answer_mode(user_id, default="auto")
+    except Exception:
+        stored_mode = "auto"
+    requested_mode = normalize_answer_mode(answer_mode or stored_mode or "auto")
+    if requested_mode == "auto" and stored_mode != "auto":
+        requested_mode = normalize_answer_mode(stored_mode)
+    effective_answer_mode = infer_answer_mode(user_text, requested_mode=requested_mode, intent=intent)
+    answer_mode_policy = mode_policy(effective_answer_mode)
+    if bool(answer_mode_policy.get("force_rag")):
+        enable_rag = True
+    if bool(answer_mode_policy.get("strict_rag")):
+        strict_rag_mode = True
+        anti_hallucination_auto_strict = True
+    if int(answer_mode_policy.get("min_sources") or 0) > 0:
+        anti_hallucination_min_sources = max(int(anti_hallucination_min_sources or 1), int(answer_mode_policy.get("min_sources") or 1))
+        rag_min_sources = max(int(rag_min_sources or 1), int(answer_mode_policy.get("min_sources") or 1))
+    try:
+        temperature = min(float(temperature or 0.3), float(answer_mode_policy.get("temperature_cap") or 0.3))
+    except Exception:
+        temperature = 0.3
+
+    casual_rag_skipped = False
+    if (
+        enable_rag
+        and bool(disable_rag_for_casual)
+        and not bool(answer_mode_policy.get("force_rag"))
+        and is_casual_or_light_chat(user_text, intent=intent, answer_mode=effective_answer_mode)
+    ):
+        enable_rag = False
+        casual_rag_skipped = True
 
     if daily_cost_limit_idr and daily_cost_limit_idr > 0:
         usage = store.usage_summary(days=1)
@@ -2396,6 +2844,14 @@ def generate_power_answer(
         min_quality=float(anti_hallucination_min_quality or 0.0),
         min_freshness=float(anti_hallucination_min_freshness or 0.0),
     )
+    show_kb_sources = should_show_kb_sources_for_answer(
+        user_text,
+        intent=intent,
+        answer_mode=effective_answer_mode,
+        guard=guard_result,
+        strict_rag_mode=bool(strict_rag_mode),
+        hide_for_casual=bool(hide_kb_sources_for_casual),
+    )
 
     if enable_rag and getattr(guard_result, "enabled", False) and not getattr(guard_result, "allow_answer", True):
         gap_id = store.log_knowledge_gap(
@@ -2419,6 +2875,8 @@ def generate_power_answer(
                 "knowledge_gap_id": gap_id,
                 "intent": intent,
                 "power_kb_sources": rag_sources,
+                "show_kb_sources": True,
+                "kb_source_display_policy": "forced_insufficient_evidence",
                 "hallucination_guard": guard_result.to_dict() if hasattr(guard_result, "to_dict") else {},
             },
         )
@@ -2434,7 +2892,12 @@ def generate_power_answer(
     )
     routed_user_text = enhance_prompt_for_intent(user_text, intent, enable_templates=enable_prompt_templates)
     guard_instruction = build_guard_system_instruction(user_text, rag_sources, guard_result) if anti_hallucination_enabled else ""
-    guarded_system_prompt = (str(system_prompt or "").strip() + ("\n\n" + guard_instruction if guard_instruction else "")).strip()
+    mode_instruction = build_mode_system_instruction(effective_answer_mode, user_text) if quality_control_enabled else ""
+    guarded_system_prompt = (
+        str(system_prompt or "").strip()
+        + ("\n\n" + mode_instruction if mode_instruction else "")
+        + ("\n\n" + guard_instruction if guard_instruction else "")
+    ).strip()
     guarded_temperature = apply_temperature_policy(float(temperature or 0.3), guard_result)
 
     # Adaptive policy: rank candidate models using historical success, quality, latency, cost, and circuit breaker.
@@ -2456,7 +2919,11 @@ def generate_power_answer(
     ranked_expensive.extend([m for m in expensive_candidates if m != selected_model and m not in ranked_expensive])
 
     adjusted_max_tokens = adaptive_token_budget_for_intent(intent, user_text, base=max_completion_tokens)
-    route_signature = ",".join(ranked_all[:8])
+    try:
+        adjusted_max_tokens = int(max(500, min(6000, adjusted_max_tokens * float(answer_mode_policy.get("token_multiplier") or 1.0))))
+    except Exception:
+        pass
+    route_signature = ",".join(ranked_all[:8]) + f"|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}"
     cache_key = make_response_cache_key(
         model=selected_model,
         system_prompt=system_prompt,
@@ -2471,6 +2938,9 @@ def generate_power_answer(
             answer, meta = cached
             meta["power_intent"] = intent
             meta["active_model_final"] = meta.get("active_model_final") or selected_model
+            meta.setdefault("show_kb_sources", bool(show_kb_sources))
+            meta.setdefault("kb_source_display_policy", "auto")
+            meta.setdefault("casual_rag_skipped", bool(casual_rag_skipped))
             return answer, meta
 
     started = time.time()
@@ -2525,7 +2995,13 @@ def generate_power_answer(
         meta = meta or {}
         final_model = str(meta.get("active_model_final") or meta.get("model_requested") or selected_model)
         meta["power_intent"] = intent
+        meta["answer_mode"] = effective_answer_mode
+        meta["answer_mode_requested"] = requested_mode
+        meta["answer_mode_policy"] = answer_mode_policy
         meta["power_rag_enabled"] = bool(enable_rag)
+        meta["show_kb_sources"] = bool(show_kb_sources)
+        meta["kb_source_display_policy"] = "auto"
+        meta["casual_rag_skipped"] = bool(casual_rag_skipped)
         kb_source_items = [
             {
                 "doc_id": item.get("doc_id"),
@@ -2588,13 +3064,66 @@ def generate_power_answer(
                     answer,
                     rag_sources,
                     guard=guard_result,
-                    append_sources=bool(anti_hallucination_append_sources),
+                    append_sources=bool(anti_hallucination_append_sources) and bool(show_kb_sources),
                 )
                 meta["hallucination_guard"] = guard_result.to_dict() if hasattr(guard_result, "to_dict") else {}
                 meta["hallucination_guard_temperature"] = guarded_temperature
                 meta["hallucination_claim_risk"] = lightweight_claim_risk(answer)
             except Exception as exc:
                 meta["hallucination_guard_error"] = str(exc)[:500]
+        if quality_control_enabled:
+            try:
+                quality_result = score_answer_quality(
+                    question=user_text,
+                    answer=answer,
+                    rag_sources=rag_sources,
+                    mode=effective_answer_mode,
+                    intent=intent,
+                    guard_meta=guard_result.to_dict() if hasattr(guard_result, "to_dict") else {},
+                )
+                meta["answer_quality"] = quality_result.to_dict() if hasattr(quality_result, "to_dict") else {}
+                should_verify_quality = bool(quality_verifier_enabled) and (
+                    bool(answer_mode_policy.get("verifier")) or bool(getattr(quality_result, "needs_verification", False))
+                ) and float(getattr(quality_result, "score", 1.0) or 1.0) < float(quality_min_score or 0.72)
+                if should_verify_quality:
+                    verifier = str(quality_verifier_model or "").strip()
+                    if not verifier:
+                        if ranked_expensive:
+                            verifier = ranked_expensive[0]
+                        elif ranked_cheap:
+                            verifier = ranked_cheap[0]
+                        else:
+                            verifier = final_model
+                    repaired_answer, verifier_meta = verify_and_repair_answer(
+                        api_url=api_url,
+                        api_key=api_key,
+                        verifier_model=verifier,
+                        system_prompt=guarded_system_prompt,
+                        question=user_text,
+                        answer=answer,
+                        rag_sources=rag_sources,
+                        mode=effective_answer_mode,
+                        timeout=timeout,
+                        max_completion_tokens=max(adjusted_max_tokens, 2200),
+                    )
+                    if repaired_answer and repaired_answer.strip():
+                        answer = repaired_answer.strip()
+                    meta["quality_verification"] = verifier_meta
+                    meta["quality_verified_by"] = verifier
+                    quality_result = score_answer_quality(
+                        question=user_text,
+                        answer=answer,
+                        rag_sources=rag_sources,
+                        mode=effective_answer_mode,
+                        intent=intent,
+                        guard_meta=guard_result.to_dict() if hasattr(guard_result, "to_dict") else {},
+                    )
+                    meta["answer_quality_after_verifier"] = quality_result.to_dict() if hasattr(quality_result, "to_dict") else {}
+                if append_quality_footer:
+                    answer = answer + build_quality_footer(quality_result, effective_answer_mode)
+            except Exception as exc:
+                meta["quality_control_error"] = str(exc)[:500]
+
         success = True
         if enable_response_cache and intent not in {"admin_command", "coding"}:
             store.set_cached_response(cache_key, answer, meta, ttl_seconds=response_cache_ttl_seconds)
@@ -2616,6 +3145,29 @@ def generate_power_answer(
             )
             if isinstance(meta, dict):
                 meta["power_interaction_id"] = interaction_id
+            try:
+                qd = (meta or {}).get("answer_quality_after_verifier") or (meta or {}).get("answer_quality") or {}
+                if qd:
+                    qr_id = store.record_answer_quality(
+                        interaction_id=interaction_id,
+                        user_id=user_id,
+                        channel=channel,
+                        intent=intent,
+                        answer_mode=effective_answer_mode,
+                        score=float(qd.get("score") or 0),
+                        level=str(qd.get("level") or ""),
+                        needs_verification=bool(qd.get("needs_verification")),
+                        verifier_model=str((meta or {}).get("quality_verified_by") or ""),
+                        verified=bool((meta or {}).get("quality_verification")),
+                        reasons=list(qd.get("reasons") or []),
+                        metrics=dict(qd.get("metrics") or {}),
+                        question=user_text,
+                        answer=answer,
+                    )
+                    if isinstance(meta, dict):
+                        meta["answer_quality_report_id"] = qr_id
+            except Exception:
+                pass
             if success and enable_rag and not rag_sources and intent in {"research", "academic", "document_question", "health", "livestock"}:
                 meta["knowledge_gap_id"] = store.log_knowledge_gap(
                     question=user_text,
@@ -2643,10 +3195,46 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
     admin_only_prefixes = (
         "/ingat", "/lupa", "/rag", "/kb", "/biaya", "/usage", "/dokumen", "/benchmark",
         "/model skor", "/model score", "/circuit", "/cache bersih", "/cache clear",
-        "/briefing", "/trending", "/cek isu", "/pantau",
+        "/briefing", "/trending", "/cek isu", "/pantau", "/kualitas", "/quality", "/evaluasi", "/laporan", "/export",
     )
     if lower.startswith(admin_only_prefixes) and not is_admin:
         return "Perintah ini hanya untuk admin."
+
+    mode_cmd = parse_mode_command(raw)
+    if mode_cmd:
+        current = store.get_user_answer_mode(user_id, default="auto")
+        if mode_cmd == "list":
+            return mode_help_text(current)
+        selected = store.set_user_answer_mode(user_id, mode_cmd)
+        return "✅ Mode jawaban diubah menjadi: " + selected + "\n\n" + mode_help_text(selected)
+
+    if lower in {"/kualitas", "/quality", "/kualitas ai", "/quality ai"}:
+        data = store.quality_dashboard(days=14)
+        lines = [
+            "📊 Quality Control AI",
+            "",
+            f"Total dinilai: {data.get('total', 0)}",
+            f"Rata-rata skor: {data.get('avg_score', 0)}",
+            f"Skor rendah: {data.get('low_count', 0)}",
+            f"Diverifikasi: {data.get('verified_count', 0)}",
+            "",
+            "Per mode:",
+        ]
+        for row in data.get("by_mode", [])[:8]:
+            lines.append(f"- {row.get('answer_mode')}: {row.get('jumlah')} | avg {float(row.get('avg_score') or 0):.2f}")
+        low_items = data.get("low_quality", [])[:5]
+        if low_items:
+            lines.append("")
+            lines.append("Jawaban skor rendah terbaru:")
+            for item in low_items:
+                lines.append(f"- #{item.get('id')} skor {float(item.get('score') or 0):.2f}: {str(item.get('question_preview') or '')[:100]}")
+        return "\n".join(lines)
+
+    if lower in {"/evaluasi mingguan", "/laporan mingguan", "/weekly report"}:
+        return store.weekly_quality_evaluation(days=7, save=True)
+
+    if lower in {"/export kb", "/export knowledge", "/export knowledgebase"}:
+        return "Export KB tersedia di dashboard Admin web: tab Quality Control → Export/Import. Untuk Telegram, gunakan web agar file JSONL bisa diunduh dengan aman."
 
     if lower in {"/briefing", "/briefing harian", "/trending"}:
         return store.daily_current_briefing(days=1, limit=12)
