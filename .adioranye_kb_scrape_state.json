@@ -1,5 +1,13 @@
 {
   "processed": {
+    "00124b08e10649056bc5afb02f16aff271af1a02a78a82e837168d22660a47ab": {
+      "chunks": 12,
+      "created_at": "2026-05-22T07:43:09+00:00",
+      "doc_id": 2064,
+      "source": "Billboard Indonesia Songs Chart",
+      "title": "Billboard Indonesia Songs Chart — Indonesia Songs",
+      "url": "https://www.billboard.com/charts/indonesia-songs-hotw/"
+    },
     "003f46a7975bb1e58d2906a2d8e96992d1805b81c3a7b885531ca31343deb0d9": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:37+00:00",
@@ -3904,6 +3912,14 @@
       "title": "OpenAlex Computer Vision Indonesia — Accurately Predicting Monument Failure Via Deep Asymmetry Allocation",
       "url": "https://www.neliti.com/publications/713806/accurately-predicting-monument-failure-via-deep-asymmetry-allocation"
     },
+    "454c2a8734035e72ac3a91e235e5a2b5c96150e200ee5582cd96423e57ba5c8b": {
+      "chunks": 3,
+      "created_at": "2026-05-22T07:42:25+00:00",
+      "doc_id": 2063,
+      "source": "Kemdiktisaintek - Berita Riset dan AI",
+      "title": "Kemdiktisaintek - Berita Riset dan AI — Kementerian Pendidikan Tinggi, Sains, dan Teknologi",
+      "url": "https://kemdiktisaintek.go.id/news/article/mendiktisaintek-dorong-kualitas-riset-kampus-dukung-pembangunan-nasional"
+    },
     "4571491be34e192b9ed2019757a76fcf6f3ffd5a501f889fb2383eaf37a077a8": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:53+00:00",
@@ -3991,6 +4007,14 @@
       "source": "Google News Top Headlines - South Korea",
       "title": "Google News Top Headlines - South Korea — Donald Trump abruptly postpones AI order after White House infighting - Financial Times",
       "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxPRnBqR1FLNk1odTBhSWVLQnpWUXJJdkNDRm1tbzBPZkVfb2R2dTdMekdINzJyMGl0dmszVzNoWDJ3SHZwU1BVVkd2Z0xaVGxVNDQ5Yk9BUnlQcG1rNG5paU5kMmZDdVJFVTZDMHJHNkJUNzFGaU4zRDB6VGN5RmJ5VDgwY0w?oc=5"
+    },
+    "46a9b4e4d73edcb6359635a4033684622d38c1f048c036965b072522a35d864c": {
+      "chunks": 1,
+      "created_at": "2026-05-22T07:41:06+00:00",
+      "doc_id": 2058,
+      "source": "Google News Indonesia - Pengetahuan dan Sains",
+      "title": "Google News Indonesia - Pengetahuan dan Sains — SAPI TEDUH, Inovasi Kanopi Cerdas Mahasiswa UNAIR Raih Juara II Esai Nasional World Milk Day - Universitas Airlangga Official Website",
+      "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPTWU3Y3pWb2QxZmNMNHJ4WTZGTjJJWFpPd2VVUUNUWk1ROU5Ca3JMcmZZMzZ0MWk5ODA3RFhianZ1MlFBM3pEd2Z1MVdTeWVxcjdwUFItQU00UXlldjRBMlEwU250RXJRODRnWUF0QzFXZ3NFXzhfZ09YN0xIZ3cyLVFmenkxMWJSbjNLaFo4SExsTV83VW9LTnVRS2t0MkF3RGx4MlVUMU16MUxFMVNadHZB?oc=5"
     },
     "46c2b2c6812dcb6263616a9f90f04138b9f254004669e0247a09657431d80c97": {
       "chunks": 2,
@@ -4135,6 +4159,14 @@
       "source": "Kementerian Kesehatan RI - Artikel Kesehatan",
       "title": "Kementerian Kesehatan RI - Artikel Kesehatan — Gas Pol Penuhi Alat Kesehatan di Rumah Sakit",
       "url": "https://kemkes.go.id/id/gas-pol-penuhi-alat-kesehatan-di-rumah-sakit"
+    },
+    "48d5c167aedf500d01c06dec1079a9a21b05b81f8ec568d92b2d5b86915cf457": {
+      "chunks": 1,
+      "created_at": "2026-05-22T07:42:12+00:00",
+      "doc_id": 2061,
+      "source": "ANTARA News - Internasional",
+      "title": "ANTARA News - Internasional — Zelensky dituntut selidiki korupsi di Ukraina demi keanggotaan UE",
+      "url": "https://www.antaranews.com/berita/5577927/zelensky-dituntut-selidiki-korupsi-di-ukraina-demi-keanggotaan-ue"
     },
     "4901f4acf019eefbf65eeb2a0a4030794e64f93fb65b7d9719e906680589acf9": {
       "chunks": 1,
@@ -4623,6 +4655,14 @@
       "source": "IEEE Spectrum - Technology Feed",
       "title": "IEEE Spectrum - Technology Feed — Manchester Code Made Bits Behave",
       "url": "https://spectrum.ieee.org/manchester-code-ieee-milestone"
+    },
+    "4f232bc1ff097726286229edac52abbff0c3ccc9564f7d048f25bb2f910ee97d": {
+      "chunks": 4,
+      "created_at": "2026-05-22T07:43:10+00:00",
+      "doc_id": 2067,
+      "source": "Apple Music Top Charts Indonesia",
+      "title": "Apple Music Top Charts Indonesia — âTop Music Charts: Songs, Playlists, Albums, Videos - Apple Music",
+      "url": "https://music.apple.com/id/new/top-charts"
     },
     "4f5a03a8432b8c5afd2269ee8de97262b9e7d98e5d8dde1c6a1d4608cef992e0": {
       "chunks": 7,
@@ -5151,6 +5191,14 @@
       "source": "Google News Indonesia - Transportasi & Infrastruktur",
       "title": "Google News Indonesia - Transportasi & Infrastruktur — Presiden Jokowi sebut kereta cepat bukti ketidaktakutan belajar hal baru - ANTARA News Sulteng",
       "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxPTWxVUzh4aWtNWS1xQlhxaGZnVnljS2ZLTExNQ2p6ZG04S3pCWGd2NEVxTmd5YjJGWlN2SDZ0Umh6d0tCRkJFTVphQUhTVndsaHc5NXpFY3hFNUJIQWNhTWxGTnBGelhtUkJNUUU1aFozdUcwZDNORlpkVjhpT2ZGY1hTRDFVa2lfc1JTOGhFX0RWR0l5dEVYcVlVaWNZazBYRkVGM3JKeGZJaDFYN2NpX3ZxMnEtbHI3?oc=5"
+    },
+    "5ab5223d011fed8b0f5977ba33f5488d7406ff4b7163156186a04f7f8e60aa94": {
+      "chunks": 1,
+      "created_at": "2026-05-22T07:42:14+00:00",
+      "doc_id": 2062,
+      "source": "Hacker News Frontpage",
+      "title": "Hacker News Frontpage — CODA: Rewriting Transformer Blocks as GEMM-Epilogue Programs",
+      "url": "https://arxiv.org/abs/2605.19269"
     },
     "5ab6f7dab3a6823c73dac54a0c22f26e2dedf70d0e69d2bbb47d518bd6985958": {
       "chunks": 1,
@@ -7104,6 +7152,14 @@
       "title": "Google News Indonesia Tech - Riset Nuklir Indonesia — Menakar Riset Nuklir Indonesia: Ambisi PLTN Hingga Uranium Lokal - CNN Indonesia",
       "url": "https://news.google.com/rss/articles/CBMiyAFBVV95cUxPODRQcGtTWlc4bGNkWWFBWmtlNUVMelI0SnMxc2M2UGN6bDRjeVg4ZGRaVkZ5NlpFWkR0OVluaWd5RFhzeEZfR2ZTNGJjUE5yZmRITlB3N29zOUYwU3JfVHBfdGtMbGxubGp4VXhnOTJWTDEyQjQxZUFxdVhSLWFVeHZGZjZQZmdwUXBUcnk2NEsxSFJZZ1dHVVZHLVRFTl9Idm9xelRGOUNkSF9WVVRBTklqOE1BdmQ3MmpVMFI5OUxtRTNpMkplUNIBzgFBVV95cUxNSENESllyb3ctUlhScHAzOUt5UVJwRnVaTzBZNjB5eXhsNFpoMFgzemRSOVF2TlF3MkE4a25KRWdHQm9aUERrVTNyY2ZkSGtHRUVZVWlKSEpqWVdmOEVGc05nSGtGaWdOTEg0TVJYSGMyNExaRHdqUXRvQUg1S2lLY0ZFbnN6WTNWdGhxOG1NWG5kZXZSSVlOdGpvWGxxak1iVW1IeHZ1S01YZHA3T0RkaFlfcXFpenhRUkt6WlRJaXFGalV2bTE5VF9RbmlFdw?oc=5"
     },
+    "7da11edf574eaec0e9456b331c38951869bd11b5b467ddced419192c88c10bad": {
+      "chunks": 1,
+      "created_at": "2026-05-22T07:42:10+00:00",
+      "doc_id": 2060,
+      "source": "ANTARA News - Finansial",
+      "title": "ANTARA News - Finansial — BCA UMKM Fest 2026 kolaborasi bersama Pagelaran Sabang Merauke",
+      "url": "https://www.antaranews.com/berita/5578087/bca-umkm-fest-2026-kolaborasi-bersama-pagelaran-sabang-merauke"
+    },
     "7dcd479ddb36678715d5e30e7b80bf140717d9bf6c163555c84a1368a38325dd": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:52+00:00",
@@ -7223,6 +7279,14 @@
       "source": "ScienceDaily Engineering News",
       "title": "ScienceDaily Engineering News — The hidden atomic gap that could break next-generation computer chips",
       "url": "https://www.sciencedaily.com/releases/2026/05/260508003125.htm"
+    },
+    "7fdb10bd8b340d949137232501f3d770ee46c2b599775335dff4676837ee5741": {
+      "chunks": 1,
+      "created_at": "2026-05-22T07:42:09+00:00",
+      "doc_id": 2059,
+      "source": "ANTARA News - Top News",
+      "title": "ANTARA News - Top News — Badan Geologi: Waspada peningkatan aktivitas Gunung Sinabung",
+      "url": "https://www.antaranews.com/berita/5578065/badan-geologi-waspada-peningkatan-aktivitas-gunung-sinabung"
     },
     "80080aef78fd20c8a452e7389cad734cb993e4b25195fdece54854236d32ec0c": {
       "chunks": 1,
@@ -7695,6 +7759,14 @@
       "source": "Google News Research - Riset Pangan BRIN",
       "title": "Google News Research - Riset Pangan BRIN — Open Graph Title - BRIN - Badan Riset dan Inovasi Nasional",
       "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxPUGhjMjdjV0ptNUF2RmJROUpidzBaSzh6QzVBVGoxY3VsQ25rdDRTaHdrekY4LUg5ZndmdS1aSUJKcmRpeEo0bTdHaUxDZV8xUlhRSVlURmdoZURfREV5bVRSNFhnYXVHazBqZ0VHOGl4WTM5SkMyd25CdjdWMEpfNV9oT1hCS084ZGZCV3pDanppdUJUSTdwZmpKWEpGaVRBTVZ5ekVmWHhlS0R3OWZzUHVCUTFYb1p1YXd2YUdTb1dNdHdNR25j?oc=5"
+    },
+    "88353761a3434a35506e68b5e7cb1332424000c157b8b549efe87a01e020dac1": {
+      "chunks": 14,
+      "created_at": "2026-05-22T07:43:09+00:00",
+      "doc_id": 2065,
+      "source": "Spotify Daily Chart Indonesia - Kworb Mirror",
+      "title": "Spotify Daily Chart Indonesia - Kworb Mirror — Spotify Daily Chart - Indonesia",
+      "url": "https://kworb.net/spotify/country/id_daily.html"
     },
     "884295c957e6ec5c8196636fad72e7274eb5ef197259db1572abb7e685715262": {
       "chunks": 1,
@@ -10087,6 +10159,14 @@
       "source": "ANTARA News - Metro",
       "title": "ANTARA News - Metro — Sejumlah pohon tumbang di Jakarta Barat imbas hujan deras",
       "url": "https://www.antaranews.com/berita/5369606/sejumlah-pohon-tumbang-di-jakarta-barat-imbas-hujan-deras"
+    },
+    "b048158a39891e7d4206ca5b7187b7f18034a496ce4cbef9d85a01ee804fa89f": {
+      "chunks": 1,
+      "created_at": "2026-05-22T07:43:10+00:00",
+      "doc_id": 2066,
+      "source": "Spotify Top 50 Indonesia Playlist Public Page",
+      "title": "Spotify Top 50 Indonesia Playlist Public Page — 50 Teratas - Indonesia | Spotify Playlist",
+      "url": "https://open.spotify.com/playlist/37i9dQZEVXbObFQZ3JLcXt"
     },
     "b065bb0482e88cda210f0d2a47bb0680e421f0057c8ae2a2d302ea1985c218f4": {
       "chunks": 1,
@@ -14361,6 +14441,13 @@
       "dry_run": false,
       "errors": 12,
       "finished_at": "2026-05-22T06:07:53+00:00"
+    },
+    {
+      "added_chunks": 39,
+      "added_documents": 10,
+      "dry_run": false,
+      "errors": 13,
+      "finished_at": "2026-05-22T07:43:11+00:00"
     }
   ],
   "version": 1
