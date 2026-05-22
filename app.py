@@ -436,6 +436,9 @@ github_actions_token = str(get_secret("GITHUB_ACTIONS_TOKEN", "") or "").strip()
 github_repo = str(get_secret("GITHUB_REPO", "") or "").strip()
 github_workflow_file = str(get_secret("GITHUB_WORKFLOW_FILE", "daily-kb-update.yml") or "daily-kb-update.yml").strip()
 github_branch = str(get_secret("GITHUB_BRANCH", "main") or "main").strip()
+# Safe default untuk /update Telegram: jalankan batch kecil agar workflow selesai <20 menit.
+github_update_source_limit = str(get_secret("GITHUB_UPDATE_SOURCE_LIMIT", "8") or "8").strip()
+github_update_max_items = str(get_secret("GITHUB_UPDATE_MAX_ITEMS", "1") or "1").strip()
 allow_unrestricted_model_commands = parse_bool(get_secret("ALLOW_UNRESTRICTED_MODEL_COMMANDS", False), default=False)
 admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
 admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
@@ -2510,6 +2513,8 @@ def get_runtime_config() -> Dict[str, Any]:
         "github_repo": github_repo,
         "github_workflow_file": github_workflow_file,
         "github_branch": github_branch,
+        "github_update_source_limit": github_update_source_limit,
+        "github_update_max_items": github_update_max_items,
         "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
         "smart_model_router": bool(st.session_state.active_smart_router),
         "return_to_primary": bool(st.session_state.active_return_to_primary),
@@ -2552,6 +2557,8 @@ def start_telegram_if_needed() -> None:
         "github_repo": github_repo,
         "github_workflow_file": github_workflow_file,
         "github_branch": github_branch,
+        "github_update_source_limit": github_update_source_limit,
+        "github_update_max_items": github_update_max_items,
         "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
                 "slashai_api_key": api_key,
                 "slashai_api_url": api_url,
@@ -2575,6 +2582,8 @@ def start_telegram_if_needed() -> None:
                 "github_repo": github_repo,
                 "github_workflow_file": github_workflow_file,
                 "github_branch": github_branch,
+        "github_update_source_limit": github_update_source_limit,
+        "github_update_max_items": github_update_max_items,
                 "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
                 "allow_memory_commands": False,
                 "smart_model_router": cfg["smart_model_router"],
@@ -3138,6 +3147,8 @@ def render_admin_settings() -> None:
         "github_repo": github_repo,
         "github_workflow_file": github_workflow_file,
         "github_branch": github_branch,
+        "github_update_source_limit": github_update_source_limit,
+        "github_update_max_items": github_update_max_items,
         "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
             "slashai_api_key": api_key,
             "slashai_api_url": api_url,
@@ -3161,6 +3172,8 @@ def render_admin_settings() -> None:
             "github_repo": github_repo,
             "github_workflow_file": github_workflow_file,
             "github_branch": github_branch,
+        "github_update_source_limit": github_update_source_limit,
+        "github_update_max_items": github_update_max_items,
             "allow_unrestricted_model_commands": bool(allow_unrestricted_model_commands),
             "allow_memory_commands": False,
             "smart_model_router": bool(st.session_state.active_smart_router),

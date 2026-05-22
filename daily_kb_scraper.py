@@ -1108,12 +1108,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--quiet", action="store_true", help="Cetak ringkasan saja, bukan laporan penuh.")
     args = parser.parse_args(argv)
 
+    # Safety caps for hosted runners. These avoid accidental 20-minute GitHub timeout
+    # when someone manually enters a large source_limit/max_items value.
+    source_limit_value = int(args.source_limit or 0)
+    max_items_value = int(args.max_items or 0)
+    hard_source_limit = int(os.getenv("KB_SCRAPER_HARD_SOURCE_LIMIT", "0") or 0)
+    hard_max_items = int(os.getenv("KB_SCRAPER_HARD_MAX_ITEMS", "0") or 0)
+    if hard_source_limit > 0:
+        source_limit_value = hard_source_limit if source_limit_value <= 0 else min(source_limit_value, hard_source_limit)
+    if hard_max_items > 0:
+        max_items_value = hard_max_items if max_items_value <= 0 else min(max_items_value, hard_max_items)
+
     try:
         report = run_daily_kb_update(
             db_path=args.db,
             sources_path=args.sources,
             state_path=args.state,
-            max_items_per_source=args.max_items or None,
+            max_items_per_source=max_items_value or None,
             timeout=args.timeout,
             dry_run=bool(args.dry_run),
             force=bool(args.force),
@@ -1123,7 +1134,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             max_backups=args.max_backups,
             skip_db_backup=bool(args.skip_db_backup),
             time_budget_seconds=int(args.time_budget_seconds or 0),
-            source_limit=int(args.source_limit or 0),
+            source_limit=source_limit_value,
             source_offset=args.source_offset,
             auto_rotate_sources=not bool(args.no_source_rotation),
         )

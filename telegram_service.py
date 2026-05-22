@@ -717,12 +717,19 @@ def trigger_github_kb_update(config: Dict[str, Any], chat_id: int) -> str:
     }
 
     requested_at = _wib_now_text()
+    # Safe defaults for GitHub-hosted runner with 20-minute limit.
+    # The workflow also has hard caps, so even if these values are changed
+    # accidentally, update remains small and sequential.
+    update_source_limit = str(config.get("github_update_source_limit") or os.getenv("GITHUB_UPDATE_SOURCE_LIMIT", "8") or "8").strip()
+    update_max_items = str(config.get("github_update_max_items") or os.getenv("GITHUB_UPDATE_MAX_ITEMS", "1") or "1").strip()
     payload_with_inputs = {
         "ref": branch,
         "inputs": {
             "source": "telegram",
             "chat_id": str(chat_id),
             "requested_at": requested_at,
+            "source_limit": update_source_limit,
+            "max_items": update_max_items,
         },
     }
     payload_without_inputs = {"ref": branch}
@@ -749,8 +756,10 @@ def trigger_github_kb_update(config: Dict[str, Any], chat_id: int) -> str:
             f"Repo: {repo}\n"
             f"Workflow: {workflow_file}\n"
             f"Branch: {branch}\n"
+            f"Batch sumber: {update_source_limit}\n"
+            f"Item/sumber: {update_max_items}\n"
             f"Waktu: {requested_at}\n\n"
-            "GitHub Actions sedang menjalankan update. "
+            "GitHub Actions sedang menjalankan update sekuensial kecil. "
             "Jika workflow sudah memakai notifikasi Telegram, kamu akan mendapat pesan lagi saat selesai."
         )
 
