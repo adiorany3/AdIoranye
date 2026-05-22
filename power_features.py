@@ -53,6 +53,40 @@ except Exception:  # keep older deployments alive if the helper file is missing
     def format_issue_report(query: str, claims: List[Dict[str, Any]], docs: Optional[List[Dict[str, Any]]] = None) -> str:
         return "Belum ada data KB yang cukup untuk isu: " + str(query)
 
+try:
+    from hallucination_guard import (
+        append_guard_note,
+        apply_temperature_policy,
+        build_guard_system_instruction,
+        build_insufficient_evidence_answer,
+        detect_high_risk_question,
+        evaluate_evidence_gate,
+        lightweight_claim_risk,
+    )
+except Exception:  # keep app alive if the guard file is absent
+    def detect_high_risk_question(text: str, intent: str = "") -> Dict[str, Any]:
+        return {"is_high_risk": False, "score": 0, "matched_keywords": [], "mode": "normal"}
+    def evaluate_evidence_gate(user_text: str, rag_sources: Optional[List[Dict[str, Any]]] = None, **kwargs: Any) -> Any:
+        class _FallbackGuard:
+            enabled = False
+            is_high_risk = False
+            allow_answer = True
+            reason = "guard_unavailable"
+            mode = "normal"
+            def to_dict(self) -> Dict[str, Any]:
+                return {"enabled": False, "allow_answer": True, "reason": "guard_unavailable"}
+        return _FallbackGuard()
+    def build_guard_system_instruction(user_text: str, rag_sources: Optional[List[Dict[str, Any]]] = None, guard: Any = None) -> str:
+        return ""
+    def build_insufficient_evidence_answer(user_text: str, guard: Any, intent: str = "") -> str:
+        return "Data belum cukup kuat di Knowledge Base untuk menjawab pertanyaan ini secara aman."
+    def apply_temperature_policy(temperature: float, guard: Any = None) -> float:
+        return float(temperature or 0.3)
+    def append_guard_note(answer: str, rag_sources: Optional[List[Dict[str, Any]]] = None, **kwargs: Any) -> str:
+        return answer
+    def lightweight_claim_risk(answer: str) -> Dict[str, Any]:
+        return {}
+
 WIB_TZ = ZoneInfo("Asia/Jakarta")
 DEFAULT_POWER_DB = ".adioranye_power.db"
 
@@ -552,6 +586,9 @@ def adaptive_token_budget_for_intent(intent: str, user_text: str, base: int = 18
         "academic": 4200,
         "document_question": 4800,
         "research": 4200,
+        "critical_current": 4800,
+        "health": 3600,
+        "livestock": 3600,
         "deep_reasoning": 4200,
         "general": 2400,
     }
@@ -2108,6 +2145,12 @@ def classify_intent_text(text: str) -> str:
         return "admin_command"
     if any(x in t for x in ["```", "def ", "class ", "traceback", "error", "bug", "streamlit", "api", "vercel", "github", "kode", "coding", "python", "javascript", "patch"]):
         return "coding"
+    try:
+        risk = detect_high_risk_question(t, intent="")
+        if risk.get("is_high_risk") and any(x in t for x in ["terbaru", "terkini", "saat ini", "hari ini", "update", "apakah benar", "benarkah", "hoaks", "hoax", "valid", "bukti"]):
+            return "critical_current"
+    except Exception:
+        pass
     if any(x in t for x in ["peternakan", "ternak", "unggas", "sapi", "kambing", "pakan", "pmk", "rabies", "flu burung", "veteriner", "hewan"]):
         return "livestock"
     if any(x in t for x in ["kesehatan", "medis", "penyakit", "obat", "gejala", "diagnosis", "terapi", "klinis", "rumah sakit"]):
@@ -2227,7 +2270,7 @@ def estimate_cost_idr(meta: Dict[str, Any], model: str = "") -> float:
 def should_self_verify(intent: str, user_text: str, enabled: bool = False) -> bool:
     if not enabled:
         return False
-    if intent in {"coding", "academic", "calculation", "deep_reasoning", "research", "document_question"}:
+    if intent in {"coding", "academic", "calculation", "deep_reasoning", "research", "document_question", "critical_current", "health", "livestock"}:
         return True
     t = str(user_text or "").lower()
     return any(x in t for x in ["pastikan", "cek lagi", "valid", "akurat", "jangan salah"])
@@ -2311,6 +2354,12 @@ def generate_power_answer(
     enable_circuit_breaker: bool = True,
     circuit_max_failures: int = 3,
     circuit_cooldown_seconds: int = 1800,
+    anti_hallucination_enabled: bool = True,
+    anti_hallucination_auto_strict: bool = True,
+    anti_hallucination_min_sources: int = 1,
+    anti_hallucination_min_quality: float = 0.0,
+    anti_hallucination_min_freshness: float = 0.0,
+    anti_hallucination_append_sources: bool = True,
     strict_rag_mode: bool = False,
     rag_min_sources: int = 1,
     rag_min_score: float = 0.0,
@@ -2336,24 +2385,43 @@ def generate_power_answer(
             rag_sources = store.search_documents(user_text, limit=max(1, int(rag_top_k or 5)), min_score=float(rag_min_score or 0.0))
         except Exception:
             rag_sources = []
-    if strict_rag_mode and enable_rag:
-        min_sources = max(1, int(rag_min_sources or 1))
-        if len(rag_sources) < min_sources:
-            gap_id = store.log_knowledge_gap(
-                question=user_text,
-                reason="strict_rag_insufficient_sources",
-                intent=intent,
-                user_id=user_id,
-                channel=channel,
-                priority=1,
-                suggested_query=user_text,
-                meta={"rag_sources_found": len(rag_sources), "rag_min_sources": min_sources},
-            )
-            return (
-                "Data belum tersedia atau belum cukup kuat di Knowledge Base. "
-                "Admin dapat menambahkan sumber baru atau mematikan STRICT_RAG_MODE untuk pertanyaan umum.",
-                {"strict_rag_blocked": True, "knowledge_gap_id": gap_id, "intent": intent, "power_kb_sources": rag_sources},
-            )
+    guard_result = evaluate_evidence_gate(
+        user_text,
+        rag_sources,
+        intent=intent,
+        enabled=bool(anti_hallucination_enabled),
+        auto_strict=bool(anti_hallucination_auto_strict),
+        strict_rag_mode=bool(strict_rag_mode),
+        min_sources=max(int(rag_min_sources or 1), int(anti_hallucination_min_sources or 1)),
+        min_quality=float(anti_hallucination_min_quality or 0.0),
+        min_freshness=float(anti_hallucination_min_freshness or 0.0),
+    )
+
+    if enable_rag and getattr(guard_result, "enabled", False) and not getattr(guard_result, "allow_answer", True):
+        gap_id = store.log_knowledge_gap(
+            question=user_text,
+            reason=str(getattr(guard_result, "reason", "insufficient_evidence")),
+            intent=intent,
+            user_id=user_id,
+            channel=channel,
+            priority=1,
+            suggested_query=user_text,
+            meta={
+                "guard": guard_result.to_dict() if hasattr(guard_result, "to_dict") else {},
+                "rag_sources_found": len(rag_sources),
+            },
+        )
+        return (
+            build_insufficient_evidence_answer(user_text, guard_result, intent=intent),
+            {
+                "anti_hallucination_blocked": True,
+                "strict_rag_blocked": bool(strict_rag_mode),
+                "knowledge_gap_id": gap_id,
+                "intent": intent,
+                "power_kb_sources": rag_sources,
+                "hallucination_guard": guard_result.to_dict() if hasattr(guard_result, "to_dict") else {},
+            },
+        )
 
     memory_text = build_power_context(
         store=store,
@@ -2365,6 +2433,9 @@ def generate_power_answer(
         enable_persistent_memory=enable_persistent_memory,
     )
     routed_user_text = enhance_prompt_for_intent(user_text, intent, enable_templates=enable_prompt_templates)
+    guard_instruction = build_guard_system_instruction(user_text, rag_sources, guard_result) if anti_hallucination_enabled else ""
+    guarded_system_prompt = (str(system_prompt or "").strip() + ("\n\n" + guard_instruction if guard_instruction else "")).strip()
+    guarded_temperature = apply_temperature_policy(float(temperature or 0.3), guard_result)
 
     # Adaptive policy: rank candidate models using historical success, quality, latency, cost, and circuit breaker.
     cheap_candidates = list(dict.fromkeys([m for m in (fallback_models or []) if m]))
@@ -2414,7 +2485,7 @@ def generate_power_answer(
             api_url=api_url,
             api_key=api_key,
             model=primary,
-            system_prompt=system_prompt,
+            system_prompt=guarded_system_prompt,
             user_text=routed_user_text,
             memory_text=memory_text,
             recent_messages=recent_messages or [],
@@ -2422,7 +2493,7 @@ def generate_power_answer(
             expensive_fallback_models=expensive_pool,
             allow_expensive_fallback=allow_expensive_fallback and bool(expensive_pool),
             max_expensive_models=max_expensive_models,
-            temperature=temperature,
+            temperature=guarded_temperature,
             max_completion_tokens=adjusted_max_tokens,
             timeout=timeout,
             smart_model_router=smart_model_router,
@@ -2498,10 +2569,10 @@ def generate_power_answer(
                     api_url=api_url,
                     api_key=api_key,
                     verifier_model=verifier,
-                    system_prompt=system_prompt,
+                    system_prompt=guarded_system_prompt,
                     user_text=user_text,
                     answer=answer,
-                    temperature=min(float(temperature), 0.2),
+                    temperature=min(float(guarded_temperature), 0.2),
                     max_completion_tokens=max(adjusted_max_tokens, 2200),
                     timeout=timeout,
                 )
@@ -2511,6 +2582,19 @@ def generate_power_answer(
                     meta["self_verified_by"] = verifier
             except Exception as exc:
                 meta["self_verification_error"] = str(exc)[:500]
+        if anti_hallucination_enabled:
+            try:
+                answer = append_guard_note(
+                    answer,
+                    rag_sources,
+                    guard=guard_result,
+                    append_sources=bool(anti_hallucination_append_sources),
+                )
+                meta["hallucination_guard"] = guard_result.to_dict() if hasattr(guard_result, "to_dict") else {}
+                meta["hallucination_guard_temperature"] = guarded_temperature
+                meta["hallucination_claim_risk"] = lightweight_claim_risk(answer)
+            except Exception as exc:
+                meta["hallucination_guard_error"] = str(exc)[:500]
         success = True
         if enable_response_cache and intent not in {"admin_command", "coding"}:
             store.set_cached_response(cache_key, answer, meta, ttl_seconds=response_cache_ttl_seconds)

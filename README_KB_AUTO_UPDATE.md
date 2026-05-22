@@ -246,3 +246,10 @@ Lihat panduan lengkap di `GLOBAL_TECH_INDONESIA_RESEARCH_SOURCES.md`.
 ## Tambahan Global Lintas Bidang
 
 Versi ini juga menyertakan `kb_sources_agro_livestock_biosystem_environment_aquaculture_law_culture_social_global.json` untuk memperkaya knowledge base dengan isu terbaru dunia tentang agro, peternakan, teknik pertanian/biosistem, lingkungan, akuakultur, hukum, budaya, perkembangan teknologi terbaru, dan dampak sosial global.
+
+## Update tambahan: Anti-Halusinasi Guard
+
+Versi ini juga menyertakan `hallucination_guard.py` dan dokumentasi `ANTI_HALUSINASI_GUARD.md`.
+Guard ini membuat sistem lebih konservatif untuk pertanyaan kritis/terkini seperti berita terbaru, kesehatan, hukum, regulasi, jurnal Q-level, harga, politik, dan klaim validasi.
+
+Jika sumber Knowledge Base belum cukup, Adioranye akan menolak mengarang jawaban dan mencatatnya sebagai Knowledge Gap. Untuk memperbarui sumber, jalankan `/update` dari Telegram atau workflow GitHub Actions.

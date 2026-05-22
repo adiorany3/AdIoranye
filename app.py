@@ -474,6 +474,12 @@ db_auto_restore_enabled = parse_bool(get_secret("DB_AUTO_RESTORE_ENABLED", True)
 power_rag_enabled = parse_bool(get_secret("POWER_RAG_ENABLED", True), default=True)
 power_rag_top_k = int(get_secret("POWER_RAG_TOP_K", 5) or 5)
 power_strict_rag_mode = parse_bool(get_secret("POWER_STRICT_RAG_MODE", False), default=False)
+power_anti_hallucination_enabled = parse_bool(get_secret("POWER_ANTI_HALLUCINATION_ENABLED", True), default=True)
+power_anti_hallucination_auto_strict = parse_bool(get_secret("POWER_ANTI_HALLUCINATION_AUTO_STRICT", True), default=True)
+power_anti_hallucination_min_sources = int(get_secret("POWER_ANTI_HALLUCINATION_MIN_SOURCES", 1) or 1)
+power_anti_hallucination_min_quality = float(get_secret("POWER_ANTI_HALLUCINATION_MIN_QUALITY", 0) or 0)
+power_anti_hallucination_min_freshness = float(get_secret("POWER_ANTI_HALLUCINATION_MIN_FRESHNESS", 0) or 0)
+power_anti_hallucination_append_sources = parse_bool(get_secret("POWER_ANTI_HALLUCINATION_APPEND_SOURCES", True), default=True)
 power_rag_min_sources = int(get_secret("POWER_RAG_MIN_SOURCES", 1) or 1)
 power_rag_min_score = float(get_secret("POWER_RAG_MIN_SCORE", 0) or 0)
 power_kb_max_file_mb = int(get_secret("POWER_KB_MAX_FILE_MB", 12) or 12)
@@ -2592,6 +2598,12 @@ def start_telegram_if_needed() -> None:
                 "power_db_path": power_db_path,
                 "power_rag_enabled": bool(power_rag_enabled),
                 "power_strict_rag_mode": bool(power_strict_rag_mode),
+                "power_anti_hallucination_enabled": bool(power_anti_hallucination_enabled),
+                "power_anti_hallucination_auto_strict": bool(power_anti_hallucination_auto_strict),
+                "power_anti_hallucination_min_sources": int(power_anti_hallucination_min_sources),
+                "power_anti_hallucination_min_quality": float(power_anti_hallucination_min_quality),
+                "power_anti_hallucination_min_freshness": float(power_anti_hallucination_min_freshness),
+                "power_anti_hallucination_append_sources": bool(power_anti_hallucination_append_sources),
                 "power_rag_min_sources": int(power_rag_min_sources),
                 "power_rag_min_score": float(power_rag_min_score),
                 "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
@@ -3172,6 +3184,12 @@ def render_admin_settings() -> None:
                 "power_db_path": power_db_path,
                 "power_rag_enabled": bool(power_rag_enabled),
                 "power_strict_rag_mode": bool(power_strict_rag_mode),
+                "power_anti_hallucination_enabled": bool(power_anti_hallucination_enabled),
+                "power_anti_hallucination_auto_strict": bool(power_anti_hallucination_auto_strict),
+                "power_anti_hallucination_min_sources": int(power_anti_hallucination_min_sources),
+                "power_anti_hallucination_min_quality": float(power_anti_hallucination_min_quality),
+                "power_anti_hallucination_min_freshness": float(power_anti_hallucination_min_freshness),
+                "power_anti_hallucination_append_sources": bool(power_anti_hallucination_append_sources),
                 "power_rag_min_sources": int(power_rag_min_sources),
                 "power_rag_min_score": float(power_rag_min_score),
                 "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
@@ -3912,6 +3930,12 @@ if user_input:
                     enable_circuit_breaker=bool(power_circuit_breaker_enabled),
                     circuit_max_failures=int(model_circuit_max_failures),
                     circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
+                    anti_hallucination_enabled=bool(power_anti_hallucination_enabled),
+                    anti_hallucination_auto_strict=bool(power_anti_hallucination_auto_strict),
+                    anti_hallucination_min_sources=int(power_anti_hallucination_min_sources),
+                    anti_hallucination_min_quality=float(power_anti_hallucination_min_quality),
+                    anti_hallucination_min_freshness=float(power_anti_hallucination_min_freshness),
+                    anti_hallucination_append_sources=bool(power_anti_hallucination_append_sources),
                     strict_rag_mode=bool(power_strict_rag_mode),
                     rag_min_sources=int(power_rag_min_sources),
                     rag_min_score=float(power_rag_min_score),
