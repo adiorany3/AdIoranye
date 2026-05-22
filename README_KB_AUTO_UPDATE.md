@@ -234,3 +234,10 @@ GitHub Actions sekarang juga membuat file `daily_intelligence_briefing.md` dan m
 ## Sumber Berita Terbaru Indonesia & Asia
 
 Versi ini menambahkan preset `kb_sources_indonesia_asia_latest.json` dan dokumentasi `NEWS_INDONESIA_ASIA_LATEST_SOURCES.md`. Preset ini memperbanyak sumber current intelligence untuk Indonesia, ASEAN, dan Asia agar pertanyaan kritis dapat dijawab dengan konteks terbaru.
+
+## Tambahan: Global Tech, Teknologi Indonesia, dan Riset Berjalan
+
+Versi ini juga menambahkan `kb_sources_global_tech_indonesia_research.json` dan menggabungkannya ke `kb_sources.json`.
+Fokusnya adalah berita teknologi global terbaru, perkembangan teknologi Indonesia, dan riset/publikasi terbaru melalui RSS, Google News, GDELT, arXiv, OpenAlex, serta sumber resmi Indonesia seperti Komdigi, BRIN, dan Kemdiktisaintek.
+
+Lihat panduan lengkap di `GLOBAL_TECH_INDONESIA_RESEARCH_SOURCES.md`.

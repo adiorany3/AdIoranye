@@ -154,6 +154,116 @@
       "topic": "US-China Asia",
       "category": "geopolitik",
       "priority": 1
+    },
+    {
+      "topic": "peluncuran model AI global dan benchmark terbaru",
+      "category": "teknologi-global",
+      "priority": 1
+    },
+    {
+      "topic": "AI agents dan automation platform global",
+      "category": "teknologi-global",
+      "priority": 1
+    },
+    {
+      "topic": "semikonduktor AI GPU NPU data center global",
+      "category": "teknologi-global",
+      "priority": 1
+    },
+    {
+      "topic": "komputasi kuantum global terbaru",
+      "category": "teknologi-global",
+      "priority": 2
+    },
+    {
+      "topic": "robot humanoid dan otomasi industri global",
+      "category": "teknologi-global",
+      "priority": 2
+    },
+    {
+      "topic": "cybersecurity zero-day ransomware global dan Indonesia",
+      "category": "keamanan-siber",
+      "priority": 1
+    },
+    {
+      "topic": "regulasi AI global dan Indonesia",
+      "category": "regulasi-teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "perkembangan cloud dan data center AI Indonesia",
+      "category": "teknologi-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "satelit internet dan infrastruktur digital Indonesia",
+      "category": "teknologi-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "IKN smart city teknologi dan digital twin",
+      "category": "teknologi-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "startup AI fintech edtech healthtech Indonesia",
+      "category": "startup-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "kendaraan listrik baterai nikel dan teknologi energi Indonesia",
+      "category": "energi-teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "riset BRIN AI pangan peternakan energi nuklir satelit",
+      "category": "riset-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "kolaborasi riset Kemdiktisaintek universitas industri AI",
+      "category": "riset-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "publikasi arXiv terbaru AI machine learning cybersecurity robotics",
+      "category": "riset-global",
+      "priority": 1
+    },
+    {
+      "topic": "OpenAlex publikasi riset Indonesia teknologi AI terbaru",
+      "category": "riset-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "riset natural language processing bahasa Indonesia",
+      "category": "riset-indonesia",
+      "priority": 2
+    },
+    {
+      "topic": "riset smart farming agritech dan peternakan presisi Indonesia",
+      "category": "riset-indonesia",
+      "priority": 2
+    },
+    {
+      "topic": "teknologi kesehatan digital dan AI medis Indonesia",
+      "category": "healthtech",
+      "priority": 2
+    },
+    {
+      "topic": "AI pendidikan Indonesia dan penggunaan generative AI di sekolah kampus",
+      "category": "edtech",
+      "priority": 1
+    },
+    {
+      "topic": "open source developer tools dan coding AI terbaru",
+      "category": "developer-tools",
+      "priority": 2
+    },
+    {
+      "topic": "climate tech carbon removal battery hydrogen global Indonesia",
+      "category": "climate-tech",
+      "priority": 2
     }
   ]
 }

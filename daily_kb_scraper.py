@@ -390,7 +390,7 @@ def parse_feed_items(xml_text: str, base_url: str = "") -> List[Dict[str, str]]:
 class SourceConfig:
     name: str
     url: str
-    type: str = "rss"  # rss, html, html_index, sitemap, static
+    type: str = "rss"  # rss, html, html_index, sitemap, static, openalex_works
     enabled: bool = True
     collection: str = "Auto Update"
     tags: str = "auto-update"
@@ -643,6 +643,91 @@ def scrape_static(session: requests.Session, source: SourceConfig) -> List[Dict[
     }]
 
 
+
+def _openalex_abstract_from_inverted_index(index: Any) -> str:
+    """Convert OpenAlex abstract_inverted_index into readable abstract text."""
+    if not isinstance(index, dict) or not index:
+        return ""
+    positions: List[Tuple[int, str]] = []
+    for word, idxs in index.items():
+        if not isinstance(idxs, list):
+            continue
+        for idx in idxs:
+            try:
+                positions.append((int(idx), str(word)))
+            except Exception:
+                continue
+    if not positions:
+        return ""
+    return " ".join(word for _, word in sorted(positions, key=lambda item: item[0]))
+
+
+def scrape_openalex_works(session: requests.Session, source: SourceConfig, limit: int) -> List[Dict[str, str]]:
+    """Fetch recent scholarly works from the OpenAlex API.
+
+    Expected source.url example:
+    https://api.openalex.org/works?search=artificial%20intelligence%20Indonesia&sort=publication_date:desc&per-page=10
+    """
+    text = fetch_text(session, source.url)
+    try:
+        data = json.loads(text)
+    except Exception as exc:
+        raise ValueError(f"OpenAlex response bukan JSON valid: {exc}")
+    results = data.get("results") if isinstance(data, dict) else []
+    if not isinstance(results, list):
+        return []
+    articles: List[Dict[str, str]] = []
+    for item in results[:limit]:
+        if not isinstance(item, dict):
+            continue
+        title = clean_spaces(item.get("display_name") or item.get("title") or "OpenAlex work")
+        url = ""
+        primary = item.get("primary_location") or {}
+        if isinstance(primary, dict):
+            url = str(primary.get("landing_page_url") or primary.get("pdf_url") or "").strip()
+        if not url:
+            url = str(item.get("doi") or item.get("id") or source.url).strip()
+        published = str(item.get("publication_date") or item.get("publication_year") or "")
+        abstract = _openalex_abstract_from_inverted_index(item.get("abstract_inverted_index"))
+        authors = []
+        for auth in item.get("authorships") or []:
+            if isinstance(auth, dict):
+                author = auth.get("author") or {}
+                if isinstance(author, dict) and author.get("display_name"):
+                    authors.append(str(author.get("display_name")))
+        source_name = ""
+        if isinstance(primary, dict):
+            src = primary.get("source") or {}
+            if isinstance(src, dict):
+                source_name = str(src.get("display_name") or "")
+        concepts = []
+        for concept in item.get("concepts") or item.get("topics") or []:
+            if isinstance(concept, dict):
+                val = concept.get("display_name") or concept.get("name")
+                if val:
+                    concepts.append(str(val))
+        cited_by = item.get("cited_by_count")
+        body_parts = [
+            f"Judul riset: {title}",
+            f"Tanggal publikasi: {published or '-'}",
+            f"Sumber publikasi: {source_name or '-'}",
+            f"Penulis: {', '.join(authors[:12]) or '-'}",
+            f"Sitasi OpenAlex: {cited_by if cited_by is not None else '-'}",
+            f"Topik: {', '.join(concepts[:12]) or '-'}",
+        ]
+        if abstract:
+            body_parts.extend(["", "Abstrak:", abstract])
+        else:
+            body_parts.extend(["", "Catatan:", "OpenAlex tidak menyediakan abstrak terstruktur untuk item ini."])
+        articles.append({
+            "title": title,
+            "url": url,
+            "published": published,
+            "summary": abstract[:800],
+            "content": "\n".join(body_parts),
+        })
+    return articles
+
 def scrape_source(session: requests.Session, source: SourceConfig, max_items_override: Optional[int] = None) -> List[Dict[str, str]]:
     limit = max(1, int(max_items_override or source.max_items or 5))
     if source.type in {"rss", "feed", "atom"}:
@@ -655,6 +740,8 @@ def scrape_source(session: requests.Session, source: SourceConfig, max_items_ove
         return scrape_sitemap(session, source, limit=limit)
     if source.type in {"static", "note", "curated"}:
         return scrape_static(session, source)[:limit]
+    if source.type in {"openalex", "openalex_works", "scholarly_works"}:
+        return scrape_openalex_works(session, source, limit=limit)
     raise ValueError(f"Tipe sumber tidak dikenali: {source.type}")
 
 
