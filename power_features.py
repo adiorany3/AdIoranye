@@ -26,6 +26,14 @@ from zoneinfo import ZoneInfo
 from ai_core import call_api_once, model_cost_tier, model_price
 
 try:
+    from db_guard import ensure_database_ready, maybe_create_periodic_backup, default_backup_dir, default_max_backups
+except Exception:  # pragma: no cover - DB guard is optional fallback
+    ensure_database_ready = None  # type: ignore
+    maybe_create_periodic_backup = None  # type: ignore
+    default_backup_dir = lambda: '.db_backups'  # type: ignore
+    default_max_backups = lambda: 10  # type: ignore
+
+try:
     from critical_current_layer import (
         build_critical_answer_instruction,
         calculate_freshness_score,
@@ -584,7 +592,58 @@ class PowerStore:
 
     def __post_init__(self) -> None:
         self.db_path = str(self.db_path or DEFAULT_POWER_DB)
-        self._ensure_schema()
+        self._db_guard_recovered = False
+        self._ensure_ready_before_open()
+        try:
+            self._ensure_schema()
+        except sqlite3.DatabaseError as exc:
+            # Jika SQLite mendeteksi "database disk image is malformed" atau error
+            # sejenis, pulihkan otomatis dari backup valid terakhir lalu ulangi init schema.
+            if self._looks_like_malformed_db_error(exc):
+                self._restore_or_quarantine_database(reason=str(exc)[:300])
+                self._ensure_schema()
+            else:
+                raise
+
+    def _looks_like_malformed_db_error(self, exc: Exception) -> bool:
+        message = str(exc or "").lower()
+        return any(token in message for token in [
+            "database disk image is malformed",
+            "file is not a database",
+            "database is locked",
+            "disk i/o error",
+            "malformed",
+            "corrupt",
+        ])
+
+    def _ensure_ready_before_open(self) -> None:
+        if ensure_database_ready is None:
+            return
+        try:
+            ensure_database_ready(
+                self.db_path,
+                default_backup_dir(),
+                auto_restore=True,
+                create_periodic_backup=False,
+                max_backups=default_max_backups(),
+            )
+        except Exception:
+            # Jangan matikan aplikasi hanya karena guard gagal; _ensure_schema masih akan mencoba membuka DB.
+            pass
+
+    def _restore_or_quarantine_database(self, reason: str = "") -> None:
+        if ensure_database_ready is None:
+            raise sqlite3.DatabaseError(reason or "database error")
+        result = ensure_database_ready(
+            self.db_path,
+            default_backup_dir(),
+            auto_restore=True,
+            create_periodic_backup=False,
+            max_backups=default_max_backups(),
+        )
+        self._db_guard_recovered = True
+        if not result.ok:
+            raise sqlite3.DatabaseError(result.message or reason or "database restore failed")
 
     def _connect(self) -> sqlite3.Connection:
         path = Path(self.db_path)

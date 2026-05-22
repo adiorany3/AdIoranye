@@ -37,6 +37,13 @@ except Exception:  # pragma: no cover - Python <3.9 fallback is not expected her
     ZoneInfo = None  # type: ignore
 
 from power_features import get_power_store
+from db_guard import (
+    create_sqlite_backup,
+    ensure_database_ready,
+    restore_latest_valid_backup,
+    sqlite_checkpoint,
+    sqlite_integrity_check,
+)
 from critical_current_layer import (
     build_daily_intelligence_brief,
     calculate_freshness_score,
@@ -842,6 +849,9 @@ def run_daily_kb_update(
     user_agent: str = DEFAULT_USER_AGENT,
     watchlist_path: str = DEFAULT_WATCHLIST_FILE,
     briefing_file: str = DEFAULT_BRIEFING_FILE,
+    backup_dir: str = ".db_backups",
+    max_backups: int = 10,
+    skip_db_backup: bool = False,
 ) -> Dict[str, Any]:
     """Run the daily update and return a serializable report."""
     raw_sources = load_sources(sources_path)
@@ -850,6 +860,20 @@ def run_daily_kb_update(
     state = load_state(state_path)
     processed: Dict[str, Any] = state.setdefault("processed", {})
     session = make_session(timeout=timeout, user_agent=user_agent)
+
+    db_guard_report: Dict[str, Any] = {"enabled": not dry_run and not skip_db_backup}
+    if not dry_run and not skip_db_backup:
+        precheck = ensure_database_ready(
+            db_path,
+            backup_dir,
+            auto_restore=True,
+            create_periodic_backup=False,
+            max_backups=max_backups,
+        )
+        db_guard_report["precheck"] = precheck.to_dict()
+        prebackup = create_sqlite_backup(db_path, backup_dir, label="pre-update", max_backups=max_backups)
+        db_guard_report["pre_update_backup"] = prebackup.to_dict()
+
     store = None if dry_run else get_power_store(db_path)
 
     report: Dict[str, Any] = {
@@ -870,6 +894,7 @@ def run_daily_kb_update(
         "watchlist_path": watchlist_path,
         "briefing_file": briefing_file,
         "critical_claims_added": 0,
+        "db_guard": db_guard_report,
     }
     try:
         if not Path(watchlist_path).exists():
@@ -1000,6 +1025,20 @@ def run_daily_kb_update(
         report["briefing_error"] = str(exc)[:300]
     if not dry_run:
         save_state(state_path, state)
+        if not skip_db_backup:
+            checkpoint = sqlite_checkpoint(db_path)
+            report.setdefault("db_guard", {})["checkpoint_after_update"] = checkpoint.to_dict()
+            final_check = sqlite_integrity_check(db_path, quick=True)
+            report.setdefault("db_guard", {})["final_integrity_check"] = final_check.to_dict()
+            if final_check.ok:
+                postbackup = create_sqlite_backup(db_path, backup_dir, label="post-update", max_backups=max_backups)
+                report.setdefault("db_guard", {})["post_update_backup"] = postbackup.to_dict()
+            else:
+                restored = restore_latest_valid_backup(db_path, backup_dir, quarantine_bad_current=True)
+                report.setdefault("db_guard", {})["restore_after_failed_update"] = restored.to_dict()
+                if not restored.ok:
+                    report["errors"] = int(report.get("errors") or 0) + 1
+                    report["db_guard_error"] = restored.message
     return report
 
 
@@ -1014,21 +1053,46 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--force", action="store_true", help="Abaikan state URL dan coba ingest ulang.")
     parser.add_argument("--watchlist", default=os.getenv("CRITICAL_WATCHLIST_FILE", DEFAULT_WATCHLIST_FILE), help="Path watchlist isu kritis.")
     parser.add_argument("--briefing-file", default=os.getenv("DAILY_INTELLIGENCE_BRIEFING_FILE", DEFAULT_BRIEFING_FILE), help="Path output briefing harian.")
+    parser.add_argument("--backup-dir", default=os.getenv("DB_BACKUP_DIR", ".db_backups"), help="Folder backup SQLite.")
+    parser.add_argument("--max-backups", type=int, default=int(os.getenv("DB_BACKUP_MAX_COUNT", "10") or 10), help="Jumlah backup SQLite yang disimpan.")
+    parser.add_argument("--skip-db-backup", action="store_true", help="Lewati backup/checkpoint database.")
     args = parser.parse_args(argv)
 
-    report = run_daily_kb_update(
-        db_path=args.db,
-        sources_path=args.sources,
-        state_path=args.state,
-        max_items_per_source=args.max_items or None,
-        timeout=args.timeout,
-        dry_run=bool(args.dry_run),
-        force=bool(args.force),
-        watchlist_path=args.watchlist,
-        briefing_file=args.briefing_file,
-    )
+    try:
+        report = run_daily_kb_update(
+            db_path=args.db,
+            sources_path=args.sources,
+            state_path=args.state,
+            max_items_per_source=args.max_items or None,
+            timeout=args.timeout,
+            dry_run=bool(args.dry_run),
+            force=bool(args.force),
+            watchlist_path=args.watchlist,
+            briefing_file=args.briefing_file,
+            backup_dir=args.backup_dir,
+            max_backups=args.max_backups,
+            skip_db_backup=bool(args.skip_db_backup),
+        )
+    except Exception as exc:
+        restore_result = None
+        if not bool(getattr(args, "dry_run", False)):
+            try:
+                restore_result = restore_latest_valid_backup(args.db, args.backup_dir, quarantine_bad_current=True).to_dict()
+            except Exception as restore_exc:
+                restore_result = {"ok": False, "message": str(restore_exc)[:500]}
+        error_report = {
+            "ok": False,
+            "error": str(exc)[:1000],
+            "db_restore_attempt": restore_result,
+            "finished_at_wib": now_wib_text(),
+        }
+        print(json.dumps(error_report, ensure_ascii=False, indent=2))
+        return 3
+
     print(json.dumps(report, ensure_ascii=False, indent=2))
     # Non-zero only if every enabled source failed. One or two bad feeds should not break deploy.
+    if report.get("db_guard_error"):
+        return 3
     if report.get("sources_enabled", 0) > 0 and report.get("errors", 0) >= report.get("sources_enabled", 0):
         return 2
     return 0

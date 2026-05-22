@@ -37,6 +37,7 @@ from power_features import (
     run_model_benchmark,
     extract_text_from_file_bytes,
 )
+from db_guard import maybe_create_periodic_backup, default_backup_dir, default_max_backups
 
 from daily_kb_scraper import (
     DEFAULT_SOURCES_FILE as KB_DEFAULT_SOURCES_FILE,
@@ -465,6 +466,11 @@ model_discovery_interval = int(get_secret("MODEL_DISCOVERY_INTERVAL_SECONDS", 36
 # Power features: persistent memory, RAG, logging, budget guard, self-check.
 power_features_enabled = parse_bool(get_secret("POWER_FEATURES_ENABLED", True), default=True)
 power_db_path = str(get_secret("POWER_DB_PATH", ".adioranye_power.db") or ".adioranye_power.db")
+db_backup_enabled = parse_bool(get_secret("DB_BACKUP_ENABLED", True), default=True)
+db_backup_dir = str(get_secret("DB_BACKUP_DIR", ".db_backups") or ".db_backups")
+db_backup_max_count = int(get_secret("DB_BACKUP_MAX_COUNT", 10) or 10)
+db_backup_min_interval_seconds = int(get_secret("DB_BACKUP_MIN_INTERVAL_SECONDS", 21600) or 21600)
+db_auto_restore_enabled = parse_bool(get_secret("DB_AUTO_RESTORE_ENABLED", True), default=True)
 power_rag_enabled = parse_bool(get_secret("POWER_RAG_ENABLED", True), default=True)
 power_rag_top_k = int(get_secret("POWER_RAG_TOP_K", 5) or 5)
 power_strict_rag_mode = parse_bool(get_secret("POWER_STRICT_RAG_MODE", False), default=False)
@@ -500,6 +506,17 @@ init_state()
 memory = MemoryStore(memory_file)
 service = get_telegram_service()
 power_store = get_power_store(power_db_path)
+if db_backup_enabled:
+    try:
+        maybe_create_periodic_backup(
+            power_db_path,
+            db_backup_dir or default_backup_dir(),
+            label="streamlit-startup",
+            min_interval_seconds=db_backup_min_interval_seconds,
+            max_backups=db_backup_max_count or default_max_backups(),
+        )
+    except Exception:
+        pass
 
 
 @st.cache_resource(show_spinner=False)
