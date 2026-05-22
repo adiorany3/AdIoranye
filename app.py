@@ -1,4 +1,5 @@
 import hmac
+import inspect
 import html
 import os
 import shutil
@@ -76,6 +77,47 @@ def parse_bool(value: Any, default: bool = False) -> bool:
 def safe_compare(left: Any, right: Any) -> bool:
     return hmac.compare_digest(str(left or ""), str(right or ""))
 
+
+
+
+def safe_generate_power_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+    """Call generate_power_answer safely across mixed app/power_features versions.
+
+    This prevents crashes like:
+    generate_power_answer() got an unexpected keyword argument 'performance_optimizer_enabled'
+    when Streamlit deploys a newer app.py with an older cached/merged power_features.py.
+    Unsupported keyword arguments are dropped only if the current function signature
+    does not accept them.
+    """
+    try:
+        signature = inspect.signature(generate_power_answer)
+        parameters = signature.parameters
+        accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+        if accepts_kwargs:
+            return generate_power_answer(**kwargs)
+        filtered_kwargs = {key: value for key, value in kwargs.items() if key in parameters}
+        dropped_keys = sorted(set(kwargs) - set(filtered_kwargs))
+        answer, meta = generate_power_answer(**filtered_kwargs)
+        if dropped_keys and isinstance(meta, dict):
+            meta["power_answer_compat_dropped_kwargs"] = dropped_keys
+        return answer, meta
+    except TypeError as exc:
+        # Extra fallback for older Python signatures or partially deployed files.
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+        if match:
+            bad_key = match.group(1)
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+                return answer, meta
+        raise
 
 def format_token_status(label: str, value: str) -> None:
     if value:
@@ -4058,7 +4100,7 @@ if user_input:
                 placeholder = st.empty()
                 placeholder.markdown("⏳ Siap! adioranye sedang menyiapkan jawaban untukmu...")
                 route = build_model_routing_plan(advance_rotation=True, user_text=user_input)
-                answer, meta = generate_power_answer(
+                answer, meta = safe_generate_power_answer(
                     api_url=api_url,
                     api_key=api_key,
                     model=route["primary_model"],

@@ -3107,8 +3107,10 @@ def generate_power_answer(
     semantic_cache_ttl_seconds: int = 86400,
     latency_budget_enabled: bool = True,
     retrieval_eval_enabled: bool = True,
+    **compat_kwargs: Any,
 ) -> Tuple[str, Dict[str, Any]]:
     store = store or get_power_store()
+    ignored_compat_kwargs = sorted(str(key) for key in (compat_kwargs or {}).keys())
     intent = classify_intent_text(user_text)
     stored_mode = "auto"
     try:
@@ -3420,6 +3422,8 @@ def generate_power_answer(
         meta["retrieval_latency_seconds"] = retrieval_latency
         meta["retrieval_metrics"] = retrieval_metrics
         meta["performance_optimizer_enabled"] = bool(performance_optimizer_enabled)
+        if ignored_compat_kwargs:
+            meta["ignored_compat_kwargs"] = ignored_compat_kwargs
 
         if should_self_verify(intent, user_text, enabled=enable_self_verification):
             verifier = ""

@@ -1,4 +1,5 @@
 import os
+import inspect
 import json
 import re
 import threading
@@ -34,6 +35,43 @@ DEFAULT_RUNTIME_STATE_FILE = ".telegram_runtime_state.json"
 LOCK_STALE_SECONDS = 180
 WIB_TZ = ZoneInfo("Asia/Jakarta")
 
+
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper for generate_power_answer keyword changes.
+
+    Telegram should keep answering even if app.py/telegram_service.py is newer
+    than power_features.py during deploy or merge. Unsupported kwargs are ignored.
+    """
+    try:
+        signature = inspect.signature(generate_power_answer)
+        parameters = signature.parameters
+        accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+        if accepts_kwargs:
+            return generate_power_answer(**kwargs)
+        filtered_kwargs = {key: value for key, value in kwargs.items() if key in parameters}
+        dropped_keys = sorted(set(kwargs) - set(filtered_kwargs))
+        answer, meta = generate_power_answer(**filtered_kwargs)
+        if dropped_keys and isinstance(meta, dict):
+            meta["power_answer_compat_dropped_kwargs"] = dropped_keys
+        return answer, meta
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+        if match:
+            bad_key = match.group(1)
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+                return answer, meta
+        raise
 
 def _wib_now_text() -> str:
     return datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
@@ -2212,7 +2250,7 @@ class TelegramBotService:
                                     request_fallback_models = [item for item in fast_pool if item != request_model]
                                     fast_normal_mode = True
 
-                            answer, meta = generate_power_answer(
+                            answer, meta = safe_generate_power_answer(
                                 api_url=api_url,
                                 api_key=api_key,
                                 model=request_model,
@@ -2322,7 +2360,7 @@ class TelegramBotService:
                                     retry_previous_model = model
                                     apply_rotation_result(retry_result, retry_rotation, "auto_retry")
 
-                                    retry_answer, retry_meta = generate_power_answer(
+                                    retry_answer, retry_meta = safe_generate_power_answer(
                                         api_url=api_url,
                                         api_key=api_key,
                                         model=model,
