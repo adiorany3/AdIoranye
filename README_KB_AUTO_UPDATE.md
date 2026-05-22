@@ -229,3 +229,8 @@ Contoh:
 ```
 
 GitHub Actions sekarang juga membuat file `daily_intelligence_briefing.md` dan memasukkan ringkasan itu ke notifikasi Telegram setelah update KB selesai.
+
+
+## Sumber Berita Terbaru Indonesia & Asia
+
+Versi ini menambahkan preset `kb_sources_indonesia_asia_latest.json` dan dokumentasi `NEWS_INDONESIA_ASIA_LATEST_SOURCES.md`. Preset ini memperbanyak sumber current intelligence untuk Indonesia, ASEAN, dan Asia agar pertanyaan kritis dapat dijawab dengan konteks terbaru.

@@ -1,12 +1,159 @@
 {
   "watchlist": [
-    {"topic": "AI model terbaru dan benchmark model", "category": "teknologi", "priority": 2},
-    {"topic": "kesehatan masyarakat Indonesia wabah penyakit", "category": "kesehatan", "priority": 1},
-    {"topic": "PMK ternak penyakit mulut dan kuku", "category": "peternakan", "priority": 1},
-    {"topic": "flu burung unggas Indonesia", "category": "peternakan", "priority": 1},
-    {"topic": "jurnal peternakan Q1 Q2 Scopus SINTA", "category": "akademik", "priority": 2},
-    {"topic": "regulasi digital Indonesia AI data pribadi", "category": "isu-terkini", "priority": 2},
-    {"topic": "harga pangan Indonesia beras daging telur", "category": "ekonomi", "priority": 2},
-    {"topic": "teknologi pendidikan e-learning", "category": "pendidikan", "priority": 3}
+    {
+      "topic": "AI model terbaru dan benchmark model",
+      "category": "teknologi",
+      "priority": 2
+    },
+    {
+      "topic": "kesehatan masyarakat Indonesia wabah penyakit",
+      "category": "kesehatan",
+      "priority": 1
+    },
+    {
+      "topic": "PMK ternak penyakit mulut dan kuku",
+      "category": "peternakan",
+      "priority": 1
+    },
+    {
+      "topic": "flu burung unggas Indonesia",
+      "category": "peternakan",
+      "priority": 1
+    },
+    {
+      "topic": "jurnal peternakan Q1 Q2 Scopus SINTA",
+      "category": "akademik",
+      "priority": 2
+    },
+    {
+      "topic": "regulasi digital Indonesia AI data pribadi",
+      "category": "isu-terkini",
+      "priority": 2
+    },
+    {
+      "topic": "harga pangan Indonesia beras daging telur",
+      "category": "ekonomi",
+      "priority": 2
+    },
+    {
+      "topic": "teknologi pendidikan e-learning",
+      "category": "pendidikan",
+      "priority": 3
+    },
+    {
+      "topic": "berita terbaru Indonesia",
+      "category": "berita",
+      "priority": 1
+    },
+    {
+      "topic": "isu politik Indonesia",
+      "category": "politik",
+      "priority": 1
+    },
+    {
+      "topic": "ekonomi Indonesia terkini",
+      "category": "ekonomi",
+      "priority": 1
+    },
+    {
+      "topic": "rupiah dan inflasi Indonesia",
+      "category": "ekonomi",
+      "priority": 1
+    },
+    {
+      "topic": "AI dan teknologi Indonesia",
+      "category": "teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "keamanan siber Indonesia",
+      "category": "teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "kesehatan publik Indonesia",
+      "category": "kesehatan",
+      "priority": 1
+    },
+    {
+      "topic": "bencana Indonesia BMKG BNPB",
+      "category": "bencana",
+      "priority": 1
+    },
+    {
+      "topic": "pangan dan harga beras Indonesia",
+      "category": "ekonomi",
+      "priority": 1
+    },
+    {
+      "topic": "peternakan dan penyakit hewan Indonesia",
+      "category": "peternakan",
+      "priority": 1
+    },
+    {
+      "topic": "IKN Nusantara",
+      "category": "infrastruktur",
+      "priority": 2
+    },
+    {
+      "topic": "ASEAN terbaru",
+      "category": "asia",
+      "priority": 1
+    },
+    {
+      "topic": "Laut China Selatan",
+      "category": "geopolitik",
+      "priority": 1
+    },
+    {
+      "topic": "Asia-Pacific geopolitik",
+      "category": "geopolitik",
+      "priority": 1
+    },
+    {
+      "topic": "China ekonomi teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "Jepang ekonomi teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "Korea Selatan teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "India ekonomi teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "Myanmar krisis ASEAN",
+      "category": "asia",
+      "priority": 1
+    },
+    {
+      "topic": "Taiwan dan semikonduktor",
+      "category": "teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "Asia climate disaster",
+      "category": "bencana",
+      "priority": 1
+    },
+    {
+      "topic": "Asia health outbreak",
+      "category": "kesehatan",
+      "priority": 1
+    },
+    {
+      "topic": "US-China Asia",
+      "category": "geopolitik",
+      "priority": 1
+    }
   ]
 }
