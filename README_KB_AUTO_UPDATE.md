@@ -106,3 +106,23 @@ Tipe yang didukung:
 - Isi knowledge base dipakai sebagai konteks RAG, bukan instruksi system permanen.
 - File `.adioranye_kb_scrape_state.json` dipakai untuk deduplikasi URL agar artikel tidak masuk berkali-kali.
 - Kalau memakai Streamlit Cloud, database runtime bisa berubah saat app restart. GitHub Actions membantu menjaga DB terbaru tersimpan di repo.
+
+
+## Preset sumber populer dan current issue
+
+Paket ini sudah ditambah preset sumber untuk mengambil informasi yang sedang populer/terbaru setiap hari:
+
+- **Populer saat ini**: Google Trends Indonesia dan Google News Indonesia.
+- **Isu terkini**: agregasi berita terbaru Indonesia dari Google News.
+- **Teknologi & AI**: Google News teknologi/AI Indonesia, Google AI Blog, The Verge, Hacker News, Python Insider, NASA Technology.
+- **Kesehatan**: RSS resmi Kementerian Kesehatan RI, termasuk rilis berita, tips kesehatan, dan artikel kesehatan.
+- **Pengetahuan & sains**: MIT News, MIT Research, NASA Recently Published, serta Google News sains/riset/inovasi Indonesia.
+
+Catatan operasional:
+
+1. Feed Google Trends/Google News dipakai sebagai sinyal topik populer, jadi `fetch_article` dibuat `false` agar sistem menyimpan judul/ringkasan dan tidak agresif mengambil banyak halaman media.
+2. Sumber resmi seperti Kemenkes, MIT, NASA, Google AI Blog, dan Python Insider memakai `fetch_article: true` agar knowledge base punya isi yang lebih substantif.
+3. Jika database membesar, turunkan `max_items` di `kb_sources.json` atau jalankan update mingguan untuk sumber global.
+4. Untuk topik kesehatan, tetap prioritaskan sumber resmi di koleksi **Auto Update - Kesehatan Resmi** ketika memberi jawaban yang berisiko.
+
+File `kb_sources_popular_current.json` juga disediakan sebagai salinan preset sumber populer/current jika kamu ingin memisahkan konfigurasi.
