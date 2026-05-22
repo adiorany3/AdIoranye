@@ -1872,6 +1872,14 @@
       "title": "arXiv eess.SY Systems and Control — Cooling Channel Design Optimization for High Power Multi-chip Packages",
       "url": "https://arxiv.org/abs/2605.20657"
     },
+    "2161e7b28e5ae63f69a4b94e47456ec9c85a56657681c7f9baa200b717fbbf2d": {
+      "chunks": 1,
+      "created_at": "2026-05-22T04:18:00+00:00",
+      "doc_id": 2046,
+      "source": "NASA - Recently Published",
+      "title": "NASA - Recently Published — Tornado Draws a Jagged Line in Mississippi",
+      "url": "https://science.nasa.gov/earth/earth-observatory/tornado-draws-a-jagged-line-in-mississippi/"
+    },
     "216847266f5534eb27fcfff0baabd16d6cabaf35f5ad33a8562e29a660f44ec6": {
       "chunks": 1,
       "created_at": "2026-05-22T02:42:11+00:00",
@@ -3488,6 +3496,14 @@
       "title": "Google News Top Headlines - Sri Lanka — House Republicans scrap vote to rein in Trump's war in Iran - Axios",
       "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9YVWdrMFN4WW5VQzdOT2ZyRHpsZHJlRkFFd1FFTUxieHQxdDdDTEZuWDNVV3ozR1FHOHdZc05CaHIxenhHOTdaeVh6Z2Z1V3VBM2NuOHJEcWFjTGpfU2psdHRta2JPSFBLWXhV?oc=5"
     },
+    "3ee3ae22daa4294ab2b3b9d3c1abce83e366e19a5b01289617477ad213e3d5b8": {
+      "chunks": 1,
+      "created_at": "2026-05-22T04:18:09+00:00",
+      "doc_id": 2047,
+      "source": "ANTARA News - Terkini",
+      "title": "ANTARA News - Terkini — TNI-Polri berupaya evakuasi jenazah pendulang dari Kampung Kawe",
+      "url": "https://www.antaranews.com/berita/5577779/tni-polri-berupaya-evakuasi-jenazah-pendulang-dari-kampung-kawe"
+    },
     "3f2c4b79ff6edbde84a064f81bdbaf9f95415fd4d407ac6abf32cdaae152586e": {
       "chunks": 2,
       "created_at": "2026-05-22T02:40:39+00:00",
@@ -4719,6 +4735,14 @@
       "source": "ANTARA News - Finansial",
       "title": "ANTARA News - Finansial — Bank Sampoerna melaporkan pembiayaan sektor UMKM capai 59 persen",
       "url": "https://www.antaranews.com/berita/5576840/bank-sampoerna-melaporkan-pembiayaan-sektor-umkm-capai-59-persen"
+    },
+    "517d8dec3a2b8f8b81d7737f84acab9565371347021b6f60240875ef4a5cf546": {
+      "chunks": 1,
+      "created_at": "2026-05-22T04:17:04+00:00",
+      "doc_id": 2045,
+      "source": "Google News Indonesia - Teknologi dan AI",
+      "title": "Google News Indonesia - Teknologi dan AI — Axioo Gandeng Primacom Perkuat Langkah di Industri AI untuk Data di Indonesia - Press Release Indonesia",
+      "url": "https://news.google.com/rss/articles/CBMitwFBVV95cUxOYzd5RG5yQ3dQaWo1UVg1QWtOc2xSQnVES2JPM0tKWThlVjAxYlJnYmE4T0xpRS1fenJNVGQtQXpnbHlwTlUtcEx0T2FUWTZYMGhKRVY0MTdTc3ByTlRzX2x2NEYydl9scU9kWVZXdXlFeGdfYndHVmI2VDF2OWpBajNSOU9EUkY3UU1sUTRYamFvaXpQTzVNME9QWF8za3pUenIwRzQyMzE2SEJybjU0UGNZM2NjSnfSAasBQVVfeXFMUERwZTk4Rlo3RktpUWpmaXFIeXplV3ItdHBjbmhMV1JudzRqU29UU25NeDRjWjcxWkhMMEhyNVdWOERQeDN2SDdtbGdTd25kcDhMbXZkQV8tTWg1VE1WRV9NVDJsOFdjSDl3REJ3RDM0REQ2NGNJR0xtVVQyOVd6MTRKU3pNVWxsN241bUhxTk1uaEJwMnJ2UUdKb2lland2Q0ExbzJzb29ORnd3?oc=5"
     },
     "519e3e1c318c5ca6303a99797a57111becdcd38e3024fbde69ea082fe4134583": {
       "chunks": 5,
@@ -9159,6 +9183,14 @@
       "source": "ANTARA News - Internasional",
       "title": "ANTARA News - Internasional — Korut kutuk penjualan senjata AS ke Korsel",
       "url": "https://www.antaranews.com/berita/5577708/korut-kutuk-penjualan-senjata-as-ke-korsel"
+    },
+    "a215323ba96ac62f37a775a85a783a546ce5e9ca593aefc39d7677dcfe28003b": {
+      "chunks": 1,
+      "created_at": "2026-05-22T04:18:15+00:00",
+      "doc_id": 2048,
+      "source": "Hacker News Frontpage",
+      "title": "Hacker News Frontpage — SpaceX not the behemoth everyone thought",
+      "url": "https://www.axios.com/2026/05/21/spacex-ipo-musk-ai"
     },
     "a22bc9f026d9392cb3a79f4ce3bd81253c92d3e0f838d79ecfac17686ee689fa": {
       "chunks": 1,
@@ -14236,6 +14268,13 @@
       "dry_run": false,
       "errors": 12,
       "finished_at": "2026-05-22T04:03:12+00:00"
+    },
+    {
+      "added_chunks": 4,
+      "added_documents": 4,
+      "dry_run": false,
+      "errors": 11,
+      "finished_at": "2026-05-22T04:19:25+00:00"
     }
   ],
   "version": 1
