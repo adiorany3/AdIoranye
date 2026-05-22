@@ -79,6 +79,73 @@ def truncate(text: str, max_chars: int) -> str:
     return text[: max(0, max_chars - 80)].rstrip() + "\n\n[Konten dipotong agar knowledge base tetap ringan.]"
 
 
+
+def extract_keywords(text: str, limit: int = 12) -> List[str]:
+    """Simple keyword extraction for KB metadata without heavy NLP dependencies."""
+    raw = re.findall(r"[a-zA-ZÀ-ÿ0-9_\-]{4,}", str(text or "").lower())
+    stop = {
+        "yang", "dan", "atau", "untuk", "dengan", "dari", "pada", "dalam", "adalah", "sebagai", "karena", "akan", "lebih", "telah",
+        "this", "that", "with", "from", "were", "have", "about", "their", "there", "which", "would", "could",
+    }
+    counts: Dict[str, int] = {}
+    for word in raw:
+        if word in stop or len(word) < 4:
+            continue
+        counts[word] = counts.get(word, 0) + 1
+    return [w for w, _ in sorted(counts.items(), key=lambda x: (-x[1], x[0]))[:max(1, int(limit or 12))]]
+
+
+def summarize_for_kb(text: str, max_sentences: int = 5) -> str:
+    """Extractive summary for cleaner RAG chunks.
+
+    This avoids API cost and makes scraped articles easier for the retrieval layer.
+    It selects sentences with frequent terms, while preserving source-neutral wording.
+    """
+    clean = clean_spaces(text)
+    if not clean:
+        return ""
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", clean)
+    sentences = [s.strip() for s in sentences if 50 <= len(s.strip()) <= 420]
+    if not sentences:
+        return clean[:900]
+    keywords = set(extract_keywords(clean, limit=18))
+    scored = []
+    for idx, sentence in enumerate(sentences[:80]):
+        words = set(re.findall(r"[a-zA-ZÀ-ÿ0-9_\-]{4,}", sentence.lower()))
+        score = len(words & keywords) + (0.5 if idx < 8 else 0.0)
+        scored.append((score, idx, sentence))
+    picked = sorted(sorted(scored, reverse=True)[:max(1, int(max_sentences or 5))], key=lambda x: x[1])
+    return clean_spaces(" ".join(item[2] for item in picked))[:1800]
+
+
+def source_domain(url: str) -> str:
+    try:
+        return urlparse(str(url or "")).netloc.lower().replace("www.", "")[:160]
+    except Exception:
+        return ""
+
+
+def estimate_source_quality_from_config(source: "SourceConfig") -> float:
+    try:
+        if source.source_quality is not None:
+            return max(0.0, min(100.0, float(source.source_quality)))
+    except Exception:
+        pass
+    hay = f"{source.name} {source.url} {source.tags} {source.collection}".lower()
+    score = 55.0
+    if any(x in hay for x in [".go.id", ".gov", "who.int", "fao.org", "woah.org", "nih.gov", "cdc.gov", "nasa.gov", "kemkes", "pertanian"]):
+        score = max(score, 92.0)
+    if any(x in hay for x in ["scimagojr", "scopus", "sinta", "pubmed", "journal", "jurnal", "springer", "elsevier", "wiley"]):
+        score = max(score, 88.0)
+    if any(x in hay for x in ["reuters", "bbc", "antaranews", "kompas", "tempo", "detik", "cnn", "techcrunch", "theverge", "wired"]):
+        score = max(score, 76.0)
+    if any(x in hay for x in ["trends", "trending", "google news"]):
+        score = max(score, 70.0)
+    if any(x in hay for x in ["blogspot", "wordpress", "facebook", "instagram", "tiktok", "twitter", "x.com"]):
+        score = min(score, 45.0)
+    return score
+
+
 def canonical_url(url: str, base_url: str = "") -> str:
     raw = urljoin(base_url or "", str(url or "").strip())
     if not raw:
@@ -326,6 +393,8 @@ class SourceConfig:
     delay_seconds: float = 1.0
     static_title: str = ""
     static_content: str = ""
+    source_quality: Optional[float] = None
+    summary_sentences: int = 5
 
 
 def load_sources(path: str = DEFAULT_SOURCES_FILE) -> List[Dict[str, Any]]:
@@ -359,6 +428,8 @@ def normalize_source(raw: Dict[str, Any]) -> SourceConfig:
         delay_seconds=max(0.0, float(raw.get("delay_seconds") or 1.0)),
         static_title=str(raw.get("static_title") or raw.get("title") or raw.get("name") or "").strip(),
         static_content=str(raw.get("static_content") or raw.get("content") or raw.get("text") or "").strip(),
+        source_quality=(float(raw.get("source_quality")) if str(raw.get("source_quality", "")).strip() else None),
+        summary_sentences=max(2, min(8, int(raw.get("summary_sentences") or 5))),
     )
 
 
@@ -690,6 +761,10 @@ def run_daily_kb_update(
                 "scraped_at_wib": now_wib_text(),
                 "processed_key": key,
                 "auto_update": True,
+                "source_quality": estimate_source_quality_from_config(source),
+                "source_domain": source_domain(url or source.url),
+                "auto_summary": summarize_for_kb(content, max_sentences=source.summary_sentences),
+                "keywords": extract_keywords(" ".join([title, content]), limit=14),
             }
 
             if dry_run:
@@ -705,6 +780,8 @@ def run_daily_kb_update(
                     metadata=metadata,
                     replace_existing=False,
                     pinned=source.pinned,
+                    source_quality=estimate_source_quality_from_config(source),
+                    summary=summarize_for_kb(content, max_sentences=source.summary_sentences),
                 )
 
             if chunks:

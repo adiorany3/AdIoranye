@@ -10,7 +10,9 @@
     "fetch_article": false,
     "min_chars": 40,
     "max_chars": 12000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Isu Terkini",
@@ -23,7 +25,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Teknologi dan AI",
@@ -36,7 +40,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Kesehatan Populer",
@@ -49,7 +55,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Pengetahuan dan Sains",
@@ -62,7 +70,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Kementerian Kesehatan RI - Rilis Berita",
@@ -75,7 +85,9 @@
     "fetch_article": true,
     "min_chars": 220,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "Kementerian Kesehatan RI - Tips Kesehatan",
@@ -88,7 +100,9 @@
     "fetch_article": true,
     "min_chars": 220,
     "max_chars": 22000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "Kementerian Kesehatan RI - Artikel Kesehatan",
@@ -101,7 +115,9 @@
     "fetch_article": true,
     "min_chars": 220,
     "max_chars": 22000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "MIT News - Latest",
@@ -114,7 +130,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "MIT News - Research",
@@ -127,7 +145,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "NASA - Recently Published",
@@ -140,7 +160,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "NASA - Technology",
@@ -153,7 +175,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "The Verge - Technology",
@@ -166,7 +190,9 @@
     "fetch_article": false,
     "min_chars": 100,
     "max_chars": 14000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 76,
+    "summary_sentences": 5
   },
   {
     "name": "Hacker News",
@@ -179,7 +205,9 @@
     "fetch_article": false,
     "min_chars": 60,
     "max_chars": 12000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   },
   {
     "name": "Python Insider",
@@ -192,7 +220,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   },
   {
     "name": "Google AI Blog",
@@ -205,7 +235,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   },
   {
     "name": "Contoh Halaman HTML",
@@ -218,6 +250,8 @@
     "fetch_article": false,
     "min_chars": 100,
     "max_chars": 12000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   }
 ]

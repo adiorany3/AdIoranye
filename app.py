@@ -107,6 +107,7 @@ def validate_runtime_secrets() -> List[Dict[str, Any]]:
         ("POWER_DB_PATH", power_db_path, False, "Database SQLite power features"),
         ("POWER_RAG_ENABLED", power_rag_enabled, False, "Knowledge Base / RAG"),
         ("POWER_RAG_TOP_K", power_rag_top_k, False, "Jumlah potongan KB yang dipakai"),
+        ("POWER_STRICT_RAG_MODE", power_strict_rag_mode, False, "Jika aktif, AI hanya menjawab jika KB cukup"),
         ("POWER_KB_MAX_FILE_MB", power_kb_max_file_mb, False, "Batas upload KB"),
         ("KB_SCRAPER_SOURCES_FILE", kb_scraper_sources_file, False, "Daftar sumber auto-update KB"),
         ("KB_SCRAPER_MAX_ITEMS_PER_SOURCE", kb_scraper_max_items_per_source, False, "Batas item per sumber saat update KB"),
@@ -461,6 +462,9 @@ power_features_enabled = parse_bool(get_secret("POWER_FEATURES_ENABLED", True), 
 power_db_path = str(get_secret("POWER_DB_PATH", ".adioranye_power.db") or ".adioranye_power.db")
 power_rag_enabled = parse_bool(get_secret("POWER_RAG_ENABLED", True), default=True)
 power_rag_top_k = int(get_secret("POWER_RAG_TOP_K", 5) or 5)
+power_strict_rag_mode = parse_bool(get_secret("POWER_STRICT_RAG_MODE", False), default=False)
+power_rag_min_sources = int(get_secret("POWER_RAG_MIN_SOURCES", 1) or 1)
+power_rag_min_score = float(get_secret("POWER_RAG_MIN_SCORE", 0) or 0)
 power_kb_max_file_mb = int(get_secret("POWER_KB_MAX_FILE_MB", 12) or 12)
 power_persistent_memory_enabled = parse_bool(get_secret("POWER_PERSISTENT_MEMORY_ENABLED", True), default=True)
 power_prompt_templates_enabled = parse_bool(get_secret("POWER_PROMPT_TEMPLATES_ENABLED", True), default=True)
@@ -1406,6 +1410,49 @@ def render_answer_model_caption(meta: Dict[str, Any] | None, fallback: str = "",
 
     st.caption(caption_text)
 
+
+
+
+def render_feedback_controls(meta: Dict[str, Any] | None, answer_text: str = "", key_prefix: str = "feedback") -> None:
+    """Persistent feedback buttons for the latest assistant messages."""
+    data = meta or {}
+    interaction_id = int(data.get("power_interaction_id") or 0)
+    if not interaction_id or not power_features_enabled:
+        return
+    cols = st.columns([1, 1, 1, 3])
+    with cols[0]:
+        if st.button("👍 Bagus", key=f"{key_prefix}_up_{interaction_id}", use_container_width=True):
+            fid = power_store.record_feedback(interaction_id=interaction_id, rating=1, label="bagus", user_id="web-admin" if st.session_state.get("admin_authenticated") else "web-public")
+            st.success(f"Feedback tersimpan #{fid}")
+    with cols[1]:
+        if st.button("👎 Kurang", key=f"{key_prefix}_down_{interaction_id}", use_container_width=True):
+            fid = power_store.record_feedback(interaction_id=interaction_id, rating=-1, label="kurang", user_id="web-admin" if st.session_state.get("admin_authenticated") else "web-public")
+            try:
+                power_store.log_knowledge_gap(
+                    question=str((st.session_state.chat_messages[-2] or {}).get("content", "")) if len(st.session_state.chat_messages) >= 2 else "",
+                    reason="negative_feedback",
+                    intent=str(data.get("power_intent") or "general"),
+                    user_id="web-admin" if st.session_state.get("admin_authenticated") else "web-public",
+                    channel="web",
+                    priority=2,
+                    meta={"interaction_id": interaction_id},
+                )
+            except Exception:
+                pass
+            st.warning(f"Feedback kurang tersimpan #{fid}")
+    with cols[2]:
+        if st.session_state.get("admin_authenticated") and st.button("📌 Template", key=f"{key_prefix}_tmpl_{interaction_id}", use_container_width=True):
+            tid = power_store.save_answer_template(
+                title=f"Template dari jawaban #{interaction_id}",
+                trigger_query=str((st.session_state.chat_messages[-2] or {}).get("content", "")) if len(st.session_state.chat_messages) >= 2 else "",
+                answer=answer_text,
+                intent=str(data.get("power_intent") or "general"),
+                tags="feedback,best-answer",
+            )
+            st.success(f"Template tersimpan #{tid}")
+    with cols[3]:
+        if data.get("strict_rag_blocked"):
+            st.caption(f"Strict RAG memblokir jawaban. Gap ID: {data.get('knowledge_gap_id')}")
 
 def build_public_model_status_html(route: Dict[str, Any], last_meta: Dict[str, Any] | None = None) -> str:
     # Panel ringkas agar pengguna/admin langsung tahu status route model tanpa membuka debug.
@@ -2510,6 +2557,9 @@ def start_telegram_if_needed() -> None:
                 "power_features_enabled": bool(power_features_enabled),
                 "power_db_path": power_db_path,
                 "power_rag_enabled": bool(power_rag_enabled),
+                "power_strict_rag_mode": bool(power_strict_rag_mode),
+                "power_rag_min_sources": int(power_rag_min_sources),
+                "power_rag_min_score": float(power_rag_min_score),
                 "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
                 "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
                 "power_self_verification_enabled": bool(power_self_verification_enabled),
@@ -3079,6 +3129,9 @@ def render_admin_settings() -> None:
                 "power_features_enabled": bool(power_features_enabled),
                 "power_db_path": power_db_path,
                 "power_rag_enabled": bool(power_rag_enabled),
+                "power_strict_rag_mode": bool(power_strict_rag_mode),
+                "power_rag_min_sources": int(power_rag_min_sources),
+                "power_rag_min_score": float(power_rag_min_score),
                 "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
                 "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
                 "power_self_verification_enabled": bool(power_self_verification_enabled),
@@ -3433,6 +3486,7 @@ for idx, msg in enumerate(st.session_state.chat_messages):
                 fallback="",
                 admin_detail=bool(st.session_state.admin_authenticated),
             )
+            render_feedback_controls(msg_meta, msg.get("content", ""), key_prefix=f"history_feedback_{idx}")
 
 
 # =========================
@@ -3450,7 +3504,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
             with col_c:
                 st.metric("Self-check", "ON" if power_self_verification_enabled else "OFF")
 
-            tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark"])
+            tabs_power = st.tabs(["📚 Knowledge Base", "🧠 Memory", "💰 Usage", "🛠️ Optimizer", "🧪 Benchmark", "🧠 Learning Loop"])
             with tabs_power[0]:
                 kb_stats = power_store.knowledge_stats()
                 c1, c2, c3, c4, c5 = st.columns(5)
@@ -3682,7 +3736,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                 st.caption("Optimizer memakai data nyata: success rate, latency, quality score, biaya, dan circuit breaker.")
                 opt_intent = st.selectbox(
                     "Lihat skor untuk intent",
-                    ["", "quick_chat", "coding", "academic", "calculation", "document_question", "research", "creative", "deep_reasoning", "general"],
+                    ["", "quick_chat", "coding", "academic", "livestock", "health", "calculation", "document_question", "research", "creative", "deep_reasoning", "general"],
                     format_func=lambda x: "semua intent" if x == "" else x,
                     key="power_optimizer_intent",
                 )
@@ -3712,6 +3766,42 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                     st.dataframe(results, use_container_width=True, hide_index=True)
                 with st.expander("Riwayat benchmark"):
                     st.dataframe(power_store.latest_benchmarks(limit=80), use_container_width=True, hide_index=True)
+
+            with tabs_power[5]:
+                st.caption("Learning Loop menyimpan feedback, knowledge gap, pertanyaan berulang, dan template jawaban agar AI makin relevan.")
+                dash_days = st.slider("Rentang dashboard", 1, 60, 14, key="learning_dash_days")
+                dashboard = power_store.learning_dashboard(days=int(dash_days))
+                f1, f2, f3 = st.columns(3)
+                fb = dashboard.get("feedback", {})
+                f1.metric("Feedback", fb.get("total", 0))
+                f2.metric("Positif", fb.get("positive", 0))
+                f3.metric("Negatif", fb.get("negative", 0))
+                st.markdown("**Intent paling sering**")
+                st.dataframe(dashboard.get("intents", []), use_container_width=True, hide_index=True)
+                st.markdown("**Pertanyaan berulang**")
+                st.dataframe(dashboard.get("repeated_questions", []), use_container_width=True, hide_index=True)
+                st.markdown("**Knowledge gap terbuka**")
+                gaps = power_store.list_knowledge_gaps(status="open", limit=100)
+                st.dataframe(gaps, use_container_width=True, hide_index=True)
+                col_gap1, col_gap2 = st.columns(2)
+                with col_gap1:
+                    done_gap_id = st.text_input("Tandai gap selesai ID", key="learning_gap_done_id")
+                with col_gap2:
+                    if st.button("✅ Tandai selesai", use_container_width=True, key="learning_gap_done_btn") and done_gap_id.strip():
+                        ok = power_store.update_knowledge_gap_status(int(done_gap_id), status="done") if done_gap_id.strip().isdigit() else False
+                        st.success("Gap selesai.") if ok else st.error("Gap ID tidak ditemukan.")
+                with st.expander("Interaksi terbaru"):
+                    only_neg = st.checkbox("Tampilkan yang feedback negatif saja", value=False, key="learning_only_negative")
+                    st.dataframe(power_store.recent_interactions(limit=100, only_negative=only_neg), use_container_width=True, hide_index=True)
+                with st.expander("Simpan template jawaban manual"):
+                    tmpl_title = st.text_input("Judul template", key="learning_template_title")
+                    tmpl_trigger = st.text_input("Trigger/contoh pertanyaan", key="learning_template_trigger")
+                    tmpl_intent = st.selectbox("Intent template", ["general", "quick_chat", "coding", "academic", "livestock", "health", "research", "creative", "deep_reasoning", "document_question"], key="learning_template_intent")
+                    tmpl_body = st.text_area("Isi template jawaban", height=180, key="learning_template_body")
+                    if st.button("💾 Simpan template", use_container_width=True, key="learning_save_template_btn") and tmpl_body.strip():
+                        tid = power_store.save_answer_template(title=tmpl_title or "Template manual", trigger_query=tmpl_trigger, answer=tmpl_body, intent=tmpl_intent, tags="manual")
+                        st.success(f"Template tersimpan #{tid}")
+
 
     except Exception as exc:
         st.error("Power Features gagal dimuat, tetapi chat utama tetap aktif.")
@@ -3780,6 +3870,9 @@ if user_input:
                     enable_circuit_breaker=bool(power_circuit_breaker_enabled),
                     circuit_max_failures=int(model_circuit_max_failures),
                     circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
+                    strict_rag_mode=bool(power_strict_rag_mode),
+                    rag_min_sources=int(power_rag_min_sources),
+                    rag_min_score=float(power_rag_min_score),
                 )
                 restore_active_model_to_cheap(route.get("primary_model"))
                 placeholder.markdown(answer)
@@ -3808,6 +3901,7 @@ if user_input:
                     elif expensive_used:
                         caption_text += " • model menengah/mahal dipakai karena jawaban hemat kurang cukup"
                 st.caption(caption_text)
+                render_feedback_controls(meta, answer, key_prefix="latest_feedback")
         except Exception as exc:
             answer = (
                 "Maaf, Adioranye belum bisa menjawab saat ini. "

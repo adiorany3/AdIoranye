@@ -165,3 +165,9 @@ Catatan penting untuk Q-level:
 - Untuk jurnal internasional, verifikasi lewat SCImago, Scopus Sources, atau JCR.
 - Untuk jurnal Indonesia, gunakan SINTA dan Garuda.
 - AI sebaiknya tidak menyatakan Q-level sebagai fakta final tanpa menyebut tahun dan sumber pengecekan.
+
+## AI Smart Learning Loop
+
+Versi ini sudah ditambah fitur feedback, knowledge gap detector, source quality ranking, strict RAG mode, auto summarizer hasil scraper, template jawaban, dan mode domain peternakan/kesehatan.
+
+Baca panduan lengkap di `AI_SMART_LEARNING_LOOP.md`.

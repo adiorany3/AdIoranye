@@ -264,6 +264,70 @@ def _format_kb_citation(item: Dict[str, Any]) -> str:
     return " · ".join(parts)[:260]
 
 
+
+def _source_domain(source: str) -> str:
+    """Extract a compact domain label from a URL/source string."""
+    raw = str(source or "").strip()
+    if not raw:
+        return ""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(raw if re.match(r"^https?://", raw, flags=re.I) else "https://" + raw)
+        host = (parsed.netloc or parsed.path.split("/", 1)[0]).lower()
+        return host.replace("www.", "")[:160]
+    except Exception:
+        return raw[:160]
+
+
+def _estimate_source_quality(source: str = "", tags: str = "", metadata: Optional[Dict[str, Any]] = None) -> float:
+    """Heuristic 0-100 source credibility score used for KB reranking.
+
+    It is intentionally transparent and editable: admins can override it via
+    source_quality on sources/docs. The score is not a truth guarantee; it only
+    helps prefer official, journal, and primary sources when multiple chunks match.
+    """
+    metadata = metadata or {}
+    explicit = metadata.get("source_quality") or metadata.get("quality_score")
+    try:
+        if explicit is not None and str(explicit).strip() != "":
+            return max(0.0, min(100.0, float(explicit)))
+    except Exception:
+        pass
+
+    hay = f"{source} {tags} {_safe_json(metadata)}".lower()
+    score = 55.0
+    official_markers = [".go.id", ".gov", "who.int", "fao.org", "woah.org", "nih.gov", "cdc.gov", "nasa.gov", "mit.edu", "kemkes.go.id", "pertanian.go.id"]
+    journal_markers = ["scimagojr", "scopus", "sinta", "springer", "elsevier", "wiley", "tandfonline", "mdpi", "frontiersin", "nature.com", "science.org", "pubmed"]
+    news_markers = ["kompas", "cnn", "reuters", "bbc", "tempo", "detik", "antaranews", "cnbc", "theverge", "techcrunch", "wired"]
+    low_markers = ["blogspot", "wordpress", "medium.com", "facebook.com", "tiktok.com", "x.com", "twitter.com", "instagram.com"]
+    if any(x in hay for x in official_markers):
+        score = max(score, 92.0)
+    if any(x in hay for x in journal_markers):
+        score = max(score, 88.0)
+    if any(x in hay for x in news_markers):
+        score = max(score, 76.0)
+    if any(x in hay for x in ["rss", "news", "berita", "trends", "trending"]):
+        score = max(score, 68.0)
+    if any(x in hay for x in low_markers):
+        score = min(score, 45.0)
+    return max(0.0, min(100.0, score))
+
+
+def _recency_boost(ts: float) -> float:
+    """Small freshness boost for recent KB chunks; capped so credibility still matters."""
+    try:
+        age_days = max(0.0, (_utc_ts() - float(ts or 0)) / 86400.0)
+    except Exception:
+        return 0.0
+    if age_days <= 2:
+        return 0.08
+    if age_days <= 7:
+        return 0.05
+    if age_days <= 30:
+        return 0.025
+    return 0.0
+
+
 # =========================
 # Knowledge base file extraction helpers
 # =========================
@@ -608,6 +672,58 @@ class PowerStore:
                     last_error TEXT DEFAULT '',
                     updated_at REAL NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS user_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    interaction_id INTEGER DEFAULT 0,
+                    user_id TEXT DEFAULT 'public',
+                    rating INTEGER DEFAULT 0,
+                    label TEXT DEFAULT '',
+                    comment TEXT DEFAULT '',
+                    created_by TEXT DEFAULT '',
+                    meta_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_feedback_ts ON user_feedback(ts);
+                CREATE INDEX IF NOT EXISTS idx_user_feedback_interaction ON user_feedback(interaction_id);
+
+                CREATE TABLE IF NOT EXISTS knowledge_gaps (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    user_id TEXT DEFAULT 'public',
+                    channel TEXT DEFAULT 'web',
+                    intent TEXT DEFAULT '',
+                    question TEXT NOT NULL,
+                    reason TEXT DEFAULT '',
+                    status TEXT DEFAULT 'open',
+                    priority INTEGER DEFAULT 3,
+                    suggested_query TEXT DEFAULT '',
+                    meta_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_status ON knowledge_gaps(status, ts);
+                CREATE INDEX IF NOT EXISTS idx_knowledge_gaps_intent ON knowledge_gaps(intent, ts);
+
+                CREATE TABLE IF NOT EXISTS answer_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    title TEXT NOT NULL,
+                    intent TEXT DEFAULT 'general',
+                    trigger_query TEXT DEFAULT '',
+                    answer TEXT NOT NULL,
+                    tags TEXT DEFAULT '',
+                    active INTEGER DEFAULT 1,
+                    uses INTEGER DEFAULT 0,
+                    updated_at REAL DEFAULT 0
+                );
+                CREATE INDEX IF NOT EXISTS idx_answer_templates_intent ON answer_templates(intent, active, updated_at);
+
+                CREATE TABLE IF NOT EXISTS source_quality_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern TEXT NOT NULL UNIQUE,
+                    quality REAL NOT NULL DEFAULT 60,
+                    note TEXT DEFAULT '',
+                    updated_at REAL NOT NULL
+                );
                 """
             )
             # Optional SQLite FTS5. Streamlit Cloud usually supports it, but keep fallback.
@@ -629,6 +745,9 @@ class PowerStore:
                 "ALTER TABLE chunks ADD COLUMN page_label TEXT DEFAULT ''",
                 "ALTER TABLE chunks ADD COLUMN char_start INTEGER DEFAULT 0",
                 "ALTER TABLE chunks ADD COLUMN char_end INTEGER DEFAULT 0",
+                "ALTER TABLE documents ADD COLUMN source_quality REAL DEFAULT 55",
+                "ALTER TABLE documents ADD COLUMN source_domain TEXT DEFAULT ''",
+                "ALTER TABLE documents ADD COLUMN summary TEXT DEFAULT ''",
             ]:
                 try:
                     conn.execute(ddl)
@@ -638,6 +757,8 @@ class PowerStore:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents(collection, created_at)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(doc_hash)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_pinned ON documents(pinned, created_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_quality ON documents(source_quality, created_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents(source_domain)")
             except Exception:
                 pass
 
@@ -693,6 +814,8 @@ class PowerStore:
         metadata: Optional[Dict[str, Any]] = None,
         replace_existing: bool = False,
         pinned: bool = False,
+        source_quality: Optional[float] = None,
+        summary: str = "",
     ) -> Tuple[int, int]:
         """Add a document with workspace/collection, tags, hashing, and citation-ready chunks."""
         title = str(title or "Dokumen tanpa judul").strip()[:240]
@@ -704,6 +827,12 @@ class PowerStore:
         if not records:
             return 0, 0
         doc_hash = _stable_hash(title + "\n" + source + "\n" + raw_text[:2_000_000])
+        metadata = metadata or {}
+        if source_quality is not None:
+            metadata["source_quality"] = source_quality
+        summary = sanitize_non_instruction_context(str(summary or metadata.get("summary") or ""), limit=1200)
+        source_domain = _source_domain(source)
+        computed_quality = _estimate_source_quality(source=source, tags=tags, metadata=metadata)
         meta_json = _safe_json(metadata or {})
         now = _utc_ts()
         with self._connect() as conn:
@@ -717,10 +846,10 @@ class PowerStore:
                     pass
             cur = conn.execute(
                 """
-                INSERT INTO documents(title, source, collection, tags, doc_hash, metadata_json, pinned, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO documents(title, source, collection, tags, doc_hash, metadata_json, pinned, created_at, updated_at, source_quality, source_domain, summary)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (title, source, collection, tags, doc_hash, meta_json, 1 if pinned else 0, now, now),
+                (title, source, collection, tags, doc_hash, meta_json, 1 if pinned else 0, now, now, computed_quality, source_domain, summary),
             )
             doc_id = int(cur.lastrowid)
             inserted = 0
@@ -761,7 +890,7 @@ class PowerStore:
                     rows = conn.execute(
                         """
                         SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                               d.title, d.source, d.collection, d.tags, d.pinned, c.created_at,
+                               d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at,
                                bm25(chunks_fts) AS fts_score
                         FROM chunks_fts
                         JOIN chunks c ON c.id = chunks_fts.rowid
@@ -775,7 +904,7 @@ class PowerStore:
                     rows = conn.execute(
                         """
                         SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                               d.title, d.source, d.collection, d.tags, d.pinned, c.created_at,
+                               d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at,
                                bm25(chunks_fts) AS fts_score
                         FROM chunks_fts
                         JOIN chunks c ON c.id = chunks_fts.rowid
@@ -792,6 +921,11 @@ class PowerStore:
                 score = (fts_component * 1.35) + lexical
                 if item.get("pinned"):
                     score += 0.08
+                try:
+                    score += (float(item.get("source_quality") or 55) / 100.0) * 0.12
+                except Exception:
+                    pass
+                score += _recency_boost(float(item.get("created_at") or 0))
                 item["score"] = round(score, 4)
                 item["citation"] = _format_kb_citation(item)
                 item["source_type"] = "fts5"
@@ -805,7 +939,7 @@ class PowerStore:
                 rows = conn.execute(
                     """
                     SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                           d.title, d.source, d.collection, d.tags, d.pinned, c.created_at
+                           d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at
                     FROM chunks c JOIN documents d ON d.id = c.doc_id
                     WHERE d.collection = ?
                     ORDER BY d.pinned DESC, c.created_at DESC LIMIT 2500
@@ -816,7 +950,7 @@ class PowerStore:
                 rows = conn.execute(
                     """
                     SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                           d.title, d.source, d.collection, d.tags, d.pinned, c.created_at
+                           d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at
                     FROM chunks c JOIN documents d ON d.id = c.doc_id
                     ORDER BY d.pinned DESC, c.created_at DESC LIMIT 2500
                     """
@@ -828,6 +962,11 @@ class PowerStore:
             score = _score_text(q, weighted_text)
             if item.get("pinned"):
                 score += 0.08
+            try:
+                score += (float(item.get("source_quality") or 55) / 100.0) * 0.12
+            except Exception:
+                pass
+            score += _recency_boost(float(item.get("created_at") or 0))
             if score > min_score:
                 item["score"] = round(score, 4)
                 item["citation"] = _format_kb_citation(item)
@@ -841,6 +980,179 @@ class PowerStore:
         final = list(results.values())
         final.sort(key=lambda x: (float(x.get("score") or 0), int(x.get("pinned") or 0)), reverse=True)
         return final[:limit]
+
+
+    # Learning loop / feedback / knowledge gaps
+    def record_feedback(
+        self,
+        interaction_id: int = 0,
+        rating: int = 0,
+        label: str = "",
+        comment: str = "",
+        user_id: str = "public",
+        created_by: str = "user",
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """Store user/admin feedback so routing and answer templates can improve."""
+        rating_value = max(-1, min(1, int(rating or 0)))
+        now = _utc_ts()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO user_feedback(ts,interaction_id,user_id,rating,label,comment,created_by,meta_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (now, int(interaction_id or 0), str(user_id or "public")[:120], rating_value, str(label or "")[:80], str(comment or "")[:1200], str(created_by or "user")[:80], _safe_json(meta or {})[:4000]),
+            )
+            # Nudge the historical model quality score when we know which interaction is being rated.
+            row = conn.execute("SELECT model, intent, latency_seconds, cost_idr FROM interactions WHERE id = ?", (int(interaction_id or 0),)).fetchone()
+        if row is not None and rating_value != 0:
+            quality = 0.85 if rating_value > 0 else 0.15
+            try:
+                self.update_model_score(
+                    model=str(_row_value(row, "model", 0, "")),
+                    intent=str(_row_value(row, "intent", 1, "general")),
+                    success=rating_value > 0,
+                    latency_seconds=float(_row_value(row, "latency_seconds", 2, 0) or 0),
+                    quality_score=quality,
+                    cost_idr=float(_row_value(row, "cost_idr", 3, 0) or 0),
+                )
+            except Exception:
+                pass
+        return int(cur.lastrowid)
+
+    def feedback_summary(self, days: int = 30) -> Dict[str, Any]:
+        since = _utc_ts() - max(1, int(days or 30)) * 86400
+        with self._connect() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN rating > 0 THEN 1 ELSE 0 END),0) AS up, COALESCE(SUM(CASE WHEN rating < 0 THEN 1 ELSE 0 END),0) AS down FROM user_feedback WHERE ts >= ?",
+                (since,),
+            ).fetchone()
+            by_label = conn.execute(
+                "SELECT label, COUNT(*) AS jumlah, COALESCE(AVG(rating),0) AS avg_rating FROM user_feedback WHERE ts >= ? GROUP BY label ORDER BY jumlah DESC LIMIT 20",
+                (since,),
+            ).fetchall()
+        return {
+            "days": days,
+            "total": int(_row_value(total, "n", 0, 0) or 0),
+            "positive": int(_row_value(total, "up", 1, 0) or 0),
+            "negative": int(_row_value(total, "down", 2, 0) or 0),
+            "by_label": [_row_to_dict(row) for row in by_label],
+        }
+
+    def recent_interactions(self, limit: int = 50, only_negative: bool = False) -> List[Dict[str, Any]]:
+        where = ""
+        params: Tuple[Any, ...] = (max(1, int(limit or 50)),)
+        if only_negative:
+            where = "WHERE EXISTS (SELECT 1 FROM user_feedback f WHERE f.interaction_id = interactions.id AND f.rating < 0)"
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, ts, user_id, channel, intent, model, success, question_preview, answer_preview, latency_seconds, cost_idr
+                FROM interactions {where}
+                ORDER BY ts DESC LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        out = []
+        for row in rows:
+            item = _row_to_dict(row)
+            item["ts_wib"] = _timestamp_to_wib(float(item.get("ts") or 0))
+            out.append(item)
+        return out
+
+    def log_knowledge_gap(
+        self,
+        question: str,
+        reason: str = "low_kb_coverage",
+        intent: str = "general",
+        user_id: str = "public",
+        channel: str = "web",
+        priority: int = 3,
+        suggested_query: str = "",
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        clean_q = sanitize_non_instruction_context(question, limit=1200)
+        if not clean_q:
+            return 0
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO knowledge_gaps(ts,user_id,channel,intent,question,reason,status,priority,suggested_query,meta_json)
+                VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)
+                """,
+                (_utc_ts(), str(user_id or "public")[:120], str(channel or "web")[:40], str(intent or "general")[:80], clean_q, str(reason or "")[:120], max(1, min(5, int(priority or 3))), str(suggested_query or clean_q)[:500], _safe_json(meta or {})[:4000]),
+            )
+            return int(cur.lastrowid)
+
+    def list_knowledge_gaps(self, status: str = "open", limit: int = 50) -> List[Dict[str, Any]]:
+        params: Tuple[Any, ...]
+        where = ""
+        if status:
+            where = "WHERE status = ?"
+            params = (str(status)[:40], max(1, int(limit or 50)))
+        else:
+            params = (max(1, int(limit or 50)),)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM knowledge_gaps {where} ORDER BY priority ASC, ts DESC LIMIT ?",
+                params,
+            ).fetchall()
+        out = []
+        for row in rows:
+            item = _row_to_dict(row)
+            item["ts_wib"] = _timestamp_to_wib(float(item.get("ts") or 0))
+            out.append(item)
+        return out
+
+    def update_knowledge_gap_status(self, gap_id: int, status: str = "done") -> bool:
+        with self._connect() as conn:
+            cur = conn.execute("UPDATE knowledge_gaps SET status = ? WHERE id = ?", (str(status or "done")[:40], int(gap_id or 0)))
+            return bool(cur.rowcount)
+
+    def save_answer_template(self, title: str, trigger_query: str, answer: str, intent: str = "general", tags: str = "") -> int:
+        body = sanitize_non_instruction_context(answer, limit=8000)
+        if not body:
+            return 0
+        now = _utc_ts()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO answer_templates(ts,title,intent,trigger_query,answer,tags,active,uses,updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?)
+                """,
+                (now, str(title or "Template jawaban")[:200], str(intent or "general")[:80], str(trigger_query or "")[:500], body, _normalize_tags(tags), now),
+            )
+            return int(cur.lastrowid)
+
+    def search_answer_templates(self, query: str, intent: str = "", limit: int = 3) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            if intent:
+                rows = conn.execute("SELECT * FROM answer_templates WHERE active = 1 AND intent IN (?, 'general') ORDER BY updated_at DESC LIMIT 500", (str(intent)[:80],)).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM answer_templates WHERE active = 1 ORDER BY updated_at DESC LIMIT 500").fetchall()
+        scored: List[Tuple[float, Dict[str, Any]]] = []
+        for row in rows:
+            item = _row_to_dict(row)
+            score = _score_text(query, f"{item.get('title','')} {item.get('trigger_query','')} {item.get('tags','')}")
+            if score > 0:
+                scored.append((score, item))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [item for _, item in scored[:max(1, int(limit or 3))]]
+
+    def learning_dashboard(self, days: int = 14) -> Dict[str, Any]:
+        since = _utc_ts() - max(1, int(days or 14)) * 86400
+        with self._connect() as conn:
+            intents = conn.execute("SELECT intent, COUNT(*) AS jumlah, COALESCE(AVG(success),0) AS success_rate FROM interactions WHERE ts >= ? GROUP BY intent ORDER BY jumlah DESC LIMIT 20", (since,)).fetchall()
+            repeated = conn.execute("SELECT lower(question_preview) AS pertanyaan, COUNT(*) AS jumlah FROM interactions WHERE ts >= ? AND length(question_preview) > 12 GROUP BY lower(question_preview) HAVING jumlah > 1 ORDER BY jumlah DESC LIMIT 20", (since,)).fetchall()
+            gaps = conn.execute("SELECT status, COUNT(*) AS jumlah FROM knowledge_gaps WHERE ts >= ? GROUP BY status", (since,)).fetchall()
+        return {
+            "days": days,
+            "intents": [_row_to_dict(row) for row in intents],
+            "repeated_questions": [_row_to_dict(row) for row in repeated],
+            "gap_status": [_row_to_dict(row) for row in gaps],
+            "feedback": self.feedback_summary(days=days),
+        }
 
     def list_documents(self, limit: int = 20, collection: str = "") -> List[Dict[str, Any]]:
         collection_filter = _normalize_collection(collection) if str(collection or "").strip() else ""
@@ -1020,7 +1332,7 @@ class PowerStore:
         answer: str,
         meta: Optional[Dict[str, Any]] = None,
         success: bool = True,
-    ) -> None:
+    ) -> int:
         meta = meta or {}
         usage = meta.get("usage") or {}
         input_tokens = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
@@ -1029,7 +1341,7 @@ class PowerStore:
         latency = float(meta.get("latency_seconds") or meta.get("power_latency_seconds") or 0)
         quality = extract_quality_score(meta, answer)
         with self._connect() as conn:
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO interactions(ts,user_id,channel,intent,model,input_tokens,output_tokens,cost_idr,
                                          latency_seconds,success,question_preview,answer_preview,meta_json)
@@ -1051,11 +1363,13 @@ class PowerStore:
                     _safe_json(meta)[:12000],
                 ),
             )
+            interaction_id = int(cur.lastrowid or 0)
         self.update_model_score(model=model, intent=intent, success=success, latency_seconds=latency, quality_score=quality, cost_idr=cost_idr)
         if success:
             self.register_model_success(model)
         else:
             self.register_model_failure(model, error=str((meta or {}).get("error") or "failed_interaction"))
+        return interaction_id
 
     def usage_summary(self, days: int = 1) -> Dict[str, Any]:
         since = _utc_ts() - max(1, int(days or 1)) * 86400
@@ -1509,7 +1823,11 @@ def classify_intent_text(text: str) -> str:
         return "admin_command"
     if any(x in t for x in ["```", "def ", "class ", "traceback", "error", "bug", "streamlit", "api", "vercel", "github", "kode", "coding", "python", "javascript", "patch"]):
         return "coding"
-    if any(x in t for x in ["skripsi", "jurnal", "bab ", "metode", "kutipan", "referensi", "smartpls", "penelitian", "akademik", "tesis"]):
+    if any(x in t for x in ["peternakan", "ternak", "unggas", "sapi", "kambing", "pakan", "pmk", "rabies", "flu burung", "veteriner", "hewan"]):
+        return "livestock"
+    if any(x in t for x in ["kesehatan", "medis", "penyakit", "obat", "gejala", "diagnosis", "terapi", "klinis", "rumah sakit"]):
+        return "health"
+    if any(x in t for x in ["skripsi", "jurnal", "quartile", "q1", "q2", "q3", "q4", "sinta", "scopus", "bab ", "metode", "kutipan", "referensi", "smartpls", "penelitian", "akademik", "tesis"]):
         return "academic"
     if any(x in t for x in ["hitung", "rumus", "berapa", "persentase", "kalkulasi", "calculate"]):
         return "calculation"
@@ -1534,6 +1852,8 @@ PROMPT_TEMPLATES: Dict[str, str] = {
     "research": "Pisahkan fakta, asumsi, dan langkah verifikasi. Jangan mengarang data terbaru.",
     "creative": "Berikan output kreatif yang siap pakai, ringkas, dan sesuai konteks komersial/branding.",
     "deep_reasoning": "Analisis masalah secara bertahap, prioritaskan solusi praktis, dan berikan rekomendasi akhir yang jelas.",
+    "livestock": "Jawab sebagai asisten pengetahuan peternakan. Prioritaskan sumber resmi, jurnal, kesehatan hewan, pakan, manajemen ternak, dan beri catatan kehati-hatian bila data belum pasti.",
+    "health": "Jawab dengan kehati-hatian kesehatan: edukatif, tidak menggantikan tenaga medis, prioritaskan sumber resmi, dan sarankan pemeriksaan profesional untuk kondisi serius.",
 }
 
 
@@ -1566,13 +1886,25 @@ def build_power_context(
             lines = [f"- {sanitize_non_instruction_context(m.get('text', ''), limit=500)}" for m in memories if str(m.get("text", "")).strip()]
             if lines:
                 sections.append("MEMORY SQLITE RELEVAN (konteks non-instruksi):\n" + "\n".join(lines)[:3000])
+    try:
+        templates = store.search_answer_templates(user_text, intent=classify_intent_text(user_text), limit=2)
+        if templates:
+            t_lines = []
+            for tmpl in templates:
+                preview = sanitize_non_instruction_context(str(tmpl.get("answer") or ""), limit=700)
+                if preview:
+                    t_lines.append(f"- Template {tmpl.get('title')}: {preview}")
+            if t_lines:
+                sections.append("TEMPLATE JAWABAN RELEVAN (referensi gaya/struktur, bukan instruksi mutlak):\n" + "\n".join(t_lines))
+    except Exception:
+        pass
     if enable_rag:
         docs = store.search_documents(user_text, limit=rag_top_k)
         if docs:
             lines = []
             for idx, doc in enumerate(docs, start=1):
                 content = re.sub(r"\s+", " ", sanitize_non_instruction_context(str(doc.get("content", "")), limit=1200)).strip()
-                lines.append(f"[KB{idx}] {doc.get('title')} (chunk {doc.get('chunk_index')}): {content}")
+                lines.append(f"[KB{idx}] {doc.get('title')} (chunk {doc.get('chunk_index')}, kualitas sumber {doc.get('source_quality', 55)}, sumber {doc.get('source')}): {content}")
             sections.append("KONTEKS KNOWLEDGE BASE/RAG NON-INSTRUKSI:\n" + "\n\n".join(lines))
     return "\n\n".join([s for s in sections if s.strip()])[:10000]
 
@@ -1674,6 +2006,9 @@ def generate_power_answer(
     enable_circuit_breaker: bool = True,
     circuit_max_failures: int = 3,
     circuit_cooldown_seconds: int = 1800,
+    strict_rag_mode: bool = False,
+    rag_min_sources: int = 1,
+    rag_min_score: float = 0.0,
 ) -> Tuple[str, Dict[str, Any]]:
     store = store or get_power_store()
     intent = classify_intent_text(user_text)
@@ -1693,9 +2028,27 @@ def generate_power_answer(
     rag_sources: List[Dict[str, Any]] = []
     if enable_rag:
         try:
-            rag_sources = store.search_documents(user_text, limit=max(1, int(rag_top_k or 5)))
+            rag_sources = store.search_documents(user_text, limit=max(1, int(rag_top_k or 5)), min_score=float(rag_min_score or 0.0))
         except Exception:
             rag_sources = []
+    if strict_rag_mode and enable_rag:
+        min_sources = max(1, int(rag_min_sources or 1))
+        if len(rag_sources) < min_sources:
+            gap_id = store.log_knowledge_gap(
+                question=user_text,
+                reason="strict_rag_insufficient_sources",
+                intent=intent,
+                user_id=user_id,
+                channel=channel,
+                priority=1,
+                suggested_query=user_text,
+                meta={"rag_sources_found": len(rag_sources), "rag_min_sources": min_sources},
+            )
+            return (
+                "Data belum tersedia atau belum cukup kuat di Knowledge Base. "
+                "Admin dapat menambahkan sumber baru atau mematikan STRICT_RAG_MODE untuk pertanyaan umum.",
+                {"strict_rag_blocked": True, "knowledge_gap_id": gap_id, "intent": intent, "power_kb_sources": rag_sources},
+            )
 
     memory_text = build_power_context(
         store=store,
@@ -1858,7 +2211,7 @@ def generate_power_answer(
             if not success and last_error:
                 meta["error"] = last_error[:1000]
             final_model = str((meta or {}).get("active_model_final") or (meta or {}).get("model_requested") or final_model or selected_model or model)
-            store.log_interaction(
+            interaction_id = store.log_interaction(
                 user_id=user_id,
                 channel=channel,
                 intent=intent,
@@ -1868,6 +2221,18 @@ def generate_power_answer(
                 meta=meta,
                 success=success,
             )
+            if isinstance(meta, dict):
+                meta["power_interaction_id"] = interaction_id
+            if success and enable_rag and not rag_sources and intent in {"research", "academic", "document_question", "health", "livestock"}:
+                meta["knowledge_gap_id"] = store.log_knowledge_gap(
+                    question=user_text,
+                    reason="no_relevant_kb_source",
+                    intent=intent,
+                    user_id=user_id,
+                    channel=channel,
+                    priority=2,
+                    suggested_query=user_text,
+                )
         except Exception:
             pass
 
@@ -2007,6 +2372,25 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
         if not chunks:
             return "Gagal menambahkan RAG: isi dokumen kosong."
         return f"✅ Knowledge base ditambahkan. Doc ID: {doc_id}, chunks: {chunks}."
+
+
+    if lower in {"/gap list", "/gaps", "/knowledge gap"}:
+        gaps = store.list_knowledge_gaps(status="open", limit=10)
+        if not gaps:
+            return "Belum ada knowledge gap terbuka."
+        lines = ["🧩 Knowledge gap terbuka:", ""]
+        for item in gaps:
+            lines.append(f"ID {item.get('id')} | {item.get('intent')} | prioritas {item.get('priority')}\n{item.get('question')}\n")
+        return "\n".join(lines).strip()
+
+    if lower.startswith("/gap selesai "):
+        gap_id = raw.split(" ", 2)[2].strip()
+        ok = store.update_knowledge_gap_status(int(gap_id), status="done") if gap_id.isdigit() else False
+        return "✅ Knowledge gap ditandai selesai." if ok else "Gap ID tidak ditemukan."
+
+    if lower in {"/feedback statistik", "/feedback stats"}:
+        data = store.feedback_summary(days=30)
+        return f"📊 Feedback 30 hari\nTotal: {data.get('total')}\nPositif: {data.get('positive')}\nNegatif: {data.get('negative')}"
 
     if lower in {"/biaya", "/usage", "/biaya hari ini", "/usage hari ini"}:
         data = store.usage_summary(days=1)

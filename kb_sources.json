@@ -10,7 +10,9 @@
     "fetch_article": false,
     "min_chars": 40,
     "max_chars": 12000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Isu Terkini",
@@ -23,7 +25,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Teknologi dan AI",
@@ -36,7 +40,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Kesehatan Populer",
@@ -49,7 +55,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Pengetahuan dan Sains",
@@ -62,7 +70,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Kementerian Kesehatan RI - Rilis Berita",
@@ -75,7 +85,9 @@
     "fetch_article": true,
     "min_chars": 220,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "Kementerian Kesehatan RI - Tips Kesehatan",
@@ -88,7 +100,9 @@
     "fetch_article": true,
     "min_chars": 220,
     "max_chars": 22000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "Kementerian Kesehatan RI - Artikel Kesehatan",
@@ -101,7 +115,9 @@
     "fetch_article": true,
     "min_chars": 220,
     "max_chars": 22000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "MIT News - Latest",
@@ -114,7 +130,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "MIT News - Research",
@@ -127,7 +145,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "NASA - Recently Published",
@@ -140,7 +160,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "NASA - Technology",
@@ -153,7 +175,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "The Verge - Technology",
@@ -166,7 +190,9 @@
     "fetch_article": false,
     "min_chars": 100,
     "max_chars": 14000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 76,
+    "summary_sentences": 5
   },
   {
     "name": "Hacker News",
@@ -179,7 +205,9 @@
     "fetch_article": false,
     "min_chars": 60,
     "max_chars": 12000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   },
   {
     "name": "Python Insider",
@@ -192,7 +220,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   },
   {
     "name": "Google AI Blog",
@@ -205,7 +235,9 @@
     "fetch_article": true,
     "min_chars": 300,
     "max_chars": 25000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   },
   {
     "name": "Contoh Halaman HTML",
@@ -218,7 +250,9 @@
     "fetch_article": false,
     "min_chars": 100,
     "max_chars": 12000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 60,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Peternakan dan Ternak",
@@ -231,7 +265,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Kesehatan Hewan dan Penyakit Ternak",
@@ -244,7 +280,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Pakan dan Nutrisi Ternak",
@@ -257,7 +295,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 70,
+    "summary_sentences": 5
   },
   {
     "name": "Google News Indonesia - Kementan Peternakan",
@@ -270,7 +310,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "Google News - Riset Peternakan dan Jurnal Terkait",
@@ -283,7 +325,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 16000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 88,
+    "summary_sentences": 5
   },
   {
     "name": "SINTA - Jurnal Ilmu-Ilmu Peternakan",
@@ -296,7 +340,9 @@
     "fetch_article": false,
     "min_chars": 200,
     "max_chars": 18000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "SINTA - Jurnal Peternakan Indonesia",
@@ -309,7 +355,9 @@
     "fetch_article": false,
     "min_chars": 200,
     "max_chars": 18000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 92,
+    "summary_sentences": 5
   },
   {
     "name": "Sains Peternakan UNS",
@@ -322,7 +370,9 @@
     "fetch_article": false,
     "min_chars": 200,
     "max_chars": 18000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 88,
+    "summary_sentences": 5
   },
   {
     "name": "Journal of Animal Science - Advance Articles RSS",
@@ -335,7 +385,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 14000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 88,
+    "summary_sentences": 5
   },
   {
     "name": "MDPI Animals - Journal Feed",
@@ -348,7 +400,9 @@
     "fetch_article": false,
     "min_chars": 80,
     "max_chars": 14000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 88,
+    "summary_sentences": 5
   },
   {
     "name": "SCImago - Animal Science and Zoology",
@@ -361,7 +415,9 @@
     "fetch_article": false,
     "min_chars": 200,
     "max_chars": 22000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 88,
+    "summary_sentences": 5
   },
   {
     "name": "SCImago - Veterinary",
@@ -374,7 +430,9 @@
     "fetch_article": false,
     "min_chars": 200,
     "max_chars": 22000,
-    "delay_seconds": 1
+    "delay_seconds": 1,
+    "source_quality": 88,
+    "summary_sentences": 5
   },
   {
     "name": "Panduan Jurnal Q-Level Peternakan",
@@ -389,6 +447,8 @@
     "max_chars": 20000,
     "delay_seconds": 0,
     "static_title": "Panduan cek jurnal Q-level bidang peternakan",
-    "static_content": "Panduan Knowledge Base: Peternakan dan Jurnal Q-Level Terkait\n\nTujuan:\nMemperkaya Adioranye AI dengan konteks bidang peternakan, kesehatan hewan, pakan ternak, unggas, sapi potong/sapi perah, kambing/domba, reproduksi, pemuliaan, kesejahteraan ternak, pangan asal hewan, dan rujukan jurnal ilmiah terkait.\n\nIstilah penting:\n- Q-level atau quartile jurnal biasanya mengacu pada pembagian Q1, Q2, Q3, Q4 berdasarkan pemeringkatan per kategori dan tahun.\n- Q1 berarti kelompok quartile tertinggi dalam suatu kategori, sedangkan Q4 berarti kelompok quartile terbawah. Status Q bisa berbeda antar kategori dan berubah setiap tahun.\n- Untuk jurnal internasional berbasis Scopus, cek melalui SCImago Journal & Country Rank atau Scopus Source Preview/CiteScore.\n- Untuk jurnal Indonesia, cek akreditasi melalui SINTA, misalnya Sinta 1 sampai Sinta 6.\n- Jangan menyatakan Q jurnal sebagai fakta final tanpa menyebut tahun dan sumber pengecekan.\n\nKata kunci pencarian jurnal internasional:\n- animal science\n- animal science and zoology\n- livestock science\n- poultry science\n- dairy science\n- animal nutrition\n- animal feed science\n- veterinary science\n- veterinary and animal science\n- animal reproduction\n- animal breeding and genetics\n- animal welfare\n- ruminant nutrition\n- swine science\n- goat and sheep production\n\nSumber cek Q-level internasional:\n- SCImago Journal & Country Rank: https://www.scimagojr.com/journalrank.php\n- SCImago Animal Science and Zoology: https://www.scimagojr.com/journalrank.php?area=1100&category=1103\n- SCImago Veterinary: https://www.scimagojr.com/journalrank.php?area=3400\n- Scopus Sources: https://www.scopus.com/sources\n\nSumber cek jurnal Indonesia:\n- SINTA Journal: https://sinta.kemdiktisaintek.go.id/journals\n- Garuda: https://garuda.kemdiktisaintek.go.id/\n\nContoh jurnal internasional terkait peternakan yang perlu dicek Q terbarunya:\n- Animals, MDPI: bidang animal science, zoology, veterinary sciences; cek Q terbaru di JCR/SCImago.\n- Poultry Science: bidang unggas, nutrisi, genetika, produksi, kesehatan, welfare, dan produk unggas; cek Q terbaru di JCR/SCImago.\n- Animal Feed Science and Technology: bidang nutrisi dan teknologi pakan ternak; cek Q terbaru di JCR/SCImago.\n- Journal of Animal Science: bidang animal science umum; cek Q terbaru di JCR/SCImago.\n- Livestock Science: bidang produksi ternak, manajemen, genetika, dan sistem peternakan; cek Q terbaru di JCR/SCImago.\n- Journal of Dairy Science: bidang sapi perah, susu, nutrisi, reproduksi, kesehatan, dan teknologi dairy; cek Q terbaru di JCR/SCImago.\n- Animal Production Science: produksi ternak, pasture, breeding, dan sistem peternakan; cek Q terbaru di JCR/SCImago.\n- Veterinary and Animal Science: bidang kesehatan hewan dan animal science; cek Q terbaru di JCR/SCImago.\n\nContoh jurnal Indonesia terkait peternakan yang perlu dicek akreditasinya:\n- Jurnal Ilmu-Ilmu Peternakan, Universitas Brawijaya; cek profil SINTA terbaru.\n- Jurnal Peternakan Indonesia, Universitas Andalas; cek profil SINTA terbaru.\n- Sains Peternakan: Jurnal Penelitian Ilmu Peternakan, Universitas Sebelas Maret; cek profil SINTA terbaru.\n\nAturan jawaban AI saat membahas jurnal Q-level:\n1. Sebutkan bahwa status Q-level dapat berubah per tahun.\n2. Tampilkan sumber pengecekan resmi bila tersedia.\n3. Bedakan antara Q-level internasional dan akreditasi SINTA nasional.\n4. Untuk rekomendasi publikasi, sesuaikan dengan topik artikel: nutrisi pakan, reproduksi, genetika, unggas, ruminansia, dairy, veterinary, atau sosial ekonomi peternakan.\n5. Jangan klaim sebuah jurnal pasti Q1/Q2/Q3/Q4 tanpa data tahun terbaru dari sumber pemeringkatan."
+    "static_content": "Panduan Knowledge Base: Peternakan dan Jurnal Q-Level Terkait\n\nTujuan:\nMemperkaya Adioranye AI dengan konteks bidang peternakan, kesehatan hewan, pakan ternak, unggas, sapi potong/sapi perah, kambing/domba, reproduksi, pemuliaan, kesejahteraan ternak, pangan asal hewan, dan rujukan jurnal ilmiah terkait.\n\nIstilah penting:\n- Q-level atau quartile jurnal biasanya mengacu pada pembagian Q1, Q2, Q3, Q4 berdasarkan pemeringkatan per kategori dan tahun.\n- Q1 berarti kelompok quartile tertinggi dalam suatu kategori, sedangkan Q4 berarti kelompok quartile terbawah. Status Q bisa berbeda antar kategori dan berubah setiap tahun.\n- Untuk jurnal internasional berbasis Scopus, cek melalui SCImago Journal & Country Rank atau Scopus Source Preview/CiteScore.\n- Untuk jurnal Indonesia, cek akreditasi melalui SINTA, misalnya Sinta 1 sampai Sinta 6.\n- Jangan menyatakan Q jurnal sebagai fakta final tanpa menyebut tahun dan sumber pengecekan.\n\nKata kunci pencarian jurnal internasional:\n- animal science\n- animal science and zoology\n- livestock science\n- poultry science\n- dairy science\n- animal nutrition\n- animal feed science\n- veterinary science\n- veterinary and animal science\n- animal reproduction\n- animal breeding and genetics\n- animal welfare\n- ruminant nutrition\n- swine science\n- goat and sheep production\n\nSumber cek Q-level internasional:\n- SCImago Journal & Country Rank: https://www.scimagojr.com/journalrank.php\n- SCImago Animal Science and Zoology: https://www.scimagojr.com/journalrank.php?area=1100&category=1103\n- SCImago Veterinary: https://www.scimagojr.com/journalrank.php?area=3400\n- Scopus Sources: https://www.scopus.com/sources\n\nSumber cek jurnal Indonesia:\n- SINTA Journal: https://sinta.kemdiktisaintek.go.id/journals\n- Garuda: https://garuda.kemdiktisaintek.go.id/\n\nContoh jurnal internasional terkait peternakan yang perlu dicek Q terbarunya:\n- Animals, MDPI: bidang animal science, zoology, veterinary sciences; cek Q terbaru di JCR/SCImago.\n- Poultry Science: bidang unggas, nutrisi, genetika, produksi, kesehatan, welfare, dan produk unggas; cek Q terbaru di JCR/SCImago.\n- Animal Feed Science and Technology: bidang nutrisi dan teknologi pakan ternak; cek Q terbaru di JCR/SCImago.\n- Journal of Animal Science: bidang animal science umum; cek Q terbaru di JCR/SCImago.\n- Livestock Science: bidang produksi ternak, manajemen, genetika, dan sistem peternakan; cek Q terbaru di JCR/SCImago.\n- Journal of Dairy Science: bidang sapi perah, susu, nutrisi, reproduksi, kesehatan, dan teknologi dairy; cek Q terbaru di JCR/SCImago.\n- Animal Production Science: produksi ternak, pasture, breeding, dan sistem peternakan; cek Q terbaru di JCR/SCImago.\n- Veterinary and Animal Science: bidang kesehatan hewan dan animal science; cek Q terbaru di JCR/SCImago.\n\nContoh jurnal Indonesia terkait peternakan yang perlu dicek akreditasinya:\n- Jurnal Ilmu-Ilmu Peternakan, Universitas Brawijaya; cek profil SINTA terbaru.\n- Jurnal Peternakan Indonesia, Universitas Andalas; cek profil SINTA terbaru.\n- Sains Peternakan: Jurnal Penelitian Ilmu Peternakan, Universitas Sebelas Maret; cek profil SINTA terbaru.\n\nAturan jawaban AI saat membahas jurnal Q-level:\n1. Sebutkan bahwa status Q-level dapat berubah per tahun.\n2. Tampilkan sumber pengecekan resmi bila tersedia.\n3. Bedakan antara Q-level internasional dan akreditasi SINTA nasional.\n4. Untuk rekomendasi publikasi, sesuaikan dengan topik artikel: nutrisi pakan, reproduksi, genetika, unggas, ruminansia, dairy, veterinary, atau sosial ekonomi peternakan.\n5. Jangan klaim sebuah jurnal pasti Q1/Q2/Q3/Q4 tanpa data tahun terbaru dari sumber pemeringkatan.",
+    "source_quality": 88,
+    "summary_sentences": 5
   }
 ]

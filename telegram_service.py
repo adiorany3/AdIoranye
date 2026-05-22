@@ -1565,6 +1565,9 @@ class TelegramBotService:
         power_db_path = str(config.get("power_db_path") or ".adioranye_power.db")
         power_rag_enabled = bool(config.get("power_rag_enabled", True))
         power_rag_top_k = int(config.get("power_rag_top_k", 5) or 5)
+        power_strict_rag_mode = bool(config.get("power_strict_rag_mode", False))
+        power_rag_min_sources = int(config.get("power_rag_min_sources", 1) or 1)
+        power_rag_min_score = float(config.get("power_rag_min_score", 0) or 0)
         power_persistent_memory_enabled = bool(config.get("power_persistent_memory_enabled", True))
         power_prompt_templates_enabled = bool(config.get("power_prompt_templates_enabled", True))
         power_self_verification_enabled = bool(config.get("power_self_verification_enabled", False))
@@ -2046,6 +2049,9 @@ class TelegramBotService:
                                 enable_circuit_breaker=bool(power_circuit_breaker_enabled),
                                 circuit_max_failures=int(model_circuit_max_failures),
                                 circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
+                                strict_rag_mode=bool(power_strict_rag_mode),
+                                rag_min_sources=int(power_rag_min_sources),
+                                rag_min_score=float(power_rag_min_score),
                             )
 
                             if isinstance(meta, dict):
@@ -2131,6 +2137,9 @@ class TelegramBotService:
                                         enable_circuit_breaker=bool(power_circuit_breaker_enabled),
                                         circuit_max_failures=int(model_circuit_max_failures),
                                         circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
+                                        strict_rag_mode=bool(power_strict_rag_mode),
+                                        rag_min_sources=int(power_rag_min_sources),
+                                        rag_min_score=float(power_rag_min_score),
                                     )
 
                                     if isinstance(retry_meta, dict):
