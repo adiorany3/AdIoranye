@@ -3,7 +3,6 @@ name: Daily Knowledge Base Update
 on:
   workflow_dispatch:
   schedule:
-    # Jalan setiap hari jam 00:10 WIB
     - cron: "10 0 * * *"
       timezone: "Asia/Jakarta"
 
@@ -54,3 +53,41 @@ jobs:
             git commit -m "Update knowledge base otomatis"
             git push
           fi
+
+      - name: Notify Telegram success
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+        run: |
+          MESSAGE="✅ Update Knowledge Base selesai.
+
+          Repo: $GITHUB_REPOSITORY
+          Branch: ${GITHUB_REF_NAME}
+          Commit: ${GITHUB_SHA}
+          Waktu: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
+
+          Status: sukses"
+
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}"
+
+      - name: Notify Telegram failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+        run: |
+          MESSAGE="❌ Update Knowledge Base gagal.
+
+          Repo: $GITHUB_REPOSITORY
+          Branch: ${GITHUB_REF_NAME}
+          Commit: ${GITHUB_SHA}
+          Waktu: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
+
+          Silakan cek log di GitHub Actions."
+
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}"
