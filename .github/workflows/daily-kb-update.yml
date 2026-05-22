@@ -1,10 +1,26 @@
 name: Daily Knowledge Base Update
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "10 0 * * *"
-      timezone: "Asia/Jakarta"
+    # 17:05 UTC = 00:05 WIB next day
+    - cron: "5 17 * * *"
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Trigger source"
+        required: false
+        default: "manual"
+        type: string
+      chat_id:
+        description: "Telegram chat id that requested update"
+        required: false
+        default: ""
+        type: string
+      requested_at:
+        description: "Request time from Telegram"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -13,8 +29,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  update-knowledge-base:
+  update-kb:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -28,29 +45,27 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-kb-auto.txt
 
       - name: Run daily KB scraper
         env:
-          SLASHAI_API_KEY: ${{ secrets.SLASHAI_API_KEY }}
-          SLASHAI_API_URL: "https://api.slashai.my.id/v1/chat/completions"
+          POWER_DB_PATH: .adioranye_power.db
+          KB_SCRAPER_SOURCES_FILE: kb_sources.json
+          KB_SCRAPER_STATE_FILE: .adioranye_kb_scrape_state.json
+          KB_SCRAPER_MAX_ITEMS_PER_SOURCE: "0"  # 0 = pakai max_items masing-masing sumber
+          KB_SCRAPER_TIMEOUT: "20"
         run: |
-          python daily_kb_scraper.py \
-            --sources kb_sources.json \
-            --db .adioranye_power.db \
-            --max-items 10
+          python daily_kb_scraper.py             --db "$POWER_DB_PATH"             --sources "$KB_SCRAPER_SOURCES_FILE"             --state "$KB_SCRAPER_STATE_FILE"             --max-items "$KB_SCRAPER_MAX_ITEMS_PER_SOURCE"
 
-      - name: Commit updated knowledge base
+      - name: Commit updated KB database and state
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add .adioranye_power.db kb_sources.json || true
-
-          if git diff --cached --quiet; then
-            echo "Tidak ada perubahan knowledge base."
+          git config user.name "adioranye-kb-bot"
+          git config user.email "actions@github.com"
+          git add .adioranye_power.db .adioranye_kb_scrape_state.json || true
+          if git diff --staged --quiet; then
+            echo "No KB changes to commit."
           else
-            git commit -m "Update knowledge base otomatis"
+            git commit -m "chore: update daily knowledge base"
             git push
           fi
 
@@ -60,18 +75,23 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_ADMIN_CHAT_ID" ]; then
+            echo "Telegram notification skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_CHAT_ID not configured."
+            exit 0
+          fi
+
           MESSAGE="✅ Update Knowledge Base selesai.
 
           Repo: $GITHUB_REPOSITORY
           Branch: ${GITHUB_REF_NAME}
-          Commit: ${GITHUB_SHA}
-          Waktu: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
+          Trigger: ${{ github.event.inputs.source || github.event_name }}
+          Chat ID: ${{ github.event.inputs.chat_id || '-' }}
+          Request: ${{ github.event.inputs.requested_at || '-' }}
+          Waktu selesai: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
 
           Status: sukses"
 
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
-            --data-urlencode "text=${MESSAGE}"
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"             -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}"             --data-urlencode "text=${MESSAGE}"
 
       - name: Notify Telegram failure
         if: failure()
@@ -79,15 +99,20 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_ADMIN_CHAT_ID" ]; then
+            echo "Telegram failure notification skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_CHAT_ID not configured."
+            exit 0
+          fi
+
           MESSAGE="❌ Update Knowledge Base gagal.
 
           Repo: $GITHUB_REPOSITORY
           Branch: ${GITHUB_REF_NAME}
-          Commit: ${GITHUB_SHA}
-          Waktu: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
+          Trigger: ${{ github.event.inputs.source || github.event_name }}
+          Chat ID: ${{ github.event.inputs.chat_id || '-' }}
+          Request: ${{ github.event.inputs.requested_at || '-' }}
+          Waktu gagal: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
 
           Silakan cek log di GitHub Actions."
 
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
-            --data-urlencode "text=${MESSAGE}"
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"             -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}"             --data-urlencode "text=${MESSAGE}"
