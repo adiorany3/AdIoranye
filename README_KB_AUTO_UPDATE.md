@@ -98,6 +98,7 @@ Tipe yang didukung:
 - `html` — satu halaman HTML disimpan sebagai satu dokumen.
 - `html_index` — halaman daftar link, lalu artikel internal diambil.
 - `sitemap` — sitemap XML, lalu URL diambil satu per satu.
+- `static` — catatan kurasi langsung dari JSON, cocok untuk panduan Q-level/manual reference.
 
 ## Catatan Penting
 
@@ -126,3 +127,41 @@ Catatan operasional:
 4. Untuk topik kesehatan, tetap prioritaskan sumber resmi di koleksi **Auto Update - Kesehatan Resmi** ketika memberi jawaban yang berisiko.
 
 File `kb_sources_popular_current.json` juga disediakan sebagai salinan preset sumber populer/current jika kamu ingin memisahkan konfigurasi.
+
+## Tambahan preset peternakan dan jurnal Q-level
+
+Paket ini juga sudah ditambah sumber bidang **peternakan** dan **jurnal Q-level terkait**.
+
+Cakupan tambahan:
+
+- Berita/topik populer peternakan Indonesia dari Google News.
+- Kesehatan hewan dan penyakit ternak: PMK, flu burung, rabies, dan isu serupa.
+- Pakan dan nutrisi ternak: ransum, hijauan, formulasi pakan, dan bahan pakan.
+- Rujukan resmi/akademik: SINTA, jurnal peternakan Indonesia, dan jurnal animal science global.
+- Panduan cek Q-level untuk jurnal internasional melalui SCImago/Scopus/JCR.
+- Panduan bedanya Q-level internasional dan akreditasi SINTA nasional.
+
+File baru:
+
+```text
+kb_sources_peternakan_jurnal.json
+PETERNAKAN_JURNAL_Q_LEVEL_SOURCES.md
+JURNAL_Q_LEVEL_PETERNAKAN.md
+```
+
+Cara menjalankan hanya preset peternakan dan jurnal:
+
+```bash
+python daily_kb_scraper.py --db .adioranye_power.db --sources kb_sources_peternakan_jurnal.json --max-items 0
+```
+
+Tipe sumber baru:
+
+- `static` — memasukkan catatan kurasi langsung dari JSON ke Knowledge Base. Ini dipakai untuk panduan Q-level karena sebagian situs ranking jurnal dapat membatasi scraping otomatis.
+
+Catatan penting untuk Q-level:
+
+- Q1/Q2/Q3/Q4 berubah mengikuti tahun dan kategori.
+- Untuk jurnal internasional, verifikasi lewat SCImago, Scopus Sources, atau JCR.
+- Untuk jurnal Indonesia, gunakan SINTA dan Garuda.
+- AI sebaiknya tidak menyatakan Q-level sebagai fakta final tanpa menyebut tahun dan sumber pengecekan.

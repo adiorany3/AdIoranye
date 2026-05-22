@@ -1,7 +1,7 @@
 """Daily Knowledge Base scraper for Adioranye AI.
 
 This module pulls fresh public information from configured RSS feeds or simple
-HTML pages and stores the cleaned content in the existing Adioranye PowerStore
+HTML pages/static curated notes and stores the cleaned content in the existing Adioranye PowerStore
 SQLite knowledge base. It is intentionally lightweight for Streamlit Cloud / GitHub
 Actions: only `requests` is required, and the KB write path uses PowerStore.add_document().
 
@@ -312,7 +312,7 @@ def parse_feed_items(xml_text: str, base_url: str = "") -> List[Dict[str, str]]:
 class SourceConfig:
     name: str
     url: str
-    type: str = "rss"  # rss, html, html_index, sitemap
+    type: str = "rss"  # rss, html, html_index, sitemap, static
     enabled: bool = True
     collection: str = "Auto Update"
     tags: str = "auto-update"
@@ -324,6 +324,8 @@ class SourceConfig:
     min_chars: int = 300
     max_chars: int = 30000
     delay_seconds: float = 1.0
+    static_title: str = ""
+    static_content: str = ""
 
 
 def load_sources(path: str = DEFAULT_SOURCES_FILE) -> List[Dict[str, Any]]:
@@ -355,6 +357,8 @@ def normalize_source(raw: Dict[str, Any]) -> SourceConfig:
         min_chars=max(0, int(raw.get("min_chars") or 300)),
         max_chars=max(1000, int(raw.get("max_chars") or 30000)),
         delay_seconds=max(0.0, float(raw.get("delay_seconds") or 1.0)),
+        static_title=str(raw.get("static_title") or raw.get("title") or raw.get("name") or "").strip(),
+        static_content=str(raw.get("static_content") or raw.get("content") or raw.get("text") or "").strip(),
     )
 
 
@@ -534,6 +538,24 @@ def scrape_sitemap(session: requests.Session, source: SourceConfig, limit: int) 
             articles.append({"title": url, "url": url, "published": "", "summary": "", "content": f"[Gagal mengambil halaman: {exc}]"})
     return articles
 
+def scrape_static(session: requests.Session, source: SourceConfig) -> List[Dict[str, str]]:
+    """Return curated static knowledge embedded in kb_sources.json.
+
+    Useful for reference notes such as journal Q-level verification guidance that
+    should enter the KB even when the ranking site blocks automated scraping.
+    The session argument is kept for a consistent scraping function signature.
+    """
+    content = clean_spaces(source.static_content)
+    if not content:
+        return []
+    return [{
+        "title": source.static_title or source.name,
+        "url": source.url,
+        "published": "",
+        "summary": "",
+        "content": content,
+    }]
+
 
 def scrape_source(session: requests.Session, source: SourceConfig, max_items_override: Optional[int] = None) -> List[Dict[str, str]]:
     limit = max(1, int(max_items_override or source.max_items or 5))
@@ -545,6 +567,8 @@ def scrape_source(session: requests.Session, source: SourceConfig, max_items_ove
         return scrape_html_index(session, source, limit=limit)
     if source.type in {"sitemap", "xml_sitemap"}:
         return scrape_sitemap(session, source, limit=limit)
+    if source.type in {"static", "note", "curated"}:
+        return scrape_static(session, source)[:limit]
     raise ValueError(f"Tipe sumber tidak dikenali: {source.type}")
 
 
