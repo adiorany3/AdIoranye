@@ -1,0 +1,54 @@
+[
+  {
+    "name": "Hacker News",
+    "url": "https://news.ycombinator.com/rss",
+    "type": "rss",
+    "enabled": true,
+    "collection": "Auto Update - Teknologi",
+    "tags": "auto-update,teknologi,programming,startup",
+    "max_items": 5,
+    "fetch_article": false,
+    "min_chars": 80,
+    "max_chars": 12000,
+    "delay_seconds": 1
+  },
+  {
+    "name": "Python Insider",
+    "url": "https://blog.python.org/feeds/posts/default",
+    "type": "rss",
+    "enabled": true,
+    "collection": "Auto Update - Programming",
+    "tags": "auto-update,python,programming",
+    "max_items": 3,
+    "fetch_article": true,
+    "min_chars": 300,
+    "max_chars": 25000,
+    "delay_seconds": 1
+  },
+  {
+    "name": "Google AI Blog",
+    "url": "https://blog.google/technology/ai/rss/",
+    "type": "rss",
+    "enabled": true,
+    "collection": "Auto Update - AI",
+    "tags": "auto-update,ai,google,teknologi",
+    "max_items": 3,
+    "fetch_article": true,
+    "min_chars": 300,
+    "max_chars": 25000,
+    "delay_seconds": 1
+  },
+  {
+    "name": "Contoh Halaman HTML",
+    "url": "https://example.com/",
+    "type": "html",
+    "enabled": false,
+    "collection": "Auto Update - Contoh",
+    "tags": "auto-update,contoh",
+    "max_items": 1,
+    "fetch_article": false,
+    "min_chars": 100,
+    "max_chars": 12000,
+    "delay_seconds": 1
+  }
+]

@@ -38,6 +38,12 @@ from power_features import (
     extract_text_from_file_bytes,
 )
 
+from daily_kb_scraper import (
+    DEFAULT_SOURCES_FILE as KB_DEFAULT_SOURCES_FILE,
+    load_sources as load_kb_scraper_sources,
+    run_daily_kb_update,
+)
+
 
 st.set_page_config(
     page_title="Adioranye AI by Galuh Adi Insani",
@@ -102,6 +108,8 @@ def validate_runtime_secrets() -> List[Dict[str, Any]]:
         ("POWER_RAG_ENABLED", power_rag_enabled, False, "Knowledge Base / RAG"),
         ("POWER_RAG_TOP_K", power_rag_top_k, False, "Jumlah potongan KB yang dipakai"),
         ("POWER_KB_MAX_FILE_MB", power_kb_max_file_mb, False, "Batas upload KB"),
+        ("KB_SCRAPER_SOURCES_FILE", kb_scraper_sources_file, False, "Daftar sumber auto-update KB"),
+        ("KB_SCRAPER_MAX_ITEMS_PER_SOURCE", kb_scraper_max_items_per_source, False, "Batas item per sumber saat update KB"),
     ]
     rows: List[Dict[str, Any]] = []
     for name, value, required, note in checks:
@@ -466,6 +474,12 @@ power_adaptive_scoring_enabled = parse_bool(get_secret("POWER_ADAPTIVE_SCORING_E
 power_circuit_breaker_enabled = parse_bool(get_secret("POWER_CIRCUIT_BREAKER_ENABLED", True), default=True)
 model_circuit_max_failures = int(get_secret("MODEL_CIRCUIT_MAX_FAILURES", 3) or 3)
 model_circuit_cooldown_seconds = int(get_secret("MODEL_CIRCUIT_COOLDOWN_SECONDS", 1800) or 1800)
+
+# Daily Knowledge Base auto-update / scraper
+kb_scraper_sources_file = str(get_secret("KB_SCRAPER_SOURCES_FILE", KB_DEFAULT_SOURCES_FILE) or KB_DEFAULT_SOURCES_FILE)
+kb_scraper_state_file = str(get_secret("KB_SCRAPER_STATE_FILE", ".adioranye_kb_scrape_state.json") or ".adioranye_kb_scrape_state.json")
+kb_scraper_max_items_per_source = int(get_secret("KB_SCRAPER_MAX_ITEMS_PER_SOURCE", 5) or 5)
+kb_scraper_timeout = int(get_secret("KB_SCRAPER_TIMEOUT", 20) or 20)
 
 # Operational safety / retention
 ai_operation_mode_default = str(get_secret("AI_OPERATION_MODE", "Seimbang") or "Seimbang")
@@ -3314,7 +3328,13 @@ POWER_CIRCUIT_BREAKER_ENABLED = true
 AI_OPERATION_MODE = "Seimbang"
 POWER_LOG_RETENTION_DAYS = 30
 POWER_CACHE_RETENTION_DAYS = 7
-POWER_BENCHMARK_RETENTION_DAYS = 14''',
+POWER_BENCHMARK_RETENTION_DAYS = 14
+
+# Daily Knowledge Base Auto Update
+KB_SCRAPER_SOURCES_FILE = "kb_sources.json"
+KB_SCRAPER_STATE_FILE = ".adioranye_kb_scrape_state.json"
+KB_SCRAPER_MAX_ITEMS_PER_SOURCE = 5
+KB_SCRAPER_TIMEOUT = 20''',
             language="toml",
         )
         st.markdown(
@@ -3441,7 +3461,7 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                 c5.metric("Karakter", kb_stats.get("characters", 0))
 
                 st.caption("Knowledge base premium: koleksi/workspace, tags, deduplikasi dokumen, hybrid search, sitasi sumber, dan pin dokumen penting.")
-                kb_upload_tabs = st.tabs(["Upload File", "Tambah Manual", "Cari", "Koleksi", "Kelola"] )
+                kb_upload_tabs = st.tabs(["Upload File", "Tambah Manual", "Cari", "Koleksi", "Kelola", "Auto Update"] )
 
                 with kb_upload_tabs[0]:
                     uploaded_kb = st.file_uploader(
@@ -3577,6 +3597,70 @@ if power_features_enabled and st.session_state.get("admin_authenticated", False)
                     if st.button("🔁 Rebuild index Knowledge Base", use_container_width=True, key="auto_btn_3351"):
                         docs_count, chunks_count = power_store.rebuild_knowledge_index()
                         st.success(f"Index dibangun ulang. Dokumen: {docs_count}, chunks: {chunks_count}")
+
+
+
+                with kb_upload_tabs[5]:
+                    st.caption("Ambil informasi terbaru dari RSS/HTML publik lalu simpan otomatis ke SQLite Knowledge Base. Cocok dijalankan manual dari admin atau harian via GitHub Actions.")
+                    st.code(f"Sources: {kb_scraper_sources_file}\nState: {kb_scraper_state_file}\nDB: {power_db_path}")
+                    try:
+                        scraper_sources = load_kb_scraper_sources(kb_scraper_sources_file)
+                    except Exception as exc:
+                        scraper_sources = []
+                        st.error(f"Gagal membaca sources JSON: {exc}")
+
+                    if scraper_sources:
+                        preview_rows = []
+                        for item in scraper_sources:
+                            preview_rows.append({
+                                "aktif": bool(item.get("enabled", True)),
+                                "nama": item.get("name") or item.get("url"),
+                                "tipe": item.get("type", "rss"),
+                                "koleksi": item.get("collection", "Auto Update"),
+                                "max_items": item.get("max_items", 5),
+                                "url": item.get("url", ""),
+                            })
+                        st.dataframe(preview_rows, use_container_width=True, hide_index=True)
+                    else:
+                        st.warning("Belum ada sumber. Buat file kb_sources.json di root repo. Contohnya sudah tersedia di paket ZIP.")
+
+                    col_auto1, col_auto2, col_auto3 = st.columns(3)
+                    with col_auto1:
+                        auto_max_items = st.number_input(
+                            "Max item/sumber",
+                            min_value=1,
+                            max_value=30,
+                            value=max(1, int(kb_scraper_max_items_per_source or 5)),
+                            step=1,
+                            key="kb_auto_max_items",
+                        )
+                    with col_auto2:
+                        auto_dry_run = st.checkbox("Dry run saja", value=False, key="kb_auto_dry_run")
+                    with col_auto3:
+                        auto_force = st.checkbox("Force ingest ulang", value=False, key="kb_auto_force")
+
+                    if st.button("🌐 Update Knowledge Base dari sumber online sekarang", use_container_width=True, key="kb_auto_update_now"):
+                        try:
+                            report = run_daily_kb_update(
+                                db_path=power_db_path,
+                                sources_path=kb_scraper_sources_file,
+                                state_path=kb_scraper_state_file,
+                                max_items_per_source=int(auto_max_items),
+                                timeout=int(kb_scraper_timeout or 20),
+                                dry_run=bool(auto_dry_run),
+                                force=bool(auto_force),
+                            )
+                            st.success(
+                                f"Selesai. Dokumen baru: {report.get('added_documents', 0)}, "
+                                f"chunks baru: {report.get('added_chunks', 0)}, "
+                                f"skip existing: {report.get('skipped_existing', 0)}, "
+                                f"error: {report.get('errors', 0)}"
+                            )
+                            items = report.get("items") or []
+                            if items:
+                                st.dataframe(items, use_container_width=True, hide_index=True)
+                        except Exception as exc:
+                            st.error(f"Auto update gagal: {exc}")
 
             with tabs_power[1]:
                 mem_text = st.text_area("Tambah memory permanen SQLite", height=100, placeholder="Contoh: User ingin jawaban profesional, praktis, dan kode siap tempel.")
