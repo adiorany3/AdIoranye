@@ -25,6 +25,26 @@ from zoneinfo import ZoneInfo
 
 from ai_core import call_api_once, model_cost_tier, model_price
 
+try:
+    from critical_current_layer import (
+        build_critical_answer_instruction,
+        calculate_freshness_score,
+        datetime_to_ts as _critical_datetime_to_ts,
+        detect_critical_question,
+        format_issue_report,
+    )
+except Exception:  # keep older deployments alive if the helper file is missing
+    def detect_critical_question(text: str) -> Dict[str, Any]:
+        return {"is_critical": False, "score": 0, "matched_keywords": [], "mode": "normal"}
+    def build_critical_answer_instruction(user_text: str, detection: Optional[Dict[str, Any]] = None) -> str:
+        return ""
+    def calculate_freshness_score(published_at: Any = "", scraped_at: Any = "") -> Dict[str, Any]:
+        return {"score": 45.0, "bucket": "unknown", "age_days": None, "published_ts": 0.0}
+    def _critical_datetime_to_ts(value: Any) -> float:
+        return 0.0
+    def format_issue_report(query: str, claims: List[Dict[str, Any]], docs: Optional[List[Dict[str, Any]]] = None) -> str:
+        return "Belum ada data KB yang cukup untuk isu: " + str(query)
+
 WIB_TZ = ZoneInfo("Asia/Jakarta")
 DEFAULT_POWER_DB = ".adioranye_power.db"
 
@@ -724,6 +744,52 @@ class PowerStore:
                     note TEXT DEFAULT '',
                     updated_at REAL NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS current_claims (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    doc_id INTEGER DEFAULT 0,
+                    ts REAL NOT NULL,
+                    published_at REAL DEFAULT 0,
+                    claim TEXT NOT NULL,
+                    title TEXT DEFAULT '',
+                    source TEXT DEFAULT '',
+                    source_name TEXT DEFAULT '',
+                    source_quality REAL DEFAULT 55,
+                    freshness_score REAL DEFAULT 45,
+                    category TEXT DEFAULT '',
+                    keywords TEXT DEFAULT '',
+                    metadata_json TEXT DEFAULT '{}',
+                    FOREIGN KEY(doc_id) REFERENCES documents(id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_current_claims_ts ON current_claims(ts);
+                CREATE INDEX IF NOT EXISTS idx_current_claims_doc ON current_claims(doc_id);
+                CREATE INDEX IF NOT EXISTS idx_current_claims_quality ON current_claims(source_quality, freshness_score);
+
+                CREATE TABLE IF NOT EXISTS issue_watchlist (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic TEXT NOT NULL UNIQUE,
+                    category TEXT DEFAULT 'general',
+                    priority INTEGER DEFAULT 3,
+                    active INTEGER DEFAULT 1,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    meta_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_issue_watchlist_active ON issue_watchlist(active, priority, updated_at);
+
+                CREATE TABLE IF NOT EXISTS issue_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    topic TEXT NOT NULL,
+                    title TEXT DEFAULT '',
+                    source TEXT DEFAULT '',
+                    event_text TEXT NOT NULL,
+                    event_time REAL DEFAULT 0,
+                    source_quality REAL DEFAULT 55,
+                    freshness_score REAL DEFAULT 45,
+                    meta_json TEXT DEFAULT '{}'
+                );
+                CREATE INDEX IF NOT EXISTS idx_issue_events_topic ON issue_events(topic, ts);
                 """
             )
             # Optional SQLite FTS5. Streamlit Cloud usually supports it, but keep fallback.
@@ -748,6 +814,9 @@ class PowerStore:
                 "ALTER TABLE documents ADD COLUMN source_quality REAL DEFAULT 55",
                 "ALTER TABLE documents ADD COLUMN source_domain TEXT DEFAULT ''",
                 "ALTER TABLE documents ADD COLUMN summary TEXT DEFAULT ''",
+                "ALTER TABLE documents ADD COLUMN published_at REAL DEFAULT 0",
+                "ALTER TABLE documents ADD COLUMN freshness_score REAL DEFAULT 45",
+                "ALTER TABLE documents ADD COLUMN criticality_score REAL DEFAULT 0",
             ]:
                 try:
                     conn.execute(ddl)
@@ -759,6 +828,8 @@ class PowerStore:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_pinned ON documents(pinned, created_at)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_quality ON documents(source_quality, created_at)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_domain ON documents(source_domain)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_freshness ON documents(freshness_score, published_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_criticality ON documents(criticality_score, created_at)")
             except Exception:
                 pass
 
@@ -833,6 +904,22 @@ class PowerStore:
         summary = sanitize_non_instruction_context(str(summary or metadata.get("summary") or ""), limit=1200)
         source_domain = _source_domain(source)
         computed_quality = _estimate_source_quality(source=source, tags=tags, metadata=metadata)
+        freshness_info = calculate_freshness_score(metadata.get("published") or metadata.get("published_at") or "", metadata.get("scraped_at") or metadata.get("created_at") or "")
+        try:
+            published_ts = float(metadata.get("published_ts") or metadata.get("published_at_ts") or freshness_info.get("published_ts") or 0)
+        except Exception:
+            published_ts = 0.0
+        try:
+            freshness_score = float(metadata.get("freshness_score") if metadata.get("freshness_score") is not None else freshness_info.get("score", 45))
+        except Exception:
+            freshness_score = 45.0
+        critical_detection = detect_critical_question(f"{title} {collection} {tags} {summary} {raw_text[:1200]}")
+        try:
+            criticality_score = float(metadata.get("criticality_score") if metadata.get("criticality_score") is not None else critical_detection.get("score", 0))
+        except Exception:
+            criticality_score = 0.0
+        metadata.setdefault("freshness", freshness_info)
+        metadata.setdefault("critical_detection", critical_detection)
         meta_json = _safe_json(metadata or {})
         now = _utc_ts()
         with self._connect() as conn:
@@ -846,10 +933,10 @@ class PowerStore:
                     pass
             cur = conn.execute(
                 """
-                INSERT INTO documents(title, source, collection, tags, doc_hash, metadata_json, pinned, created_at, updated_at, source_quality, source_domain, summary)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO documents(title, source, collection, tags, doc_hash, metadata_json, pinned, created_at, updated_at, source_quality, source_domain, summary, published_at, freshness_score, criticality_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (title, source, collection, tags, doc_hash, meta_json, 1 if pinned else 0, now, now, computed_quality, source_domain, summary),
+                (title, source, collection, tags, doc_hash, meta_json, 1 if pinned else 0, now, now, computed_quality, source_domain, summary, published_ts, freshness_score, criticality_score),
             )
             doc_id = int(cur.lastrowid)
             inserted = 0
@@ -873,6 +960,29 @@ class PowerStore:
                     )
                 except Exception:
                     pass
+            try:
+                claims = metadata.get("claims") or []
+                if isinstance(claims, list):
+                    for claim_item in claims[:30]:
+                        if isinstance(claim_item, dict):
+                            claim_text = sanitize_non_instruction_context(str(claim_item.get("claim") or ""), limit=900)
+                            keywords = ",".join(str(x)[:40] for x in (claim_item.get("keywords") or [])[:12]) if isinstance(claim_item.get("keywords"), list) else str(claim_item.get("keywords") or "")[:300]
+                            source_name = str(claim_item.get("source_name") or metadata.get("source_name") or "")[:180]
+                        else:
+                            claim_text = sanitize_non_instruction_context(str(claim_item or ""), limit=900)
+                            keywords = ""
+                            source_name = str(metadata.get("source_name") or "")[:180]
+                        if not claim_text:
+                            continue
+                        conn.execute(
+                            """
+                            INSERT INTO current_claims(doc_id, ts, published_at, claim, title, source, source_name, source_quality, freshness_score, category, keywords, metadata_json)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (doc_id, now, published_ts, claim_text, title, source, source_name, computed_quality, freshness_score, collection, keywords, _safe_json(claim_item if isinstance(claim_item, dict) else {})),
+                        )
+            except Exception:
+                pass
             return doc_id, inserted
 
     def search_documents(self, query: str, limit: int = 5, collection: str = "", min_score: float = 0.0, include_pinned: bool = True) -> List[Dict[str, Any]]:
@@ -890,7 +1000,7 @@ class PowerStore:
                     rows = conn.execute(
                         """
                         SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                               d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at,
+                               d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, d.freshness_score, d.published_at, d.criticality_score, c.created_at,
                                bm25(chunks_fts) AS fts_score
                         FROM chunks_fts
                         JOIN chunks c ON c.id = chunks_fts.rowid
@@ -904,7 +1014,7 @@ class PowerStore:
                     rows = conn.execute(
                         """
                         SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                               d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at,
+                               d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, d.freshness_score, d.published_at, d.criticality_score, c.created_at,
                                bm25(chunks_fts) AS fts_score
                         FROM chunks_fts
                         JOIN chunks c ON c.id = chunks_fts.rowid
@@ -926,6 +1036,11 @@ class PowerStore:
                 except Exception:
                     pass
                 score += _recency_boost(float(item.get("created_at") or 0))
+                try:
+                    score += (float(item.get("freshness_score") or 45) / 100.0) * 0.10
+                    score += min(0.08, (float(item.get("criticality_score") or 0) / 100.0) * 0.08)
+                except Exception:
+                    pass
                 item["score"] = round(score, 4)
                 item["citation"] = _format_kb_citation(item)
                 item["source_type"] = "fts5"
@@ -939,7 +1054,7 @@ class PowerStore:
                 rows = conn.execute(
                     """
                     SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                           d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at
+                           d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, d.freshness_score, d.published_at, d.criticality_score, c.created_at
                     FROM chunks c JOIN documents d ON d.id = c.doc_id
                     WHERE d.collection = ?
                     ORDER BY d.pinned DESC, c.created_at DESC LIMIT 2500
@@ -950,7 +1065,7 @@ class PowerStore:
                 rows = conn.execute(
                     """
                     SELECT c.id, c.doc_id, c.chunk_index, c.content, c.heading, c.page_label,
-                           d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, c.created_at
+                           d.title, d.source, d.collection, d.tags, d.pinned, d.source_quality, d.source_domain, d.freshness_score, d.published_at, d.criticality_score, c.created_at
                     FROM chunks c JOIN documents d ON d.id = c.doc_id
                     ORDER BY d.pinned DESC, c.created_at DESC LIMIT 2500
                     """
@@ -967,6 +1082,11 @@ class PowerStore:
             except Exception:
                 pass
             score += _recency_boost(float(item.get("created_at") or 0))
+            try:
+                score += (float(item.get("freshness_score") or 45) / 100.0) * 0.10
+                score += min(0.08, (float(item.get("criticality_score") or 0) / 100.0) * 0.08)
+            except Exception:
+                pass
             if score > min_score:
                 item["score"] = round(score, 4)
                 item["citation"] = _format_kb_citation(item)
@@ -981,6 +1101,112 @@ class PowerStore:
         final.sort(key=lambda x: (float(x.get("score") or 0), int(x.get("pinned") or 0)), reverse=True)
         return final[:limit]
 
+    # Critical current knowledge / issue intelligence
+    def search_current_claims(self, query: str, limit: int = 10, min_score: float = 0.0, days: int = 90) -> List[Dict[str, Any]]:
+        q = str(query or "").strip()
+        if not q:
+            return []
+        since = _utc_ts() - max(1, int(days or 90)) * 86400
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM current_claims
+                WHERE ts >= ? OR published_at >= ?
+                ORDER BY freshness_score DESC, source_quality DESC, ts DESC
+                LIMIT 2000
+                """,
+                (since, since),
+            ).fetchall()
+        scored: List[Tuple[float, Dict[str, Any]]] = []
+        for row in rows:
+            item = _row_to_dict(row)
+            text = f"{item.get('claim','')} {item.get('title','')} {item.get('source_name','')} {item.get('keywords','')} {item.get('category','')}"
+            score = _score_text(q, text)
+            try:
+                score += (float(item.get("source_quality") or 55) / 100.0) * 0.16
+                score += (float(item.get("freshness_score") or 45) / 100.0) * 0.18
+            except Exception:
+                pass
+            if score > min_score:
+                item["score"] = round(score, 4)
+                item["ts_wib"] = _timestamp_to_wib(float(item.get("ts") or 0))
+                item["published_wib"] = _timestamp_to_wib(float(item.get("published_at") or 0))
+                scored.append((score, item))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [item for _, item in scored[:max(1, int(limit or 10))]]
+
+    def build_current_issue_report(self, query: str, limit: int = 8) -> str:
+        claims = self.search_current_claims(query, limit=limit, days=180)
+        docs = self.search_documents(query, limit=5)
+        return format_issue_report(query, claims=claims, docs=docs)
+
+    def add_watch_topic(self, topic: str, category: str = "general", priority: int = 3, meta: Optional[Dict[str, Any]] = None) -> int:
+        clean = sanitize_non_instruction_context(topic, limit=240)
+        if not clean:
+            return 0
+        now = _utc_ts()
+        with self._connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO issue_watchlist(topic, category, priority, active, created_at, updated_at, meta_json)
+                VALUES (?, ?, ?, 1, ?, ?, ?)
+                ON CONFLICT(topic) DO UPDATE SET category=excluded.category, priority=excluded.priority, active=1, updated_at=excluded.updated_at, meta_json=excluded.meta_json
+                """,
+                (clean, str(category or "general")[:80], max(1, min(5, int(priority or 3))), now, now, _safe_json(meta or {})),
+            )
+            row = conn.execute("SELECT id FROM issue_watchlist WHERE topic = ?", (clean,)).fetchone()
+            return int(_row_value(row, "id", 0, cur.lastrowid or 0) or 0)
+
+    def list_watch_topics(self, active_only: bool = True, limit: int = 50) -> List[Dict[str, Any]]:
+        with self._connect() as conn:
+            if active_only:
+                rows = conn.execute("SELECT * FROM issue_watchlist WHERE active = 1 ORDER BY priority ASC, updated_at DESC LIMIT ?", (max(1, int(limit or 50)),)).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM issue_watchlist ORDER BY active DESC, priority ASC, updated_at DESC LIMIT ?", (max(1, int(limit or 50)),)).fetchall()
+        out = []
+        for row in rows:
+            item = _row_to_dict(row)
+            item["updated_at_wib"] = _timestamp_to_wib(float(item.get("updated_at") or 0))
+            out.append(item)
+        return out
+
+    def remove_watch_topic(self, watch_id: int) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute("UPDATE issue_watchlist SET active = 0, updated_at = ? WHERE id = ?", (_utc_ts(), int(watch_id or 0)))
+            return bool(cur.rowcount)
+
+    def daily_current_briefing(self, days: int = 1, limit: int = 12) -> str:
+        since = _utc_ts() - max(1, int(days or 1)) * 86400
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM current_claims
+                WHERE ts >= ? OR published_at >= ?
+                ORDER BY source_quality DESC, freshness_score DESC, ts DESC
+                LIMIT ?
+                """,
+                (since, since, max(1, int(limit or 12))),
+            ).fetchall()
+        claims = [_row_to_dict(row) for row in rows]
+        lines = [
+            "📌 Daily Intelligence Briefing Adioranye",
+            f"Periode: {days} hari terakhir",
+            f"Tanggal cek: {now_wib_text()}",
+            "",
+        ]
+        if not claims:
+            lines.append("Belum ada klaim/fakta baru yang terekam di current_claims. Jalankan /update atau cek sumber KB.")
+            return "\n".join(lines)
+        lines.append("Update penting dari KB:")
+        for idx, item in enumerate(claims, start=1):
+            claim = re.sub(r"\s+", " ", str(item.get("claim") or "")).strip()[:360]
+            title = str(item.get("title") or item.get("source_name") or "-")[:150]
+            lines.append(
+                f"{idx}. {claim}\n"
+                f"   Sumber: {title} | kualitas {item.get('source_quality')} | freshness {item.get('freshness_score')} | { _timestamp_to_wib(float(item.get('published_at') or item.get('ts') or 0)) }"
+            )
+        lines.append("\nGunakan /cek isu <topik> untuk melihat bukti dan dokumen pendukung pada satu isu tertentu.")
+        return "\n".join(lines)
 
     # Learning loop / feedback / knowledge gaps
     def record_feedback(
@@ -1854,6 +2080,7 @@ PROMPT_TEMPLATES: Dict[str, str] = {
     "deep_reasoning": "Analisis masalah secara bertahap, prioritaskan solusi praktis, dan berikan rekomendasi akhir yang jelas.",
     "livestock": "Jawab sebagai asisten pengetahuan peternakan. Prioritaskan sumber resmi, jurnal, kesehatan hewan, pakan, manajemen ternak, dan beri catatan kehati-hatian bila data belum pasti.",
     "health": "Jawab dengan kehati-hatian kesehatan: edukatif, tidak menggantikan tenaga medis, prioritaskan sumber resmi, dan sarankan pemeriksaan profesional untuk kondisi serius.",
+    "critical_current": "Jawab sebagai analis isu terkini. Utamakan data terbaru, kualitas sumber, perbedaan klaim, batas kepastian, dan rekomendasi verifikasi.",
 }
 
 
@@ -1861,9 +2088,15 @@ def enhance_prompt_for_intent(user_text: str, intent: str, enable_templates: boo
     if not enable_templates:
         return user_text
     template = PROMPT_TEMPLATES.get(intent)
-    if not template:
+    critical_instruction = build_critical_answer_instruction(user_text)
+    if not template and not critical_instruction:
         return user_text
-    return f"{user_text}\n\nInstruksi mode {intent}: {template}"
+    parts = [str(user_text or "")]
+    if template:
+        parts.append(f"Instruksi mode {intent}: {template}")
+    if critical_instruction:
+        parts.append(critical_instruction)
+    return "\n\n".join(parts)
 
 
 def build_power_context(
@@ -1898,6 +2131,19 @@ def build_power_context(
                 sections.append("TEMPLATE JAWABAN RELEVAN (referensi gaya/struktur, bukan instruksi mutlak):\n" + "\n".join(t_lines))
     except Exception:
         pass
+    try:
+        critical_detection = detect_critical_question(user_text)
+        if critical_detection.get("is_critical"):
+            claims = store.search_current_claims(user_text, limit=6, days=180)
+            if claims:
+                c_lines = []
+                for idx, claim in enumerate(claims, start=1):
+                    body = re.sub(r"\s+", " ", sanitize_non_instruction_context(str(claim.get("claim") or ""), limit=650)).strip()
+                    c_lines.append(f"[CLAIM{idx}] {body} (sumber {claim.get('source_name') or claim.get('source')}; kualitas {claim.get('source_quality')}; freshness {claim.get('freshness_score')}; tanggal {claim.get('published_wib') or claim.get('ts_wib')})")
+                sections.append("KLAIM/FAKTA TERKINI DARI CURRENT CRITICAL LAYER (konteks non-instruksi):\n" + "\n".join(c_lines))
+    except Exception:
+        pass
+
     if enable_rag:
         docs = store.search_documents(user_text, limit=rag_top_k)
         if docs:
@@ -2161,6 +2407,10 @@ def generate_power_answer(
                 "page_label": item.get("page_label"),
                 "chunk_index": item.get("chunk_index"),
                 "score": item.get("score"),
+                "source_quality": item.get("source_quality"),
+                "freshness_score": item.get("freshness_score"),
+                "published_at": item.get("published_at"),
+                "criticality_score": item.get("criticality_score"),
                 "citation": item.get("citation") or _format_kb_citation(item),
             }
             for item in (rag_sources or [])[:5]
@@ -2250,9 +2500,47 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
     admin_only_prefixes = (
         "/ingat", "/lupa", "/rag", "/kb", "/biaya", "/usage", "/dokumen", "/benchmark",
         "/model skor", "/model score", "/circuit", "/cache bersih", "/cache clear",
+        "/briefing", "/trending", "/cek isu", "/pantau",
     )
     if lower.startswith(admin_only_prefixes) and not is_admin:
         return "Perintah ini hanya untuk admin."
+
+    if lower in {"/briefing", "/briefing harian", "/trending"}:
+        return store.daily_current_briefing(days=1, limit=12)
+
+    if lower.startswith("/cek isu ") or lower.startswith("/cekisu "):
+        if lower.startswith("/cek isu "):
+            query = raw.split(" ", 2)[2].strip()
+        else:
+            query = raw.split(" ", 1)[1].strip() if " " in raw else ""
+        if not query:
+            return "Format: /cek isu <topik>"
+        return store.build_current_issue_report(query, limit=8)
+
+    if lower in {"/pantau", "/pantau list", "/watchlist"}:
+        topics = store.list_watch_topics(active_only=True, limit=50)
+        if not topics:
+            return "Watchlist masih kosong. Tambahkan dengan: /pantau <topik>"
+        lines = ["👁️ Watchlist Isu", ""]
+        for item in topics:
+            lines.append(f"#{item.get('id')} [{item.get('priority')}] {item.get('topic')} — {item.get('category')}")
+        return "\n".join(lines)
+
+    if lower.startswith("/pantau hapus "):
+        parts = raw.split()
+        try:
+            watch_id = int(parts[-1])
+        except Exception:
+            return "Format: /pantau hapus <id>"
+        ok = store.remove_watch_topic(watch_id)
+        return "✅ Watchlist dinonaktifkan." if ok else "ID watchlist tidak ditemukan."
+
+    if lower.startswith("/pantau "):
+        topic = raw.split(" ", 1)[1].strip()
+        if not topic:
+            return "Format: /pantau <topik>"
+        watch_id = store.add_watch_topic(topic, category="manual", priority=2, meta={"created_by": user_id})
+        return f"✅ Topik dipantau. ID: {watch_id}\nTopik: {topic}"
 
     if lower.startswith("/ingat "):
         body = raw.split(" ", 1)[1].strip()
@@ -2277,7 +2565,14 @@ def handle_power_command(text: str, store: PowerStore, user_id: str = "global", 
             "• /kb pin <doc_id> — prioritaskan dokumen\n"
             "• /kb unpin <doc_id> — lepas prioritas dokumen\n"
             "• /kb set <doc_id> <koleksi> | <tag1,tag2> — ubah metadata\n"
-            "• /kb tambah <judul> lalu baris baru isi dokumen"
+            "• /kb tambah <judul> lalu baris baru isi dokumen\n"
+            "\n🧭 Critical Current Layer:\n"
+            "• /briefing — ringkasan klaim/fakta terkini dari KB\n"
+            "• /trending — sama dengan /briefing ringkas\n"
+            "• /cek isu <topik> — cek isu kritis dengan klaim + dokumen pendukung\n"
+            "• /pantau <topik> — tambah topik watchlist\n"
+            "• /pantau list — daftar watchlist\n"
+            "• /pantau hapus <id> — nonaktifkan watchlist"
         )
 
     if lower in {"/kb statistik", "/rag statistik", "/kb stats", "/rag stats"}:

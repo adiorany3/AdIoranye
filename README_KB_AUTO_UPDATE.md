@@ -194,3 +194,38 @@ TELEGRAM_ADMIN_CHAT_ID
 ```
 
 Lihat `TELEGRAM_UPDATE_COMMAND.md` untuk panduan lengkap.
+
+## Tambahan: Critical Current Knowledge Layer
+
+Versi ini menambahkan lapisan pengetahuan terkini untuk pertanyaan kritis. Fitur ini menyimpan klaim/fakta penting ke tabel `current_claims`, memberi skor kesegaran (`freshness_score`), skor kualitas sumber (`source_quality`), dan skor kritikalitas (`criticality_score`).
+
+File tambahan:
+
+```text
+critical_current_layer.py
+critical_watchlist.json
+kb_sources_critical_current.json
+CRITICAL_CURRENT_LAYER.md
+daily_intelligence_briefing.md
+```
+
+Command Telegram/admin baru:
+
+```text
+/briefing
+/trending
+/cek isu <topik>
+/pantau <topik>
+/pantau list
+/pantau hapus <id>
+```
+
+Contoh:
+
+```text
+/cek isu PMK ternak terbaru
+/cek isu jurnal peternakan Q1 Scopus
+/briefing
+```
+
+GitHub Actions sekarang juga membuat file `daily_intelligence_briefing.md` dan memasukkan ringkasan itu ke notifikasi Telegram setelah update KB selesai.

@@ -37,10 +37,21 @@ except Exception:  # pragma: no cover - Python <3.9 fallback is not expected her
     ZoneInfo = None  # type: ignore
 
 from power_features import get_power_store
+from critical_current_layer import (
+    build_daily_intelligence_brief,
+    calculate_freshness_score,
+    calculate_source_quality,
+    detect_critical_question,
+    extract_claims,
+    load_watchlist,
+    save_default_watchlist,
+)
 
 DEFAULT_DB_PATH = ".adioranye_power.db"
 DEFAULT_SOURCES_FILE = "kb_sources.json"
 DEFAULT_STATE_FILE = ".adioranye_kb_scrape_state.json"
+DEFAULT_WATCHLIST_FILE = "critical_watchlist.json"
+DEFAULT_BRIEFING_FILE = "daily_intelligence_briefing.md"
 DEFAULT_USER_AGENT = (
     "AdioranyeAI-KB-Updater/1.0 (+https://github.com/; respectful daily knowledge update)"
 )
@@ -395,6 +406,8 @@ class SourceConfig:
     static_content: str = ""
     source_quality: Optional[float] = None
     summary_sentences: int = 5
+    critical: bool = True
+    claim_max_items: int = 8
 
 
 def load_sources(path: str = DEFAULT_SOURCES_FILE) -> List[Dict[str, Any]]:
@@ -430,6 +443,8 @@ def normalize_source(raw: Dict[str, Any]) -> SourceConfig:
         static_content=str(raw.get("static_content") or raw.get("content") or raw.get("text") or "").strip(),
         source_quality=(float(raw.get("source_quality")) if str(raw.get("source_quality", "")).strip() else None),
         summary_sentences=max(2, min(8, int(raw.get("summary_sentences") or 5))),
+        critical=bool(raw.get("critical", True)),
+        claim_max_items=max(2, min(20, int(raw.get("claim_max_items") or 8))),
     )
 
 
@@ -673,6 +688,62 @@ def processed_key(article: Dict[str, str], source: SourceConfig) -> str:
     return stable_hash(source.name + "|" + article.get("title", "") + "|" + article.get("published", ""))
 
 
+
+
+def enrich_article_metadata(article: Dict[str, str], source: SourceConfig, content: str, title: str, url: str) -> Dict[str, Any]:
+    published = article.get("published", "")
+    scraped_at = now_iso()
+    freshness = calculate_freshness_score(published_at=published, scraped_at=scraped_at)
+    quality = calculate_source_quality(
+        url=url or source.url,
+        title=title,
+        tags=source.tags,
+        source_name=source.name,
+        configured_quality=estimate_source_quality_from_config(source),
+    )
+    detection = detect_critical_question(" ".join([title, source.collection, source.tags, content[:1800]]))
+    claims = extract_claims(
+        text=content,
+        title=title,
+        source_name=source.name,
+        url=url or source.url,
+        published_at=published,
+        max_claims=source.claim_max_items,
+    ) if source.critical else []
+    return {
+        "source_name": source.name,
+        "source_type": source.type,
+        "source_url": source.url,
+        "article_url": url,
+        "published": published,
+        "published_ts": freshness.get("published_ts") or 0,
+        "scraped_at": scraped_at,
+        "scraped_at_wib": now_wib_text(),
+        "auto_update": True,
+        "source_quality": quality.get("score"),
+        "source_quality_reason": quality.get("reason"),
+        "source_domain": source_domain(url or source.url),
+        "freshness_score": freshness.get("score"),
+        "freshness_bucket": freshness.get("bucket"),
+        "freshness_age_days": freshness.get("age_days"),
+        "criticality_score": detection.get("score", 0),
+        "critical_detection": detection,
+        "claims": claims,
+        "auto_summary": summarize_for_kb(content, max_sentences=source.summary_sentences),
+        "keywords": extract_keywords(" ".join([title, content]), limit=14),
+    }
+
+
+def append_claims_to_document_text(document_text: str, claims: List[Dict[str, Any]]) -> str:
+    if not claims:
+        return document_text
+    lines = [document_text, "", "Klaim/fakta penting terstruktur:"]
+    for idx, item in enumerate(claims[:12], start=1):
+        claim = clean_spaces(item.get("claim") or "")
+        if claim:
+            lines.append(f"{idx}. {claim}")
+    return "\n".join(lines)
+
 def run_daily_kb_update(
     db_path: str = DEFAULT_DB_PATH,
     sources_path: str = DEFAULT_SOURCES_FILE,
@@ -682,6 +753,8 @@ def run_daily_kb_update(
     dry_run: bool = False,
     force: bool = False,
     user_agent: str = DEFAULT_USER_AGENT,
+    watchlist_path: str = DEFAULT_WATCHLIST_FILE,
+    briefing_file: str = DEFAULT_BRIEFING_FILE,
 ) -> Dict[str, Any]:
     """Run the daily update and return a serializable report."""
     raw_sources = load_sources(sources_path)
@@ -707,7 +780,16 @@ def run_daily_kb_update(
         "skipped_short": 0,
         "errors": 0,
         "items": [],
+        "watchlist_path": watchlist_path,
+        "briefing_file": briefing_file,
+        "critical_claims_added": 0,
     }
+    try:
+        if not Path(watchlist_path).exists():
+            save_default_watchlist(watchlist_path)
+        report["watchlist"] = load_watchlist(watchlist_path)[:100]
+    except Exception:
+        report["watchlist"] = []
 
     for source in enabled_sources:
         try:
@@ -749,23 +831,11 @@ def run_daily_kb_update(
                 })
                 continue
 
+            metadata = enrich_article_metadata(article, source, content, title, url)
+            metadata["processed_key"] = key
             document_text = build_document_text(article, source)
+            document_text = append_claims_to_document_text(document_text, metadata.get("claims") or [])
             doc_title = f"{source.name} — {title}"[:240]
-            metadata = {
-                "source_name": source.name,
-                "source_type": source.type,
-                "source_url": source.url,
-                "article_url": url,
-                "published": article.get("published", ""),
-                "scraped_at": now_iso(),
-                "scraped_at_wib": now_wib_text(),
-                "processed_key": key,
-                "auto_update": True,
-                "source_quality": estimate_source_quality_from_config(source),
-                "source_domain": source_domain(url or source.url),
-                "auto_summary": summarize_for_kb(content, max_sentences=source.summary_sentences),
-                "keywords": extract_keywords(" ".join([title, content]), limit=14),
-            }
 
             if dry_run:
                 doc_id, chunks = 0, 0
@@ -780,8 +850,8 @@ def run_daily_kb_update(
                     metadata=metadata,
                     replace_existing=False,
                     pinned=source.pinned,
-                    source_quality=estimate_source_quality_from_config(source),
-                    summary=summarize_for_kb(content, max_sentences=source.summary_sentences),
+                    source_quality=float(metadata.get("source_quality") or estimate_source_quality_from_config(source)),
+                    summary=str(metadata.get("auto_summary") or summarize_for_kb(content, max_sentences=source.summary_sentences)),
                 )
 
             if chunks:
@@ -818,7 +888,12 @@ def run_daily_kb_update(
                 "doc_id": doc_id,
                 "chunks": chunks,
                 "chars": len(document_text),
+                "source_quality": metadata.get("source_quality"),
+                "freshness_score": metadata.get("freshness_score"),
+                "criticality_score": metadata.get("criticality_score"),
+                "claims": len(metadata.get("claims") or []),
             })
+            report["critical_claims_added"] += int(len(metadata.get("claims") or [])) if status in {"added", "dry_run"} else 0
 
     report["finished_at"] = now_iso()
     report["finished_at_wib"] = now_wib_text()
@@ -829,6 +904,13 @@ def run_daily_kb_update(
         "errors": report["errors"],
         "dry_run": dry_run,
     })
+    try:
+        brief_text = build_daily_intelligence_brief(report, report.get("items") or [])
+        report["briefing_text"] = brief_text
+        if briefing_file:
+            Path(briefing_file).write_text(brief_text, encoding="utf-8")
+    except Exception as exc:
+        report["briefing_error"] = str(exc)[:300]
     if not dry_run:
         save_state(state_path, state)
     return report
@@ -843,6 +925,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--timeout", type=int, default=int(os.getenv("KB_SCRAPER_TIMEOUT", "20") or 20), help="HTTP timeout detik.")
     parser.add_argument("--dry-run", action="store_true", help="Ambil dan bersihkan data tanpa menyimpan ke database.")
     parser.add_argument("--force", action="store_true", help="Abaikan state URL dan coba ingest ulang.")
+    parser.add_argument("--watchlist", default=os.getenv("CRITICAL_WATCHLIST_FILE", DEFAULT_WATCHLIST_FILE), help="Path watchlist isu kritis.")
+    parser.add_argument("--briefing-file", default=os.getenv("DAILY_INTELLIGENCE_BRIEFING_FILE", DEFAULT_BRIEFING_FILE), help="Path output briefing harian.")
     args = parser.parse_args(argv)
 
     report = run_daily_kb_update(
@@ -853,6 +937,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         timeout=args.timeout,
         dry_run=bool(args.dry_run),
         force=bool(args.force),
+        watchlist_path=args.watchlist,
+        briefing_file=args.briefing_file,
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     # Non-zero only if every enabled source failed. One or two bad feeds should not break deploy.
