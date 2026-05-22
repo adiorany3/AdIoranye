@@ -129,6 +129,75 @@ except Exception:  # keep older deployments alive if performance layer is absent
     def build_performance_report(metrics):
         return str(metrics)
 
+
+try:
+    from music_chart_tools import (
+        build_music_chart_context,
+        build_music_chart_fallback_answer,
+        fetch_indonesia_music_charts,
+        is_indonesia_music_chart_query,
+        is_music_chart_query,
+        music_chart_result_to_pseudo_source,
+    )
+except Exception:  # keep app alive if music chart helper is absent
+    def is_music_chart_query(text: Any) -> bool:
+        return False
+    def is_indonesia_music_chart_query(text: Any) -> bool:
+        return False
+    def fetch_indonesia_music_charts(limit: int = 10, timeout: int = 8) -> Any:
+        class _R:
+            ok = False
+            source_name = ""
+            source_url = ""
+            fetched_at_wib = ""
+            items = ()
+            note = "music_chart_tools unavailable"
+            errors = ("music_chart_tools unavailable",)
+            def to_dict(self):
+                return {"ok": False, "errors": list(self.errors)}
+        return _R()
+    def build_music_chart_context(result: Any, max_items: int = 10) -> str:
+        return ""
+    def build_music_chart_fallback_answer(result: Any) -> str:
+        return "Data tangga lagu terbaru belum tersedia."
+    def music_chart_result_to_pseudo_source(result: Any) -> Dict[str, Any]:
+        return {}
+
+
+try:
+    from live_knowledge_fallback import (
+        LiveSearchResult,
+        build_live_search_system_instruction,
+        live_result_to_rag_sources,
+        save_live_result_to_kb,
+        should_trigger_live_fallback,
+        tavily_live_search,
+    )
+except Exception:  # keep app alive if live fallback helper is absent
+    class LiveSearchResult:  # type: ignore
+        ok = False
+        def to_dict(self):
+            return {"ok": False, "reason": "live_knowledge_fallback unavailable"}
+    def should_trigger_live_fallback(user_text: str, **kwargs: Any) -> Dict[str, Any]:
+        return {"use": False, "reason": "live_knowledge_fallback_unavailable"}
+    def tavily_live_search(query: str, **kwargs: Any) -> Any:
+        class _R:
+            ok = False
+            reason = "live_knowledge_fallback_unavailable"
+            errors = ["live_knowledge_fallback unavailable"]
+            items = []
+            def __init__(self, query_text: str = ""):
+                self.query = query_text
+            def to_dict(self):
+                return {"ok": False, "query": self.query, "reason": self.reason, "errors": self.errors}
+        return _R(query)
+    def live_result_to_rag_sources(result: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+        return []
+    def save_live_result_to_kb(store: Any, result: Any, **kwargs: Any) -> Dict[str, Any]:
+        return {"saved": 0, "skipped": True}
+    def build_live_search_system_instruction(result: Any) -> str:
+        return ""
+
 try:
     from hallucination_guard import (
         append_guard_note,
@@ -2794,6 +2863,8 @@ def classify_intent_text(text: str) -> str:
         return "empty"
     if t.startswith(("/", "!")):
         return "admin_command"
+    if is_music_chart_query(t):
+        return "music_chart"
     if any(x in t for x in ["```", "def ", "class ", "traceback", "error", "bug", "streamlit", "api", "vercel", "github", "kode", "coding", "python", "javascript", "patch"]):
         return "coding"
     try:
@@ -2834,6 +2905,7 @@ PROMPT_TEMPLATES: Dict[str, str] = {
     "livestock": "Jawab sebagai asisten pengetahuan peternakan. Prioritaskan sumber resmi, jurnal, kesehatan hewan, pakan, manajemen ternak, dan beri catatan kehati-hatian bila data belum pasti.",
     "health": "Jawab dengan kehati-hatian kesehatan: edukatif, tidak menggantikan tenaga medis, prioritaskan sumber resmi, dan sarankan pemeriksaan profesional untuk kondisi serius.",
     "critical_current": "Jawab sebagai analis isu terkini. Utamakan data terbaru, kualitas sumber, perbedaan klaim, batas kepastian, dan rekomendasi verifikasi.",
+    "music_chart": "Jawab ringkas sebagai asisten hiburan/musik. Untuk tangga lagu, gunakan konteks chart yang tersedia, sebutkan bahwa peringkat bersifat snapshot dan bisa berubah. Jangan mengarang judul/artis di luar konteks.",
 }
 
 
@@ -2927,7 +2999,7 @@ SOURCE_REQUEST_TERMS = [
 ]
 
 SOURCE_WORTHY_INTENTS = {
-    "research", "academic", "health", "livestock", "critical_current", "document_question",
+    "research", "academic", "health", "livestock", "critical_current", "document_question", "music_chart",
 }
 
 
@@ -3107,6 +3179,21 @@ def generate_power_answer(
     semantic_cache_ttl_seconds: int = 86400,
     latency_budget_enabled: bool = True,
     retrieval_eval_enabled: bool = True,
+    live_music_chart_enabled: bool = True,
+    live_music_chart_limit: int = 10,
+    live_music_chart_timeout_seconds: int = 8,
+    live_web_fallback_enabled: bool = True,
+    live_web_fallback_provider: str = "tavily",
+    tavily_api_key: str = "",
+    live_web_fallback_max_results: int = 4,
+    live_web_fallback_timeout_seconds: int = 10,
+    live_web_fallback_min_sources: int = 1,
+    live_web_fallback_include_raw_content: bool = True,
+    live_web_fallback_max_content_chars: int = 3200,
+    live_web_fallback_auto_save_to_kb: bool = True,
+    live_web_fallback_ttl_hours: int = 24,
+    live_web_fallback_force_for_current: bool = True,
+    live_web_fallback_topic: str = "auto",
     **compat_kwargs: Any,
 ) -> Tuple[str, Dict[str, Any]]:
     store = store or get_power_store()
@@ -3134,6 +3221,19 @@ def generate_power_answer(
         temperature = min(float(temperature or 0.3), float(answer_mode_policy.get("temperature_cap") or 0.3))
     except Exception:
         temperature = 0.3
+
+    music_chart_query = bool(is_music_chart_query(user_text))
+    # Tangga lagu terbaru adalah data aktual, tetapi risikonya rendah.
+    # Jangan biarkan guard mengubah pertanyaan hiburan ringan menjadi blokir total
+    # selama mode pengguna bukan riset/kritis/strict. Bukti tetap diambil dari helper live chart.
+    if music_chart_query and effective_answer_mode not in {"riset", "kritis"}:
+        anti_hallucination_auto_strict = False
+        strict_rag_mode = False
+        anti_hallucination_min_sources = min(int(anti_hallucination_min_sources or 1), 1)
+        rag_min_sources = min(int(rag_min_sources or 1), 1)
+        # Chart musik berubah cepat; hindari cache jawaban lama.
+        enable_response_cache = False
+        semantic_cache_enabled = False
 
     query_plan = rewrite_query(user_text, intent=intent, answer_mode=effective_answer_mode) if (performance_optimizer_enabled and query_rewriter_enabled) else QueryPlan(user_text, user_text, [], False, True, "disabled")
     retrieval_query = str(getattr(query_plan, "rewritten_query", "") or user_text)
@@ -3176,6 +3276,107 @@ def generate_power_answer(
                 rag_sources = rerank_sources(retrieval_query, rag_sources, limit=raw_limit, diversity=True)
         except Exception:
             rag_sources = []
+
+    music_chart_result = None
+    if music_chart_query and bool(live_music_chart_enabled):
+        try:
+            music_chart_result = fetch_indonesia_music_charts(
+                limit=int(live_music_chart_limit or 10),
+                timeout=int(live_music_chart_timeout_seconds or 8),
+            )
+            if getattr(music_chart_result, "ok", False):
+                pseudo = music_chart_result_to_pseudo_source(music_chart_result)
+                if pseudo:
+                    rag_sources = [pseudo] + list(rag_sources or [])
+                    enable_rag = True
+            elif not rag_sources:
+                answer = build_music_chart_fallback_answer(music_chart_result)
+                meta = {
+                    "intent": intent,
+                    "music_chart_query": True,
+                    "music_chart_live_fetch_ok": False,
+                    "music_chart_result": music_chart_result.to_dict() if hasattr(music_chart_result, "to_dict") else {},
+                    "anti_hallucination_blocked": False,
+                    "show_kb_sources": False,
+                    "kb_source_display_policy": "music_chart_live_fetch_failed",
+                }
+                try:
+                    store.log_interaction(user_id=user_id, channel=channel, intent=intent, model=model, question=user_text, answer=answer, meta=meta, success=True)
+                except Exception:
+                    pass
+                return answer, meta
+        except Exception as exc:
+            if not rag_sources:
+                answer = (
+                    "Saya belum bisa mengambil tangga lagu Indonesia terbaru saat ini. "
+                    "Coba jalankan /update atau tambahkan sumber chart musik seperti Billboard Indonesia Songs, Spotify Top 50 Indonesia, Apple Music Top Charts Indonesia, dan YouTube Charts Indonesia."
+                )
+                meta = {"intent": intent, "music_chart_query": True, "music_chart_live_fetch_error": str(exc)[:500], "show_kb_sources": False}
+                return answer, meta
+
+
+    live_search_result = None
+    live_search_decision: Dict[str, Any] = {"use": False, "reason": "disabled"}
+    live_search_save_meta: Dict[str, Any] = {}
+    if bool(live_web_fallback_enabled) and str(live_web_fallback_provider or "tavily").lower() == "tavily":
+        try:
+            live_min_sources = max(1, int(live_web_fallback_min_sources or 1))
+            live_search_decision = should_trigger_live_fallback(
+                user_text,
+                intent=intent,
+                answer_mode=effective_answer_mode,
+                rag_sources=rag_sources,
+                min_sources=live_min_sources,
+                force=False,
+            )
+            # For current factual questions, live search can supplement stale KB even outside strict mode.
+            if bool(live_web_fallback_force_for_current) and not live_search_decision.get("use"):
+                live_search_decision = should_trigger_live_fallback(
+                    user_text,
+                    intent=intent,
+                    answer_mode=effective_answer_mode,
+                    rag_sources=rag_sources,
+                    min_sources=live_min_sources,
+                    force=False,
+                )
+            if bool(live_search_decision.get("use")):
+                live_search_result = tavily_live_search(
+                    retrieval_query,
+                    api_key=str(tavily_api_key or ""),
+                    max_results=int(live_web_fallback_max_results or 4),
+                    timeout=int(live_web_fallback_timeout_seconds or 10),
+                    include_raw_content=bool(live_web_fallback_include_raw_content),
+                    max_content_chars=int(live_web_fallback_max_content_chars or 3200),
+                    topic=str(live_web_fallback_topic or "auto"),
+                )
+                if getattr(live_search_result, "ok", False):
+                    live_sources = live_result_to_rag_sources(
+                        live_search_result,
+                        max_sources=int(live_web_fallback_max_results or 4),
+                    )
+                    rag_sources = list(live_sources or []) + list(rag_sources or [])
+                    # Prefer fresh live sources, but keep a few KB sources for grounding diversity.
+                    if performance_optimizer_enabled and reranker_enabled:
+                        rag_sources = rerank_sources(
+                            retrieval_query,
+                            rag_sources,
+                            limit=max(int(rag_top_k or 5), int(live_web_fallback_max_results or 4)),
+                            diversity=True,
+                        )
+                    enable_rag = True
+                    # Current/live answers should not be cached too aggressively.
+                    enable_response_cache = False
+                    semantic_cache_enabled = False
+                    if bool(live_web_fallback_auto_save_to_kb):
+                        live_search_save_meta = save_live_result_to_kb(
+                            store,
+                            live_search_result,
+                            ttl_hours=int(live_web_fallback_ttl_hours or 24),
+                            max_items=int(live_web_fallback_max_results or 4),
+                        )
+        except Exception as exc:
+            live_search_decision = {"use": False, "reason": "error", "error": str(exc)[:500]}
+
     retrieval_latency = round(time.time() - retrieval_started, 4)
     retrieval_metrics = retrieval_precision_estimate(retrieval_query, rag_sources) if (performance_optimizer_enabled and retrieval_eval_enabled) else {}
     if performance_optimizer_enabled and retrieval_eval_enabled and enable_rag:
@@ -3254,10 +3455,12 @@ def generate_power_answer(
     routed_user_text = enhance_prompt_for_intent(user_text, intent, enable_templates=enable_prompt_templates)
     guard_instruction = build_guard_system_instruction(user_text, rag_sources, guard_result) if anti_hallucination_enabled else ""
     mode_instruction = build_mode_system_instruction(effective_answer_mode, user_text) if quality_control_enabled else ""
+    live_instruction = build_live_search_system_instruction(live_search_result) if live_search_result is not None else ""
     guarded_system_prompt = (
         str(system_prompt or "").strip()
         + ("\n\n" + mode_instruction if mode_instruction else "")
         + ("\n\n" + guard_instruction if guard_instruction else "")
+        + ("\n\n" + live_instruction if live_instruction else "")
     ).strip()
     guarded_temperature = apply_temperature_policy(float(temperature or 0.3), guard_result)
 
@@ -3422,6 +3625,21 @@ def generate_power_answer(
         meta["retrieval_latency_seconds"] = retrieval_latency
         meta["retrieval_metrics"] = retrieval_metrics
         meta["performance_optimizer_enabled"] = bool(performance_optimizer_enabled)
+        meta["live_web_fallback_enabled"] = bool(live_web_fallback_enabled)
+        meta["live_web_fallback_provider"] = str(live_web_fallback_provider or "tavily")
+        meta["live_web_fallback_decision"] = live_search_decision
+        if live_search_result is not None and hasattr(live_search_result, "to_dict"):
+            meta["live_web_fallback_result"] = live_search_result.to_dict()
+            meta["live_web_fallback_used"] = bool(getattr(live_search_result, "ok", False))
+        else:
+            meta["live_web_fallback_used"] = False
+        if live_search_save_meta:
+            meta["live_web_fallback_saved_to_kb"] = live_search_save_meta
+        if music_chart_query:
+            meta["music_chart_query"] = True
+            meta["music_chart_live_fetch_ok"] = bool(getattr(music_chart_result, "ok", False)) if music_chart_result is not None else False
+            if music_chart_result is not None and hasattr(music_chart_result, "to_dict"):
+                meta["music_chart_result"] = music_chart_result.to_dict()
         if ignored_compat_kwargs:
             meta["ignored_compat_kwargs"] = ignored_compat_kwargs
 

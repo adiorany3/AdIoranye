@@ -547,6 +547,21 @@ power_semantic_cache_threshold = float(get_secret("POWER_SEMANTIC_CACHE_THRESHOL
 power_semantic_cache_ttl_seconds = int(get_secret("POWER_SEMANTIC_CACHE_TTL_SECONDS", 86400) or 86400)
 power_latency_budget_enabled = parse_bool(get_secret("POWER_LATENCY_BUDGET_ENABLED", True), default=True)
 power_retrieval_eval_enabled = parse_bool(get_secret("POWER_RETRIEVAL_EVAL_ENABLED", True), default=True)
+live_music_chart_enabled = parse_bool(get_secret("LIVE_MUSIC_CHART_ENABLED", True), default=True)
+live_music_chart_limit = int(get_secret("LIVE_MUSIC_CHART_LIMIT", 10) or 10)
+live_music_chart_timeout_seconds = int(get_secret("LIVE_MUSIC_CHART_TIMEOUT_SECONDS", 8) or 8)
+live_web_fallback_enabled = parse_bool(get_secret("LIVE_WEB_FALLBACK_ENABLED", True), default=True)
+live_web_fallback_provider = str(get_secret("LIVE_WEB_FALLBACK_PROVIDER", "tavily") or "tavily")
+tavily_api_key = str(get_secret("TAVILY_API_KEY", "") or "")
+live_web_fallback_max_results = int(get_secret("LIVE_WEB_FALLBACK_MAX_RESULTS", 4) or 4)
+live_web_fallback_timeout_seconds = int(get_secret("LIVE_WEB_FALLBACK_TIMEOUT_SECONDS", 10) or 10)
+live_web_fallback_min_sources = int(get_secret("LIVE_WEB_FALLBACK_MIN_SOURCES", 1) or 1)
+live_web_fallback_include_raw_content = parse_bool(get_secret("LIVE_WEB_FALLBACK_INCLUDE_RAW_CONTENT", True), default=True)
+live_web_fallback_max_content_chars = int(get_secret("LIVE_WEB_FALLBACK_MAX_CONTENT_CHARS", 3200) or 3200)
+live_web_fallback_auto_save_to_kb = parse_bool(get_secret("LIVE_WEB_FALLBACK_AUTO_SAVE_TO_KB", True), default=True)
+live_web_fallback_ttl_hours = int(get_secret("LIVE_WEB_FALLBACK_TTL_HOURS", 24) or 24)
+live_web_fallback_force_for_current = parse_bool(get_secret("LIVE_WEB_FALLBACK_FORCE_FOR_CURRENT", True), default=True)
+live_web_fallback_topic = str(get_secret("LIVE_WEB_FALLBACK_TOPIC", "auto") or "auto")
 daily_cost_limit_idr = float(get_secret("DAILY_COST_LIMIT_IDR", 0) or 0)
 max_expensive_calls_per_day = int(get_secret("MAX_EXPENSIVE_CALLS_PER_DAY", 0) or 0)
 benchmark_max_models = int(get_secret("BENCHMARK_MAX_MODELS", 8) or 8)
@@ -2698,6 +2713,21 @@ def start_telegram_if_needed() -> None:
                 "power_semantic_cache_ttl_seconds": int(power_semantic_cache_ttl_seconds),
                 "power_latency_budget_enabled": bool(power_latency_budget_enabled),
                 "power_retrieval_eval_enabled": bool(power_retrieval_eval_enabled),
+                "live_music_chart_enabled": bool(live_music_chart_enabled),
+                "live_music_chart_limit": int(live_music_chart_limit),
+                "live_music_chart_timeout_seconds": int(live_music_chart_timeout_seconds),
+                "live_web_fallback_enabled": bool(live_web_fallback_enabled),
+                "live_web_fallback_provider": live_web_fallback_provider,
+                "tavily_api_key": tavily_api_key,
+                "live_web_fallback_max_results": int(live_web_fallback_max_results),
+                "live_web_fallback_timeout_seconds": int(live_web_fallback_timeout_seconds),
+                "live_web_fallback_min_sources": int(live_web_fallback_min_sources),
+                "live_web_fallback_include_raw_content": bool(live_web_fallback_include_raw_content),
+                "live_web_fallback_max_content_chars": int(live_web_fallback_max_content_chars),
+                "live_web_fallback_auto_save_to_kb": bool(live_web_fallback_auto_save_to_kb),
+                "live_web_fallback_ttl_hours": int(live_web_fallback_ttl_hours),
+                "live_web_fallback_force_for_current": bool(live_web_fallback_force_for_current),
+                "live_web_fallback_topic": live_web_fallback_topic,
                 "power_default_answer_mode": power_default_answer_mode,
                 "daily_cost_limit_idr": float(daily_cost_limit_idr),
                 "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
@@ -3304,6 +3334,21 @@ def render_admin_settings() -> None:
                 "power_semantic_cache_ttl_seconds": int(power_semantic_cache_ttl_seconds),
                 "power_latency_budget_enabled": bool(power_latency_budget_enabled),
                 "power_retrieval_eval_enabled": bool(power_retrieval_eval_enabled),
+                "live_music_chart_enabled": bool(live_music_chart_enabled),
+                "live_music_chart_limit": int(live_music_chart_limit),
+                "live_music_chart_timeout_seconds": int(live_music_chart_timeout_seconds),
+                "live_web_fallback_enabled": bool(live_web_fallback_enabled),
+                "live_web_fallback_provider": live_web_fallback_provider,
+                "tavily_api_key": tavily_api_key,
+                "live_web_fallback_max_results": int(live_web_fallback_max_results),
+                "live_web_fallback_timeout_seconds": int(live_web_fallback_timeout_seconds),
+                "live_web_fallback_min_sources": int(live_web_fallback_min_sources),
+                "live_web_fallback_include_raw_content": bool(live_web_fallback_include_raw_content),
+                "live_web_fallback_max_content_chars": int(live_web_fallback_max_content_chars),
+                "live_web_fallback_auto_save_to_kb": bool(live_web_fallback_auto_save_to_kb),
+                "live_web_fallback_ttl_hours": int(live_web_fallback_ttl_hours),
+                "live_web_fallback_force_for_current": bool(live_web_fallback_force_for_current),
+                "live_web_fallback_topic": live_web_fallback_topic,
                 "power_default_answer_mode": power_default_answer_mode,
                 "daily_cost_limit_idr": float(daily_cost_limit_idr),
                 "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
@@ -4159,6 +4204,21 @@ if user_input:
                     semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
                     latency_budget_enabled=bool(power_latency_budget_enabled),
                     retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
+                    live_music_chart_enabled=bool(live_music_chart_enabled),
+                    live_music_chart_limit=int(live_music_chart_limit),
+                    live_music_chart_timeout_seconds=int(live_music_chart_timeout_seconds),
+                    live_web_fallback_enabled=bool(live_web_fallback_enabled),
+                    live_web_fallback_provider=live_web_fallback_provider,
+                    tavily_api_key=tavily_api_key,
+                    live_web_fallback_max_results=int(live_web_fallback_max_results),
+                    live_web_fallback_timeout_seconds=int(live_web_fallback_timeout_seconds),
+                    live_web_fallback_min_sources=int(live_web_fallback_min_sources),
+                    live_web_fallback_include_raw_content=bool(live_web_fallback_include_raw_content),
+                    live_web_fallback_max_content_chars=int(live_web_fallback_max_content_chars),
+                    live_web_fallback_auto_save_to_kb=bool(live_web_fallback_auto_save_to_kb),
+                    live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
+                    live_web_fallback_force_for_current=bool(live_web_fallback_force_for_current),
+                    live_web_fallback_topic=live_web_fallback_topic,
                 )
                 restore_active_model_to_cheap(route.get("primary_model"))
                 placeholder.markdown(answer)

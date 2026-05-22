@@ -1779,6 +1779,21 @@ class TelegramBotService:
         power_semantic_cache_ttl_seconds = int(config.get("power_semantic_cache_ttl_seconds", 86400) or 86400)
         power_latency_budget_enabled = bool(config.get("power_latency_budget_enabled", True))
         power_retrieval_eval_enabled = bool(config.get("power_retrieval_eval_enabled", True))
+        live_music_chart_enabled = bool(config.get("live_music_chart_enabled", True))
+        live_music_chart_limit = int(config.get("live_music_chart_limit", 10) or 10)
+        live_music_chart_timeout_seconds = int(config.get("live_music_chart_timeout_seconds", 8) or 8)
+        live_web_fallback_enabled = bool(config.get("live_web_fallback_enabled", True))
+        live_web_fallback_provider = str(config.get("live_web_fallback_provider") or "tavily")
+        tavily_api_key = str(config.get("tavily_api_key") or "")
+        live_web_fallback_max_results = int(config.get("live_web_fallback_max_results", 4) or 4)
+        live_web_fallback_timeout_seconds = int(config.get("live_web_fallback_timeout_seconds", 10) or 10)
+        live_web_fallback_min_sources = int(config.get("live_web_fallback_min_sources", 1) or 1)
+        live_web_fallback_include_raw_content = bool(config.get("live_web_fallback_include_raw_content", True))
+        live_web_fallback_max_content_chars = int(config.get("live_web_fallback_max_content_chars", 3200) or 3200)
+        live_web_fallback_auto_save_to_kb = bool(config.get("live_web_fallback_auto_save_to_kb", True))
+        live_web_fallback_ttl_hours = int(config.get("live_web_fallback_ttl_hours", 24) or 24)
+        live_web_fallback_force_for_current = bool(config.get("live_web_fallback_force_for_current", True))
+        live_web_fallback_topic = str(config.get("live_web_fallback_topic") or "auto")
         power_default_answer_mode = str(config.get("power_default_answer_mode") or "auto").strip().lower()
         daily_cost_limit_idr = float(config.get("daily_cost_limit_idr", 0) or 0)
         max_expensive_calls_per_day = int(config.get("max_expensive_calls_per_day", 0) or 0)
@@ -2309,6 +2324,21 @@ class TelegramBotService:
                                 semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
                                 latency_budget_enabled=bool(power_latency_budget_enabled),
                                 retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
+                                live_music_chart_enabled=bool(live_music_chart_enabled),
+                                live_music_chart_limit=int(live_music_chart_limit),
+                                live_music_chart_timeout_seconds=int(live_music_chart_timeout_seconds),
+                                live_web_fallback_enabled=bool(live_web_fallback_enabled),
+                                live_web_fallback_provider=live_web_fallback_provider,
+                                tavily_api_key=tavily_api_key,
+                                live_web_fallback_max_results=int(live_web_fallback_max_results),
+                                live_web_fallback_timeout_seconds=int(live_web_fallback_timeout_seconds),
+                                live_web_fallback_min_sources=int(live_web_fallback_min_sources),
+                                live_web_fallback_include_raw_content=bool(live_web_fallback_include_raw_content),
+                                live_web_fallback_max_content_chars=int(live_web_fallback_max_content_chars),
+                                live_web_fallback_auto_save_to_kb=bool(live_web_fallback_auto_save_to_kb),
+                                live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
+                                live_web_fallback_force_for_current=bool(live_web_fallback_force_for_current),
+                                live_web_fallback_topic=live_web_fallback_topic,
                             )
 
                             if isinstance(meta, dict):
@@ -2419,6 +2449,21 @@ class TelegramBotService:
                                         semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
                                         latency_budget_enabled=bool(power_latency_budget_enabled),
                                         retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
+                                        live_music_chart_enabled=bool(live_music_chart_enabled),
+                                        live_music_chart_limit=int(live_music_chart_limit),
+                                        live_music_chart_timeout_seconds=int(live_music_chart_timeout_seconds),
+                                        live_web_fallback_enabled=bool(live_web_fallback_enabled),
+                                        live_web_fallback_provider=live_web_fallback_provider,
+                                        tavily_api_key=tavily_api_key,
+                                        live_web_fallback_max_results=int(live_web_fallback_max_results),
+                                        live_web_fallback_timeout_seconds=int(live_web_fallback_timeout_seconds),
+                                        live_web_fallback_min_sources=int(live_web_fallback_min_sources),
+                                        live_web_fallback_include_raw_content=bool(live_web_fallback_include_raw_content),
+                                        live_web_fallback_max_content_chars=int(live_web_fallback_max_content_chars),
+                                        live_web_fallback_auto_save_to_kb=bool(live_web_fallback_auto_save_to_kb),
+                                        live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
+                                        live_web_fallback_force_for_current=bool(live_web_fallback_force_for_current),
+                                        live_web_fallback_topic=live_web_fallback_topic,
                                     )
 
                                     if isinstance(retry_meta, dict):
