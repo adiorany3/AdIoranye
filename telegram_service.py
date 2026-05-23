@@ -494,6 +494,78 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
     return "\n".join(lines)
 
 
+
+def is_tavily_test_command(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+    command = raw.split()[0].lower()
+    if "@" in command:
+        command = command.split("@", 1)[0]
+    return command == "/tavily"
+
+
+def run_tavily_connection_test(
+    api_key: str,
+    query: str = "berita AI terbaru hari ini",
+) -> str:
+    key = str(api_key or os.getenv("TAVILY_API_KEY", "") or "").strip()
+
+    if not key:
+        return "❌ TAVILY_API_KEY belum terbaca."
+
+    try:
+        response = requests.post(
+            "https://api.tavily.com/search",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "query": str(query or "berita AI terbaru hari ini"),
+                "topic": "general",
+                "search_depth": "basic",
+                "max_results": 3,
+                "include_answer": True,
+                "include_raw_content": False,
+            },
+            timeout=15,
+        )
+    except requests.Timeout:
+        return "❌ Tavily timeout."
+    except requests.RequestException as exc:
+        return f"❌ Request Tavily gagal: {exc}"
+
+    try:
+        data = response.json()
+    except Exception:
+        data = {}
+
+    if response.status_code != 200:
+        detail = response.text[:900]
+        return (
+            "❌ Tavily belum konek.\n\n"
+            f"HTTP: {response.status_code}\n"
+            f"Detail: {detail}"
+        )
+
+    results = data.get("results") or []
+    first = results[0] if results and isinstance(results[0], dict) else {}
+
+    lines = [
+        "✅ Tavily tersambung.",
+        f"Hasil: {len(results)}",
+    ]
+
+    if first.get("title"):
+        lines.append(f"Contoh: {first.get('title')}")
+    if first.get("url"):
+        lines.append(f"URL: {first.get('url')}")
+
+    return "\n".join(lines)
+
+
+
 def build_telegram_model_note(
     meta: Any,
     requested_model: str,
@@ -1916,7 +1988,9 @@ class TelegramBotService:
         live_music_chart_timeout_seconds = int(config.get("live_music_chart_timeout_seconds", 8) or 8)
         live_web_fallback_enabled = bool(config.get("live_web_fallback_enabled", True))
         live_web_fallback_provider = str(config.get("live_web_fallback_provider") or "tavily")
-        tavily_api_key = str(config.get("tavily_api_key") or "")
+        tavily_api_key = str(config.get("tavily_api_key") or "").strip()
+        if tavily_api_key:
+            os.environ["TAVILY_API_KEY"] = tavily_api_key
         live_web_fallback_max_results = int(config.get("live_web_fallback_max_results", 4) or 4)
         live_web_fallback_timeout_seconds = int(config.get("live_web_fallback_timeout_seconds", 10) or 10)
         live_web_fallback_min_sources = int(config.get("live_web_fallback_min_sources", 1) or 1)
@@ -2269,6 +2343,27 @@ class TelegramBotService:
                                 chat_id,
                                 "Format perintah salah. Gunakan: /ubah mahal atau /ubah murah",
                                 parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if is_tavily_test_command(text):
+                            if not self._is_admin_chat(chat_id, config):
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            parts = text.strip().split(maxsplit=1)
+                            test_query = (
+                                parts[1]
+                                if len(parts) > 1
+                                else "berita AI terbaru hari ini"
+                            )
+                            self._send_message(
+                                token,
+                                chat_id,
+                                run_tavily_connection_test(
+                                    tavily_api_key,
+                                    test_query,
+                                ),
                             )
                             continue
 

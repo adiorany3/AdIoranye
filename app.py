@@ -897,7 +897,9 @@ live_web_fallback_enabled = parse_bool(
 live_web_fallback_provider = str(
     get_secret("LIVE_WEB_FALLBACK_PROVIDER", "tavily") or "tavily"
 )
-tavily_api_key = str(get_secret("TAVILY_API_KEY", "") or "")
+tavily_api_key = str(get_secret("TAVILY_API_KEY", "") or "").strip()
+if tavily_api_key:
+    os.environ["TAVILY_API_KEY"] = tavily_api_key
 live_web_fallback_max_results = int(get_secret("LIVE_WEB_FALLBACK_MAX_RESULTS", 4) or 4)
 live_web_fallback_timeout_seconds = int(
     get_secret("LIVE_WEB_FALLBACK_TIMEOUT_SECONDS", 10) or 10
@@ -6418,6 +6420,163 @@ def sanitize_public_answer(
         meta["public_error_original_preview"] = raw_answer[:700]
 
     return get_safe_public_error_message()
+
+
+
+def test_tavily_connection(
+    query: str = "berita AI terbaru hari ini",
+) -> Dict[str, Any]:
+    """Tes koneksi Tavily langsung ke endpoint resmi."""
+    api_key = str(tavily_api_key or os.getenv("TAVILY_API_KEY", "") or "").strip()
+
+    if not api_key:
+        return {
+            "ok": False,
+            "status_code": None,
+            "error": "TAVILY_API_KEY belum terbaca dari Streamlit Secrets/environment.",
+            "result_count": 0,
+            "sample_title": "",
+            "sample_url": "",
+        }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "query": str(query or "berita AI terbaru hari ini"),
+        "topic": "general",
+        "search_depth": "basic",
+        "max_results": 3,
+        "include_answer": True,
+        "include_raw_content": False,
+    }
+
+    try:
+        response = requests.post(
+            "https://api.tavily.com/search",
+            headers=headers,
+            json=payload,
+            timeout=15,
+        )
+    except requests.Timeout:
+        return {
+            "ok": False,
+            "status_code": None,
+            "error": "Request ke Tavily timeout.",
+            "result_count": 0,
+            "sample_title": "",
+            "sample_url": "",
+        }
+    except requests.RequestException as exc:
+        return {
+            "ok": False,
+            "status_code": None,
+            "error": f"Request ke Tavily gagal: {exc}",
+            "result_count": 0,
+            "sample_title": "",
+            "sample_url": "",
+        }
+
+    text_preview = ""
+    try:
+        data = response.json()
+    except Exception:
+        data = {}
+        text_preview = response.text[:700]
+
+    if response.status_code != 200:
+        return {
+            "ok": False,
+            "status_code": response.status_code,
+            "error": text_preview or str(data)[:700],
+            "result_count": 0,
+            "sample_title": "",
+            "sample_url": "",
+        }
+
+    results = data.get("results") or []
+    first = results[0] if results and isinstance(results[0], dict) else {}
+
+    return {
+        "ok": True,
+        "status_code": response.status_code,
+        "error": "",
+        "result_count": len(results),
+        "sample_title": str(first.get("title") or "")[:180],
+        "sample_url": str(first.get("url") or "")[:240],
+        "answer_preview": str(data.get("answer") or "")[:300],
+    }
+
+
+def render_tavily_connection_panel() -> None:
+    """Panel admin untuk memastikan Tavily benar-benar tersambung."""
+    st.markdown("#### Koneksi Tavily / Live Web")
+    col_a, col_b, col_c = st.columns(3)
+
+    with col_a:
+        st.metric(
+            "Live Web",
+            "ON" if live_web_fallback_enabled else "OFF",
+        )
+
+    with col_b:
+        st.metric(
+            "Provider",
+            live_web_fallback_provider,
+        )
+
+    with col_c:
+        st.metric(
+            "Tavily Key",
+            "Terbaca" if bool(tavily_api_key) else "Kosong",
+        )
+
+    if not tavily_api_key:
+        st.error(
+            "TAVILY_API_KEY belum terbaca. Isi di Streamlit Secrets, lalu Save dan Reboot app."
+        )
+        return
+
+    test_query = st.text_input(
+        "Query tes Tavily",
+        value="berita AI terbaru hari ini",
+        key="tavily_test_query",
+    )
+
+    if st.button(
+        "🔎 Tes koneksi Tavily",
+        use_container_width=True,
+        key="tavily_connection_test_button",
+    ):
+        result = test_tavily_connection(test_query)
+
+        if result.get("ok"):
+            st.success(
+                f"Tavily tersambung. Hasil ditemukan: {result.get('result_count', 0)}"
+            )
+            if result.get("sample_title"):
+                st.caption(f"Contoh: {result.get('sample_title')}")
+            if result.get("sample_url"):
+                st.caption(f"URL: {result.get('sample_url')}")
+            if result.get("answer_preview"):
+                st.info(result.get("answer_preview"))
+        else:
+            st.error("Tavily belum tersambung.")
+            st.code(
+                str(result.get("error") or "Tidak ada detail error.")[:1200],
+                language="text",
+            )
+            status_code = result.get("status_code")
+            if status_code == 401:
+                st.warning(
+                    "HTTP 401 biasanya berarti API key salah, expired, atau belum disimpan di Secrets."
+                )
+            elif status_code == 429:
+                st.warning(
+                    "HTTP 429 berarti kuota/rate limit Tavily habis atau terlalu sering request."
+                )
 
 
 def render_public_status_summary() -> None:
