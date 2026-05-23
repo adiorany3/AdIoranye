@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Tuple
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 from ai_core import (
     ALL_SLASHAI_MODELS,
@@ -4449,6 +4450,23 @@ st.markdown(
         }
     }
 
+    .auto-scroll-anchor {
+        display: block;
+        width: 100%;
+        height: 1px;
+        margin: 0;
+        padding: 0;
+        opacity: 0;
+        pointer-events: none;
+        scroll-margin-bottom: var(--chat-safe-space-desktop);
+    }
+
+    @media (max-width: 760px) {
+        .auto-scroll-anchor {
+            scroll-margin-bottom: var(--chat-safe-space-mobile);
+        }
+    }
+
     @media (prefers-reduced-motion: reduce) {
         .ai-loading-orb,
         .ai-loading-dot,
@@ -4487,6 +4505,108 @@ def render_loading_animation_html(
         </div>
     </div>
     """
+
+
+def render_auto_scroll_script(
+    target: str = "latest",
+    delay_ms: int = 120,
+) -> None:
+    """Auto-scroll ke pesan terbaru, kartu loading, atau anchor bawah."""
+    safe_target = _html_escape(target)
+    safe_delay = max(0, int(delay_ms or 0))
+    components.html(
+        f"""
+        <script>
+        (function () {{
+            const targetMode = "{safe_target}";
+            const delay = {safe_delay};
+
+            function getParentDocument() {{
+                try {{
+                    return window.parent.document;
+                }} catch (error) {{
+                    return document;
+                }}
+            }}
+
+            function getLastElement(items) {{
+                if (!items || items.length === 0) {{
+                    return null;
+                }}
+
+                return items[items.length - 1];
+            }}
+
+            function findTarget(doc) {{
+                if (targetMode === "loading") {{
+                    const loadingCard = doc.querySelector(".ai-loading-card");
+
+                    if (loadingCard) {{
+                        return loadingCard;
+                    }}
+                }}
+
+                if (targetMode === "bottom") {{
+                    const anchors = doc.querySelectorAll(".auto-scroll-anchor");
+                    const lastAnchor = getLastElement(anchors);
+
+                    if (lastAnchor) {{
+                        return lastAnchor;
+                    }}
+                }}
+
+                const chatMessages = doc.querySelectorAll(
+                    'div[data-testid="stChatMessage"]'
+                );
+                const lastMessage = getLastElement(chatMessages);
+
+                if (lastMessage) {{
+                    return lastMessage;
+                }}
+
+                const chatInput = doc.querySelector(
+                    'div[data-testid="stChatInput"]'
+                );
+
+                if (chatInput) {{
+                    return chatInput;
+                }}
+
+                return doc.body;
+            }}
+
+            function runScroll() {{
+                const doc = getParentDocument();
+                const targetElement = findTarget(doc);
+
+                if (!targetElement || !targetElement.scrollIntoView) {{
+                    return;
+                }}
+
+                targetElement.scrollIntoView({{
+                    behavior: "smooth",
+                    block: "end",
+                    inline: "nearest"
+                }});
+
+                if (targetMode === "loading") {{
+                    window.setTimeout(function () {{
+                        targetElement.scrollIntoView({{
+                            behavior: "smooth",
+                            block: "center",
+                            inline: "nearest"
+                        }});
+                    }}, 180);
+                }}
+            }}
+
+            window.setTimeout(runScroll, delay);
+        }})();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
 
 
 # =========================
@@ -6033,6 +6153,11 @@ def render_public_page() -> None:
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        render_auto_scroll_script(
+            target="latest",
+            delay_ms=80,
+        )
+
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
         local_reply = ""
@@ -6055,6 +6180,10 @@ def render_public_page() -> None:
                         render_loading_animation_html(),
                         unsafe_allow_html=True,
                     )
+                    render_auto_scroll_script(
+                        target="loading",
+                        delay_ms=90,
+                    )
                     route = build_model_routing_plan(
                         advance_rotation=True,
                         user_text=user_input,
@@ -6076,6 +6205,10 @@ def render_public_page() -> None:
                             subtitle=loading_subtitle,
                         ),
                         unsafe_allow_html=True,
+                    )
+                    render_auto_scroll_script(
+                        target="loading",
+                        delay_ms=120,
                     )
                     answer, meta = safe_generate_power_answer(
                         api_url=api_url,
@@ -6204,6 +6337,10 @@ def render_public_page() -> None:
                     )
                     restore_active_model_to_cheap(route.get("primary_model"))
                     placeholder.markdown(answer)
+                    render_auto_scroll_script(
+                        target="latest",
+                        delay_ms=120,
+                    )
                     st.session_state.last_answer_meta = meta or {}
                     final_model = (
                         (meta or {}).get("active_model_final")
@@ -6289,7 +6426,11 @@ def render_public_page() -> None:
                 st.json(meta)
 
     # Ruang aman terakhir agar input floating tidak menutupi pesan terakhir, termasuk pesan yang baru dibuat.
-    st.markdown('<div class="chat-input-safe-space"></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="auto-scroll-anchor"></div>'
+        '<div class="chat-input-safe-space"></div>',
+        unsafe_allow_html=True,
+    )
 
     # Tiny refresh delay for hosting online stability
     time.sleep(0.03)
