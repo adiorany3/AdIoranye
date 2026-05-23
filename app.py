@@ -4143,7 +4143,7 @@ if user_input:
         try:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                placeholder.markdown("⏳ Siap! adioranye sedang menyiapkan jawaban untukmu...")
+                placeholder.markdown("⏳ Siap! adioranye sedang menyiapkan jawaban dengan jujur... tunggu sebentar, akan saya analisakan untukmu...")
                 route = build_model_routing_plan(advance_rotation=True, user_text=user_input)
                 answer, meta = safe_generate_power_answer(
                     api_url=api_url,
