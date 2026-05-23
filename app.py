@@ -5451,15 +5451,214 @@ def render_auto_scroll_script(
 
 
 
+
+def render_sound_unlock_script() -> None:
+    """Unlock audio setelah interaksi pertama user.
+
+    Browser modern biasanya memblokir audio otomatis.
+    Karena itu audio context perlu diaktifkan dari klik/ketikan user.
+    """
+    components.html(
+        """
+        <script>
+        (function () {
+            function getParentWindow() {
+                try {
+                    return window.parent;
+                } catch (error) {
+                    return window;
+                }
+            }
+
+            function getParentDocument(parentWindow) {
+                try {
+                    return parentWindow.document;
+                } catch (error) {
+                    return document;
+                }
+            }
+
+            const parentWindow = getParentWindow();
+            const doc = getParentDocument(parentWindow);
+
+            if (!doc || !doc.body) {
+                return;
+            }
+
+            if (parentWindow.__adioranyeSoundReady === true) {
+                return;
+            }
+
+            const AudioContextClass =
+                parentWindow.AudioContext ||
+                parentWindow.webkitAudioContext ||
+                window.AudioContext ||
+                window.webkitAudioContext;
+
+            if (!AudioContextClass) {
+                return;
+            }
+
+            function createContext() {
+                if (!parentWindow.__adioranyeAudioContext) {
+                    parentWindow.__adioranyeAudioContext =
+                        new AudioContextClass();
+                }
+
+                return parentWindow.__adioranyeAudioContext;
+            }
+
+            function playTone(
+                audioContext,
+                frequency,
+                startTime,
+                duration,
+                volume
+            ) {
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+
+                oscillator.type = "sine";
+
+                oscillator.frequency.setValueAtTime(
+                    frequency,
+                    startTime
+                );
+
+                gain.gain.setValueAtTime(
+                    0.0001,
+                    startTime
+                );
+
+                gain.gain.exponentialRampToValueAtTime(
+                    volume,
+                    startTime + 0.018
+                );
+
+                gain.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    startTime + duration
+                );
+
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+
+                oscillator.start(startTime);
+                oscillator.stop(startTime + duration + 0.03);
+            }
+
+            parentWindow.__adioranyePlayAnswerSound = function () {
+                try {
+                    const audioContext = createContext();
+
+                    if (audioContext.state === "suspended") {
+                        parentWindow.__adioranyePendingChime = true;
+                        audioContext.resume().then(function () {
+                            parentWindow.__adioranyePlayAnswerSound();
+                        });
+                        return false;
+                    }
+
+                    const now = audioContext.currentTime;
+
+                    playTone(
+                        audioContext,
+                        659.25,
+                        now,
+                        0.11,
+                        0.070
+                    );
+
+                    playTone(
+                        audioContext,
+                        880.00,
+                        now + 0.105,
+                        0.14,
+                        0.058
+                    );
+
+                    playTone(
+                        audioContext,
+                        1174.66,
+                        now + 0.225,
+                        0.17,
+                        0.045
+                    );
+
+                    parentWindow.__adioranyePendingChime = false;
+                    return true;
+                } catch (error) {
+                    return false;
+                }
+            };
+
+            function unlockSound() {
+                try {
+                    const audioContext = createContext();
+
+                    audioContext.resume().then(function () {
+                        const now = audioContext.currentTime;
+                        const oscillator = audioContext.createOscillator();
+                        const gain = audioContext.createGain();
+
+                        gain.gain.setValueAtTime(
+                            0.00001,
+                            now
+                        );
+
+                        oscillator.frequency.setValueAtTime(
+                            440,
+                            now
+                        );
+
+                        oscillator.connect(gain);
+                        gain.connect(audioContext.destination);
+
+                        oscillator.start(now);
+                        oscillator.stop(now + 0.025);
+
+                        parentWindow.__adioranyeSoundReady = true;
+
+                        if (parentWindow.__adioranyePendingChime === true) {
+                            window.setTimeout(function () {
+                                parentWindow.__adioranyePlayAnswerSound();
+                            }, 80);
+                        }
+                    }).catch(function () {});
+                } catch (error) {}
+            }
+
+            const events = [
+                "pointerdown",
+                "mousedown",
+                "touchstart",
+                "keydown",
+                "click"
+            ];
+
+            events.forEach(function (eventName) {
+                doc.addEventListener(
+                    eventName,
+                    unlockSound,
+                    {
+                        once: false,
+                        passive: true,
+                        capture: true
+                    }
+                );
+            });
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
+
+
 def render_answer_ready_sound_script(
     sound_key: str = "latest",
 ) -> None:
-    """Mainkan suara kecil saat jawaban final sudah muncul.
-
-    Catatan:
-    Browser biasanya mengizinkan suara karena dipicu setelah user mengirim pesan.
-    Jika browser memblokir autoplay, script gagal diam-diam tanpa mengganggu chat.
-    """
+    """Mainkan suara kecil saat jawaban final sudah muncul."""
     safe_key = _html_escape(sound_key)
     components.html(
         f"""
@@ -5467,95 +5666,39 @@ def render_answer_ready_sound_script(
         (function () {{
             const soundKey = "adioranye-answer-ready-{safe_key}";
 
+            function getParentWindow() {{
+                try {{
+                    return window.parent;
+                }} catch (error) {{
+                    return window;
+                }}
+            }}
+
+            const parentWindow = getParentWindow();
+
             try {{
-                if (window.sessionStorage.getItem(soundKey) === "played") {{
+                if (parentWindow.sessionStorage.getItem(soundKey) === "played") {{
                     return;
                 }}
 
-                window.sessionStorage.setItem(soundKey, "played");
+                parentWindow.sessionStorage.setItem(
+                    soundKey,
+                    "played"
+                );
 
-                const AudioContextClass =
-                    window.AudioContext ||
-                    window.webkitAudioContext;
+                if (typeof parentWindow.__adioranyePlayAnswerSound === "function") {{
+                    const played = parentWindow.__adioranyePlayAnswerSound();
 
-                if (!AudioContextClass) {{
+                    if (!played) {{
+                        parentWindow.__adioranyePendingChime = true;
+                    }}
+
                     return;
                 }}
 
-                const audioContext = new AudioContextClass();
-
-                function playTone(
-                    frequency,
-                    startTime,
-                    duration,
-                    volume
-                ) {{
-                    const oscillator = audioContext.createOscillator();
-                    const gain = audioContext.createGain();
-
-                    oscillator.type = "sine";
-                    oscillator.frequency.setValueAtTime(
-                        frequency,
-                        startTime
-                    );
-
-                    gain.gain.setValueAtTime(
-                        0.0001,
-                        startTime
-                    );
-
-                    gain.gain.exponentialRampToValueAtTime(
-                        volume,
-                        startTime + 0.018
-                    );
-
-                    gain.gain.exponentialRampToValueAtTime(
-                        0.0001,
-                        startTime + duration
-                    );
-
-                    oscillator.connect(gain);
-                    gain.connect(audioContext.destination);
-
-                    oscillator.start(startTime);
-                    oscillator.stop(startTime + duration + 0.03);
-                }}
-
-                function playChime() {{
-                    const now = audioContext.currentTime;
-
-                    playTone(
-                        660,
-                        now,
-                        0.12,
-                        0.045
-                    );
-
-                    playTone(
-                        880,
-                        now + 0.105,
-                        0.16,
-                        0.040
-                    );
-
-                    playTone(
-                        1174.66,
-                        now + 0.235,
-                        0.18,
-                        0.030
-                    );
-                }}
-
-                if (audioContext.state === "suspended") {{
-                    audioContext
-                        .resume()
-                        .then(playChime)
-                        .catch(function () {{}});
-                }} else {{
-                    playChime();
-                }}
+                parentWindow.__adioranyePendingChime = true;
             }} catch (error) {{
-                // Sengaja diam agar notifikasi suara tidak pernah merusak UI.
+                // Suara notifikasi tidak boleh mengganggu UI.
             }}
         }})();
         </script>
@@ -7482,6 +7625,7 @@ def render_public_page() -> None:
     # Public Chat UI
     # =========================
     cfg = get_runtime_config()
+    render_sound_unlock_script()
     public_route_preview = build_model_routing_plan(user_text="halo")
     cheap_active = public_route_preview.get("active_cheap_models") or []
     expensive_active = public_route_preview.get("active_expensive_models") or []
