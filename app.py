@@ -6556,6 +6556,475 @@ KB_SCRAPER_TIMEOUT = 20''',
             """.strip())
 
 
+
+# =========================
+# Animated Adioranye AI brand
+# =========================
+st.markdown(
+    """
+    <style>
+    .adioranye-brand-title {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-width: 0;
+        line-height: 1;
+        white-space: nowrap;
+    }
+
+    .adioranye-brand-mark {
+        position: relative;
+        width: 18px;
+        height: 18px;
+        flex: 0 0 18px;
+        border-radius: 8px;
+        background:
+            radial-gradient(circle at 32% 26%, rgba(255,255,255,0.96), transparent 25%),
+            linear-gradient(135deg, #ff8a3d, #34c759 52%, #0a84ff);
+        box-shadow:
+            0 0 0 1px rgba(255,255,255,0.34) inset,
+            0 7px 18px rgba(10,132,255,0.22),
+            0 0 18px rgba(52,199,89,0.20);
+        animation: adioranyeBrandFloat 3.6s ease-in-out infinite;
+    }
+
+    .adioranye-brand-mark::before,
+    .adioranye-brand-mark::after {
+        content: "";
+        position: absolute;
+        width: 3px;
+        height: 3px;
+        top: 7px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.96);
+        box-shadow: 0 0 4px rgba(255,255,255,0.88);
+        animation: adioranyeBlink 3.2s ease-in-out infinite;
+    }
+
+    .adioranye-brand-mark::before {
+        left: 5px;
+    }
+
+    .adioranye-brand-mark::after {
+        right: 5px;
+    }
+
+    .adioranye-brand-word {
+        font-weight: 850;
+        letter-spacing: -0.03em;
+        background:
+            linear-gradient(
+                100deg,
+                var(--mac-text),
+                #ff8a3d 28%,
+                #34c759 55%,
+                #0a84ff 78%,
+                var(--mac-text)
+            );
+        background-size: 260% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: adioranyeTextFlow 4.8s ease-in-out infinite;
+    }
+
+    .adioranye-brand-ai {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 24px;
+        padding: 3px 6px;
+        border-radius: 999px;
+        border: 1px solid rgba(10,132,255,0.34);
+        background:
+            radial-gradient(circle at 20% 20%, rgba(255,255,255,0.50), transparent 32%),
+            linear-gradient(135deg, rgba(10,132,255,0.20), rgba(52,199,89,0.16));
+        color: var(--mac-text);
+        font-size: 0.66rem;
+        font-weight: 900;
+        letter-spacing: 0.01em;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.28),
+            0 6px 16px rgba(10,132,255,0.12);
+        animation: adioranyeChipPulse 2.8s ease-in-out infinite;
+    }
+
+    .app-hero.adioranye-hero-motion {
+        isolation: isolate;
+    }
+
+    .app-hero.adioranye-hero-motion::before {
+        content: "";
+        position: absolute;
+        inset: -40% -28%;
+        z-index: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 18% 35%, rgba(255,138,61,0.14), transparent 22%),
+            radial-gradient(circle at 68% 24%, rgba(52,199,89,0.13), transparent 24%),
+            radial-gradient(circle at 82% 80%, rgba(10,132,255,0.12), transparent 26%);
+        opacity: 0.92;
+        animation: adioranyeAuraMove 10s ease-in-out infinite alternate;
+    }
+
+    .app-logo.adioranye-logo-motion {
+        position: relative;
+        overflow: visible;
+        background:
+            radial-gradient(circle at 30% 20%, rgba(255,255,255,0.82), transparent 26%),
+            linear-gradient(145deg, rgba(255,138,61,0.26), rgba(52,199,89,0.20) 52%, rgba(10,132,255,0.22)) !important;
+        animation: adioranyeBotFloat 3.4s ease-in-out infinite;
+    }
+
+    .app-logo.adioranye-logo-motion::before,
+    .app-logo.adioranye-logo-motion::after {
+        content: "✦";
+        position: absolute;
+        color: #ff8a3d;
+        font-size: 0.64rem;
+        text-shadow: 0 0 10px rgba(255,138,61,0.55);
+        opacity: 0.82;
+        animation: adioranyeSparkle 2.6s ease-in-out infinite;
+    }
+
+    .app-logo.adioranye-logo-motion::before {
+        top: -8px;
+        right: -5px;
+    }
+
+    .app-logo.adioranye-logo-motion::after {
+        left: -7px;
+        bottom: 4px;
+        color: #34c759;
+        animation-delay: 0.9s;
+    }
+
+    .adioranye-mini-bot {
+        position: relative;
+        width: 38px;
+        height: 34px;
+        border-radius: 14px 14px 12px 12px;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.98), rgba(238,247,255,0.88));
+        border: 1px solid rgba(15,23,42,0.10);
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.86),
+            0 10px 22px rgba(15,23,42,0.14);
+    }
+
+    .adioranye-mini-bot::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -10px;
+        width: 2px;
+        height: 10px;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #0a84ff, #34c759);
+        transform: translateX(-50%);
+        transform-origin: bottom center;
+        animation: adioranyeAntenna 1.9s ease-in-out infinite;
+    }
+
+    .adioranye-mini-bot::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -14px;
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #34c759;
+        box-shadow:
+            0 0 0 4px rgba(52,199,89,0.14),
+            0 0 15px rgba(52,199,89,0.65);
+        transform: translateX(-50%);
+        animation: adioranyeSignalPulse 1.9s ease-in-out infinite;
+    }
+
+    .adioranye-eye {
+        position: absolute;
+        top: 13px;
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: #0f172a;
+        box-shadow: 0 0 0 2px rgba(10,132,255,0.08);
+        animation: adioranyeBlink 3.2s ease-in-out infinite;
+    }
+
+    .adioranye-eye.left {
+        left: 10px;
+    }
+
+    .adioranye-eye.right {
+        right: 10px;
+    }
+
+    .adioranye-smile {
+        position: absolute;
+        left: 50%;
+        bottom: 8px;
+        width: 14px;
+        height: 7px;
+        border-bottom: 2px solid rgba(255,138,61,0.90);
+        border-radius: 0 0 999px 999px;
+        transform: translateX(-50%);
+        animation: adioranyeSmile 2.4s ease-in-out infinite;
+    }
+
+    .adioranye-hero-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .app-title.adioranye-hero-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 0.35rem !important;
+    }
+
+    .adioranye-hero-word {
+        background:
+            linear-gradient(
+                100deg,
+                var(--mac-text),
+                #ff8a3d 25%,
+                #34c759 54%,
+                #0a84ff 78%,
+                var(--mac-text)
+            );
+        background-size: 260% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: adioranyeTextFlow 4.8s ease-in-out infinite;
+    }
+
+    .adioranye-ai-chip-large {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(10,132,255,0.32);
+        background:
+            linear-gradient(135deg, rgba(10,132,255,0.16), rgba(52,199,89,0.14));
+        color: var(--mac-text);
+        font-size: 0.88rem;
+        font-weight: 900;
+        letter-spacing: 0.03em;
+        box-shadow: 0 8px 20px rgba(10,132,255,0.10);
+        animation: adioranyeChipPulse 2.8s ease-in-out infinite;
+    }
+
+    .adioranye-hero-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(52,199,89,0.26);
+        background: rgba(52,199,89,0.09);
+        color: var(--mac-muted);
+        font-size: 0.78rem;
+        font-weight: 800;
+    }
+
+    .adioranye-hero-kicker::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #34c759;
+        box-shadow: 0 0 12px rgba(52,199,89,0.64);
+        animation: onlinePulse 1.65s ease-in-out infinite;
+    }
+
+    @keyframes adioranyeTextFlow {
+        0%, 100% {
+            background-position: 0% 50%;
+        }
+        50% {
+            background-position: 100% 50%;
+        }
+    }
+
+    @keyframes adioranyeBotFloat {
+        0%, 100% {
+            transform: translateY(0) rotate(-1deg);
+        }
+        50% {
+            transform: translateY(-5px) rotate(1.2deg);
+        }
+    }
+
+    @keyframes adioranyeBrandFloat {
+        0%, 100% {
+            transform: translateY(0) rotate(-3deg) scale(1);
+        }
+        50% {
+            transform: translateY(-2px) rotate(4deg) scale(1.04);
+        }
+    }
+
+    @keyframes adioranyeBlink {
+        0%, 86%, 100% {
+            transform: scaleY(1);
+        }
+        90%, 94% {
+            transform: scaleY(0.12);
+        }
+    }
+
+    @keyframes adioranyeSmile {
+        0%, 100% {
+            transform: translateX(-50%) scaleX(1);
+        }
+        50% {
+            transform: translateX(-50%) scaleX(1.14);
+        }
+    }
+
+    @keyframes adioranyeAntenna {
+        0%, 100% {
+            transform: translateX(-50%) rotate(-4deg);
+        }
+        50% {
+            transform: translateX(-50%) rotate(4deg);
+        }
+    }
+
+    @keyframes adioranyeSignalPulse {
+        0%, 100% {
+            transform: translateX(-50%) scale(0.92);
+            opacity: 0.82;
+        }
+        50% {
+            transform: translateX(-50%) scale(1.16);
+            opacity: 1;
+        }
+    }
+
+    @keyframes adioranyeChipPulse {
+        0%, 100% {
+            transform: translateY(0);
+            box-shadow: 0 8px 20px rgba(10,132,255,0.08);
+        }
+        50% {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 26px rgba(52,199,89,0.13);
+        }
+    }
+
+    @keyframes adioranyeAuraMove {
+        0% {
+            transform: translate3d(-2%, -1%, 0) rotate(0deg);
+        }
+        100% {
+            transform: translate3d(2%, 2%, 0) rotate(4deg);
+        }
+    }
+
+    @keyframes adioranyeSparkle {
+        0%, 100% {
+            transform: scale(0.78) rotate(0deg);
+            opacity: 0.38;
+        }
+        50% {
+            transform: scale(1.18) rotate(16deg);
+            opacity: 1;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .adioranye-brand-title {
+            gap: 5px;
+        }
+
+        .adioranye-brand-mark {
+            width: 15px;
+            height: 15px;
+            flex-basis: 15px;
+            border-radius: 6px;
+        }
+
+        .adioranye-brand-ai {
+            min-width: 20px;
+            padding: 2px 5px;
+            font-size: 0.58rem;
+        }
+
+        .adioranye-mini-bot {
+            width: 32px;
+            height: 29px;
+            border-radius: 12px 12px 10px 10px;
+        }
+
+        .adioranye-eye {
+            top: 11px;
+            width: 5px;
+            height: 5px;
+        }
+
+        .adioranye-eye.left {
+            left: 8px;
+        }
+
+        .adioranye-eye.right {
+            right: 8px;
+        }
+
+        .adioranye-smile {
+            width: 12px;
+            bottom: 7px;
+        }
+
+        .app-title.adioranye-hero-title {
+            gap: 6px;
+        }
+
+        .adioranye-ai-chip-large {
+            padding: 4px 8px;
+            font-size: 0.72rem;
+        }
+
+        .adioranye-hero-kicker {
+            margin-bottom: 7px;
+            padding: 4px 8px;
+            font-size: 0.70rem;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .adioranye-brand-mark,
+        .adioranye-brand-mark::before,
+        .adioranye-brand-mark::after,
+        .adioranye-brand-word,
+        .adioranye-brand-ai,
+        .app-logo.adioranye-logo-motion,
+        .app-logo.adioranye-logo-motion::before,
+        .app-logo.adioranye-logo-motion::after,
+        .adioranye-mini-bot::before,
+        .adioranye-mini-bot::after,
+        .adioranye-eye,
+        .adioranye-smile,
+        .adioranye-hero-word,
+        .adioranye-ai-chip-large,
+        .adioranye-hero-kicker::before,
+        .app-hero.adioranye-hero-motion::before {
+            animation: none !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # =========================
 # Page Router
 # =========================
@@ -6575,7 +7044,13 @@ def render_public_page() -> None:
                 <span class="mac-min"></span>
                 <span class="mac-max"></span>
             </div>
-            <div class="mac-window-title">adioranye AI</div>
+            <div class="mac-window-title">
+                <span class="adioranye-brand-title" aria-label="adioranye AI">
+                    <span class="adioranye-brand-mark" aria-hidden="true"></span>
+                    <span class="adioranye-brand-word">adioranye</span>
+                    <span class="adioranye-brand-ai">AI</span>
+                </span>
+            </div>
             <div class="mac-window-actions online-status" aria-label="Status AI online">
                 <span class="online-dot" aria-hidden="true"></span>
                 <span class="online-text">Online</span>
@@ -6586,10 +7061,20 @@ def render_public_page() -> None:
                 </span>
             </div>
         </div>
-        <div class="app-hero">
-            <div class="app-logo">🤖</div>
-            <div>
-                <h3 class="app-title">Selamat Datang</h3>
+        <div class="app-hero adioranye-hero-motion">
+            <div class="app-logo adioranye-logo-motion" aria-hidden="true">
+                <div class="adioranye-mini-bot">
+                    <span class="adioranye-eye left"></span>
+                    <span class="adioranye-eye right"></span>
+                    <span class="adioranye-smile"></span>
+                </div>
+            </div>
+            <div class="adioranye-hero-content">
+                <div class="adioranye-hero-kicker">aktif dan siap membantu</div>
+                <h3 class="app-title adioranye-hero-title">
+                    <span class="adioranye-hero-word">Adioranye</span>
+                    <span class="adioranye-ai-chip-large">AI</span>
+                </h3>
                 <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dibaca di mode terang maupun gelap. Router otomatis memilih {len(cheap_active)} model utama dan {len(expensive_active)} model kuat sesuai tingkat kesulitan pertanyaan.</p>
             </div>
         </div>
