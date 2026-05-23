@@ -2514,8 +2514,25 @@ class TelegramBotService:
                                 api_url=api_url,
                                 api_key=api_key,
                                 model=request_model,
-                                system_prompt=persona,
-                                user_text=text,
+                                system_prompt=(
+                                    persona
+                                    + (
+                                        "\n\nMODE INFO TERKINI AKTIF:\n"
+                                        "- Prioritaskan hasil live web/Tavily untuk pertanyaan terbaru/hari ini/sekarang.\n"
+                                        "- Jangan menjawab berdasarkan Knowledge Base lama jika sumber live web tersedia.\n"
+                                        "- Jika live web gagal, jelaskan bahwa info terkini belum dapat diverifikasi."
+                                        if live_scraping_needed
+                                        else ""
+                                    )
+                                ),
+                                user_text=(
+                                    text
+                                    + (
+                                        "\n\nInstruksi internal: ini pertanyaan info terkini. Gunakan hasil live web/Tavily sebagai sumber utama; abaikan KB lama 2025 jika tidak relevan."
+                                        if live_scraping_needed
+                                        else ""
+                                    )
+                                ),
                                 base_memory_text=memory_text,
                                 recent_messages=history,
                                 fallback_models=request_fallback_models,
@@ -2531,14 +2548,21 @@ class TelegramBotService:
                                 store=power_store,
                                 user_id=str(chat_id),
                                 channel="telegram",
-                                enable_rag=bool(power_features_enabled and power_rag_enabled),
+                                enable_rag=bool(
+                                    power_features_enabled
+                                    and power_rag_enabled
+                                    and not live_scraping_needed
+                                ),
                                 rag_top_k=int(power_rag_top_k),
                                 enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
                                 enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
                                 enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
                                 daily_cost_limit_idr=float(daily_cost_limit_idr),
                                 max_expensive_calls_per_day=int(max_expensive_calls_per_day),
-                                enable_response_cache=bool(power_response_cache_enabled),
+                                enable_response_cache=bool(
+                                    power_response_cache_enabled
+                                    and not live_scraping_needed
+                                ),
                                 response_cache_ttl_seconds=int(power_response_cache_ttl_seconds),
                                 enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
                                 enable_circuit_breaker=bool(power_circuit_breaker_enabled),
@@ -2550,21 +2574,34 @@ class TelegramBotService:
                                 anti_hallucination_min_quality=float(power_anti_hallucination_min_quality),
                                 anti_hallucination_min_freshness=float(power_anti_hallucination_min_freshness),
                                 anti_hallucination_append_sources=bool(power_anti_hallucination_append_sources),
-                                strict_rag_mode=bool(power_strict_rag_mode),
+                                strict_rag_mode=bool(
+                                    power_strict_rag_mode
+                                    and not live_scraping_needed
+                                ),
                                 rag_min_sources=int(power_rag_min_sources),
                                 rag_min_score=float(power_rag_min_score),
                                 quality_control_enabled=bool(power_quality_control_enabled),
                                 quality_verifier_enabled=bool(power_quality_verifier_enabled),
                                 quality_verifier_model=power_quality_verifier_model,
                                 quality_min_score=float(power_quality_min_score),
-                                answer_mode=power_default_answer_mode,
+                                answer_mode=(
+                                    "current"
+                                    if live_scraping_needed
+                                    else power_default_answer_mode
+                                ),
                                 append_quality_footer=bool(power_quality_append_footer),
                                 hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
-                                disable_rag_for_casual=bool(power_disable_rag_for_casual),
+                                disable_rag_for_casual=bool(
+                                    power_disable_rag_for_casual
+                                    or live_scraping_needed
+                                ),
                                 performance_optimizer_enabled=bool(power_performance_optimizer_enabled),
                                 query_rewriter_enabled=bool(power_query_rewriter_enabled),
                                 reranker_enabled=bool(power_reranker_enabled),
-                                semantic_cache_enabled=bool(power_semantic_cache_enabled),
+                                semantic_cache_enabled=bool(
+                                    power_semantic_cache_enabled
+                                    and not live_scraping_needed
+                                ),
                                 semantic_cache_threshold=float(power_semantic_cache_threshold),
                                 semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
                                 latency_budget_enabled=bool(power_latency_budget_enabled),
@@ -2598,6 +2635,9 @@ class TelegramBotService:
                                 meta["telegram_auto_live_scraping_needed"] = live_scraping_needed
                                 meta["telegram_auto_live_scraping_reason"] = live_scraping_profile.get("reason", "")
                                 meta["telegram_auto_live_scraping_topic"] = request_live_web_topic
+                                meta["telegram_current_info_mode"] = live_scraping_needed
+                                meta["telegram_kb_disabled_for_current_info"] = live_scraping_needed
+                                meta["telegram_cache_disabled_for_current_info"] = live_scraping_needed
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
 
@@ -2645,8 +2685,25 @@ class TelegramBotService:
                                         api_url=api_url,
                                         api_key=api_key,
                                         model=model,
-                                        system_prompt=persona,
-                                        user_text=text,
+                                        system_prompt=(
+                                            persona
+                                            + (
+                                                "\n\nMODE INFO TERKINI AKTIF:\n"
+                                                "- Prioritaskan hasil live web/Tavily untuk pertanyaan terbaru/hari ini/sekarang.\n"
+                                                "- Jangan menjawab berdasarkan Knowledge Base lama jika sumber live web tersedia.\n"
+                                                "- Jika live web gagal, jelaskan bahwa info terkini belum dapat diverifikasi."
+                                                if live_scraping_needed
+                                                else ""
+                                            )
+                                        ),
+                                        user_text=(
+                                            text
+                                            + (
+                                                "\n\nInstruksi internal: ini pertanyaan info terkini. Gunakan hasil live web/Tavily sebagai sumber utama; abaikan KB lama 2025 jika tidak relevan."
+                                                if live_scraping_needed
+                                                else ""
+                                            )
+                                        ),
                                         base_memory_text=memory_text,
                                         recent_messages=history,
                                         fallback_models=fallback_models,
@@ -2662,14 +2719,21 @@ class TelegramBotService:
                                         store=power_store,
                                         user_id=str(chat_id),
                                         channel="telegram",
-                                        enable_rag=bool(power_features_enabled and power_rag_enabled),
+                                        enable_rag=bool(
+                                            power_features_enabled
+                                            and power_rag_enabled
+                                            and not live_scraping_needed
+                                        ),
                                         rag_top_k=int(power_rag_top_k),
                                         enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
                                         enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
                                         enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
                                         daily_cost_limit_idr=float(daily_cost_limit_idr),
                                         max_expensive_calls_per_day=int(max_expensive_calls_per_day),
-                                        enable_response_cache=bool(power_response_cache_enabled),
+                                        enable_response_cache=bool(
+                                            power_response_cache_enabled
+                                            and not live_scraping_needed
+                                        ),
                                         response_cache_ttl_seconds=int(power_response_cache_ttl_seconds),
                                         enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
                                         enable_circuit_breaker=bool(power_circuit_breaker_enabled),
@@ -2681,21 +2745,34 @@ class TelegramBotService:
                                         anti_hallucination_min_quality=float(power_anti_hallucination_min_quality),
                                         anti_hallucination_min_freshness=float(power_anti_hallucination_min_freshness),
                                         anti_hallucination_append_sources=bool(power_anti_hallucination_append_sources),
-                                        strict_rag_mode=bool(power_strict_rag_mode),
+                                        strict_rag_mode=bool(
+                                            power_strict_rag_mode
+                                            and not live_scraping_needed
+                                        ),
                                         rag_min_sources=int(power_rag_min_sources),
                                         rag_min_score=float(power_rag_min_score),
                                         quality_control_enabled=bool(power_quality_control_enabled),
                                         quality_verifier_enabled=bool(power_quality_verifier_enabled),
                                         quality_verifier_model=power_quality_verifier_model,
                                         quality_min_score=float(power_quality_min_score),
-                                        answer_mode=power_default_answer_mode,
+                                        answer_mode=(
+                                            "current"
+                                            if live_scraping_needed
+                                            else power_default_answer_mode
+                                        ),
                                         append_quality_footer=bool(power_quality_append_footer),
                                         hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
-                                        disable_rag_for_casual=bool(power_disable_rag_for_casual),
+                                        disable_rag_for_casual=bool(
+                                            power_disable_rag_for_casual
+                                            or live_scraping_needed
+                                        ),
                                         performance_optimizer_enabled=bool(power_performance_optimizer_enabled),
                                         query_rewriter_enabled=bool(power_query_rewriter_enabled),
                                         reranker_enabled=bool(power_reranker_enabled),
-                                        semantic_cache_enabled=bool(power_semantic_cache_enabled),
+                                        semantic_cache_enabled=bool(
+                                            power_semantic_cache_enabled
+                                            and not live_scraping_needed
+                                        ),
                                         semantic_cache_threshold=float(power_semantic_cache_threshold),
                                         semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
                                         latency_budget_enabled=bool(power_latency_budget_enabled),
@@ -2729,6 +2806,9 @@ class TelegramBotService:
                                         retry_meta["telegram_auto_live_scraping_needed"] = live_scraping_needed
                                         retry_meta["telegram_auto_live_scraping_reason"] = live_scraping_profile.get("reason", "")
                                         retry_meta["telegram_auto_live_scraping_topic"] = request_live_web_topic
+                                        retry_meta["telegram_current_info_mode"] = live_scraping_needed
+                                        retry_meta["telegram_kb_disabled_for_current_info"] = live_scraping_needed
+                                        retry_meta["telegram_cache_disabled_for_current_info"] = live_scraping_needed
                                         retry_meta["telegram_speed_updated_at"] = self._model_health_checked_at
 
                                     history.append({"role": "user", "content": text})

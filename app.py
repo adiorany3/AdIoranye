@@ -2353,15 +2353,18 @@ def choose_dynamic_runtime_options(
         else min(power_response_cache_ttl_seconds, 600)
     )
 
-    if live_scraping_needed:
-        rag_top_k = max(rag_top_k, int(power_rag_top_k or 5))
-        response_cache_ttl_seconds = min(
-            response_cache_ttl_seconds,
-            max(300, int(live_web_fallback_ttl_hours or 24) * 3600),
-        )
+    current_info_mode = bool(live_scraping_needed)
+
+    if current_info_mode:
+        # Pertanyaan info terkini tidak boleh dijawab dari KB/cache lama.
+        # Live web/Tavily harus menjadi sumber utama.
+        retrieval_enabled = False
+        rag_top_k = 0
+        response_cache_ttl_seconds = 0
 
     return {
-        "enable_rag": retrieval_enabled,
+        "current_info_mode": current_info_mode,
+        "enable_rag": bool(retrieval_enabled and not current_info_mode),
         "rag_top_k": rag_top_k,
         "enable_self_verification": bool(
             power_features_enabled
@@ -2375,11 +2378,11 @@ def choose_dynamic_runtime_options(
             power_quality_verifier_enabled and (very_complex or accuracy_needed)
         ),
         "query_rewriter_enabled": bool(
-            power_query_rewriter_enabled and retrieval_enabled
+            power_query_rewriter_enabled and (retrieval_enabled or current_info_mode)
         ),
         "reranker_enabled": bool(power_reranker_enabled and retrieval_enabled),
         "semantic_cache_enabled": bool(
-            power_semantic_cache_enabled and not very_complex
+            power_semantic_cache_enabled and not very_complex and not current_info_mode
         ),
         "response_cache_ttl_seconds": response_cache_ttl_seconds,
         "max_completion_tokens": dynamic_max_tokens,
@@ -9003,8 +9006,25 @@ def render_public_page() -> None:
                         api_url=api_url,
                         api_key=api_key,
                         model=route["primary_model"],
-                        system_prompt=cfg["persona"],
-                        user_text=user_input,
+                        system_prompt=(
+                            cfg["persona"]
+                            + (
+                                "\n\nMODE INFO TERKINI AKTIF:\n"
+                                "- Untuk pertanyaan yang meminta info terbaru/hari ini/sekarang, prioritaskan sumber live web/Tavily.\n"
+                                "- Jangan menjawab berdasarkan Knowledge Base lama jika sumber live web tersedia.\n"
+                                "- Jika live web gagal atau tidak ada sumber baru, jelaskan bahwa info terkini belum dapat diverifikasi."
+                                if runtime_options.get("current_info_mode")
+                                else ""
+                            )
+                        ),
+                        user_text=(
+                            user_input
+                            + (
+                                "\n\nInstruksi internal: ini pertanyaan info terkini. Gunakan hasil live web/Tavily sebagai sumber utama; abaikan KB lama 2025 jika tidak relevan."
+                                if runtime_options.get("current_info_mode")
+                                else ""
+                            )
+                        ),
                         base_memory_text=build_memory_text(limit=12),
                         recent_messages=st.session_state.chat_messages[:-1][-6:],
                         fallback_models=route["cheap_fallback_models"],
@@ -9024,7 +9044,10 @@ def render_public_page() -> None:
                             else "web-public"
                         ),
                         channel="web",
-                        enable_rag=bool(runtime_options["enable_rag"]),
+                        enable_rag=bool(
+                            runtime_options["enable_rag"]
+                            and not runtime_options.get("current_info_mode")
+                        ),
                         rag_top_k=int(runtime_options["rag_top_k"]),
                         enable_persistent_memory=bool(
                             power_features_enabled and power_persistent_memory_enabled
@@ -9037,7 +9060,10 @@ def render_public_page() -> None:
                         ),
                         daily_cost_limit_idr=float(daily_cost_limit_idr),
                         max_expensive_calls_per_day=int(max_expensive_calls_per_day),
-                        enable_response_cache=bool(power_response_cache_enabled),
+                        enable_response_cache=bool(
+                            power_response_cache_enabled
+                            and not runtime_options.get("current_info_mode")
+                        ),
                         response_cache_ttl_seconds=int(
                             runtime_options["response_cache_ttl_seconds"]
                         ),
@@ -9063,7 +9089,10 @@ def render_public_page() -> None:
                         anti_hallucination_append_sources=bool(
                             power_anti_hallucination_append_sources
                         ),
-                        strict_rag_mode=bool(power_strict_rag_mode),
+                        strict_rag_mode=bool(
+                            power_strict_rag_mode
+                            and not runtime_options.get("current_info_mode")
+                        ),
                         rag_min_sources=int(power_rag_min_sources),
                         rag_min_score=float(power_rag_min_score),
                         quality_control_enabled=bool(
@@ -9074,12 +9103,19 @@ def render_public_page() -> None:
                         ),
                         quality_verifier_model=power_quality_verifier_model,
                         quality_min_score=float(power_quality_min_score),
-                        answer_mode=power_default_answer_mode,
+                        answer_mode=(
+                            "current"
+                            if runtime_options.get("current_info_mode")
+                            else power_default_answer_mode
+                        ),
                         append_quality_footer=bool(power_quality_append_footer),
                         hide_kb_sources_for_casual=bool(
                             power_hide_kb_sources_for_casual
                         ),
-                        disable_rag_for_casual=bool(power_disable_rag_for_casual),
+                        disable_rag_for_casual=bool(
+                            power_disable_rag_for_casual
+                            or runtime_options.get("current_info_mode")
+                        ),
                         performance_optimizer_enabled=bool(
                             power_performance_optimizer_enabled
                         ),
@@ -9089,6 +9125,7 @@ def render_public_page() -> None:
                         reranker_enabled=bool(runtime_options["reranker_enabled"]),
                         semantic_cache_enabled=bool(
                             runtime_options["semantic_cache_enabled"]
+                            and not runtime_options.get("current_info_mode")
                         ),
                         semantic_cache_threshold=float(power_semantic_cache_threshold),
                         semantic_cache_ttl_seconds=int(
@@ -9174,6 +9211,15 @@ def render_public_page() -> None:
                         meta["auto_live_scraping_topic"] = runtime_options.get(
                             "auto_live_scraping_topic",
                             "auto",
+                        )
+                        meta["current_info_mode"] = bool(
+                            runtime_options.get("current_info_mode")
+                        )
+                        meta["kb_disabled_for_current_info"] = bool(
+                            runtime_options.get("current_info_mode")
+                        )
+                        meta["cache_disabled_for_current_info"] = bool(
+                            runtime_options.get("current_info_mode")
                         )
                     restore_active_model_to_cheap(route.get("primary_model"))
                     answer = sanitize_public_answer(
