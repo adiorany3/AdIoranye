@@ -3647,7 +3647,7 @@ st.markdown(
         <div class="app-logo">🤖</div>
         <div>
             <h3 class="app-title">Selamat Datang</h3>
-            <p class="app-subtitle">Tulis pertanyaan Anda dalam kolom. Tunggu beberapa saat, sehingga AI bot adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. AI ini dikembangkan dengan tune yang ketat sehingga menghindari halusinasi, jawab asal tanpa adanya data dan memberikan asumsi. Terdapat {len(cheap_active)} model AI utama dan {len(expensive_active)} model kuat, yang akan mendiskusikan dibalik layar, untuk menjawab pertanyaan Anda (jumlah akan model akan berubah automatis sesuai dengan yang aktif saat server berjalan, sehingga bukan angka statis.</p>
+            <p class="app-subtitle">Tulis pertanyaan Anda dalam kolom. Tunggu beberapa saat, sehingga AI bot adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. AI ini dikembangkan dengan tune yang ketat sehingga menghindari halusinasi, jawab asal tanpa adanya data dan memberikan asumsi. Terdapat {len(cheap_active)} model AI utama dan {len(expensive_active)} model kuat, yang akan mendiskusikan dibalik layar, untuk menjawab pertanyaan Anda (jumlah akan model akan berubah automatis sesuai dengan yang aktif saat server berjalan, sehingga bukan angka statis).</p>
         </div>
     </div>
     <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
@@ -3676,7 +3676,7 @@ if st.session_state.chat_messages:
         role_label = "Pengguna" if item.get("role") == "user" else "Adioranye"
         transcript_parts.append(f"{role_label}:\n{item.get('content', '')}")
     st.download_button(
-        "⬇️ Download semua chat PDF",
+        "⬇️ Download jawaban ini ke PDF",
         data=make_answer_pdf_bytes("\n\n".join(transcript_parts), title="Riwayat Chat Adioranye AI"),
         file_name=f"riwayat-chat-adioranye-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.pdf",
         mime="application/pdf",
