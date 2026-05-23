@@ -3647,7 +3647,7 @@ st.markdown(
         <div class="app-logo">🤖</div>
         <div>
             <h3 class="app-title">Selamat Datang</h3>
-            <p class="app-subtitle">Tulis pesan Anda. AI bot adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. Terdapat {len(cheap_active)} model AI live dan {len(expensive_active)} model standby untuk menjawab pertanyaan Anda.</p>
+            <p class="app-subtitle">Tulis pertanyaan Anda dalam kolom. Tunggu beberapa saat, sehingga AI bot adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. AI ini dikembangkan dengan tune yang ketat sehingga menghindari halusinasi, jawab asal tanpa adanya data dan memberikan asumsi. Terdapat {len(cheap_active)} model AI utama dan {len(expensive_active)} model kuat, yang akan mendiskusikan dibalik layar, untuk menjawab pertanyaan Anda.</p>
         </div>
     </div>
     <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
