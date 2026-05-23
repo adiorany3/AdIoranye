@@ -434,23 +434,26 @@ def init_state() -> None:
 DEFAULT_PERSONA = (
     "Nama kamu adalah adioranye. "
     "Kamu dibuat oleh Galuh Adi Insani. "
-    "Kamu adalah asisten pribadi yang sangat cerdas, ramah, teliti, detail, cepat memahami konteks, dan mampu membantu berbagai kebutuhan pengguna secara praktis. "
-    "Jawab dalam bahasa Indonesia yang natural, jelas, sopan, dan mudah dipahami. "
-    "Untuk pertanyaan sederhana, jawab singkat dan langsung. Untuk pertanyaan teknis, akademik, bisnis, coding, atau analisis, jawab lebih detail, bertahap, dan berikan contoh bila membantu. "
-    "Jangan mengarang fakta. Jika informasi tidak pasti, jelaskan keterbatasannya dan berikan saran langkah aman. "
-    "Jika permintaan berbahaya atau melanggar aturan, tolak dengan singkat dan arahkan ke alternatif yang aman."
+    "Peran kamu adalah asisten AI profesional yang cepat, teliti, ramah, dan sangat praktis. "
+    "Gunakan bahasa Indonesia yang natural, sopan, jelas, dan tidak bertele-tele. "
+    "Untuk pertanyaan sederhana, jawab langsung. Untuk tugas akademik, coding, bisnis, riset, dokumen, atau analisis, jawab terstruktur, bertahap, dan siap dipakai. "
+    "Utamakan akurasi: jangan mengarang fakta, angka, sumber, hukum, medis, keuangan, atau informasi terbaru. Jika data belum cukup, jelaskan batasannya dan berikan langkah aman. "
+    "Saat memperbaiki kode, sebutkan letak masalah, solusi inti, lalu berikan kode yang bisa langsung ditempel. "
+    "Saat membuat tulisan, ikuti format pengguna dan gunakan gaya bahasa manusiawi, rapi, serta mudah dipahami. "
+    "Jika permintaan berisiko atau melanggar aturan, tolak singkat dan arahkan ke alternatif yang aman."
 )
 
 DEFAULT_MEMORY_CONTEXT = """
 Memory default Adioranye:
-- Adioranye, kamu diprogram oleh Galuh Adi Insani, dapat membantu menjawab pertanyaan umum, akademik, teknis, bisnis, kreatif, penulisan, coding, analisis data, strategi konten, dan kebutuhan praktis sehari-hari.
-- Prioritaskan jawaban yang akurat, jelas, ramah, detail secukupnya, dan langsung bisa dipakai.
-- Untuk pertanyaan akademik, bantu dengan struktur rapi, bahasa natural, contoh, dan penjelasan yang mudah dipahami.
-- Untuk pertanyaan coding atau aplikasi, berikan langkah perbaikan yang praktis, kode yang siap ditempel, dan jelaskan letak perubahan penting.
-- Untuk pertanyaan bisnis, pemasaran, desain, konten, atau promosi, berikan ide yang ringkas, menarik, dan mudah dieksekusi.
-- Untuk pertanyaan yang membutuhkan data terbaru, hukum, medis, keuangan, atau keputusan berisiko, jangan mengarang. Jelaskan bahwa data perlu diverifikasi dan berikan arahan aman.
-- Jika pengguna meminta format tertentu, ikuti format tersebut. Jika tidak, gunakan struktur yang paling mudah dibaca.
-- Jika permintaan kurang jelas, tetap berikan jawaban terbaik berdasarkan konteks yang ada dan sebutkan asumsi yang digunakan.
+- Identitas: Adioranye dibuat oleh Galuh Adi Insani dan berperan sebagai asisten AI praktis untuk kebutuhan umum, akademik, teknis, bisnis, kreatif, coding, analisis data, strategi konten, dokumen, dan produktivitas.
+- Gaya jawaban: profesional, ramah, jelas, ringkas untuk pertanyaan ringan, dan detail bertahap untuk pekerjaan kompleks.
+- Prinsip akurasi: jangan mengarang. Untuk data terbaru, hukum, medis, keuangan, harga, jadwal, atau keputusan berisiko, sampaikan bahwa data perlu diverifikasi atau gunakan sumber yang tersedia.
+- Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
+- Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
+- Bisnis/konten/desain: berikan ide yang menarik, aman dipakai, mudah dieksekusi, dan sesuai platform.
+- Dokumen/Knowledge Base: jika ada data internal atau dokumen yang relevan, prioritaskan data tersebut. Jika sumber tidak cukup, jangan memaksakan jawaban.
+- Format: ikuti format pengguna. Jika format tidak disebutkan, gunakan struktur paling mudah dibaca.
+- Ketidakjelasan: tetap berikan jawaban terbaik berdasarkan konteks, lalu sebutkan asumsi singkat yang dipakai.
 """.strip()
 
 CHEAP_MODEL_OPTIONS = list(dict.fromkeys(ALL_CHEAP_MODELS or DEFAULT_CHEAP_FALLBACK_MODELS.copy()))
@@ -1210,52 +1213,155 @@ def _contains_any(text: str, keywords: List[str]) -> bool:
     return any(keyword in lowered for keyword in keywords)
 
 
-def is_thinking_question(user_text: str) -> bool:
-    """Deteksi pertanyaan yang perlu model lebih capable/reasoning.
+LIGHTWEIGHT_INTENT_KEYWORDS = [
+    "hai", "halo", "hello", "thanks", "terima kasih", "makasih", "siapa kamu",
+    "apa kabar", "oke", "ok", "sip", "lanjut", "ya", "tidak", "bisa", "test",
+]
 
-    Prinsipnya konservatif: pertanyaan sederhana tetap lewat rotasi model murah,
-    sedangkan pertanyaan analitis, teknis, multi-langkah, debugging, riset,
-    atau konteks panjang langsung diarahkan ke model capable.
+THINKING_INTENT_KEYWORDS = [
+    "thinking", "reasoning", "berpikir", "nalar", "logika", "analisis", "analisa",
+    "evaluasi", "bandingkan", "pertimbangkan", "strategi", "arsitektur", "algoritma",
+    "debug", "error", "traceback", "exception", "bug", "refactor", "optimasi",
+    "optimize", "perbaiki kode", "cek kode", "review kode", "audit kode", "skripsi",
+    "tesis", "jurnal", "riset", "metodologi", "smartpls", "statistik", "regresi",
+    "sentimen", "indobert", "buatkan alur", "bagan alur", "step by step",
+    "langkah-langkah", "kenapa", "mengapa", "apa penyebab", "solusi terbaik",
+    "rekomendasi terbaik", "prioritaskan", "model yang capable", "jawaban mendalam",
+    "berpikir dalam", "tuning", "tune", "deploy", "vercel", "streamlit",
+]
+
+CODE_OR_LOG_MARKERS = [
+    "```", "def ", "class ", "import ", "from ", "return ", "npm ", "pip ",
+    "vercel", "status code", "response:", "build failed", "failed", "unauthorized",
+    "creditsdepleted", "traceback", "exception", "streamlit", "session_state",
+    "generate_answer", "generate_power_answer", "<html", "<script", "select * from",
+]
+
+RETRIEVAL_TRIGGER_KEYWORDS = [
+    "berdasarkan file", "berdasarkan dokumen", "dari file", "dari dokumen", "kb",
+    "knowledge base", "sumber", "referensi", "kutipan", "jurnal", "pdf", "docx",
+    "data terbaru", "terbaru", "hari ini", "update", "berita", "harga", "jadwal",
+    "aturan", "hukum", "regulasi", "medis", "keuangan", "riset", "paper",
+]
+
+
+def _keyword_hits(text: str, keywords: List[str]) -> List[str]:
+    lowered = f" {str(text or '').lower()} "
+    return [keyword for keyword in keywords if keyword in lowered]
+
+
+def _normalize_operation_mode(value: Any) -> str:
+    raw = str(value or "Seimbang").strip().lower()
+    aliases = {
+        "hemat": "Hemat",
+        "murah": "Hemat",
+        "cheap": "Hemat",
+        "balanced": "Seimbang",
+        "balance": "Seimbang",
+        "seimbang": "Seimbang",
+        "maksimal": "Maksimal",
+        "max": "Maksimal",
+        "maximum": "Maksimal",
+        "pintar": "Maksimal",
+    }
+    return aliases.get(raw, "Seimbang")
+
+
+def estimate_prompt_complexity(user_text: str) -> Dict[str, Any]:
+    """Beri skor kompleksitas untuk routing model dan keputusan RAG.
+
+    Skor tinggi berarti lebih pantas memakai model capable/reasoning.
+    Skor rendah berarti cukup memakai model hemat/cepat.
     """
-    if not bool(st.session_state.get("active_thinking_model_router", True)):
-        return False
-
     text = str(user_text or "").strip()
-    if not text:
-        return False
-
     lowered = text.lower()
     word_count = len(text.split())
+    score = 0
+    signals: List[str] = []
+
+    light_hits = _keyword_hits(lowered, LIGHTWEIGHT_INTENT_KEYWORDS)
+    thinking_hits = _keyword_hits(lowered, THINKING_INTENT_KEYWORDS)
+    code_hits = _keyword_hits(lowered, CODE_OR_LOG_MARKERS)
+    retrieval_hits = _keyword_hits(lowered, RETRIEVAL_TRIGGER_KEYWORDS)
+
+    if thinking_hits:
+        score += min(5, 2 + len(thinking_hits))
+        signals.append("thinking-keyword")
+    if code_hits:
+        score += min(5, 3 + len(code_hits))
+        signals.append("code-or-log")
+    if retrieval_hits:
+        score += min(3, len(retrieval_hits))
+        signals.append("retrieval-needed")
+
     min_chars = int(st.session_state.get("active_thinking_min_chars", thinking_min_chars_default) or 180)
-
-    strong_keywords = [
-        "thinking", "reasoning", "berpikir", "nalar", "logika", "analisis", "analisa",
-        "evaluasi", "bandingkan", "pertimbangkan", "strategi", "arsitektur", "algoritma",
-        "debug", "error", "traceback", "exception", "bug", "refactor", "optimasi",
-        "optimize", "perbaiki kode", "cek kode", "skripsi", "tesis", "jurnal", "riset",
-        "metodologi", "smartpls", "statistik", "regresi", "sentimen", "indobert",
-        "buatkan alur", "bagan alur", "step by step", "langkah-langkah", "kenapa", "mengapa",
-        "apa penyebab", "solusi terbaik", "rekomendasi terbaik", "prioritaskan",
-        "model yang capable", "jawaban mendalam", "berpikir dalam",
-    ]
-    code_or_log_markers = [
-        "```", "def ", "class ", "import ", "from ", "return ", "npm ", "vercel",
-        "status code", "response:", "build failed", "failed", "unauthorized", "creditsdepleted",
-        "<html", "<script", "streamlit", "session_state", "generate_answer",
-    ]
-
-    if _contains_any(lowered, strong_keywords):
-        return True
-    if _contains_any(lowered, code_or_log_markers):
-        return True
     if len(text) >= min_chars and word_count >= 24:
-        return True
+        score += 2
+        signals.append("long-context")
     if text.count("?") >= 2 and word_count >= 18:
-        return True
-    if any(token in lowered for token in ["1.", "2.", "3.", "- "]) and word_count >= 25:
-        return True
+        score += 2
+        signals.append("multi-question")
+    if any(token in lowered for token in ["1.", "2.", "3.", "- ", "• "]) and word_count >= 25:
+        score += 1
+        signals.append("structured-request")
+    if any(ext in lowered for ext in [".py", ".js", ".tsx", ".jsx", ".html", ".css", ".sql"]):
+        score += 2
+        signals.append("file-extension")
 
+    if light_hits and word_count <= 10 and not code_hits and not thinking_hits:
+        score -= 3
+        signals.append("casual-short")
+    elif word_count <= 6 and not code_hits and not thinking_hits:
+        score -= 1
+        signals.append("short-prompt")
+
+    score = max(0, score)
+    return {
+        "score": score,
+        "signals": signals,
+        "thinking_hits": thinking_hits[:8],
+        "code_hits": code_hits[:8],
+        "retrieval_hits": retrieval_hits[:8],
+        "word_count": word_count,
+        "char_count": len(text),
+    }
+
+
+def should_use_retrieval_for_prompt(user_text: str) -> bool:
+    """Aktifkan RAG/web fallback hanya ketika manfaatnya jelas."""
+    if not bool(power_features_enabled and power_rag_enabled):
+        return False
+    if bool(power_strict_rag_mode):
+        return True
+    info = estimate_prompt_complexity(user_text)
+    if info.get("retrieval_hits"):
+        return True
+    text = str(user_text or "").strip().lower()
+    if len(text) >= 220 and not _contains_any(text, LIGHTWEIGHT_INTENT_KEYWORDS):
+        return True
+    if any(token in text for token in ["lampiran", "upload", "database", "dokumen", "sumber", "referensi"]):
+        return True
     return False
+
+
+def is_thinking_question(user_text: str) -> bool:
+    """Deteksi pertanyaan yang perlu model lebih capable/reasoning."""
+    if not bool(st.session_state.get("active_thinking_model_router", True)):
+        st.session_state.last_prompt_complexity = {"score": 0, "signals": ["thinking-router-off"]}
+        return False
+
+    complexity = estimate_prompt_complexity(user_text)
+    st.session_state.last_prompt_complexity = complexity
+    operation_mode = _normalize_operation_mode(st.session_state.get("active_operation_mode", ai_operation_mode_default))
+
+    if operation_mode == "Maksimal":
+        threshold = 2
+    elif operation_mode == "Hemat":
+        threshold = 6
+    else:
+        threshold = 4
+
+    return int(complexity.get("score") or 0) >= threshold
 
 
 def get_capable_primary_model(active_expensive_models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> str:
@@ -1282,17 +1388,18 @@ def get_capable_primary_model(active_expensive_models: List[str], health_cache: 
 
 def build_model_routing_plan(advance_rotation: bool = False, user_text: str = "") -> Dict[str, Any]:
     """
-    Routing default:
-    1) Pertanyaan thinking/kompleks langsung memakai model capable aktif.
-    2) Pertanyaan ringan/non-thinking langsung memakai model murah aktif dengan latency tercepat.
-    3) Jika fast-normal dimatikan, pertanyaan biasa kembali ke rotasi model murah.
-    4) Jika semua model murah gagal/kurang cukup, naik otomatis ke model menengah/mahal aktif.
-    5) Setelah request selesai, state aplikasi tetap diarahkan kembali ke model murah aktif.
+    Routing tuning final:
+    1) Mode Hemat: tahan model menengah/mahal kecuali tidak ada model hemat aktif.
+    2) Mode Seimbang: chat ringan memakai model hemat tercepat; prompt kompleks langsung ke model capable.
+    3) Mode Maksimal: agresif memakai model capable aktif.
+    4) Fallback tetap aman: murah lain dulu, lalu capable jika diizinkan.
+    5) Setelah request selesai, state dikembalikan ke model hemat aktif bila memungkinkan.
     """
     active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
-    operation_mode = str(st.session_state.get("active_operation_mode", ai_operation_mode_default) or "Seimbang")
+    operation_mode = _normalize_operation_mode(st.session_state.get("active_operation_mode", ai_operation_mode_default))
     selected_model = str(st.session_state.get("active_model") or default_model).strip()
     health_cache = st.session_state.get("model_health_cache") or {}
+    complexity = estimate_prompt_complexity(user_text)
 
     selected_is_cheap = _tier_rank(selected_model) == 0
     selected_is_active = bool(health_cache.get(selected_model, {}).get("active"))
@@ -1300,50 +1407,55 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     fast_normal_enabled = bool(st.session_state.get("active_fast_normal_model_router", True))
     fastest_cheap_models = prioritize_fastest_active_models(active_cheap_models, health_cache)
     thinking_mode = is_thinking_question(user_text)
+
     if operation_mode == "Hemat":
         capable_primary = ""
-    elif operation_mode == "Maksimal":
-        capable_primary = get_capable_primary_model(active_expensive_models, health_cache)
     else:
-        capable_primary = get_capable_primary_model(active_expensive_models, health_cache) if thinking_mode else ""
+        capable_primary = get_capable_primary_model(active_expensive_models, health_cache)
 
     direct_to_expensive = False
     thinking_direct_to_capable = False
     normal_fast_mode = False
     rotated_primary = ""
+    routing_reason = ""
 
-    if ((thinking_mode and capable_primary) or (operation_mode == "Maksimal" and capable_primary)):
-        # Pertanyaan kompleks langsung dijalankan oleh model capable, bukan model murah.
+    if operation_mode == "Maksimal" and capable_primary:
         primary_model = capable_primary
         direct_to_expensive = True
         thinking_direct_to_capable = True
+        routing_reason = "mode-maksimal-capable"
+    elif thinking_mode and capable_primary and operation_mode != "Hemat":
+        primary_model = capable_primary
+        direct_to_expensive = True
+        thinking_direct_to_capable = True
+        routing_reason = "prompt-kompleks-capable"
     elif active_cheap_models:
         if fast_normal_enabled and fastest_cheap_models:
-            # Pertanyaan ringan/non-thinking harus secepat mungkin: gunakan model murah aktif tercepat.
             primary_model = fastest_cheap_models[0]
             normal_fast_mode = True
+            routing_reason = "prompt-ringan-model-hemat-tercepat"
         elif rotate_enabled:
-            # Jika fast-normal dimatikan, setiap request memakai model murah aktif berikutnya.
-            # Render UI/admin hanya mengintip tanpa menggeser indeks.
             primary_model = get_rotating_cheap_primary(active_cheap_models, advance=advance_rotation)
             rotated_primary = primary_model
+            routing_reason = "rotasi-model-hemat"
         elif selected_is_cheap and selected_model in active_cheap_models and selected_is_active:
             primary_model = selected_model
+            routing_reason = "model-admin-aktif"
         elif default_model in active_cheap_models:
             primary_model = default_model
+            routing_reason = "default-model-hemat"
         else:
             primary_model = active_cheap_models[0]
+            routing_reason = "fallback-model-hemat-aktif"
     elif active_expensive_models:
-        # Tidak ada model murah yang hidup: langsung pakai model menengah/mahal aktif.
         primary_model = active_expensive_models[0]
         direct_to_expensive = True
+        routing_reason = "tidak-ada-model-hemat-aktif"
     else:
-        # Fallback paling akhir: jangan kosongkan model agar error tetap informatif dari generate_answer.
         primary_model = selected_model or default_model
+        routing_reason = "fallback-terakhir-belum-terverifikasi"
 
     if thinking_direct_to_capable:
-        # Saat thinking mode, jangan turun ke model murah sebagai fallback utama;
-        # gunakan model capable lain jika tersedia.
         cheap_fallback_models = []
     else:
         cheap_pool = fastest_cheap_models if normal_fast_mode and fastest_cheap_models else active_cheap_models
@@ -1351,12 +1463,10 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
 
     expensive_fallback_models = [model for model in active_expensive_models if model != primary_model]
 
-    # Default: expensive fallback aktif. Admin masih bisa mematikan lewat toggle,
-    # tetapi jika tidak ada model murah aktif sama sekali atau pertanyaan thinking,
-    # expensive tetap dipakai agar jawaban memakai model yang lebih capable.
     allow_expensive = bool(active_expensive_models) and (
         bool(st.session_state.get("allow_expensive_fallback", True)) or direct_to_expensive or thinking_direct_to_capable
     )
+
     if operation_mode == "Hemat":
         allow_expensive = False
         expensive_fallback_models = []
@@ -1364,6 +1474,7 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
             primary_model = active_cheap_models[0]
             direct_to_expensive = False
             thinking_direct_to_capable = False
+            routing_reason = "mode-hemat-model-hemat"
     elif operation_mode == "Maksimal" and active_expensive_models:
         allow_expensive = True
 
@@ -1373,8 +1484,6 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
     else:
         max_expensive = 1
 
-    # Karena fallback murah biayanya rendah, izinkan router mengecek semua model murah aktif
-    # sebelum naik ke model menengah/mahal.
     max_smart_models = max(
         int(st.session_state.get("active_max_smart_models", 2) or 2),
         len(cheap_fallback_models),
@@ -1383,10 +1492,7 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
 
     return_to_primary = bool(st.session_state.get("active_return_to_primary", True)) and not direct_to_expensive
 
-    next_cheap_model = ""
-    if active_cheap_models:
-        next_cheap_model = get_rotating_cheap_primary(active_cheap_models, advance=False)
-
+    next_cheap_model = get_rotating_cheap_primary(active_cheap_models, advance=False) if active_cheap_models else ""
     fastest_cheap_primary = fastest_cheap_models[0] if fastest_cheap_models else ""
 
     return {
@@ -1412,6 +1518,14 @@ def build_model_routing_plan(advance_rotation: bool = False, user_text: str = ""
         "next_cheap_primary_model": next_cheap_model,
         "cheap_rotation_index": int(st.session_state.get("cheap_model_rotation_index", 0) or 0),
         "operation_mode": operation_mode,
+        "routing_reason": routing_reason,
+        "complexity_score": int(complexity.get("score") or 0),
+        "complexity_signals": complexity.get("signals", []),
+        "complexity_hits": {
+            "thinking": complexity.get("thinking_hits", []),
+            "code": complexity.get("code_hits", []),
+            "retrieval": complexity.get("retrieval_hits", []),
+        },
     }
 
 def restore_active_model_to_cheap(preferred_model: str = "") -> None:
@@ -2808,6 +2922,7 @@ def render_admin_status() -> None:
         f"Rotasi murah: {'ON' if st.session_state.get('active_rotate_cheap_primary', True) else 'OFF'}\n\n"
         f"Thinking router: {'ON' if st.session_state.get('active_thinking_model_router', True) else 'OFF'}\n\n"
         f"Fast normal: {'ON' if st.session_state.get('active_fast_normal_model_router', True) else 'OFF'}\n\n"
+        f"Mode operasi: {st.session_state.get('active_operation_mode', ai_operation_mode_default)}\n\n"
         f"Model aktif terdeteksi: {active_count}\n\n"
         f"Cek model terakhir: {checked_at}"
     ).replace(",", ".")
@@ -4143,7 +4258,7 @@ if user_input:
         try:
             with st.chat_message("assistant"):
                 placeholder = st.empty()
-                placeholder.markdown("⏳ Siap! adioranye sedang menyiapkan jawaban dengan jujur... tunggu sebentar, akan saya analisakan untukmu...")
+                placeholder.markdown("⏳ adioranye sedang menganalisis permintaan dan memilih model terbaik...")
                 route = build_model_routing_plan(advance_rotation=True, user_text=user_input)
                 answer, meta = safe_generate_power_answer(
                     api_url=api_url,
@@ -4166,7 +4281,7 @@ if user_input:
                     store=power_store,
                     user_id="web-admin" if st.session_state.get("admin_authenticated", False) else "web-public",
                     channel="web",
-                    enable_rag=bool(power_features_enabled and power_rag_enabled),
+                    enable_rag=bool(power_features_enabled and power_rag_enabled and should_use_retrieval_for_prompt(user_input)),
                     rag_top_k=int(power_rag_top_k),
                     enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
                     enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
@@ -4230,6 +4345,11 @@ if user_input:
                     caption_text += f" • intent: {(meta or {}).get('power_intent')}"
                 if (meta or {}).get("self_verified_by"):
                     caption_text += f" • self-check: {(meta or {}).get('self_verified_by')}"
+                route_reason = str(route.get("routing_reason") or "")
+                if route_reason:
+                    caption_text += f" • rute: {route_reason}"
+                if st.session_state.admin_authenticated:
+                    caption_text += f" • skor kompleksitas: {route.get('complexity_score', 0)}"
                 if (meta or {}).get("power_kb_sources") and (bool((meta or {}).get("show_kb_sources", False)) or st.session_state.admin_authenticated):
                     kb_sources = (meta or {}).get("power_kb_sources") or []
                     caption_text += f" • KB: {len(kb_sources)} sumber"
