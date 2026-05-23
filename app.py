@@ -1,3 +1,4 @@
+import base64
 import hmac
 import inspect
 import html
@@ -403,20 +404,48 @@ def make_answer_pdf_bytes(
 
 
 def answer_pdf_download_button(
-    answer_text: str, key: str, model_name: str = ""
+    answer_text: str,
+    key: str,
+    model_name: str = "",
 ) -> None:
-    """Render tombol download PDF untuk sebuah jawaban assistant."""
+    """Render link kecil download PDF untuk sebuah jawaban assistant."""
     if not str(answer_text or "").strip():
         return
+
     meta_text = f"Model: {model_name}" if model_name else ""
-    filename = f"jawaban-adioranye-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.pdf"
-    st.download_button(
-        "⬇️ Klik disini untuk download jawaban ke format PDF",
-        data=make_answer_pdf_bytes(answer_text, meta_text=meta_text),
-        file_name=filename,
-        mime="application/pdf",
-        key=key,
-        use_container_width=True,
+    filename = (
+        "jawaban-adioranye-"
+        f"{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}"
+        ".pdf"
+    )
+    pdf_bytes = make_answer_pdf_bytes(
+        answer_text,
+        meta_text=meta_text,
+    )
+    pdf_base64 = base64.b64encode(pdf_bytes).decode("ascii")
+    safe_filename = html.escape(
+        filename,
+        quote=True,
+    )
+    link_id = html.escape(
+        str(key or "download-pdf"),
+        quote=True,
+    )
+
+    st.markdown(
+        f"""
+        <div class="answer-pdf-link-wrap" id="{link_id}">
+            <a
+                class="answer-pdf-link"
+                href="data:application/pdf;base64,{pdf_base64}"
+                download="{safe_filename}"
+                title="Download jawaban ke PDF"
+            >
+                Klik disini untuk download PDF
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -2379,6 +2408,32 @@ st.markdown(
 
     #MainMenu, footer {
         visibility: hidden;
+    }
+
+
+    .answer-pdf-link-wrap {
+        margin-top: 0.25rem;
+        margin-bottom: 0.85rem;
+        line-height: 1.2;
+    }
+
+    .answer-pdf-link {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        max-width: 100%;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--mac-blue) !important;
+        text-decoration: none !important;
+        border-bottom: 1px solid transparent;
+        opacity: 0.86;
+        transition: opacity 0.16s ease, border-color 0.16s ease;
+    }
+
+    .answer-pdf-link:hover {
+        opacity: 1;
+        border-bottom-color: currentColor;
     }
 
     header[data-testid="stHeader"] {
