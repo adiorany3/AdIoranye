@@ -139,6 +139,138 @@ def _contains_any(text: str, keywords: List[str]) -> bool:
     return any(keyword in lowered for keyword in keywords)
 
 
+
+TELEGRAM_CURRENT_INFO_KEYWORDS = [
+    "terbaru",
+    "terkini",
+    "hari ini",
+    "sekarang",
+    "saat ini",
+    "minggu ini",
+    "bulan ini",
+    "tahun ini",
+    "update",
+    "berita",
+    "viral",
+    "tren",
+    "trend",
+    "jadwal",
+    "harga",
+    "kurs",
+    "cuaca",
+    "rilis",
+    "regulasi",
+    "aturan terbaru",
+    "kebijakan terbaru",
+    "data terbaru",
+    "statistik terbaru",
+    "live",
+    "real time",
+    "real-time",
+]
+
+TELEGRAM_CURRENT_INFO_DOMAINS = [
+    "politik",
+    "pemerintah",
+    "hukum",
+    "regulasi",
+    "harga",
+    "kurs",
+    "emas",
+    "saham",
+    "crypto",
+    "cuaca",
+    "jadwal",
+    "olahraga",
+    "film",
+    "musik",
+    "teknologi",
+    "ai",
+    "openai",
+    "chatgpt",
+    "streamlit",
+    "vercel",
+    "github",
+    "telegram",
+    "bpjs",
+    "kementerian",
+]
+
+
+def detect_telegram_auto_live_scraping_need(
+    text: str,
+    enabled: bool = True,
+) -> Dict[str, Any]:
+    """Detect Telegram messages that need current external information."""
+    prompt = str(text or "").strip()
+    lowered = prompt.lower()
+    word_count = len(re.findall(r"\w+", lowered))
+
+    if not enabled:
+        return {
+            "needed": False,
+            "reason": "disabled",
+            "topic": "auto",
+            "keywords": [],
+        }
+
+    keyword_hits = [
+        keyword
+        for keyword in TELEGRAM_CURRENT_INFO_KEYWORDS
+        if keyword in lowered
+    ]
+
+    domain_hits = [
+        keyword
+        for keyword in TELEGRAM_CURRENT_INFO_DOMAINS
+        if keyword in lowered
+    ]
+
+    explicit_current = bool(keyword_hits)
+    external_dynamic = bool(
+        domain_hits
+        and any(
+            marker in lowered
+            for marker in [
+                "apa",
+                "berapa",
+                "siapa",
+                "kapan",
+                "cek",
+                "cari",
+                "update",
+                "info",
+                "berita",
+            ]
+        )
+    )
+
+    if word_count <= 3 and not explicit_current:
+        return {
+            "needed": False,
+            "reason": "too_short_without_current_marker",
+            "topic": "auto",
+            "keywords": keyword_hits + domain_hits,
+        }
+
+    if explicit_current or external_dynamic:
+        return {
+            "needed": True,
+            "reason": "explicit_current_keyword"
+            if explicit_current
+            else "external_dynamic_question",
+            "topic": prompt[:160] or "auto",
+            "keywords": keyword_hits + domain_hits,
+        }
+
+    return {
+        "needed": False,
+        "reason": "not_current_info",
+        "topic": "auto",
+        "keywords": keyword_hits + domain_hits,
+    }
+
+
 def is_thinking_telegram_question(text: str, history: Optional[List[Dict[str, str]]] = None, min_chars: int = 180) -> bool:
     """Detect Telegram questions that should use a more capable model.
 
@@ -1794,6 +1926,8 @@ class TelegramBotService:
         live_web_fallback_ttl_hours = int(config.get("live_web_fallback_ttl_hours", 24) or 24)
         live_web_fallback_force_for_current = bool(config.get("live_web_fallback_force_for_current", True))
         live_web_fallback_topic = str(config.get("live_web_fallback_topic") or "auto")
+        auto_live_scraping_enabled = bool(config.get("auto_live_scraping_enabled", True))
+        auto_live_scraping_show_status = bool(config.get("auto_live_scraping_show_status", True))
         power_default_answer_mode = str(config.get("power_default_answer_mode") or "auto").strip().lower()
         daily_cost_limit_idr = float(config.get("daily_cost_limit_idr", 0) or 0)
         max_expensive_calls_per_day = int(config.get("max_expensive_calls_per_day", 0) or 0)
@@ -2265,6 +2399,22 @@ class TelegramBotService:
                                     request_fallback_models = [item for item in fast_pool if item != request_model]
                                     fast_normal_mode = True
 
+                            live_scraping_profile = detect_telegram_auto_live_scraping_need(
+                                text,
+                                enabled=bool(auto_live_scraping_enabled),
+                            )
+                            live_scraping_needed = bool(
+                                live_scraping_profile.get("needed")
+                            )
+                            request_live_web_topic = (
+                                live_scraping_profile.get("topic", "auto")
+                                if live_scraping_needed
+                                else live_web_fallback_topic
+                            )
+
+                            if live_scraping_needed and auto_live_scraping_show_status:
+                                self._send_typing(token, chat_id)
+
                             answer, meta = safe_generate_power_answer(
                                 api_url=api_url,
                                 api_key=api_key,
@@ -2337,8 +2487,11 @@ class TelegramBotService:
                                 live_web_fallback_max_content_chars=int(live_web_fallback_max_content_chars),
                                 live_web_fallback_auto_save_to_kb=bool(live_web_fallback_auto_save_to_kb),
                                 live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
-                                live_web_fallback_force_for_current=bool(live_web_fallback_force_for_current),
-                                live_web_fallback_topic=live_web_fallback_topic,
+                                live_web_fallback_force_for_current=bool(
+                                    live_web_fallback_force_for_current
+                                    and live_scraping_needed
+                                ),
+                                live_web_fallback_topic=request_live_web_topic,
                             )
 
                             if isinstance(meta, dict):
@@ -2347,6 +2500,9 @@ class TelegramBotService:
                                 meta["telegram_forced_model_mode"] = manual_mode
                                 meta["telegram_rotate_mode"] = manual_mode == "auto" and self._last_model_update_source == "rotate"
                                 meta["telegram_model_requested"] = request_model
+                                meta["telegram_auto_live_scraping_needed"] = live_scraping_needed
+                                meta["telegram_auto_live_scraping_reason"] = live_scraping_profile.get("reason", "")
+                                meta["telegram_auto_live_scraping_topic"] = request_live_web_topic
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
 
@@ -2462,8 +2618,11 @@ class TelegramBotService:
                                         live_web_fallback_max_content_chars=int(live_web_fallback_max_content_chars),
                                         live_web_fallback_auto_save_to_kb=bool(live_web_fallback_auto_save_to_kb),
                                         live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
-                                        live_web_fallback_force_for_current=bool(live_web_fallback_force_for_current),
-                                        live_web_fallback_topic=live_web_fallback_topic,
+                                        live_web_fallback_force_for_current=bool(
+                                            live_web_fallback_force_for_current
+                                            and live_scraping_needed
+                                        ),
+                                        live_web_fallback_topic=request_live_web_topic,
                                     )
 
                                     if isinstance(retry_meta, dict):
@@ -2472,6 +2631,9 @@ class TelegramBotService:
                                         retry_meta["telegram_previous_model"] = retry_previous_model
                                         retry_meta["telegram_forced_model_mode"] = manual_mode
                                         retry_meta["telegram_model_requested"] = model
+                                        retry_meta["telegram_auto_live_scraping_needed"] = live_scraping_needed
+                                        retry_meta["telegram_auto_live_scraping_reason"] = live_scraping_profile.get("reason", "")
+                                        retry_meta["telegram_auto_live_scraping_topic"] = request_live_web_topic
                                         retry_meta["telegram_speed_updated_at"] = self._model_health_checked_at
 
                                     history.append({"role": "user", "content": text})

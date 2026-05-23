@@ -917,6 +917,17 @@ live_web_fallback_force_for_current = parse_bool(
     get_secret("LIVE_WEB_FALLBACK_FORCE_FOR_CURRENT", True), default=True
 )
 live_web_fallback_topic = str(get_secret("LIVE_WEB_FALLBACK_TOPIC", "auto") or "auto")
+auto_live_scraping_enabled = parse_bool(
+    get_secret("AUTO_LIVE_SCRAPING_ENABLED", True),
+    default=True,
+)
+auto_live_scraping_show_status = parse_bool(
+    get_secret("AUTO_LIVE_SCRAPING_SHOW_STATUS", True),
+    default=True,
+)
+auto_live_scraping_min_query_chars = int(
+    get_secret("AUTO_LIVE_SCRAPING_MIN_QUERY_CHARS", 8) or 8
+)
 daily_cost_limit_idr = float(get_secret("DAILY_COST_LIMIT_IDR", 0) or 0)
 max_expensive_calls_per_day = int(get_secret("MAX_EXPENSIVE_CALLS_PER_DAY", 0) or 0)
 benchmark_max_models = int(get_secret("BENCHMARK_MAX_MODELS", 8) or 8)
@@ -2101,6 +2112,192 @@ def _model_capability_score(model: str) -> int:
     return max(0, score)
 
 
+
+CURRENT_INFO_KEYWORDS = [
+    "terbaru",
+    "terkini",
+    "hari ini",
+    "sekarang",
+    "saat ini",
+    "barusan",
+    "minggu ini",
+    "bulan ini",
+    "tahun ini",
+    "update",
+    "berita",
+    "news",
+    "viral",
+    "tren",
+    "trend",
+    "jadwal",
+    "harga",
+    "kurs",
+    "cuaca",
+    "rilis",
+    "rilisan",
+    "regulasi",
+    "aturan terbaru",
+    "kebijakan terbaru",
+    "presiden sekarang",
+    "ceo sekarang",
+    "siapa sekarang",
+    "data terbaru",
+    "statistik terbaru",
+    "live",
+    "real time",
+    "real-time",
+]
+
+CURRENT_INFO_DOMAINS = [
+    "politik",
+    "pemerintah",
+    "hukum",
+    "regulasi",
+    "harga",
+    "kurs",
+    "emas",
+    "saham",
+    "crypto",
+    "cuaca",
+    "jadwal",
+    "olahraga",
+    "film",
+    "musik",
+    "teknologi",
+    "ai",
+    "openai",
+    "gemini",
+    "chatgpt",
+    "streamlit",
+    "vercel",
+    "github",
+    "telegram",
+    "bpjs",
+    "kemenkes",
+    "kementerian",
+]
+
+
+def detect_auto_live_scraping_need(
+    user_text: str,
+) -> Dict[str, Any]:
+    """Deteksi apakah pertanyaan perlu info web/scraping terkini."""
+    text = str(user_text or "").strip()
+    lowered = text.lower()
+    word_count = len(re.findall(r"\w+", lowered))
+
+    if not bool(auto_live_scraping_enabled):
+        return {
+            "needed": False,
+            "reason": "disabled",
+            "topic": "auto",
+            "keywords": [],
+        }
+
+    if len(text) < int(auto_live_scraping_min_query_chars or 8):
+        return {
+            "needed": False,
+            "reason": "too_short",
+            "topic": "auto",
+            "keywords": [],
+        }
+
+    keyword_hits = [
+        keyword
+        for keyword in CURRENT_INFO_KEYWORDS
+        if keyword in lowered
+    ]
+
+    domain_hits = [
+        keyword
+        for keyword in CURRENT_INFO_DOMAINS
+        if keyword in lowered
+    ]
+
+    explicit_need = bool(keyword_hits)
+    external_question = bool(
+        domain_hits
+        and any(
+            marker in lowered
+            for marker in [
+                "apa",
+                "berapa",
+                "siapa",
+                "kapan",
+                "dimana",
+                "di mana",
+                "cek",
+                "cari",
+                "update",
+                "info",
+                "berita",
+            ]
+        )
+    )
+
+    dated_dynamic = bool(
+        re.search(
+            r"\b(20[2-9][0-9]|2026|2027|2028)\b",
+            lowered,
+        )
+        and any(
+            marker in lowered
+            for marker in [
+                "terbaru",
+                "update",
+                "data",
+                "aturan",
+                "jadwal",
+                "harga",
+            ]
+        )
+    )
+
+    likely_current = bool(
+        explicit_need
+        or external_question
+        or dated_dynamic
+    )
+
+    local_work_markers = [
+        "perbaiki file",
+        "kerjakan file",
+        "ubah kode ini",
+        "patch file",
+        "buatkan desain",
+        "lanjutkan",
+    ]
+
+    if any(marker in lowered for marker in local_work_markers) and not explicit_need:
+        likely_current = False
+
+    if not likely_current:
+        return {
+            "needed": False,
+            "reason": "not_current_info",
+            "topic": "auto",
+            "keywords": keyword_hits + domain_hits,
+        }
+
+    if word_count <= 3 and not explicit_need:
+        return {
+            "needed": False,
+            "reason": "too_short_without_current_marker",
+            "topic": "auto",
+            "keywords": keyword_hits + domain_hits,
+        }
+
+    return {
+        "needed": True,
+        "reason": "explicit_current_keyword"
+        if explicit_need
+        else "external_dynamic_question",
+        "topic": text[:160].strip() or "auto",
+        "keywords": keyword_hits + domain_hits,
+    }
+
+
+
 def choose_dynamic_runtime_options(
     user_text: str,
     route: Dict[str, Any],
@@ -2108,22 +2305,30 @@ def choose_dynamic_runtime_options(
 ) -> Dict[str, Any]:
     """Bangun opsi runtime AI berdasarkan jenis prompt.
 
-    Tujuannya agar algoritma tidak selalu menyalakan semua fitur berat.
     Prompt sederhana tetap cepat; prompt kompleks memakai RAG/verifier/self-check.
+    Jika pertanyaan membutuhkan info terkini, live web fallback dipaksa aktif
+    melalui metadata runtime.
     """
     complexity = route or {}
     score = int(complexity.get("complexity_score") or 0)
     thinking_mode = bool(complexity.get("thinking_mode"))
+    live_scraping_profile = detect_auto_live_scraping_need(user_text)
+    live_scraping_needed = bool(live_scraping_profile.get("needed"))
+
     retrieval_enabled = bool(
         power_features_enabled
         and power_rag_enabled
-        and should_use_retrieval_for_prompt(user_text)
+        and (
+            should_use_retrieval_for_prompt(user_text)
+            or live_scraping_needed
+        )
     )
     accuracy_needed = bool(
         (complexity.get("complexity_hits") or {}).get("retrieval")
         or estimate_prompt_complexity(user_text).get("accuracy_hits")
+        or live_scraping_needed
     )
-    complex_enough = thinking_mode or score >= 5
+    complex_enough = thinking_mode or score >= 5 or live_scraping_needed
     very_complex = score >= 8
 
     configured_max_tokens = _clamp_int(
@@ -2139,9 +2344,23 @@ def choose_dynamic_runtime_options(
     else:
         dynamic_max_tokens = min(configured_max_tokens, 2200)
 
+    rag_top_k = max(3, int(power_rag_top_k))
+    response_cache_ttl_seconds = int(
+        power_response_cache_ttl_seconds
+        if not accuracy_needed
+        else min(power_response_cache_ttl_seconds, 600)
+    )
+
+    if live_scraping_needed:
+        rag_top_k = max(rag_top_k, int(power_rag_top_k or 5))
+        response_cache_ttl_seconds = min(
+            response_cache_ttl_seconds,
+            max(300, int(live_web_fallback_ttl_hours or 24) * 3600),
+        )
+
     return {
         "enable_rag": retrieval_enabled,
-        "rag_top_k": max(3, int(power_rag_top_k)),
+        "rag_top_k": rag_top_k,
         "enable_self_verification": bool(
             power_features_enabled
             and power_self_verification_enabled
@@ -2160,13 +2379,13 @@ def choose_dynamic_runtime_options(
         "semantic_cache_enabled": bool(
             power_semantic_cache_enabled and not very_complex
         ),
-        "response_cache_ttl_seconds": int(
-            power_response_cache_ttl_seconds if not accuracy_needed else min(power_response_cache_ttl_seconds, 600)
-        ),
+        "response_cache_ttl_seconds": response_cache_ttl_seconds,
         "max_completion_tokens": dynamic_max_tokens,
-        "timeout": 90 if very_complex else 60,
+        "timeout": 90 if very_complex or live_scraping_needed else 60,
         "strategy_label": (
-            "analisis-mendalam"
+            "live-current-info"
+            if live_scraping_needed
+            else "analisis-mendalam"
             if very_complex
             else "analisis-standar"
             if complex_enough
@@ -2175,7 +2394,13 @@ def choose_dynamic_runtime_options(
         "accuracy_needed": accuracy_needed,
         "complex_enough": complex_enough,
         "very_complex": very_complex,
+        "auto_live_scraping_needed": live_scraping_needed,
+        "auto_live_scraping_reason": live_scraping_profile.get("reason", ""),
+        "auto_live_scraping_topic": live_scraping_profile.get("topic", "auto"),
+        "auto_live_scraping_keywords": live_scraping_profile.get("keywords", []),
     }
+
+
 
 
 def is_thinking_question(user_text: str) -> bool:
@@ -6605,6 +6830,8 @@ def build_telegram_config_payload(
             live_web_fallback_force_for_current
         ),
         "live_web_fallback_topic": live_web_fallback_topic,
+        "auto_live_scraping_enabled": bool(auto_live_scraping_enabled),
+        "auto_live_scraping_show_status": bool(auto_live_scraping_show_status),
         "power_default_answer_mode": power_default_answer_mode,
         "daily_cost_limit_idr": float(daily_cost_limit_idr),
         "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
@@ -8523,7 +8750,11 @@ def render_public_page() -> None:
                             True,
                         )
                     )
-                    if route.get("thinking_direct_to_capable"):
+                    if runtime_options.get("auto_live_scraping_needed"):
+                        loading_subtitle = (
+                            "Mode info terkini aktif. Adioranye sedang mengecek sumber luar dan cache terbaru."
+                        )
+                    elif route.get("thinking_direct_to_capable"):
                         loading_subtitle = (
                             "Mode analisis aktif. Robot kecilnya sedang membaca konteks lebih teliti."
                         )
@@ -8671,8 +8902,13 @@ def render_public_page() -> None:
                         live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
                         live_web_fallback_force_for_current=bool(
                             live_web_fallback_force_for_current
+                            and runtime_options.get("auto_live_scraping_needed")
                         ),
-                        live_web_fallback_topic=live_web_fallback_topic,
+                        live_web_fallback_topic=(
+                            runtime_options.get("auto_live_scraping_topic")
+                            if runtime_options.get("auto_live_scraping_needed")
+                            else live_web_fallback_topic
+                        ),
                     )
                     if not isinstance(meta, dict):
                         meta = {}
@@ -8705,6 +8941,17 @@ def render_public_page() -> None:
                             runtime_options.get("streaming_preview_enabled")
                         )
                         meta["stable_typewriter_display"] = True
+                        meta["auto_live_scraping_needed"] = bool(
+                            runtime_options.get("auto_live_scraping_needed")
+                        )
+                        meta["auto_live_scraping_reason"] = runtime_options.get(
+                            "auto_live_scraping_reason",
+                            "",
+                        )
+                        meta["auto_live_scraping_topic"] = runtime_options.get(
+                            "auto_live_scraping_topic",
+                            "auto",
+                        )
                     restore_active_model_to_cheap(route.get("primary_model"))
                     answer = sanitize_public_answer(
                         answer,
