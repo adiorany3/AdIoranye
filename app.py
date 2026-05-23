@@ -5526,10 +5526,14 @@ def render_auto_scroll_script(
 
 
 def render_sound_unlock_script() -> None:
-    """Unlock audio setelah interaksi pertama user.
+    """Pasang bridge suara yang bisa retry.
 
-    Browser modern biasanya memblokir audio otomatis.
-    Karena itu audio context perlu diaktifkan dari klik/ketikan user.
+    Browser dapat memblokir suara jika belum ada interaksi user.
+    Script ini:
+    - memasang fungsi global di parent window,
+    - membuka audio context saat user klik/tap/ketik,
+    - menyimpan suara pending jika autoplay ditolak,
+    - mencoba memutar ulang setelah interaksi berikutnya.
     """
     components.html(
         """
@@ -5537,7 +5541,7 @@ def render_sound_unlock_script() -> None:
         (function () {
             function getParentWindow() {
                 try {
-                    return window.parent;
+                    return window.parent || window;
                 } catch (error) {
                     return window;
                 }
@@ -5545,7 +5549,7 @@ def render_sound_unlock_script() -> None:
 
             function getParentDocument(parentWindow) {
                 try {
-                    return parentWindow.document;
+                    return parentWindow.document || document;
                 } catch (error) {
                     return document;
                 }
@@ -5558,21 +5562,23 @@ def render_sound_unlock_script() -> None:
                 return;
             }
 
-            if (parentWindow.__adioranyeSoundReady === true) {
-                return;
-            }
-
             const AudioContextClass =
                 parentWindow.AudioContext ||
                 parentWindow.webkitAudioContext ||
                 window.AudioContext ||
                 window.webkitAudioContext;
 
-            if (!AudioContextClass) {
-                return;
-            }
+            parentWindow.__adioranyePlayedSoundKeys =
+                parentWindow.__adioranyePlayedSoundKeys || {};
+
+            parentWindow.__adioranyePendingSoundKeys =
+                parentWindow.__adioranyePendingSoundKeys || {};
 
             function createContext() {
+                if (!AudioContextClass) {
+                    return null;
+                }
+
                 if (!parentWindow.__adioranyeAudioContext) {
                     parentWindow.__adioranyeAudioContext =
                         new AudioContextClass();
@@ -5617,50 +5623,73 @@ def render_sound_unlock_script() -> None:
                 gain.connect(audioContext.destination);
 
                 oscillator.start(startTime);
-                oscillator.stop(startTime + duration + 0.03);
+                oscillator.stop(startTime + duration + 0.04);
             }
 
-            parentWindow.__adioranyePlayAnswerSound = function () {
-                try {
-                    const audioContext = createContext();
+            function playChimeNow(soundKey) {
+                const key = String(soundKey || "latest");
 
-                    if (audioContext.state === "suspended") {
-                        parentWindow.__adioranyePendingChime = true;
-                        audioContext.resume().then(function () {
-                            parentWindow.__adioranyePlayAnswerSound();
-                        });
-                        return false;
-                    }
-
-                    const now = audioContext.currentTime;
-
-                    playTone(
-                        audioContext,
-                        659.25,
-                        now,
-                        0.11,
-                        0.070
-                    );
-
-                    playTone(
-                        audioContext,
-                        880.00,
-                        now + 0.105,
-                        0.14,
-                        0.058
-                    );
-
-                    playTone(
-                        audioContext,
-                        1174.66,
-                        now + 0.225,
-                        0.17,
-                        0.045
-                    );
-
-                    parentWindow.__adioranyePendingChime = false;
+                if (parentWindow.__adioranyePlayedSoundKeys[key]) {
                     return true;
+                }
+
+                const audioContext = createContext();
+
+                if (!audioContext) {
+                    return false;
+                }
+
+                if (audioContext.state === "suspended") {
+                    parentWindow.__adioranyePendingSoundKeys[key] = true;
+
+                    audioContext
+                        .resume()
+                        .then(function () {
+                            parentWindow.__adioranyePlayAnswerSound(key);
+                        })
+                        .catch(function () {});
+
+                    return false;
+                }
+
+                const now = audioContext.currentTime;
+
+                playTone(
+                    audioContext,
+                    659.25,
+                    now,
+                    0.11,
+                    0.085
+                );
+
+                playTone(
+                    audioContext,
+                    880.00,
+                    now + 0.105,
+                    0.14,
+                    0.070
+                );
+
+                playTone(
+                    audioContext,
+                    1174.66,
+                    now + 0.225,
+                    0.18,
+                    0.055
+                );
+
+                parentWindow.__adioranyePlayedSoundKeys[key] = true;
+                delete parentWindow.__adioranyePendingSoundKeys[key];
+
+                return true;
+            }
+
+            parentWindow.__adioranyePlayAnswerSound = function (soundKey) {
+                try {
+                    return playChimeNow(soundKey);
                 } catch (error) {
+                    const key = String(soundKey || "latest");
+                    parentWindow.__adioranyePendingSoundKeys[key] = true;
                     return false;
                 }
             };
@@ -5669,35 +5698,26 @@ def render_sound_unlock_script() -> None:
                 try {
                     const audioContext = createContext();
 
-                    audioContext.resume().then(function () {
-                        const now = audioContext.currentTime;
-                        const oscillator = audioContext.createOscillator();
-                        const gain = audioContext.createGain();
+                    if (!audioContext) {
+                        return;
+                    }
 
-                        gain.gain.setValueAtTime(
-                            0.00001,
-                            now
-                        );
+                    audioContext
+                        .resume()
+                        .then(function () {
+                            parentWindow.__adioranyeSoundReady = true;
 
-                        oscillator.frequency.setValueAtTime(
-                            440,
-                            now
-                        );
+                            const pendingKeys = Object.keys(
+                                parentWindow.__adioranyePendingSoundKeys || {}
+                            );
 
-                        oscillator.connect(gain);
-                        gain.connect(audioContext.destination);
-
-                        oscillator.start(now);
-                        oscillator.stop(now + 0.025);
-
-                        parentWindow.__adioranyeSoundReady = true;
-
-                        if (parentWindow.__adioranyePendingChime === true) {
-                            window.setTimeout(function () {
-                                parentWindow.__adioranyePlayAnswerSound();
-                            }, 80);
-                        }
-                    }).catch(function () {});
+                            pendingKeys.forEach(function (key) {
+                                window.setTimeout(function () {
+                                    parentWindow.__adioranyePlayAnswerSound(key);
+                                }, 80);
+                            });
+                        })
+                        .catch(function () {});
                 } catch (error) {}
             }
 
@@ -5709,21 +5729,37 @@ def render_sound_unlock_script() -> None:
                 "click"
             ];
 
-            events.forEach(function (eventName) {
-                doc.addEventListener(
-                    eventName,
-                    unlockSound,
-                    {
-                        once: false,
-                        passive: true,
-                        capture: true
-                    }
-                );
-            });
+            if (parentWindow.__adioranyeSoundEventsBound !== true) {
+                parentWindow.__adioranyeSoundEventsBound = true;
+
+                events.forEach(function (eventName) {
+                    doc.addEventListener(
+                        eventName,
+                        unlockSound,
+                        {
+                            passive: true,
+                            capture: true
+                        }
+                    );
+
+                    try {
+                        parentWindow.addEventListener(
+                            eventName,
+                            unlockSound,
+                            {
+                                passive: true,
+                                capture: true
+                            }
+                        );
+                    } catch (error) {}
+                });
+            }
+
+            window.setTimeout(unlockSound, 80);
         })();
         </script>
         """,
-        height=0,
+        height=1,
         scrolling=False,
     )
 
@@ -5731,7 +5767,11 @@ def render_sound_unlock_script() -> None:
 def render_answer_ready_sound_script(
     sound_key: str = "latest",
 ) -> None:
-    """Mainkan suara kecil saat jawaban final sudah muncul."""
+    """Mainkan suara kecil saat jawaban final sudah siap.
+
+    Berbeda dari versi lama, script ini tidak menandai suara sebagai
+    "sudah diputar" sebelum audio benar-benar berhasil diputar.
+    """
     safe_key = _html_escape(sound_key)
     components.html(
         f"""
@@ -5741,7 +5781,7 @@ def render_answer_ready_sound_script(
 
             function getParentWindow() {{
                 try {{
-                    return window.parent;
+                    return window.parent || window;
                 }} catch (error) {{
                     return window;
                 }}
@@ -5750,36 +5790,29 @@ def render_answer_ready_sound_script(
             const parentWindow = getParentWindow();
 
             try {{
-                if (parentWindow.sessionStorage.getItem(soundKey) === "played") {{
-                    return;
-                }}
-
-                parentWindow.sessionStorage.setItem(
-                    soundKey,
-                    "played"
-                );
+                parentWindow.__adioranyePendingSoundKeys =
+                    parentWindow.__adioranyePendingSoundKeys || {{}};
 
                 if (typeof parentWindow.__adioranyePlayAnswerSound === "function") {{
-                    const played = parentWindow.__adioranyePlayAnswerSound();
+                    const played = parentWindow.__adioranyePlayAnswerSound(soundKey);
 
                     if (!played) {{
-                        parentWindow.__adioranyePendingChime = true;
+                        parentWindow.__adioranyePendingSoundKeys[soundKey] = true;
                     }}
 
                     return;
                 }}
 
-                parentWindow.__adioranyePendingChime = true;
+                parentWindow.__adioranyePendingSoundKeys[soundKey] = true;
             }} catch (error) {{
                 // Suara notifikasi tidak boleh mengganggu UI.
             }}
         }})();
         </script>
         """,
-        height=0,
+        height=1,
         scrolling=False,
     )
-
 
 
 def _get_public_stats() -> Dict[str, Any]:
@@ -8672,6 +8705,10 @@ def render_public_page() -> None:
                         meta=meta,
                         route=route,
                     )
+                    if bool(st.session_state.get("sound_enabled", True)):
+                        render_answer_ready_sound_script(
+                            sound_key=f"normal-{len(st.session_state.chat_messages)}",
+                        )
                     render_answer_typewriter_display(
                         placeholder,
                         answer,
@@ -8757,6 +8794,7 @@ def render_public_page() -> None:
         if local_reply:
             with st.chat_message("assistant"):
                 st.markdown(answer)
+                render_sound_unlock_script()
                 if bool(st.session_state.get("sound_enabled", True)):
                     render_answer_ready_sound_script(
                         sound_key=f"local-{len(st.session_state.chat_messages)}",
