@@ -2172,20 +2172,56 @@ def render_answer_model_caption(
     st.caption(caption_text)
 
 
-def render_feedback_controls(
-    meta: Dict[str, Any] | None, answer_text: str = "", key_prefix: str = "feedback"
+def show_feedback_notice(
+    message: str,
+    icon: str = "✅",
 ) -> None:
-    """Persistent feedback buttons for the latest assistant messages."""
+    """Show compact feedback confirmation without a large alert box."""
+    try:
+        st.toast(
+            message,
+            icon=icon,
+        )
+    except Exception:
+        st.caption(f"{icon} {message}")
+
+
+def render_feedback_controls(
+    meta: Dict[str, Any] | None,
+    answer_text: str = "",
+    key_prefix: str = "feedback",
+) -> None:
+    """Render compact feedback controls for assistant answers."""
     data = meta or {}
     interaction_id = int(data.get("power_interaction_id") or 0)
+
     if not interaction_id or not power_features_enabled:
         return
-    cols = st.columns([1, 1, 1, 3])
+
+    st.markdown(
+        """
+        <div class="feedback-info-box">
+            <span class="feedback-info-title">Info feedback</span>
+            <span class="feedback-info-text">
+                Klik <b>Bagus</b> jika jawaban sudah sesuai, atau <b>Kurang</b>
+                jika jawaban perlu diperbaiki. Masukan ini dipakai untuk
+                meningkatkan jawaban berikutnya.
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns(
+        [0.7, 0.7, 0.9, 5.2],
+        gap="small",
+    )
+
     with cols[0]:
         if st.button(
             "👍 Bagus",
             key=f"{key_prefix}_up_{interaction_id}",
-            use_container_width=True,
+            help="Tandai jawaban ini sudah sesuai dan membantu.",
         ):
             fid = power_store.record_feedback(
                 interaction_id=interaction_id,
@@ -2197,12 +2233,16 @@ def render_feedback_controls(
                     else "web-public"
                 ),
             )
-            st.success(f"Feedback tersimpan #{fid}")
+            show_feedback_notice(
+                f"Feedback bagus tersimpan #{fid}. Terima kasih.",
+                icon="✅",
+            )
+
     with cols[1]:
         if st.button(
             "👎 Kurang",
             key=f"{key_prefix}_down_{interaction_id}",
-            use_container_width=True,
+            help="Tandai jawaban ini masih kurang agar bisa diperbaiki.",
         ):
             fid = power_store.record_feedback(
                 interaction_id=interaction_id,
@@ -2219,7 +2259,8 @@ def render_feedback_controls(
                     question=(
                         str(
                             (st.session_state.chat_messages[-2] or {}).get(
-                                "content", ""
+                                "content",
+                                "",
                             )
                         )
                         if len(st.session_state.chat_messages) >= 2
@@ -2238,12 +2279,16 @@ def render_feedback_controls(
                 )
             except Exception:
                 pass
-            st.warning(f"Feedback kurang tersimpan #{fid}")
+            show_feedback_notice(
+                f"Feedback kurang tersimpan #{fid}. Akan dipakai untuk perbaikan.",
+                icon="📝",
+            )
+
     with cols[2]:
         if st.session_state.get("admin_authenticated") and st.button(
             "📌 Template",
             key=f"{key_prefix}_tmpl_{interaction_id}",
-            use_container_width=True,
+            help="Simpan jawaban ini sebagai template admin.",
         ):
             tid = power_store.save_answer_template(
                 title=f"Template dari jawaban #{interaction_id}",
@@ -2256,13 +2301,16 @@ def render_feedback_controls(
                 intent=str(data.get("power_intent") or "general"),
                 tags="feedback,best-answer",
             )
-            st.success(f"Template tersimpan #{tid}")
+            show_feedback_notice(
+                f"Template tersimpan #{tid}.",
+                icon="📌",
+            )
+
     with cols[3]:
         if data.get("strict_rag_blocked"):
             st.caption(
                 f"Strict RAG memblokir jawaban. Gap ID: {data.get('knowledge_gap_id')}"
             )
-
 
 def build_public_model_status_html(
     route: Dict[str, Any], last_meta: Dict[str, Any] | None = None
@@ -3859,6 +3907,115 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+
+
+# =========================
+# Compact feedback controls
+# =========================
+st.markdown(
+    """
+    <style>
+    .feedback-info-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        max-width: 100%;
+        margin: 0.18rem 0 0.35rem;
+        padding: 0.38rem 0.58rem;
+        border: 1px solid var(--ui-border, rgba(148, 163, 184, 0.28));
+        border-radius: 999px;
+        background: var(--ui-surface-soft, rgba(255, 255, 255, 0.68));
+        color: var(--ui-muted, rgba(71, 85, 105, 0.92));
+        font-size: 0.72rem;
+        line-height: 1.35;
+        box-shadow: 0 5px 14px rgba(15, 23, 42, 0.05);
+    }
+
+    .feedback-info-title {
+        flex: 0 0 auto;
+        font-weight: 800;
+        color: var(--ui-text-strong, #0f172a);
+    }
+
+    .feedback-info-text {
+        color: var(--ui-muted, #475569);
+    }
+
+    div[class*="_feedback_up_"] button,
+    div[class*="_feedback_down_"] button,
+    div[class*="_feedback_tmpl_"] button,
+    div[class*="st-key-latest_feedback_up_"] button,
+    div[class*="st-key-latest_feedback_down_"] button,
+    div[class*="st-key-latest_feedback_tmpl_"] button,
+    div[class*="st-key-history_feedback_"][class*="_up_"] button,
+    div[class*="st-key-history_feedback_"][class*="_down_"] button,
+    div[class*="st-key-history_feedback_"][class*="_tmpl_"] button {
+        width: auto !important;
+        min-width: 0 !important;
+        min-height: 30px !important;
+        padding: 0.2rem 0.55rem !important;
+        border-radius: 999px !important;
+        font-size: 0.72rem !important;
+        line-height: 1.1 !important;
+        font-weight: 750 !important;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.07) !important;
+    }
+
+    div[class*="_feedback_up_"] button:hover,
+    div[class*="_feedback_down_"] button:hover,
+    div[class*="_feedback_tmpl_"] button:hover,
+    div[class*="st-key-latest_feedback_up_"] button:hover,
+    div[class*="st-key-latest_feedback_down_"] button:hover,
+    div[class*="st-key-latest_feedback_tmpl_"] button:hover,
+    div[class*="st-key-history_feedback_"][class*="_up_"] button:hover,
+    div[class*="st-key-history_feedback_"][class*="_down_"] button:hover,
+    div[class*="st-key-history_feedback_"][class*="_tmpl_"] button:hover {
+        transform: translateY(-1px);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .feedback-info-box {
+            background: rgba(15, 23, 42, 0.54);
+            border-color: rgba(255, 255, 255, 0.14);
+            color: rgba(226, 232, 240, 0.82);
+        }
+
+        .feedback-info-title {
+            color: rgba(248, 250, 252, 0.96);
+        }
+
+        .feedback-info-text {
+            color: rgba(203, 213, 225, 0.82);
+        }
+    }
+
+    @media (max-width: 760px) {
+        .feedback-info-box {
+            display: flex;
+            align-items: flex-start;
+            border-radius: 14px;
+            padding: 0.48rem 0.62rem;
+        }
+
+        div[class*="_feedback_up_"] button,
+        div[class*="_feedback_down_"] button,
+        div[class*="_feedback_tmpl_"] button,
+        div[class*="st-key-latest_feedback_up_"] button,
+        div[class*="st-key-latest_feedback_down_"] button,
+        div[class*="st-key-latest_feedback_tmpl_"] button,
+        div[class*="st-key-history_feedback_"][class*="_up_"] button,
+        div[class*="st-key-history_feedback_"][class*="_down_"] button,
+        div[class*="st-key-history_feedback_"][class*="_tmpl_"] button {
+            width: auto !important;
+            min-height: 30px !important;
+            padding: 0.22rem 0.55rem !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # =========================
 # Runtime config
