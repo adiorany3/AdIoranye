@@ -254,7 +254,7 @@ def _wrap_pdf_text(text: str, max_chars: int = 92) -> List[str]:
 def make_answer_pdf_bytes(answer_text: str, title: str = "Jawaban Adioranye AI", meta_text: str = "") -> bytes:
     """Buat PDF teks sederhana agar hasil jawaban web bisa diunduh.
 
-    Sengaja tidak memakai reportlab/fpdf supaya tidak menambah dependency di Streamlit Cloud.
+    Sengaja tidak memakai reportlab/fpdf supaya tidak menambah dependency di hosting online.
     PDF memakai font Helvetica bawaan PDF viewer.
     """
     page_width = 595
@@ -697,7 +697,7 @@ def reset_streamlit_cache_memory() -> int:
 
 
 def build_memory_text(limit: int = 12) -> str:
-    """Gabungkan memory default, cache Streamlit, dan memory lokal admin."""
+    """Gabungkan memory default, cache online, dan memory lokal admin."""
     default_context = str(st.session_state.get("active_default_memory") or default_memory_context_from_secret or DEFAULT_MEMORY_CONTEXT).strip()
     cache_memory = str(streamlit_cache_memory_prompt_text(limit=limit) or "").strip()
     local_memory = str(memory.as_prompt_text(limit=limit) or "").strip()
@@ -730,7 +730,7 @@ def persona_with_default_memory(persona: str) -> str:
     if default_context:
         context_sections.append("Konteks default yang selalu dipakai:\n" + default_context)
     if cache_context:
-        context_sections.append("Memory cache Streamlit aktif:\n" + cache_context)
+        context_sections.append("Memory cache online aktif:\n" + cache_context)
 
     if not context_sections:
         return persona
@@ -3141,6 +3141,101 @@ st.markdown(
 )
 
 
+# =========================
+# White-label cleanup: hide Streamlit chrome/branding
+# =========================
+st.markdown(
+    """
+    <style>
+    /*
+      Bersihkan elemen bawaan Streamlit yang biasanya masih terlihat:
+      header, toolbar kanan atas, tombol deploy, menu hamburger, footer,
+      status widget, decoration bar, dan anchor otomatis pada heading.
+      Catatan: CSS ini hanya membersihkan tampilan dalam app. Domain streamlit.app
+      tetap hanya bisa disamarkan dengan custom subdomain/domain wrapper.
+    */
+    #MainMenu,
+    footer,
+    header,
+    div[data-testid="stHeader"],
+    div[data-testid="stToolbar"],
+    div[data-testid="toolbar"],
+    div[data-testid="stDecoration"],
+    div[data-testid="stStatusWidget"],
+    div[data-testid="stAppDeployButton"],
+    div[data-testid="stDeployButton"],
+    .stDeployButton,
+    .viewerBadge_container__1QSob,
+    .viewerBadge_link__1S137,
+    .viewerBadge_text__1JaDK,
+    a[href="https://streamlit.io"],
+    a[href^="https://streamlit.io"],
+    a[href^="https://www.streamlit.io"],
+    button[title="View fullscreen"],
+    button[title="Deploy"],
+    button[aria-label="Deploy"],
+    button[aria-label="Main menu"],
+    button[aria-label="Open menu"],
+    [aria-label="Deploy"],
+    [aria-label="Main menu"],
+    [data-testid="StyledFullScreenButton"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        height: 0 !important;
+        min-height: 0 !important;
+        max-height: 0 !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* Hilangkan ruang kosong bekas header Streamlit. */
+    div[data-testid="stAppViewContainer"] > .main,
+    div[data-testid="stMain"],
+    section.main {
+        padding-top: 0 !important;
+    }
+
+    .main .block-container,
+    div[data-testid="stMainBlockContainer"],
+    div.block-container {
+        padding-top: 0.9rem !important;
+    }
+
+    /* Anchor/link bawaan yang muncul saat hover heading. */
+    a.anchor-link,
+    a.header-anchor,
+    .anchor-link,
+    .header-anchor,
+    [data-testid="stMarkdownContainer"] a.anchor-link {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    /* Bersihkan frame/decoration default pada embed/wrapper. */
+    iframe,
+    .st-emotion-cache-1dp5vir,
+    .st-emotion-cache-18ni7ap,
+    .st-emotion-cache-z5fcl4 {
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    /* Jangan tampilkan link branding Streamlit jika ada teks footer fallback. */
+    footer:after,
+    footer:before {
+        content: "" !important;
+        display: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 
 # =========================
 # Runtime config
@@ -3999,13 +4094,13 @@ def render_admin_settings() -> None:
             height=220,
         )
 
-        st.markdown("#### Memory Cache Streamlit Online")
+        st.markdown("#### Memory Cache Online")
         st.info(
-            "Memory cache disimpan di RAM/cache Streamlit. Memory ini bertahan saat rerun dan selama container app masih hidup, "
-            "tetapi bisa hilang saat app sleep, restart, clear cache, atau redeploy. Cocok untuk memory cepat di Streamlit Cloud."
+            "Memory cache disimpan di RAM/cache online. Memory ini bertahan saat rerun dan selama container app masih hidup, "
+            "tetapi bisa hilang saat app sleep, restart, clear cache, atau redeploy. Cocok untuk memory cepat di hosting online."
         )
         st.session_state.active_use_streamlit_cache_memory = st.toggle(
-            "Aktifkan memory cache Streamlit untuk jawaban AI",
+            "Aktifkan memory cache online untuk jawaban AI",
             value=bool(st.session_state.active_use_streamlit_cache_memory),
         )
 
@@ -4013,20 +4108,20 @@ def render_admin_settings() -> None:
         if cache_memory_text:
             st.code(cache_memory_text)
         else:
-            st.write("Belum ada memory di cache Streamlit.")
+            st.write("Belum ada memory di cache online.")
 
         new_cache_memory = st.text_area(
-            "Tambah memory ke cache Streamlit",
+            "Tambah memory ke cache online",
             value="",
             height=90,
             placeholder="Contoh: User ingin jawaban yang ringkas, jelas, dan langsung bisa dipakai.",
         )
         col_cache_save, col_cache_save_both = st.columns(2)
         with col_cache_save:
-            if st.button("Simpan ke cache Streamlit", use_container_width=True, key="auto_btn_3004"):
+            if st.button("Simpan ke cache online", use_container_width=True, key="auto_btn_3004"):
                 saved = add_streamlit_cache_memory(new_cache_memory, source="streamlit-admin-cache")
                 if saved:
-                    st.success("Memory disimpan ke cache Streamlit.")
+                    st.success("Memory disimpan ke cache online.")
                 else:
                     st.info("Memory kosong atau sudah ada di cache.")
                 st.rerun()
@@ -4036,7 +4131,7 @@ def render_admin_settings() -> None:
                 if new_cache_memory.strip():
                     memory.add(new_cache_memory.strip(), source="streamlit-admin-file")
                 if saved_cache or new_cache_memory.strip():
-                    st.success("Memory disimpan ke cache Streamlit dan file lokal.")
+                    st.success("Memory disimpan ke cache online dan file lokal.")
                 else:
                     st.info("Memory kosong atau sudah ada.")
                 st.rerun()
@@ -4055,7 +4150,7 @@ def render_admin_settings() -> None:
                 st.rerun()
 
         st.markdown("#### Memory Tambahan File Lokal")
-        st.caption("Opsional. File lokal dapat hilang di Streamlit Cloud saat app restart/redeploy, tetapi tetap dipertahankan untuk kompatibilitas fitur lama.")
+        st.caption("Opsional. File lokal dapat hilang di hosting online saat app restart/redeploy, tetapi tetap dipertahankan untuk kompatibilitas fitur lama.")
         current_memory = memory.list_text(limit=80)
         if current_memory:
             st.code(current_memory)
@@ -4092,8 +4187,8 @@ def render_admin_settings() -> None:
         render_maintenance_tools()
 
     with tab_setup:
-        st.markdown("#### Secrets Streamlit Cloud")
-        st.write("Masukkan konfigurasi berikut di menu **Streamlit Cloud → App → Settings → Secrets**.")
+        st.markdown("#### Secrets Aplikasi")
+        st.write("Masukkan konfigurasi berikut di menu **Dashboard Aplikasi → Settings → Secrets**.")
         st.code(
             '''ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "GANTI_PASSWORD_ADMIN_YANG_KUAT"
@@ -4230,7 +4325,7 @@ st.markdown(
 )
 
 if not api_key:
-    st.warning("SLASHAI_API_KEY belum diisi. Chat belum bisa digunakan sampai admin mengisi Secrets di Streamlit Cloud.")
+    st.warning("SLASHAI_API_KEY belum diisi. Chat belum bisa digunakan sampai admin mengisi Secrets di hosting online.")
 
 col_new_chat, col_info = st.columns([1, 4])
 with col_new_chat:
@@ -4852,5 +4947,5 @@ if user_input:
 # Ruang aman terakhir agar input floating tidak menutupi pesan terakhir, termasuk pesan yang baru dibuat.
 st.markdown('<div class="chat-input-safe-space"></div>', unsafe_allow_html=True)
 
-# Tiny refresh delay for Streamlit Cloud stability
+# Tiny refresh delay for hosting online stability
 time.sleep(0.03)
