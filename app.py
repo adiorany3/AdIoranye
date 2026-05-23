@@ -1680,6 +1680,62 @@ CODE_OR_LOG_MARKERS = [
     "select * from",
 ]
 
+FILE_EDITING_INTENT_KEYWORDS = [
+    "kerjakan ke file",
+    "buat file",
+    "generate file",
+    "download file",
+    "replace app.py",
+    "patch",
+    "diff",
+    "zip",
+    "perbaiki file",
+    "ubah file",
+    "edit file",
+    "upload ke github",
+    "redeploy",
+]
+
+ACCURACY_CRITICAL_KEYWORDS = [
+    "jangan mengarang",
+    "akurat",
+    "valid",
+    "verifikasi",
+    "fakta",
+    "hukum",
+    "medis",
+    "keuangan",
+    "regulasi",
+    "sumber resmi",
+    "kutipan",
+    "referensi",
+    "terbaru",
+    "hari ini",
+]
+
+CAPABLE_MODEL_PRIORITY_PATTERNS = [
+    ("gpt-5", 100),
+    ("gpt-4.1", 92),
+    ("gpt-4o", 86),
+    ("o3", 84),
+    ("o4", 82),
+    ("claude", 80),
+    ("sonnet", 78),
+    ("opus", 82),
+    ("gemini-2.5-pro", 78),
+    ("gemini", 68),
+    ("deepseek-r1", 72),
+    ("qwen", 62),
+    ("llama", 58),
+]
+
+FAST_MODEL_PENALTY_PATTERNS = [
+    ("nano", -18),
+    ("mini", -10),
+    ("flash", -8),
+    ("lite", -10),
+]
+
 RETRIEVAL_TRIGGER_KEYWORDS = [
     "berdasarkan file",
     "berdasarkan dokumen",
@@ -1733,71 +1789,113 @@ def _normalize_operation_mode(value: Any) -> str:
 
 
 def estimate_prompt_complexity(user_text: str) -> Dict[str, Any]:
-    """Beri skor kompleksitas untuk routing model dan keputusan RAG.
+    """Skor kompleksitas prompt untuk router model, RAG, dan quality control.
 
-    Skor tinggi berarti lebih pantas memakai model capable/reasoning.
-    Skor rendah berarti cukup memakai model hemat/cepat.
+    Prinsip algoritma:
+    - Prompt ringan tetap cepat dan hemat.
+    - Prompt teknis/akademik/kode/file memakai jalur lebih capable.
+    - Prompt yang membutuhkan fakta/sumber memicu retrieval dan verifikasi.
+    - Skor tidak hanya berdasarkan panjang, tetapi juga jenis tugas.
     """
     text = str(user_text or "").strip()
     lowered = text.lower()
-    word_count = len(text.split())
+    words = re.findall(r"\b\w+\b", lowered)
+    word_count = len(words)
+    line_count = max(1, len(text.splitlines()))
+    char_count = len(text)
     score = 0
     signals: List[str] = []
 
     light_hits = _keyword_hits(lowered, LIGHTWEIGHT_INTENT_KEYWORDS)
     thinking_hits = _keyword_hits(lowered, THINKING_INTENT_KEYWORDS)
     code_hits = _keyword_hits(lowered, CODE_OR_LOG_MARKERS)
+    file_hits = _keyword_hits(lowered, FILE_EDITING_INTENT_KEYWORDS)
     retrieval_hits = _keyword_hits(lowered, RETRIEVAL_TRIGGER_KEYWORDS)
+    accuracy_hits = _keyword_hits(lowered, ACCURACY_CRITICAL_KEYWORDS)
 
     if thinking_hits:
-        score += min(5, 2 + len(thinking_hits))
-        signals.append("thinking-keyword")
+        score += min(7, 2 + len(thinking_hits) * 2)
+        signals.append("thinking-task")
+
     if code_hits:
-        score += min(5, 3 + len(code_hits))
-        signals.append("code-or-log")
+        score += min(8, 4 + len(code_hits) * 2)
+        signals.append("code-or-log-task")
+
+    if file_hits:
+        score += min(7, 4 + len(file_hits))
+        signals.append("file-editing-task")
+
     if retrieval_hits:
-        score += min(3, len(retrieval_hits))
+        score += min(5, 2 + len(retrieval_hits))
         signals.append("retrieval-needed")
+
+    if accuracy_hits:
+        score += min(4, 1 + len(accuracy_hits))
+        signals.append("accuracy-critical")
 
     min_chars = int(
         st.session_state.get("active_thinking_min_chars", thinking_min_chars_default)
         or 180
     )
-    if len(text) >= min_chars and word_count >= 24:
+
+    if char_count >= min_chars and word_count >= 24:
         score += 2
         signals.append("long-context")
+
+    if char_count >= 700 or word_count >= 95:
+        score += 2
+        signals.append("very-long-context")
+
+    if line_count >= 8:
+        score += 2
+        signals.append("multi-line-context")
+
     if text.count("?") >= 2 and word_count >= 18:
         score += 2
         signals.append("multi-question")
+
     if (
         any(token in lowered for token in ["1.", "2.", "3.", "- ", "• "])
         and word_count >= 25
     ):
         score += 1
         signals.append("structured-request")
+
     if any(
         ext in lowered
-        for ext in [".py", ".js", ".tsx", ".jsx", ".html", ".css", ".sql"]
+        for ext in [".py", ".js", ".tsx", ".jsx", ".html", ".css", ".sql", ".toml", ".json"]
     ):
-        score += 2
+        score += 3
         signals.append("file-extension")
 
-    if light_hits and word_count <= 10 and not code_hits and not thinking_hits:
-        score -= 3
+    if re.search(r"\b(error|exception|traceback|failed|status\s*code|unauthorized)\b", lowered):
+        score += 3
+        signals.append("error-diagnostic")
+
+    if re.search(r"\b(api|database|sqlite|streamlit|vercel|github|deploy|router|cache|rag)\b", lowered):
+        score += 2
+        signals.append("technical-system")
+
+    if light_hits and word_count <= 10 and not code_hits and not thinking_hits and not file_hits:
+        score -= 4
         signals.append("casual-short")
-    elif word_count <= 6 and not code_hits and not thinking_hits:
-        score -= 1
+    elif word_count <= 6 and not code_hits and not thinking_hits and not file_hits:
+        score -= 2
         signals.append("short-prompt")
 
-    score = max(0, score)
+    score = max(0, min(score, 20))
+
     return {
         "score": score,
         "signals": signals,
         "thinking_hits": thinking_hits[:8],
         "code_hits": code_hits[:8],
+        "file_hits": file_hits[:8],
         "retrieval_hits": retrieval_hits[:8],
+        "accuracy_hits": accuracy_hits[:8],
         "word_count": word_count,
-        "char_count": len(text),
+        "char_count": char_count,
+        "line_count": line_count,
     }
 
 
@@ -1807,12 +1905,30 @@ def should_use_retrieval_for_prompt(user_text: str) -> bool:
         return False
     if bool(power_strict_rag_mode):
         return True
+
     info = estimate_prompt_complexity(user_text)
-    if info.get("retrieval_hits"):
-        return True
     text = str(user_text or "").strip().lower()
-    if len(text) >= 220 and not _contains_any(text, LIGHTWEIGHT_INTENT_KEYWORDS):
+
+    if info.get("retrieval_hits") or info.get("accuracy_hits"):
         return True
+
+    if info.get("file_hits") and any(
+        token in text
+        for token in [
+            "file",
+            "dokumen",
+            "lampiran",
+            "pdf",
+            "docx",
+            "data",
+            "sumber",
+        ]
+    ):
+        return True
+
+    if len(text) >= 320 and not _contains_any(text, LIGHTWEIGHT_INTENT_KEYWORDS):
+        return True
+
     if any(
         token in text
         for token in [
@@ -1822,10 +1938,120 @@ def should_use_retrieval_for_prompt(user_text: str) -> bool:
             "dokumen",
             "sumber",
             "referensi",
+            "berdasarkan",
         ]
     ):
         return True
+
     return False
+
+
+def _clamp_int(value: Any, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = minimum
+    return max(minimum, min(parsed, maximum))
+
+
+def _model_capability_score(model: str) -> int:
+    """Skor kasar kapabilitas model dari nama model.
+
+    Dipakai hanya untuk memilih primary model pada prompt kompleks.
+    Health check tetap menjadi syarat utama.
+    """
+    lowered = str(model or "").lower()
+    score = 50
+
+    for pattern, value in CAPABLE_MODEL_PRIORITY_PATTERNS:
+        if pattern in lowered:
+            score = max(score, value)
+
+    for pattern, penalty in FAST_MODEL_PENALTY_PATTERNS:
+        if pattern in lowered:
+            score += penalty
+
+    if model_cost_tier(model) == "cheap":
+        score -= 12
+
+    return max(0, score)
+
+
+def choose_dynamic_runtime_options(
+    user_text: str,
+    route: Dict[str, Any],
+    cfg: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Bangun opsi runtime AI berdasarkan jenis prompt.
+
+    Tujuannya agar algoritma tidak selalu menyalakan semua fitur berat.
+    Prompt sederhana tetap cepat; prompt kompleks memakai RAG/verifier/self-check.
+    """
+    complexity = route or {}
+    score = int(complexity.get("complexity_score") or 0)
+    thinking_mode = bool(complexity.get("thinking_mode"))
+    retrieval_enabled = bool(
+        power_features_enabled
+        and power_rag_enabled
+        and should_use_retrieval_for_prompt(user_text)
+    )
+    accuracy_needed = bool(
+        (complexity.get("complexity_hits") or {}).get("retrieval")
+        or estimate_prompt_complexity(user_text).get("accuracy_hits")
+    )
+    complex_enough = thinking_mode or score >= 5
+    very_complex = score >= 8
+
+    configured_max_tokens = _clamp_int(
+        cfg.get("max_completion_tokens", 2600),
+        minimum=900,
+        maximum=12000,
+    )
+
+    if very_complex:
+        dynamic_max_tokens = min(configured_max_tokens, 5200)
+    elif complex_enough:
+        dynamic_max_tokens = min(configured_max_tokens, 3600)
+    else:
+        dynamic_max_tokens = min(configured_max_tokens, 2200)
+
+    return {
+        "enable_rag": retrieval_enabled,
+        "rag_top_k": max(3, int(power_rag_top_k)),
+        "enable_self_verification": bool(
+            power_features_enabled
+            and power_self_verification_enabled
+            and (very_complex or accuracy_needed or retrieval_enabled)
+        ),
+        "quality_control_enabled": bool(
+            power_quality_control_enabled and (complex_enough or retrieval_enabled)
+        ),
+        "quality_verifier_enabled": bool(
+            power_quality_verifier_enabled and (very_complex or accuracy_needed)
+        ),
+        "query_rewriter_enabled": bool(
+            power_query_rewriter_enabled and retrieval_enabled
+        ),
+        "reranker_enabled": bool(power_reranker_enabled and retrieval_enabled),
+        "semantic_cache_enabled": bool(
+            power_semantic_cache_enabled and not very_complex
+        ),
+        "response_cache_ttl_seconds": int(
+            power_response_cache_ttl_seconds if not accuracy_needed else min(power_response_cache_ttl_seconds, 600)
+        ),
+        "max_completion_tokens": dynamic_max_tokens,
+        "timeout": 90 if very_complex else 60,
+        "strategy_label": (
+            "analisis-mendalam"
+            if very_complex
+            else "analisis-standar"
+            if complex_enough
+            else "cepat-hemat"
+        ),
+        "accuracy_needed": accuracy_needed,
+        "complex_enough": complex_enough,
+        "very_complex": very_complex,
+    }
 
 
 def is_thinking_question(user_text: str) -> bool:
@@ -1856,28 +2082,36 @@ def is_thinking_question(user_text: str) -> bool:
 def get_capable_primary_model(
     active_expensive_models: List[str], health_cache: Dict[str, Dict[str, Any]]
 ) -> str:
-    """Pilih model capable aktif untuk pertanyaan thinking.
+    """Pilih model capable aktif untuk prompt kompleks.
 
-    Urutan:
-    1) THINKING_CAPABLE_MODEL dari Secrets jika diisi dan aktif.
-    2) Model menengah/mahal aktif hasil health check.
-    3) Model non-cheap aktif dari MODEL_OPTIONS sebagai cadangan.
+    Versi ini tidak hanya mengambil model pertama dari daftar fallback.
+    Model diperingkat dari estimasi kapabilitas, status aktif, latency, dan harga.
     """
     override = str(thinking_capable_model_override or "").strip()
     if override and health_cache.get(override, {}).get("active"):
         return override
 
-    if active_expensive_models:
-        return active_expensive_models[0]
+    active_candidates: List[str] = []
+    for model_name in unique_models(active_expensive_models + MODEL_OPTIONS):
+        if health_cache.get(model_name, {}).get("active") and _tier_rank(model_name) > 0:
+            active_candidates.append(model_name)
 
-    candidates = []
-    for model_name in MODEL_OPTIONS:
-        if _tier_rank(model_name) > 0 and health_cache.get(model_name, {}).get(
-            "active"
-        ):
-            candidates.append(model_name)
-    prioritized = prioritize_active_models(candidates, health_cache)
-    return prioritized[0] if prioritized else ""
+    if not active_candidates:
+        return ""
+
+    def sort_key(model_name: str) -> Tuple[int, float, int, str]:
+        price = model_price(model_name)
+        latency = float(
+            health_cache.get(model_name, {}).get("latency_ms") or 999999
+        )
+        return (
+            -_model_capability_score(model_name),
+            latency,
+            int(price.get("output", 999999999)),
+            model_name,
+        )
+
+    return sorted(unique_models(active_candidates), key=sort_key)[0]
 
 
 def build_model_routing_plan(
@@ -6025,7 +6259,7 @@ def render_admin_settings() -> None:
                         max_expensive_models=route["max_expensive_models"],
                         temperature=float(st.session_state.active_temperature),
                         max_completion_tokens=int(st.session_state.active_max_tokens),
-                        timeout=60,
+                        timeout=int(runtime_options["timeout"]),
                         smart_model_router=bool(st.session_state.active_smart_router),
                         return_to_primary=route["return_to_primary"],
                         max_smart_models=route["max_smart_models"],
@@ -7230,6 +7464,11 @@ def render_public_page() -> None:
                         advance_rotation=True,
                         user_text=user_input,
                     )
+                    runtime_options = choose_dynamic_runtime_options(
+                        user_text=user_input,
+                        route=route,
+                        cfg=cfg,
+                    )
                     if route.get("thinking_direct_to_capable"):
                         loading_subtitle = (
                             "Mode analisis aktif. Robot kecilnya sedang membaca konteks lebih teliti."
@@ -7265,7 +7504,7 @@ def render_public_page() -> None:
                         allow_expensive_fallback=route["allow_expensive_fallback"],
                         max_expensive_models=route["max_expensive_models"],
                         temperature=float(cfg["temperature"]),
-                        max_completion_tokens=int(cfg["max_completion_tokens"]),
+                        max_completion_tokens=int(runtime_options["max_completion_tokens"]),
                         timeout=60,
                         smart_model_router=bool(cfg["smart_model_router"]),
                         return_to_primary=route["return_to_primary"],
@@ -7277,12 +7516,8 @@ def render_public_page() -> None:
                             else "web-public"
                         ),
                         channel="web",
-                        enable_rag=bool(
-                            power_features_enabled
-                            and power_rag_enabled
-                            and should_use_retrieval_for_prompt(user_input)
-                        ),
-                        rag_top_k=int(power_rag_top_k),
+                        enable_rag=bool(runtime_options["enable_rag"]),
+                        rag_top_k=int(runtime_options["rag_top_k"]),
                         enable_persistent_memory=bool(
                             power_features_enabled and power_persistent_memory_enabled
                         ),
@@ -7290,13 +7525,13 @@ def render_public_page() -> None:
                             power_features_enabled and power_prompt_templates_enabled
                         ),
                         enable_self_verification=bool(
-                            power_features_enabled and power_self_verification_enabled
+                            runtime_options["enable_self_verification"]
                         ),
                         daily_cost_limit_idr=float(daily_cost_limit_idr),
                         max_expensive_calls_per_day=int(max_expensive_calls_per_day),
                         enable_response_cache=bool(power_response_cache_enabled),
                         response_cache_ttl_seconds=int(
-                            power_response_cache_ttl_seconds
+                            runtime_options["response_cache_ttl_seconds"]
                         ),
                         enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
                         enable_circuit_breaker=bool(power_circuit_breaker_enabled),
@@ -7323,8 +7558,12 @@ def render_public_page() -> None:
                         strict_rag_mode=bool(power_strict_rag_mode),
                         rag_min_sources=int(power_rag_min_sources),
                         rag_min_score=float(power_rag_min_score),
-                        quality_control_enabled=bool(power_quality_control_enabled),
-                        quality_verifier_enabled=bool(power_quality_verifier_enabled),
+                        quality_control_enabled=bool(
+                            runtime_options["quality_control_enabled"]
+                        ),
+                        quality_verifier_enabled=bool(
+                            runtime_options["quality_verifier_enabled"]
+                        ),
                         quality_verifier_model=power_quality_verifier_model,
                         quality_min_score=float(power_quality_min_score),
                         answer_mode=power_default_answer_mode,
@@ -7336,9 +7575,13 @@ def render_public_page() -> None:
                         performance_optimizer_enabled=bool(
                             power_performance_optimizer_enabled
                         ),
-                        query_rewriter_enabled=bool(power_query_rewriter_enabled),
-                        reranker_enabled=bool(power_reranker_enabled),
-                        semantic_cache_enabled=bool(power_semantic_cache_enabled),
+                        query_rewriter_enabled=bool(
+                            runtime_options["query_rewriter_enabled"]
+                        ),
+                        reranker_enabled=bool(runtime_options["reranker_enabled"]),
+                        semantic_cache_enabled=bool(
+                            runtime_options["semantic_cache_enabled"]
+                        ),
                         semantic_cache_threshold=float(power_semantic_cache_threshold),
                         semantic_cache_ttl_seconds=int(
                             power_semantic_cache_ttl_seconds
@@ -7377,6 +7620,23 @@ def render_public_page() -> None:
                         ),
                         live_web_fallback_topic=live_web_fallback_topic,
                     )
+                    if isinstance(meta, dict):
+                        meta["route_reason"] = route.get("routing_reason", "")
+                        meta["route_complexity_score"] = route.get(
+                            "complexity_score", 0
+                        )
+                        meta["route_complexity_signals"] = route.get(
+                            "complexity_signals", []
+                        )
+                        meta["runtime_strategy"] = runtime_options.get(
+                            "strategy_label", ""
+                        )
+                        meta["runtime_rag_enabled"] = bool(
+                            runtime_options.get("enable_rag")
+                        )
+                        meta["runtime_quality_verifier_enabled"] = bool(
+                            runtime_options.get("quality_verifier_enabled")
+                        )
                     restore_active_model_to_cheap(route.get("primary_model"))
                     placeholder.markdown(answer)
                     render_auto_scroll_script(
@@ -7402,6 +7662,9 @@ def render_public_page() -> None:
                     route_reason = str(route.get("routing_reason") or "")
                     if route_reason:
                         caption_text += f" • rute: {route_reason}"
+                    strategy_label = str(runtime_options.get("strategy_label") or "")
+                    if strategy_label and st.session_state.admin_authenticated:
+                        caption_text += f" • strategi: {strategy_label}"
                     if st.session_state.admin_authenticated:
                         caption_text += (
                             f" • skor kompleksitas: {route.get('complexity_score', 0)}"
