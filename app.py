@@ -6606,10 +6606,12 @@ def render_admin_production_dashboard() -> None:
 
     st.subheader("🛡️ Produksi & Stabilitas")
 
-    col_a,
-    col_b,
-    col_c,
-    col_d = st.columns(4)
+    (
+        col_a,
+        col_b,
+        col_c,
+        col_d,
+    ) = st.columns(4)
 
     with col_a:
         st.metric(
