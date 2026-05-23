@@ -711,6 +711,17 @@ telegram_speed_update_code = str(
     get_secret("TELEGRAM_SPEED_UPDATE_CODE", "4321") or "4321"
 ).strip()
 telegram_admin_chat_ids = str(get_secret("TELEGRAM_ADMIN_CHAT_IDS", "") or "").strip()
+telegram_runtime_state_file = str(
+    get_secret("TELEGRAM_RUNTIME_STATE_FILE", ".telegram_runtime_state.json")
+    or ".telegram_runtime_state.json"
+).strip()
+telegram_model_mode_default = str(
+    get_secret("TELEGRAM_MODEL_MODE", "auto") or "auto"
+).strip().lower()
+telegram_auto_rotate_on_model_error = parse_bool(
+    get_secret("TELEGRAM_AUTO_ROTATE_ON_MODEL_ERROR", True),
+    default=True,
+)
 # GitHub Actions trigger untuk perintah Telegram /update Knowledge Base
 github_actions_token = str(get_secret("GITHUB_ACTIONS_TOKEN", "") or "").strip()
 github_repo = str(get_secret("GITHUB_REPO", "") or "").strip()
@@ -6106,6 +6117,35 @@ def get_safe_public_error_message() -> str:
     )
 
 
+def is_public_connection_error_answer(
+    answer_text: str,
+    meta: Dict[str, Any] | None = None,
+) -> bool:
+    """Return True jika jawaban adalah pesan error publik yang aman.
+
+    Untuk kondisi ini UI tidak boleh menampilkan efek loading/typewriter,
+    karena proses sudah selesai dan gagal secara aman.
+    """
+    answer = str(answer_text or "").strip()
+    safe_messages = {
+        str(PUBLIC_AI_ERROR_MESSAGE).strip(),
+        str(get_safe_public_error_message()).strip(),
+        str(make_public_ai_error_message()).strip(),
+    }
+
+    if answer in safe_messages:
+        return True
+
+    if isinstance(meta, dict):
+        return bool(
+            meta.get("public_error_sanitized")
+            or meta.get("public_error_hidden")
+            or meta.get("public_safe_message")
+        )
+
+    return False
+
+
 def looks_like_public_error_detail(
     answer_text: str,
 ) -> bool:
@@ -6262,12 +6302,20 @@ def render_answer_typewriter_display(
     answer_text: str,
     chunk_size: int = 22,
     delay_seconds: float = 0.012,
+    is_error: bool = False,
 ) -> None:
-    """Tampilkan jawaban bertahap secara aman tanpa memaksa API streaming."""
+    """Tampilkan jawaban bertahap secara aman tanpa memaksa API streaming.
+
+    Jika jawaban adalah error publik, animasi langsung dihentikan.
+    """
     answer = str(answer_text or "")
 
     if not answer.strip():
         placeholder.markdown(answer)
+        return
+
+    if is_error:
+        placeholder.warning(answer)
         return
 
     # Untuk jawaban sangat panjang, jangan terlalu lambat.
@@ -6316,6 +6364,258 @@ def render_realtime_stream_answer(
     raise RuntimeError(
         "Direct API streaming disabled; using stable typewriter display."
     )
+
+
+
+def normalize_telegram_model_mode(
+    mode: Any = "",
+) -> str:
+    """Map mode UI/app ke mode Telegram: auto, cheap, expensive."""
+    raw = str(mode or "").strip().lower()
+
+    if raw in {
+        "cheap",
+        "murah",
+        "hemat",
+        "cepat",
+        "normal",
+    }:
+        return "cheap"
+
+    if raw in {
+        "expensive",
+        "mahal",
+        "medium",
+        "menengah",
+        "maksimal",
+        "pintar",
+        "capable",
+    }:
+        return "expensive"
+
+    return "auto"
+
+
+def build_telegram_config_payload(
+    route: Dict[str, Any],
+    cfg: Dict[str, Any],
+    persona_text: str,
+) -> Dict[str, Any]:
+    """Bangun config Telegram sesuai format `telegram_service.py`.
+
+    File Telegram memakai banyak key eksplisit untuk router, health-check,
+    model switch, GitHub update, RAG, quality control, dan runtime state.
+    Helper ini menjaga agar Start Bot manual dan auto-start memakai format
+    config yang sama.
+    """
+    telegram_model_mode = normalize_telegram_model_mode(
+        st.session_state.get(
+            "telegram_model_mode",
+            telegram_model_mode_default,
+        )
+    )
+
+    active_expensive_models = route.get(
+        "active_expensive_models",
+        [],
+    )
+
+    active_cheap_models = route.get(
+        "active_cheap_models",
+        [],
+    )
+
+    fast_cheap_models = route.get(
+        "fast_cheap_models",
+        [],
+    )
+
+    config_payload = {
+        "telegram_token": telegram_token,
+        "telegram_admin_chat_ids": telegram_admin_chat_ids,
+        "admin_chat_ids": telegram_admin_chat_ids,
+        "telegram_runtime_state_file": telegram_runtime_state_file,
+        "telegram_model_mode": telegram_model_mode,
+        "auto_rotate_on_model_error": bool(telegram_auto_rotate_on_model_error),
+        "github_actions_token": github_actions_token,
+        "github_repo": github_repo,
+        "github_workflow_file": github_workflow_file,
+        "github_branch": github_branch,
+        "github_update_source_limit": github_update_source_limit,
+        "github_update_max_items": github_update_max_items,
+        "allow_unrestricted_model_commands": bool(
+            allow_unrestricted_model_commands
+        ),
+        "slashai_api_key": api_key,
+        "slashai_api_url": api_url,
+        "slashai_model": route["primary_model"],
+        "persona": persona_text,
+        "memory_file": memory_file,
+        "fallback_models": route["cheap_fallback_models"],
+        "expensive_fallback_models": route["expensive_fallback_models"],
+        "allow_expensive_fallback": route["allow_expensive_fallback"],
+        "max_expensive_models": route["max_expensive_models"],
+        "show_model_info": telegram_show_model_info,
+        "temperature": float(cfg["temperature"]),
+        "max_completion_tokens": int(cfg["max_completion_tokens"]),
+        "timeout": 60,
+        "drop_pending_updates": drop_pending_updates,
+        "send_processing_message": send_processing_message,
+        # File Telegram memaksa plain text, key ini tetap dikirim untuk kompatibilitas.
+        "telegram_parse_mode": "",
+        "lock_file": telegram_lock_file,
+        "allow_memory_commands": False,
+        "smart_model_router": bool(cfg["smart_model_router"]),
+        "return_to_primary": route["return_to_primary"],
+        "max_smart_models": route["max_smart_models"],
+        "thinking_model_router": bool(
+            st.session_state.get(
+                "active_thinking_model_router",
+                True,
+            )
+        ),
+        "thinking_min_chars": int(
+            st.session_state.get(
+                "active_thinking_min_chars",
+                thinking_min_chars_default,
+            )
+            or 180
+        ),
+        "thinking_capable_model": thinking_capable_model_override,
+        "thinking_capable_models": active_expensive_models,
+        "capable_models": active_expensive_models,
+        "fast_normal_model_router": bool(
+            st.session_state.get(
+                "active_fast_normal_model_router",
+                True,
+            )
+        ),
+        "fastest_cheap_model": route.get(
+            "fastest_cheap_primary_model",
+            "",
+        ),
+        "fast_cheap_models": fast_cheap_models,
+        "active_cheap_models": active_cheap_models,
+        "active_expensive_models": active_expensive_models,
+        "all_cheap_models": CHEAP_MODEL_OPTIONS,
+        "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
+        "all_model_candidates": unique_models(
+            MODEL_OPTIONS
+            + TOP_USAGE_MODEL_CANDIDATES
+            + (st.session_state.get("dynamic_api_models") or [])
+        ),
+        "model_discovery_enabled": bool(model_discovery_enabled),
+        "models_api_url": models_api_url,
+        "model_discovery_timeout": int(model_discovery_timeout or 12),
+        "model_health_timeout": int(model_health_timeout or 12),
+        "model_health_workers": model_health_workers,
+        "model_health_retries": model_health_retries,
+        "model_health_midnight_only": bool(model_health_midnight_only),
+        "model_health_hour_wib": int(model_health_hour_wib or 0),
+        "model_health_window_minutes": int(model_health_window_minutes or 60),
+        "power_features_enabled": bool(power_features_enabled),
+        "power_db_path": power_db_path,
+        "power_rag_enabled": bool(power_rag_enabled),
+        "power_rag_top_k": int(power_rag_top_k),
+        "power_strict_rag_mode": bool(power_strict_rag_mode),
+        "power_anti_hallucination_enabled": bool(
+            power_anti_hallucination_enabled
+        ),
+        "power_anti_hallucination_auto_strict": bool(
+            power_anti_hallucination_auto_strict
+        ),
+        "power_anti_hallucination_min_sources": int(
+            power_anti_hallucination_min_sources
+        ),
+        "power_anti_hallucination_min_quality": float(
+            power_anti_hallucination_min_quality
+        ),
+        "power_anti_hallucination_min_freshness": float(
+            power_anti_hallucination_min_freshness
+        ),
+        "power_anti_hallucination_append_sources": bool(
+            power_anti_hallucination_append_sources
+        ),
+        "power_rag_min_sources": int(power_rag_min_sources),
+        "power_rag_min_score": float(power_rag_min_score),
+        "power_persistent_memory_enabled": bool(
+            power_persistent_memory_enabled
+        ),
+        "power_prompt_templates_enabled": bool(
+            power_prompt_templates_enabled
+        ),
+        "power_self_verification_enabled": bool(
+            power_self_verification_enabled
+        ),
+        "power_quality_control_enabled": bool(
+            power_quality_control_enabled
+        ),
+        "power_quality_verifier_enabled": bool(
+            power_quality_verifier_enabled
+        ),
+        "power_quality_verifier_model": power_quality_verifier_model,
+        "power_quality_min_score": float(power_quality_min_score),
+        "power_quality_append_footer": bool(power_quality_append_footer),
+        "power_hide_kb_sources_for_casual": bool(
+            power_hide_kb_sources_for_casual
+        ),
+        "power_disable_rag_for_casual": bool(power_disable_rag_for_casual),
+        "power_performance_optimizer_enabled": bool(
+            power_performance_optimizer_enabled
+        ),
+        "power_query_rewriter_enabled": bool(power_query_rewriter_enabled),
+        "power_reranker_enabled": bool(power_reranker_enabled),
+        "power_semantic_cache_enabled": bool(power_semantic_cache_enabled),
+        "power_semantic_cache_threshold": float(
+            power_semantic_cache_threshold
+        ),
+        "power_semantic_cache_ttl_seconds": int(
+            power_semantic_cache_ttl_seconds
+        ),
+        "power_latency_budget_enabled": bool(power_latency_budget_enabled),
+        "power_retrieval_eval_enabled": bool(power_retrieval_eval_enabled),
+        "live_music_chart_enabled": bool(live_music_chart_enabled),
+        "live_music_chart_limit": int(live_music_chart_limit),
+        "live_music_chart_timeout_seconds": int(
+            live_music_chart_timeout_seconds
+        ),
+        "live_web_fallback_enabled": bool(live_web_fallback_enabled),
+        "live_web_fallback_provider": live_web_fallback_provider,
+        "tavily_api_key": tavily_api_key,
+        "live_web_fallback_max_results": int(
+            live_web_fallback_max_results
+        ),
+        "live_web_fallback_timeout_seconds": int(
+            live_web_fallback_timeout_seconds
+        ),
+        "live_web_fallback_min_sources": int(
+            live_web_fallback_min_sources
+        ),
+        "live_web_fallback_include_raw_content": bool(
+            live_web_fallback_include_raw_content
+        ),
+        "live_web_fallback_max_content_chars": int(
+            live_web_fallback_max_content_chars
+        ),
+        "live_web_fallback_auto_save_to_kb": bool(
+            live_web_fallback_auto_save_to_kb
+        ),
+        "live_web_fallback_ttl_hours": int(live_web_fallback_ttl_hours),
+        "live_web_fallback_force_for_current": bool(
+            live_web_fallback_force_for_current
+        ),
+        "live_web_fallback_topic": live_web_fallback_topic,
+        "power_default_answer_mode": power_default_answer_mode,
+        "daily_cost_limit_idr": float(daily_cost_limit_idr),
+        "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
+        "speed_update_code": telegram_speed_update_code,
+        "model_circuit_max_failures": int(model_circuit_max_failures),
+        "model_circuit_cooldown_seconds": int(
+            model_circuit_cooldown_seconds
+        ),
+    }
+
+    return config_payload
 
 
 # =========================
@@ -6383,216 +6683,17 @@ def get_runtime_config() -> Dict[str, Any]:
 
 def start_telegram_if_needed() -> None:
     cfg = get_runtime_config()
+
     if auto_start and telegram_token and api_key and not service.status()["running"]:
         route = build_model_routing_plan(advance_rotation=True)
-        service.start(
-            {
-                "telegram_token": telegram_token,
-                "telegram_admin_chat_ids": telegram_admin_chat_ids,
-                "github_actions_token": github_actions_token,
-                "github_repo": github_repo,
-                "github_workflow_file": github_workflow_file,
-                "github_branch": github_branch,
-                "github_update_source_limit": github_update_source_limit,
-                "github_update_max_items": github_update_max_items,
-                "allow_unrestricted_model_commands": bool(
-                    allow_unrestricted_model_commands
-                ),
-                "slashai_api_key": api_key,
-                "slashai_api_url": api_url,
-                "slashai_model": route["primary_model"],
-                "persona": persona_with_default_memory(cfg["persona"]),
-                "memory_file": memory_file,
-                "fallback_models": route["cheap_fallback_models"],
-                "expensive_fallback_models": route["expensive_fallback_models"],
-                "allow_expensive_fallback": route["allow_expensive_fallback"],
-                "max_expensive_models": route["max_expensive_models"],
-                "show_model_info": telegram_show_model_info,
-                "temperature": cfg["temperature"],
-                "max_completion_tokens": cfg["max_completion_tokens"],
-                "timeout": 60,
-                "drop_pending_updates": drop_pending_updates,
-                "send_processing_message": send_processing_message,
-                "telegram_parse_mode": telegram_parse_mode,
-                "lock_file": telegram_lock_file,
-                "telegram_admin_chat_ids": telegram_admin_chat_ids,
-                "github_actions_token": github_actions_token,
-                "github_repo": github_repo,
-                "github_workflow_file": github_workflow_file,
-                "github_branch": github_branch,
-                "github_update_source_limit": github_update_source_limit,
-                "github_update_max_items": github_update_max_items,
-                "allow_unrestricted_model_commands": bool(
-                    allow_unrestricted_model_commands
-                ),
-                "allow_memory_commands": False,
-                "smart_model_router": cfg["smart_model_router"],
-                "return_to_primary": route["return_to_primary"],
-                "max_smart_models": route["max_smart_models"],
-                "thinking_model_router": bool(
-                    st.session_state.get("active_thinking_model_router", True)
-                ),
-                "thinking_min_chars": int(
-                    st.session_state.get(
-                        "active_thinking_min_chars", thinking_min_chars_default
-                    )
-                    or 180
-                ),
-                "thinking_capable_model": thinking_capable_model_override,
-                "fast_normal_model_router": bool(
-                    st.session_state.get("active_fast_normal_model_router", True)
-                ),
-                "fastest_cheap_model": route.get("fastest_cheap_primary_model", ""),
-                "fast_cheap_models": route.get("fast_cheap_models", []),
-                "all_cheap_models": CHEAP_MODEL_OPTIONS,
-                "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
-                "all_model_candidates": unique_models(
-                    MODEL_OPTIONS
-                    + TOP_USAGE_MODEL_CANDIDATES
-                    + (st.session_state.get("dynamic_api_models") or [])
-                ),
-                "model_discovery_enabled": bool(model_discovery_enabled),
-                "models_api_url": models_api_url,
-                "model_discovery_timeout": int(model_discovery_timeout or 12),
-                "model_health_workers": model_health_workers,
-                "model_health_retries": model_health_retries,
-                "power_features_enabled": bool(power_features_enabled),
-                "power_db_path": power_db_path,
-                "power_rag_enabled": bool(power_rag_enabled),
-                "power_strict_rag_mode": bool(power_strict_rag_mode),
-                "power_anti_hallucination_enabled": bool(
-                    power_anti_hallucination_enabled
-                ),
-                "power_anti_hallucination_auto_strict": bool(
-                    power_anti_hallucination_auto_strict
-                ),
-                "power_anti_hallucination_min_sources": int(
-                    power_anti_hallucination_min_sources
-                ),
-                "power_anti_hallucination_min_quality": float(
-                    power_anti_hallucination_min_quality
-                ),
-                "power_anti_hallucination_min_freshness": float(
-                    power_anti_hallucination_min_freshness
-                ),
-                "power_anti_hallucination_append_sources": bool(
-                    power_anti_hallucination_append_sources
-                ),
-                "power_rag_min_sources": int(power_rag_min_sources),
-                "power_rag_min_score": float(power_rag_min_score),
-                "power_persistent_memory_enabled": bool(
-                    power_persistent_memory_enabled
-                ),
-                "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
-                "power_self_verification_enabled": bool(
-                    power_self_verification_enabled
-                ),
-                "power_quality_control_enabled": bool(power_quality_control_enabled),
-                "power_quality_verifier_enabled": bool(power_quality_verifier_enabled),
-                "power_quality_verifier_model": power_quality_verifier_model,
-                "power_quality_min_score": float(power_quality_min_score),
-                "power_quality_append_footer": bool(power_quality_append_footer),
-                "power_hide_kb_sources_for_casual": bool(
-                    power_hide_kb_sources_for_casual
-                ),
-                "power_disable_rag_for_casual": bool(power_disable_rag_for_casual),
-                "power_performance_optimizer_enabled": bool(
-                    power_performance_optimizer_enabled
-                ),
-                "power_query_rewriter_enabled": bool(power_query_rewriter_enabled),
-                "power_reranker_enabled": bool(power_reranker_enabled),
-                "power_semantic_cache_enabled": bool(power_semantic_cache_enabled),
-                "power_semantic_cache_threshold": float(power_semantic_cache_threshold),
-                "power_semantic_cache_ttl_seconds": int(
-                    power_semantic_cache_ttl_seconds
-                ),
-                "power_latency_budget_enabled": bool(power_latency_budget_enabled),
-                "power_retrieval_eval_enabled": bool(power_retrieval_eval_enabled),
-                "live_music_chart_enabled": bool(live_music_chart_enabled),
-                "live_music_chart_limit": int(live_music_chart_limit),
-                "live_music_chart_timeout_seconds": int(
-                    live_music_chart_timeout_seconds
-                ),
-                "live_web_fallback_enabled": bool(live_web_fallback_enabled),
-                "live_web_fallback_provider": live_web_fallback_provider,
-                "tavily_api_key": tavily_api_key,
-                "live_web_fallback_max_results": int(live_web_fallback_max_results),
-                "live_web_fallback_timeout_seconds": int(
-                    live_web_fallback_timeout_seconds
-                ),
-                "live_web_fallback_min_sources": int(live_web_fallback_min_sources),
-                "live_web_fallback_include_raw_content": bool(
-                    live_web_fallback_include_raw_content
-                ),
-                "live_web_fallback_max_content_chars": int(
-                    live_web_fallback_max_content_chars
-                ),
-                "live_web_fallback_auto_save_to_kb": bool(
-                    live_web_fallback_auto_save_to_kb
-                ),
-                "live_web_fallback_ttl_hours": int(live_web_fallback_ttl_hours),
-                "live_web_fallback_force_for_current": bool(
-                    live_web_fallback_force_for_current
-                ),
-                "live_web_fallback_topic": live_web_fallback_topic,
-                "power_default_answer_mode": power_default_answer_mode,
-                "daily_cost_limit_idr": float(daily_cost_limit_idr),
-                "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
-                "power_response_cache_enabled": bool(power_response_cache_enabled),
-                "power_response_cache_ttl_seconds": int(
-                    power_response_cache_ttl_seconds
-                ),
-                "power_adaptive_scoring_enabled": bool(power_adaptive_scoring_enabled),
-                "power_circuit_breaker_enabled": bool(power_circuit_breaker_enabled),
-                "model_circuit_max_failures": int(model_circuit_max_failures),
-                "model_circuit_cooldown_seconds": int(model_circuit_cooldown_seconds),
-                "operation_mode": str(
-                    st.session_state.get(
-                        "active_operation_mode", ai_operation_mode_default
-                    )
-                    or "Seimbang"
-                ),
-                "active_cheap_models": route.get("active_cheap_models", []),
-                "thinking_capable_models": route.get("active_expensive_models", []),
-                "speed_update_code": telegram_speed_update_code,
-                "model_health_timeout": int(model_health_timeout or 12),
-                "model_health_midnight_only": bool(model_health_midnight_only),
-                "model_health_hour_wib": int(model_health_hour_wib or 0),
-                "model_health_window_minutes": int(model_health_window_minutes or 60),
-            }
+        bot_config = build_telegram_config_payload(
+            route=route,
+            cfg=cfg,
+            persona_text=persona_with_default_memory(cfg["persona"]),
         )
+        service.start(bot_config)
         restore_active_model_to_cheap(route.get("primary_model"))
 
-
-start_telegram_if_needed()
-
-
-# =========================
-# Admin settings UI
-# =========================
-def render_admin_login() -> None:
-    st.subheader("🔐 Admin")
-
-    if not admin_password:
-        st.error("ADMIN_PASSWORD belum diisi di Streamlit Secrets.")
-        return
-
-    with st.form("admin_login_form", clear_on_submit=False):
-        username_input = st.text_input("Username", value="", placeholder="admin")
-        password_input = st.text_input(
-            "Password", type="password", placeholder="Password admin"
-        )
-        submitted = st.form_submit_button("Masuk Admin", use_container_width=True)
-
-    if submitted:
-        username_ok = safe_compare(username_input.strip(), admin_username)
-        password_ok = safe_compare(password_input, admin_password)
-        if username_ok and password_ok:
-            st.session_state.admin_authenticated = True
-            st.success("Login admin berhasil.")
-            st.rerun()
-        else:
-            st.error("Username atau password salah.")
 
 
 def render_admin_status() -> None:
@@ -7298,153 +7399,42 @@ def render_admin_settings() -> None:
                 st.error("Koneksi Telegram gagal.")
                 st.code(str(diag.get("last_error") or "Tidak ada detail error."))
 
+        cfg = get_runtime_config()
         route = build_model_routing_plan()
-        bot_config = {
-            "telegram_token": telegram_token,
-            "telegram_admin_chat_ids": telegram_admin_chat_ids,
-            "github_actions_token": github_actions_token,
-            "github_repo": github_repo,
-            "github_workflow_file": github_workflow_file,
-            "github_branch": github_branch,
-            "github_update_source_limit": github_update_source_limit,
-            "github_update_max_items": github_update_max_items,
-            "allow_unrestricted_model_commands": bool(
-                allow_unrestricted_model_commands
+        bot_config = build_telegram_config_payload(
+            route=route,
+            cfg=cfg,
+            persona_text=persona_with_default_memory(
+                st.session_state.active_persona
             ),
-            "slashai_api_key": api_key,
-            "slashai_api_url": api_url,
-            "slashai_model": route["primary_model"],
-            "persona": persona_with_default_memory(st.session_state.active_persona),
-            "memory_file": memory_file,
-            "fallback_models": route["cheap_fallback_models"],
-            "expensive_fallback_models": route["expensive_fallback_models"],
-            "allow_expensive_fallback": route["allow_expensive_fallback"],
-            "max_expensive_models": route["max_expensive_models"],
-            "show_model_info": telegram_show_model_info,
-            "temperature": float(st.session_state.active_temperature),
-            "max_completion_tokens": int(st.session_state.active_max_tokens),
-            "timeout": 60,
-            "drop_pending_updates": drop_pending_updates,
-            "send_processing_message": send_processing_message,
-            "telegram_parse_mode": telegram_parse_mode,
-            "lock_file": telegram_lock_file,
-            "telegram_admin_chat_ids": telegram_admin_chat_ids,
-            "github_actions_token": github_actions_token,
-            "github_repo": github_repo,
-            "github_workflow_file": github_workflow_file,
-            "github_branch": github_branch,
-            "github_update_source_limit": github_update_source_limit,
-            "github_update_max_items": github_update_max_items,
-            "allow_unrestricted_model_commands": bool(
-                allow_unrestricted_model_commands
-            ),
-            "allow_memory_commands": False,
-            "smart_model_router": bool(st.session_state.active_smart_router),
-            "return_to_primary": route["return_to_primary"],
-            "max_smart_models": route["max_smart_models"],
-            "thinking_model_router": bool(
-                st.session_state.get("active_thinking_model_router", True)
-            ),
-            "thinking_min_chars": int(
-                st.session_state.get(
-                    "active_thinking_min_chars", thinking_min_chars_default
-                )
-                or 180
-            ),
-            "thinking_capable_model": thinking_capable_model_override,
-            "fast_normal_model_router": bool(
-                st.session_state.get("active_fast_normal_model_router", True)
-            ),
-            "fastest_cheap_model": route.get("fastest_cheap_primary_model", ""),
-            "fast_cheap_models": route.get("fast_cheap_models", []),
-            "all_cheap_models": CHEAP_MODEL_OPTIONS,
-            "all_expensive_models": EXPENSIVE_MODEL_OPTIONS,
-            "all_model_candidates": unique_models(
-                MODEL_OPTIONS
-                + TOP_USAGE_MODEL_CANDIDATES
-                + (st.session_state.get("dynamic_api_models") or [])
-            ),
-            "model_discovery_enabled": bool(model_discovery_enabled),
-            "models_api_url": models_api_url,
-            "model_discovery_timeout": int(model_discovery_timeout or 12),
-            "model_health_workers": model_health_workers,
-            "model_health_retries": model_health_retries,
-            "power_features_enabled": bool(power_features_enabled),
-            "power_db_path": power_db_path,
-            "power_rag_enabled": bool(power_rag_enabled),
-            "power_strict_rag_mode": bool(power_strict_rag_mode),
-            "power_anti_hallucination_enabled": bool(power_anti_hallucination_enabled),
-            "power_anti_hallucination_auto_strict": bool(
-                power_anti_hallucination_auto_strict
-            ),
-            "power_anti_hallucination_min_sources": int(
-                power_anti_hallucination_min_sources
-            ),
-            "power_anti_hallucination_min_quality": float(
-                power_anti_hallucination_min_quality
-            ),
-            "power_anti_hallucination_min_freshness": float(
-                power_anti_hallucination_min_freshness
-            ),
-            "power_anti_hallucination_append_sources": bool(
-                power_anti_hallucination_append_sources
-            ),
-            "power_rag_min_sources": int(power_rag_min_sources),
-            "power_rag_min_score": float(power_rag_min_score),
-            "power_persistent_memory_enabled": bool(power_persistent_memory_enabled),
-            "power_prompt_templates_enabled": bool(power_prompt_templates_enabled),
-            "power_self_verification_enabled": bool(power_self_verification_enabled),
-            "power_quality_control_enabled": bool(power_quality_control_enabled),
-            "power_quality_verifier_enabled": bool(power_quality_verifier_enabled),
-            "power_quality_verifier_model": power_quality_verifier_model,
-            "power_quality_min_score": float(power_quality_min_score),
-            "power_quality_append_footer": bool(power_quality_append_footer),
-            "power_hide_kb_sources_for_casual": bool(power_hide_kb_sources_for_casual),
-            "power_disable_rag_for_casual": bool(power_disable_rag_for_casual),
-            "power_performance_optimizer_enabled": bool(
-                power_performance_optimizer_enabled
-            ),
-            "power_query_rewriter_enabled": bool(power_query_rewriter_enabled),
-            "power_reranker_enabled": bool(power_reranker_enabled),
-            "power_semantic_cache_enabled": bool(power_semantic_cache_enabled),
-            "power_semantic_cache_threshold": float(power_semantic_cache_threshold),
-            "power_semantic_cache_ttl_seconds": int(power_semantic_cache_ttl_seconds),
-            "power_latency_budget_enabled": bool(power_latency_budget_enabled),
-            "power_retrieval_eval_enabled": bool(power_retrieval_eval_enabled),
-            "live_music_chart_enabled": bool(live_music_chart_enabled),
-            "live_music_chart_limit": int(live_music_chart_limit),
-            "live_music_chart_timeout_seconds": int(live_music_chart_timeout_seconds),
-            "live_web_fallback_enabled": bool(live_web_fallback_enabled),
-            "live_web_fallback_provider": live_web_fallback_provider,
-            "tavily_api_key": tavily_api_key,
-            "live_web_fallback_max_results": int(live_web_fallback_max_results),
-            "live_web_fallback_timeout_seconds": int(live_web_fallback_timeout_seconds),
-            "live_web_fallback_min_sources": int(live_web_fallback_min_sources),
-            "live_web_fallback_include_raw_content": bool(
-                live_web_fallback_include_raw_content
-            ),
-            "live_web_fallback_max_content_chars": int(
-                live_web_fallback_max_content_chars
-            ),
-            "live_web_fallback_auto_save_to_kb": bool(
-                live_web_fallback_auto_save_to_kb
-            ),
-            "live_web_fallback_ttl_hours": int(live_web_fallback_ttl_hours),
-            "live_web_fallback_force_for_current": bool(
-                live_web_fallback_force_for_current
-            ),
-            "live_web_fallback_topic": live_web_fallback_topic,
-            "power_default_answer_mode": power_default_answer_mode,
-            "daily_cost_limit_idr": float(daily_cost_limit_idr),
-            "max_expensive_calls_per_day": int(max_expensive_calls_per_day),
-            "active_cheap_models": route.get("active_cheap_models", []),
-            "thinking_capable_models": route.get("active_expensive_models", []),
-            "speed_update_code": telegram_speed_update_code,
-            "model_health_timeout": int(model_health_timeout or 12),
-            "model_health_midnight_only": bool(model_health_midnight_only),
-            "model_health_hour_wib": int(model_health_hour_wib or 0),
-            "model_health_window_minutes": int(model_health_window_minutes or 60),
+        )
+
+        st.markdown("#### Mode model Telegram")
+        current_telegram_mode = normalize_telegram_model_mode(
+            st.session_state.get(
+                "telegram_model_mode",
+                telegram_model_mode_default,
+            )
+        )
+        mode_options = {
+            "auto": "Otomatis",
+            "cheap": "Murah/Cepat",
+            "expensive": "Medium/Mahal",
         }
+        selected_label = st.radio(
+            "Mode routing bot",
+            options=list(mode_options.keys()),
+            format_func=lambda value: mode_options.get(value, value),
+            index=list(mode_options.keys()).index(current_telegram_mode)
+            if current_telegram_mode in mode_options
+            else 0,
+            horizontal=True,
+            key="telegram_model_mode",
+            help="Sesuai format telegram_service.py: auto, cheap, atau expensive.",
+        )
+        bot_config["telegram_model_mode"] = normalize_telegram_model_mode(
+            selected_label
+        )
 
         col_start, col_stop = st.columns(2)
         with col_start:
@@ -7472,6 +7462,22 @@ def render_admin_settings() -> None:
                         ),
                         "thinking_capable_models": start_route.get(
                             "active_expensive_models", []
+                        ),
+                        "capable_models": start_route.get(
+                            "active_expensive_models", []
+                        ),
+                        "active_expensive_models": start_route.get(
+                            "active_expensive_models", []
+                        ),
+                        "telegram_model_mode": normalize_telegram_model_mode(
+                            st.session_state.get(
+                                "telegram_model_mode",
+                                telegram_model_mode_default,
+                            )
+                        ),
+                        "telegram_runtime_state_file": telegram_runtime_state_file,
+                        "auto_rotate_on_model_error": bool(
+                            telegram_auto_rotate_on_model_error
                         ),
                     }
                 )
@@ -8705,19 +8711,32 @@ def render_public_page() -> None:
                         meta=meta,
                         route=route,
                     )
-                    if bool(st.session_state.get("sound_enabled", True)):
+                    is_public_error_answer = is_public_connection_error_answer(
+                        answer,
+                        meta=meta,
+                    )
+
+                    if (
+                        bool(st.session_state.get("sound_enabled", True))
+                        and not is_public_error_answer
+                    ):
                         render_answer_ready_sound_script(
                             sound_key=f"normal-{len(st.session_state.chat_messages)}",
                         )
+
                     render_answer_typewriter_display(
                         placeholder,
                         answer,
+                        is_error=is_public_error_answer,
                     )
                     render_auto_scroll_script(
                         target="latest",
                         delay_ms=120,
                     )
-                    if bool(st.session_state.get("sound_enabled", True)):
+                    if (
+                        bool(st.session_state.get("sound_enabled", True))
+                        and not is_public_error_answer
+                    ):
                         render_answer_ready_sound_script(
                             sound_key=f"normal-{len(st.session_state.chat_messages)}",
                         )
@@ -8788,14 +8807,23 @@ def render_public_page() -> None:
                 }
                 answer = make_public_ai_error_message()
                 st.session_state.last_answer_meta = meta
-                with st.chat_message("assistant"):
-                    st.warning(answer)
+
+                existing_placeholder = locals().get("placeholder")
+
+                if existing_placeholder is not None:
+                    existing_placeholder.warning(answer)
+                else:
+                    with st.chat_message("assistant"):
+                        st.warning(answer)
 
         if local_reply:
             with st.chat_message("assistant"):
                 st.markdown(answer)
                 render_sound_unlock_script()
-                if bool(st.session_state.get("sound_enabled", True)):
+                if (
+                    bool(st.session_state.get("sound_enabled", True))
+                    and not is_public_connection_error_answer(answer, meta=meta)
+                ):
                     render_answer_ready_sound_script(
                         sound_key=f"local-{len(st.session_state.chat_messages)}",
                     )
