@@ -84,6 +84,64 @@ def safe_compare(left: Any, right: Any) -> bool:
     return hmac.compare_digest(str(left or ""), str(right or ""))
 
 
+PUBLIC_AI_ERROR_MESSAGE = (
+    "Maaf, Adioranye sedang mengalami gangguan koneksi/model. "
+    "Silakan coba lagi beberapa saat lagi."
+)
+
+TECHNICAL_ERROR_PATTERNS = [
+    "semua model gagal",
+    "detail ringkas",
+    "httpsconnectionpool",
+    "read timed out",
+    "timeout=",
+    "api status",
+    "external billing",
+    "insufficient balance",
+    "insufficient_user_quota",
+    "invalid model",
+    "openai-compatible",
+    "slashai/",
+    "traceback",
+    "requests.exceptions",
+    "connectionerror",
+    "httperror",
+    "401002",
+]
+
+
+def make_public_ai_error_message() -> str:
+    return PUBLIC_AI_ERROR_MESSAGE
+
+
+def looks_like_technical_error(text: Any) -> bool:
+    lowered = str(text or "").lower()
+    if not lowered.strip():
+        return False
+    return any(pattern in lowered for pattern in TECHNICAL_ERROR_PATTERNS)
+
+
+def sanitize_public_ai_answer(
+    answer_text: Any,
+    meta: Dict[str, Any] | None = None,
+    show_technical_detail: bool = False,
+) -> str:
+    """Hide raw provider/model errors from the public chat UI.
+
+    Technical details are kept in metadata for admin debug, but visitors only see
+    a short user-friendly message.
+    """
+    answer = str(answer_text or "").strip()
+    if show_technical_detail or not looks_like_technical_error(answer):
+        return answer
+
+    if isinstance(meta, dict):
+        meta["public_error_sanitized"] = True
+        meta["hidden_public_error_detail"] = answer[:5000]
+
+    return make_public_ai_error_message()
+
+
 def safe_generate_power_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
     """Call generate_power_answer safely across mixed app/power_features versions.
 
@@ -5392,6 +5450,121 @@ def render_auto_scroll_script(
     )
 
 
+
+def render_answer_ready_sound_script(
+    sound_key: str = "latest",
+) -> None:
+    """Mainkan suara kecil saat jawaban final sudah muncul.
+
+    Catatan:
+    Browser biasanya mengizinkan suara karena dipicu setelah user mengirim pesan.
+    Jika browser memblokir autoplay, script gagal diam-diam tanpa mengganggu chat.
+    """
+    safe_key = _html_escape(sound_key)
+    components.html(
+        f"""
+        <script>
+        (function () {{
+            const soundKey = "adioranye-answer-ready-{safe_key}";
+
+            try {{
+                if (window.sessionStorage.getItem(soundKey) === "played") {{
+                    return;
+                }}
+
+                window.sessionStorage.setItem(soundKey, "played");
+
+                const AudioContextClass =
+                    window.AudioContext ||
+                    window.webkitAudioContext;
+
+                if (!AudioContextClass) {{
+                    return;
+                }}
+
+                const audioContext = new AudioContextClass();
+
+                function playTone(
+                    frequency,
+                    startTime,
+                    duration,
+                    volume
+                ) {{
+                    const oscillator = audioContext.createOscillator();
+                    const gain = audioContext.createGain();
+
+                    oscillator.type = "sine";
+                    oscillator.frequency.setValueAtTime(
+                        frequency,
+                        startTime
+                    );
+
+                    gain.gain.setValueAtTime(
+                        0.0001,
+                        startTime
+                    );
+
+                    gain.gain.exponentialRampToValueAtTime(
+                        volume,
+                        startTime + 0.018
+                    );
+
+                    gain.gain.exponentialRampToValueAtTime(
+                        0.0001,
+                        startTime + duration
+                    );
+
+                    oscillator.connect(gain);
+                    gain.connect(audioContext.destination);
+
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + duration + 0.03);
+                }}
+
+                function playChime() {{
+                    const now = audioContext.currentTime;
+
+                    playTone(
+                        660,
+                        now,
+                        0.12,
+                        0.045
+                    );
+
+                    playTone(
+                        880,
+                        now + 0.105,
+                        0.16,
+                        0.040
+                    );
+
+                    playTone(
+                        1174.66,
+                        now + 0.235,
+                        0.18,
+                        0.030
+                    );
+                }}
+
+                if (audioContext.state === "suspended") {{
+                    audioContext
+                        .resume()
+                        .then(playChime)
+                        .catch(function () {{}});
+                }} else {{
+                    playChime();
+                }}
+            }} catch (error) {{
+                // Sengaja diam agar notifikasi suara tidak pernah merusak UI.
+            }}
+        }})();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
+
+
 # =========================
 # Runtime config
 # =========================
@@ -7620,6 +7793,16 @@ def render_public_page() -> None:
                         ),
                         live_web_fallback_topic=live_web_fallback_topic,
                     )
+                    if not isinstance(meta, dict):
+                        meta = {}
+                    answer = sanitize_public_ai_answer(
+                        answer,
+                        meta,
+                        show_technical_detail=bool(
+                            st.session_state.admin_authenticated
+                            and st.session_state.show_debug
+                        ),
+                    )
                     if isinstance(meta, dict):
                         meta["route_reason"] = route.get("routing_reason", "")
                         meta["route_complexity_score"] = route.get(
@@ -7642,6 +7825,9 @@ def render_public_page() -> None:
                     render_auto_scroll_script(
                         target="latest",
                         delay_ms=120,
+                    )
+                    render_answer_ready_sound_script(
+                        sound_key=f"normal-{len(st.session_state.chat_messages)}",
                     )
                     st.session_state.last_answer_meta = meta or {}
                     final_model = (
@@ -7703,19 +7889,22 @@ def render_public_page() -> None:
                     st.caption(caption_text)
                     render_feedback_controls(meta, answer, key_prefix="latest_feedback")
             except Exception as exc:
-                answer = (
-                    "Maaf, Adioranye belum bisa menjawab saat ini. "
-                    "Silakan coba lagi beberapa saat lagi atau hubungi admin.\n\n"
-                    f"Detail ringkas: {str(exc)[:1000]}"
-                )
-                meta = {}
+                meta = {
+                    "public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_public_error_detail": str(exc)[:5000],
+                }
+                answer = make_public_ai_error_message()
                 st.session_state.last_answer_meta = meta
                 with st.chat_message("assistant"):
-                    st.error(answer)
+                    st.warning(answer)
 
         if local_reply:
             with st.chat_message("assistant"):
                 st.markdown(answer)
+                render_answer_ready_sound_script(
+                    sound_key=f"local-{len(st.session_state.chat_messages)}",
+                )
                 answer_pdf_download_button(answer, key="download_pdf_local_reply")
 
         st.session_state.chat_messages.append(
