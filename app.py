@@ -2655,7 +2655,9 @@ st.markdown(
         justify-self: end;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 7px;
+        min-width: 84px;
         padding: 6px 11px;
         border-radius: 999px;
         border: 1px solid var(--mac-border);
@@ -2663,6 +2665,7 @@ st.markdown(
         color: var(--mac-muted);
         font-size: 0.82rem;
         font-weight: 700;
+        overflow: hidden;
     }
 
     .mac-window-actions::before {
@@ -2672,6 +2675,175 @@ st.markdown(
         border-radius: 999px;
         background: #28c840;
         box-shadow: 0 0 0 4px rgba(40, 200, 64, 0.12);
+    }
+
+    .mac-window-actions.online-status {
+        position: relative;
+        isolation: isolate;
+        min-width: 92px;
+        padding: 6px 10px;
+        border-color: rgba(52, 199, 89, 0.30);
+        background:
+            radial-gradient(circle at 20% 30%, rgba(52, 199, 89, 0.22), transparent 34%),
+            linear-gradient(135deg, var(--mac-panel), var(--mac-panel-soft));
+        color: var(--mac-text);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.26),
+            0 8px 22px rgba(52, 199, 89, 0.10);
+    }
+
+    .mac-window-actions.online-status::before {
+        display: none;
+    }
+
+    .online-status::after {
+        content: "";
+        position: absolute;
+        inset: -40% -70%;
+        z-index: -1;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(52, 199, 89, 0.18),
+            transparent
+        );
+        transform: translateX(-55%) rotate(12deg);
+        animation: onlineSweep 2.8s ease-in-out infinite;
+    }
+
+    .online-dot {
+        position: relative;
+        width: 8px;
+        height: 8px;
+        flex: 0 0 8px;
+        border-radius: 999px;
+        background: #34c759;
+        box-shadow:
+            0 0 0 0 rgba(52, 199, 89, 0.38),
+            0 0 12px rgba(52, 199, 89, 0.72);
+        animation: onlinePulse 1.65s ease-in-out infinite;
+    }
+
+    .online-dot::after {
+        content: "";
+        position: absolute;
+        inset: -6px;
+        border-radius: inherit;
+        border: 1px solid rgba(52, 199, 89, 0.30);
+        animation: onlineRing 1.65s ease-out infinite;
+    }
+
+    .online-text {
+        line-height: 1;
+        font-weight: 820;
+        letter-spacing: -0.01em;
+        background: linear-gradient(
+            90deg,
+            var(--mac-text),
+            #34c759,
+            var(--mac-text)
+        );
+        background-size: 220% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: onlineTextShimmer 3.2s ease-in-out infinite;
+    }
+
+    .online-wave {
+        display: inline-flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 11px;
+        flex: 0 0 auto;
+    }
+
+    .online-wave span {
+        display: block;
+        width: 2px;
+        height: 4px;
+        border-radius: 999px;
+        background: #34c759;
+        opacity: 0.58;
+        animation: onlineBars 1.15s ease-in-out infinite;
+    }
+
+    .online-wave span:nth-child(2) {
+        animation-delay: 0.16s;
+    }
+
+    .online-wave span:nth-child(3) {
+        animation-delay: 0.32s;
+    }
+
+    @keyframes onlinePulse {
+        0%, 100% {
+            transform: scale(0.92);
+            box-shadow:
+                0 0 0 0 rgba(52, 199, 89, 0.36),
+                0 0 10px rgba(52, 199, 89, 0.62);
+        }
+        50% {
+            transform: scale(1.10);
+            box-shadow:
+                0 0 0 6px rgba(52, 199, 89, 0),
+                0 0 17px rgba(52, 199, 89, 0.92);
+        }
+    }
+
+    @keyframes onlineRing {
+        0% {
+            transform: scale(0.70);
+            opacity: 0.78;
+        }
+        100% {
+            transform: scale(1.45);
+            opacity: 0;
+        }
+    }
+
+    @keyframes onlineBars {
+        0%, 100% {
+            height: 4px;
+            opacity: 0.45;
+        }
+        50% {
+            height: 11px;
+            opacity: 0.95;
+        }
+    }
+
+    @keyframes onlineSweep {
+        0%, 35% {
+            transform: translateX(-60%) rotate(12deg);
+            opacity: 0;
+        }
+        55% {
+            opacity: 1;
+        }
+        100% {
+            transform: translateX(60%) rotate(12deg);
+            opacity: 0;
+        }
+    }
+
+    @keyframes onlineTextShimmer {
+        0%, 100% {
+            background-position: 0% 50%;
+        }
+        50% {
+            background-position: 100% 50%;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .online-status::after,
+        .online-dot,
+        .online-dot::after,
+        .online-text,
+        .online-wave span {
+            animation: none !important;
+        }
     }
 
     @media (min-width: 1280px) {
@@ -2704,8 +2876,31 @@ st.markdown(
         }
 
         .mac-window-actions {
+            min-width: 72px;
             padding: 5px 8px;
             font-size: 0.72rem;
+        }
+
+        .mac-window-actions.online-status {
+            min-width: 82px;
+            gap: 5px;
+            padding: 5px 7px;
+        }
+
+        .online-dot {
+            width: 7px;
+            height: 7px;
+            flex-basis: 7px;
+        }
+
+        .online-wave {
+            height: 9px;
+            gap: 1.5px;
+        }
+
+        .online-wave span {
+            width: 2px;
+            height: 3px;
         }
     }
 
@@ -6069,7 +6264,15 @@ def render_public_page() -> None:
                 <span class="mac-max"></span>
             </div>
             <div class="mac-window-title">adioranye AI</div>
-            <div class="mac-window-actions">Online</div>
+            <div class="mac-window-actions online-status" aria-label="Status AI online">
+                <span class="online-dot" aria-hidden="true"></span>
+                <span class="online-text">Online</span>
+                <span class="online-wave" aria-hidden="true">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </span>
+            </div>
         </div>
         <div class="app-hero">
             <div class="app-logo">🤖</div>
