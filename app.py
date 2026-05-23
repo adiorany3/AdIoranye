@@ -4271,6 +4271,225 @@ st.markdown(
 )
 
 # =========================
+# Loading animation style
+# =========================
+st.markdown(
+    """
+    <style>
+    .ai-loading-card {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.78rem;
+        max-width: min(100%, 560px);
+        margin: 0.15rem 0 0.65rem 0;
+        padding: 0.78rem 0.9rem;
+        border: 1px solid var(--mac-border);
+        border-radius: 18px;
+        background:
+            linear-gradient(135deg, var(--mac-panel), var(--mac-panel-soft));
+        box-shadow: var(--mac-shadow-soft);
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
+        color: var(--mac-text);
+    }
+
+    .ai-loading-orb {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        position: relative;
+        flex: 0 0 auto;
+        background:
+            radial-gradient(circle at 30% 28%, #ffffff, transparent 22%),
+            conic-gradient(
+                from 0deg,
+                var(--mac-blue),
+                rgba(255, 159, 10, 0.92),
+                rgba(48, 209, 88, 0.9),
+                var(--mac-blue)
+            );
+        animation: aiOrbSpin 1.15s linear infinite;
+    }
+
+    .ai-loading-orb::after {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        border-radius: inherit;
+        background: var(--mac-window-strong);
+        box-shadow: inset 0 0 0 1px var(--mac-border);
+    }
+
+    .ai-loading-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 0.22rem;
+        min-width: 0;
+    }
+
+    .ai-loading-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.42rem;
+        font-size: 0.92rem;
+        font-weight: 760;
+        letter-spacing: -0.01em;
+        color: var(--mac-text);
+        line-height: 1.25;
+    }
+
+    .ai-loading-subtitle {
+        font-size: 0.76rem;
+        color: var(--mac-muted);
+        line-height: 1.35;
+    }
+
+    .ai-loading-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.18rem;
+        transform: translateY(1px);
+    }
+
+    .ai-loading-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        background: currentColor;
+        opacity: 0.45;
+        animation: aiDotPulse 1.05s ease-in-out infinite;
+    }
+
+    .ai-loading-dot:nth-child(2) {
+        animation-delay: 0.16s;
+    }
+
+    .ai-loading-dot:nth-child(3) {
+        animation-delay: 0.32s;
+    }
+
+    .ai-loading-bar {
+        width: min(250px, 56vw);
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.22);
+    }
+
+    .ai-loading-bar::before {
+        content: "";
+        display: block;
+        width: 42%;
+        height: 100%;
+        border-radius: inherit;
+        background:
+            linear-gradient(
+                90deg,
+                transparent,
+                var(--mac-blue),
+                rgba(255, 159, 10, 0.92),
+                transparent
+            );
+        animation: aiLoadingBar 1.35s ease-in-out infinite;
+    }
+
+    @keyframes aiOrbSpin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @keyframes aiDotPulse {
+        0%,
+        80%,
+        100% {
+            transform: translateY(0);
+            opacity: 0.35;
+        }
+
+        40% {
+            transform: translateY(-4px);
+            opacity: 1;
+        }
+    }
+
+    @keyframes aiLoadingBar {
+        0% {
+            transform: translateX(-110%);
+        }
+
+        100% {
+            transform: translateX(260%);
+        }
+    }
+
+    @media (max-width: 520px) {
+        .ai-loading-card {
+            width: 100%;
+            gap: 0.62rem;
+            padding: 0.66rem 0.72rem;
+            border-radius: 16px;
+        }
+
+        .ai-loading-orb {
+            width: 28px;
+            height: 28px;
+        }
+
+        .ai-loading-title {
+            font-size: 0.84rem;
+        }
+
+        .ai-loading-subtitle {
+            font-size: 0.7rem;
+        }
+
+        .ai-loading-bar {
+            width: min(210px, 64vw);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .ai-loading-orb,
+        .ai-loading-dot,
+        .ai-loading-bar::before {
+            animation: none !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+def render_loading_animation_html(
+    title: str = "Adioranye sedang menyiapkan jawaban",
+    subtitle: str = "Menganalisis pertanyaan, memilih model terbaik, lalu menyusun respons.",
+) -> str:
+    safe_title = _html_escape(title)
+    safe_subtitle = _html_escape(subtitle)
+    return f"""
+    <div class="ai-loading-card" role="status" aria-live="polite">
+        <div class="ai-loading-orb"></div>
+        <div class="ai-loading-copy">
+            <div class="ai-loading-title">
+                <span>{safe_title}</span>
+                <span class="ai-loading-dots" aria-hidden="true">
+                    <span class="ai-loading-dot"></span>
+                    <span class="ai-loading-dot"></span>
+                    <span class="ai-loading-dot"></span>
+                </span>
+            </div>
+            <div class="ai-loading-subtitle">
+                {safe_subtitle}
+            </div>
+            <div class="ai-loading-bar" aria-hidden="true"></div>
+        </div>
+    </div>
+    """
+
+
+# =========================
 # Runtime config
 # =========================
 def get_runtime_config() -> Dict[str, Any]:
@@ -5833,10 +6052,30 @@ def render_public_page() -> None:
                 with st.chat_message("assistant"):
                     placeholder = st.empty()
                     placeholder.markdown(
-                        "⏳ adioranye sedang menganalisis permintaan dan memilih model terbaik..."
+                        render_loading_animation_html(),
+                        unsafe_allow_html=True,
                     )
                     route = build_model_routing_plan(
-                        advance_rotation=True, user_text=user_input
+                        advance_rotation=True,
+                        user_text=user_input,
+                    )
+                    if route.get("thinking_direct_to_capable"):
+                        loading_subtitle = (
+                            "Mode analisis aktif. Pertanyaan diproses dengan model capable."
+                        )
+                    elif route.get("normal_fast_mode"):
+                        loading_subtitle = (
+                            "Mode cepat aktif. Pertanyaan diproses dengan model hemat tercepat."
+                        )
+                    else:
+                        loading_subtitle = (
+                            "Sistem memilih jalur model terbaik dan menyiapkan jawaban."
+                        )
+                    placeholder.markdown(
+                        render_loading_animation_html(
+                            subtitle=loading_subtitle,
+                        ),
+                        unsafe_allow_html=True,
                     )
                     answer, meta = safe_generate_power_answer(
                         api_url=api_url,
