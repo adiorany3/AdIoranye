@@ -4017,6 +4017,140 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+
+# =========================
+# Streamlit online emblem safe area
+# =========================
+st.markdown(
+    """
+    <style>
+    /*
+      Safe area khusus untuk emblem/badge bawaan Streamlit Online.
+      Beberapa badge berada fixed di kanan-bawah dan bisa menutup pesan,
+      tombol feedback, atau input chat. Bagian ini memberi ruang aman dan
+      tetap menjaga tampilan rapi pada mode light maupun dark.
+    */
+    :root {
+        --online-emblem-safe-right: 98px;
+        --online-emblem-safe-bottom: 88px;
+        --chat-floating-bottom: 18px;
+        --chat-safe-space-desktop: 300px;
+        --chat-safe-space-mobile: 330px;
+    }
+
+    /* Coba sembunyikan variasi badge Streamlit Cloud yang sering berubah nama class. */
+    div[class*="viewerBadge"],
+    div[class*="ViewerBadge"],
+    div[class*="stStatusWidget"],
+    div[class*="stDeployButton"],
+    div[class*="stAppDeployButton"],
+    div[class*="decoration"],
+    div[class*="Decoration"],
+    a[href*="streamlit.io"],
+    a[href*="streamlit.app"],
+    button[title*="Streamlit"],
+    button[aria-label*="Streamlit"],
+    [data-testid*="stStatusWidget"],
+    [data-testid*="stDeployButton"],
+    [data-testid*="stAppDeployButton"],
+    [data-testid*="stToolbar"],
+    [data-testid*="stDecoration"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+    }
+
+    /* Tambah ruang bawah supaya pesan terakhir tidak tertutup overlay apa pun. */
+    .main .block-container,
+    div[data-testid="stMainBlockContainer"],
+    div.block-container {
+        padding-bottom: var(--chat-safe-space-desktop) !important;
+    }
+
+    .chat-input-safe-space {
+        height: var(--chat-safe-space-desktop) !important;
+    }
+
+    /* Pesan/feedback diberi jarak aman dari pojok kanan-bawah. */
+    div[data-testid="stChatMessage"]:last-of-type,
+    .feedback-info-box,
+    .answer-pdf-link-wrap {
+        scroll-margin-bottom: var(--chat-safe-space-desktop) !important;
+    }
+
+    /* Input tidak lagi terlalu dekat dengan kanan-bawah tempat badge biasa muncul. */
+    div[data-testid="stChatInput"] {
+        bottom: var(--chat-floating-bottom) !important;
+        width: min(980px, calc(100vw - var(--online-emblem-safe-right) - 78px)) !important;
+        max-width: calc(100vw - var(--online-emblem-safe-right) - 78px) !important;
+        transform: translateX(calc(-50% - 18px)) !important;
+        z-index: 998 !important;
+    }
+
+    /* Area klik tombol kirim dijaga agar tidak tepat di bawah badge kanan. */
+    div[data-testid="stChatInput"] button {
+        margin-right: 0.15rem !important;
+        position: relative !important;
+        z-index: 2 !important;
+    }
+
+    @media (min-width: 1280px) {
+        div[data-testid="stChatInput"] {
+            width: min(1040px, calc(100vw - var(--online-emblem-safe-right) - 132px)) !important;
+            max-width: calc(100vw - var(--online-emblem-safe-right) - 132px) !important;
+        }
+    }
+
+    @media (max-width: 760px) {
+        :root {
+            --online-emblem-safe-right: 74px;
+            --online-emblem-safe-bottom: 86px;
+            --chat-floating-bottom: calc(56px + env(safe-area-inset-bottom));
+        }
+
+        .main .block-container,
+        div[data-testid="stMainBlockContainer"],
+        div.block-container {
+            padding-bottom: var(--chat-safe-space-mobile) !important;
+        }
+
+        .chat-input-safe-space {
+            height: var(--chat-safe-space-mobile) !important;
+        }
+
+        div[data-testid="stChatInput"] {
+            left: 50% !important;
+            bottom: var(--chat-floating-bottom) !important;
+            width: calc(100vw - 24px) !important;
+            max-width: calc(100vw - 24px) !important;
+            transform: translateX(-50%) !important;
+            border-radius: 20px !important;
+        }
+
+        div[data-testid="stChatMessage"]:last-of-type,
+        .feedback-info-box,
+        .answer-pdf-link-wrap {
+            scroll-margin-bottom: var(--chat-safe-space-mobile) !important;
+        }
+    }
+
+    @media (max-width: 420px) {
+        :root {
+            --chat-floating-bottom: calc(64px + env(safe-area-inset-bottom));
+        }
+
+        div[data-testid="stChatInput"] {
+            width: calc(100vw - 18px) !important;
+            max-width: calc(100vw - 18px) !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # =========================
 # Runtime config
 # =========================
