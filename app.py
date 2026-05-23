@@ -351,7 +351,7 @@ def answer_pdf_download_button(answer_text: str, key: str, model_name: str = "")
     meta_text = f"Model: {model_name}" if model_name else ""
     filename = f"jawaban-adioranye-{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}.pdf"
     st.download_button(
-        "⬇️ Download jawaban PDF",
+        "⬇️ Klik disini untuk download jawaban ke format PDF",
         data=make_answer_pdf_bytes(answer_text, meta_text=meta_text),
         file_name=filename,
         mime="application/pdf",
