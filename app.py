@@ -2191,126 +2191,165 @@ def render_feedback_controls(
     answer_text: str = "",
     key_prefix: str = "feedback",
 ) -> None:
-    """Render compact feedback controls for assistant answers."""
+    """Render very compact feedback controls for assistant answers."""
     data = meta or {}
     interaction_id = int(data.get("power_interaction_id") or 0)
 
     if not interaction_id or not power_features_enabled:
         return
 
-    st.markdown(
-        """
-        <div class="feedback-info-box">
-            <span class="feedback-info-title">Info feedback</span>
-            <span class="feedback-info-text">
-                Klik <b>Bagus</b> jika jawaban sudah sesuai, atau <b>Kurang</b>
-                jika jawaban perlu diperbaiki. Masukan ini dipakai untuk
-                meningkatkan jawaban berikutnya.
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    user_id = (
+        "web-admin"
+        if st.session_state.get("admin_authenticated")
+        else "web-public"
     )
 
-    cols = st.columns(
-        [0.7, 0.7, 0.9, 5.2],
-        gap="small",
-    )
+    def save_feedback(
+        rating: int,
+        label: str,
+    ) -> int:
+        feedback_id = power_store.record_feedback(
+            interaction_id=interaction_id,
+            rating=rating,
+            label=label,
+            user_id=user_id,
+        )
 
-    with cols[0]:
-        if st.button(
-            "👍 Bagus",
-            key=f"{key_prefix}_up_{interaction_id}",
-            help="Tandai jawaban ini sudah sesuai dan membantu.",
-        ):
-            fid = power_store.record_feedback(
-                interaction_id=interaction_id,
-                rating=1,
-                label="bagus",
-                user_id=(
-                    "web-admin"
-                    if st.session_state.get("admin_authenticated")
-                    else "web-public"
-                ),
-            )
-            show_feedback_notice(
-                f"Feedback bagus tersimpan #{fid}. Terima kasih.",
-                icon="✅",
-            )
-
-    with cols[1]:
-        if st.button(
-            "👎 Kurang",
-            key=f"{key_prefix}_down_{interaction_id}",
-            help="Tandai jawaban ini masih kurang agar bisa diperbaiki.",
-        ):
-            fid = power_store.record_feedback(
-                interaction_id=interaction_id,
-                rating=-1,
-                label="kurang",
-                user_id=(
-                    "web-admin"
-                    if st.session_state.get("admin_authenticated")
-                    else "web-public"
-                ),
-            )
+        if rating < 0:
             try:
+                question_text = ""
+                if len(st.session_state.chat_messages) >= 2:
+                    previous_message = st.session_state.chat_messages[-2] or {}
+                    question_text = str(previous_message.get("content", ""))
+
                 power_store.log_knowledge_gap(
-                    question=(
-                        str(
-                            (st.session_state.chat_messages[-2] or {}).get(
-                                "content",
-                                "",
-                            )
-                        )
-                        if len(st.session_state.chat_messages) >= 2
-                        else ""
-                    ),
+                    question=question_text,
                     reason="negative_feedback",
                     intent=str(data.get("power_intent") or "general"),
-                    user_id=(
-                        "web-admin"
-                        if st.session_state.get("admin_authenticated")
-                        else "web-public"
-                    ),
+                    user_id=user_id,
                     channel="web",
                     priority=2,
                     meta={"interaction_id": interaction_id},
                 )
             except Exception:
                 pass
-            show_feedback_notice(
-                f"Feedback kurang tersimpan #{fid}. Akan dipakai untuk perbaikan.",
-                icon="📝",
-            )
 
-    with cols[2]:
-        if st.session_state.get("admin_authenticated") and st.button(
-            "📌 Template",
-            key=f"{key_prefix}_tmpl_{interaction_id}",
-            help="Simpan jawaban ini sebagai template admin.",
-        ):
-            tid = power_store.save_answer_template(
-                title=f"Template dari jawaban #{interaction_id}",
-                trigger_query=(
-                    str((st.session_state.chat_messages[-2] or {}).get("content", ""))
-                    if len(st.session_state.chat_messages) >= 2
-                    else ""
-                ),
-                answer=answer_text,
-                intent=str(data.get("power_intent") or "general"),
-                tags="feedback,best-answer",
-            )
-            show_feedback_notice(
-                f"Template tersimpan #{tid}.",
-                icon="📌",
-            )
+        return feedback_id
 
-    with cols[3]:
-        if data.get("strict_rag_blocked"):
-            st.caption(
-                f"Strict RAG memblokir jawaban. Gap ID: {data.get('knowledge_gap_id')}"
-            )
+    st.markdown(
+        """
+        <div class="feedback-info-box feedback-info-box--mobile-compact">
+            <span class="feedback-info-title">Feedback</span>
+            <span class="feedback-info-text">
+                Tekan 👍 jika sesuai, atau 👎 jika perlu diperbaiki.
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    feedback_state_key = f"{key_prefix}_recorded_{interaction_id}"
+    thumbs_key = f"{key_prefix}_thumbs_{interaction_id}"
+
+    if hasattr(st, "feedback"):
+        selected_feedback = st.feedback(
+            "thumbs",
+            key=thumbs_key,
+        )
+
+        if selected_feedback is not None:
+            already_recorded = st.session_state.get(feedback_state_key)
+
+            if not already_recorded:
+                rating = 1 if int(selected_feedback) == 1 else -1
+                label = "bagus" if rating > 0 else "kurang"
+                feedback_id = save_feedback(
+                    rating=rating,
+                    label=label,
+                )
+
+                st.session_state[feedback_state_key] = label
+
+                if rating > 0:
+                    show_feedback_notice(
+                        f"Feedback tersimpan #{feedback_id}. Terima kasih.",
+                        icon="✅",
+                    )
+                else:
+                    show_feedback_notice(
+                        f"Feedback tersimpan #{feedback_id}. Akan dipakai untuk perbaikan.",
+                        icon="📝",
+                    )
+    else:
+        cols = st.columns(
+            [0.28, 0.28, 5.4],
+            gap="small",
+        )
+
+        with cols[0]:
+            if st.button(
+                "👍",
+                key=f"{key_prefix}_up_{interaction_id}",
+                help="Bagus: jawaban sudah sesuai dan membantu.",
+            ):
+                feedback_id = save_feedback(
+                    rating=1,
+                    label="bagus",
+                )
+                show_feedback_notice(
+                    f"Feedback tersimpan #{feedback_id}. Terima kasih.",
+                    icon="✅",
+                )
+
+        with cols[1]:
+            if st.button(
+                "👎",
+                key=f"{key_prefix}_down_{interaction_id}",
+                help="Kurang: jawaban masih perlu diperbaiki.",
+            ):
+                feedback_id = save_feedback(
+                    rating=-1,
+                    label="kurang",
+                )
+                show_feedback_notice(
+                    f"Feedback tersimpan #{feedback_id}. Akan dipakai untuk perbaikan.",
+                    icon="📝",
+                )
+
+    if st.session_state.get("admin_authenticated"):
+        template_cols = st.columns(
+            [0.32, 6.0],
+            gap="small",
+        )
+
+        with template_cols[0]:
+            if st.button(
+                "📌",
+                key=f"{key_prefix}_tmpl_{interaction_id}",
+                help="Simpan jawaban ini sebagai template admin.",
+            ):
+                trigger_query = ""
+                if len(st.session_state.chat_messages) >= 2:
+                    previous_message = st.session_state.chat_messages[-2] or {}
+                    trigger_query = str(previous_message.get("content", ""))
+
+                template_id = power_store.save_answer_template(
+                    title=f"Template dari jawaban #{interaction_id}",
+                    trigger_query=trigger_query,
+                    answer=answer_text,
+                    intent=str(data.get("power_intent") or "general"),
+                    tags="feedback,best-answer",
+                )
+                show_feedback_notice(
+                    f"Template tersimpan #{template_id}.",
+                    icon="📌",
+                )
+
+    if data.get("strict_rag_blocked"):
+        st.caption(
+            f"Strict RAG memblokir jawaban. Gap ID: {data.get('knowledge_gap_id')}"
+        )
+
 
 def build_public_model_status_html(
     route: Dict[str, Any], last_meta: Dict[str, Any] | None = None
@@ -3919,17 +3958,17 @@ st.markdown(
     .feedback-info-box {
         display: inline-flex;
         align-items: center;
-        gap: 0.45rem;
-        max-width: 100%;
-        margin: 0.18rem 0 0.35rem;
-        padding: 0.38rem 0.58rem;
-        border: 1px solid var(--ui-border, rgba(148, 163, 184, 0.28));
+        gap: 0.36rem;
+        max-width: min(100%, 560px);
+        margin: 0.12rem 0 0.28rem;
+        padding: 0.30rem 0.50rem;
+        border: 1px solid var(--ui-border, rgba(148, 163, 184, 0.26));
         border-radius: 999px;
-        background: var(--ui-surface-soft, rgba(255, 255, 255, 0.68));
-        color: var(--ui-muted, rgba(71, 85, 105, 0.92));
-        font-size: 0.72rem;
-        line-height: 1.35;
-        box-shadow: 0 5px 14px rgba(15, 23, 42, 0.05);
+        background: var(--ui-surface-soft, rgba(255, 255, 255, 0.62));
+        color: var(--ui-muted, rgba(71, 85, 105, 0.90));
+        font-size: 0.68rem;
+        line-height: 1.28;
+        box-shadow: 0 4px 10px rgba(15, 23, 42, 0.045);
     }
 
     .feedback-info-title {
@@ -3942,6 +3981,7 @@ st.markdown(
         color: var(--ui-muted, #475569);
     }
 
+    /* Tombol feedback fallback dan tombol template admin dibuat kecil. */
     div[class*="_feedback_up_"] button,
     div[class*="_feedback_down_"] button,
     div[class*="_feedback_tmpl_"] button,
@@ -3951,15 +3991,17 @@ st.markdown(
     div[class*="st-key-history_feedback_"][class*="_up_"] button,
     div[class*="st-key-history_feedback_"][class*="_down_"] button,
     div[class*="st-key-history_feedback_"][class*="_tmpl_"] button {
-        width: auto !important;
-        min-width: 0 !important;
-        min-height: 30px !important;
-        padding: 0.2rem 0.55rem !important;
+        width: 34px !important;
+        min-width: 34px !important;
+        max-width: 34px !important;
+        min-height: 28px !important;
+        height: 28px !important;
+        padding: 0 !important;
         border-radius: 999px !important;
-        font-size: 0.72rem !important;
-        line-height: 1.1 !important;
+        font-size: 0.76rem !important;
+        line-height: 1 !important;
         font-weight: 750 !important;
-        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.07) !important;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07) !important;
     }
 
     div[class*="_feedback_up_"] button:hover,
@@ -3974,10 +4016,27 @@ st.markdown(
         transform: translateY(-1px);
     }
 
+    /* st.feedback thumbs bawaan dibuat lebih ringkas. */
+    div[data-testid="stFeedback"] {
+        width: fit-content !important;
+        max-width: 92px !important;
+        margin: 0.04rem 0 0.28rem !important;
+    }
+
+    div[data-testid="stFeedback"] button {
+        width: 32px !important;
+        min-width: 32px !important;
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 !important;
+        border-radius: 999px !important;
+        font-size: 0.78rem !important;
+    }
+
     @media (prefers-color-scheme: dark) {
         .feedback-info-box {
-            background: rgba(15, 23, 42, 0.54);
-            border-color: rgba(255, 255, 255, 0.14);
+            background: rgba(15, 23, 42, 0.52);
+            border-color: rgba(255, 255, 255, 0.13);
             color: rgba(226, 232, 240, 0.82);
         }
 
@@ -3992,12 +4051,34 @@ st.markdown(
 
     @media (max-width: 760px) {
         .feedback-info-box {
-            display: flex;
-            align-items: flex-start;
-            border-radius: 14px;
-            padding: 0.48rem 0.62rem;
+            display: inline-flex;
+            align-items: center;
+            max-width: calc(100vw - 40px);
+            margin-top: 0.08rem;
+            margin-bottom: 0.22rem;
+            padding: 0.26rem 0.42rem;
+            border-radius: 999px;
+            font-size: 0.64rem;
+            line-height: 1.22;
         }
 
+        .feedback-info-title {
+            font-size: 0.63rem;
+        }
+
+        .feedback-info-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        div[data-testid="stFeedback"] {
+            max-width: 82px !important;
+            margin-top: 0 !important;
+            margin-bottom: 0.20rem !important;
+        }
+
+        div[data-testid="stFeedback"] button,
         div[class*="_feedback_up_"] button,
         div[class*="_feedback_down_"] button,
         div[class*="_feedback_tmpl_"] button,
@@ -4007,9 +4088,47 @@ st.markdown(
         div[class*="st-key-history_feedback_"][class*="_up_"] button,
         div[class*="st-key-history_feedback_"][class*="_down_"] button,
         div[class*="st-key-history_feedback_"][class*="_tmpl_"] button {
-            width: auto !important;
-            min-height: 30px !important;
-            padding: 0.22rem 0.55rem !important;
+            width: 30px !important;
+            min-width: 30px !important;
+            max-width: 30px !important;
+            height: 27px !important;
+            min-height: 27px !important;
+            padding: 0 !important;
+            font-size: 0.72rem !important;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .feedback-info-box {
+            max-width: calc(100vw - 32px);
+            padding: 0.24rem 0.38rem;
+            font-size: 0.61rem;
+        }
+
+        .feedback-info-title {
+            display: none;
+        }
+
+        div[data-testid="stFeedback"] {
+            max-width: 76px !important;
+        }
+
+        div[data-testid="stFeedback"] button,
+        div[class*="_feedback_up_"] button,
+        div[class*="_feedback_down_"] button,
+        div[class*="_feedback_tmpl_"] button,
+        div[class*="st-key-latest_feedback_up_"] button,
+        div[class*="st-key-latest_feedback_down_"] button,
+        div[class*="st-key-latest_feedback_tmpl_"] button,
+        div[class*="st-key-history_feedback_"][class*="_up_"] button,
+        div[class*="st-key-history_feedback_"][class*="_down_"] button,
+        div[class*="st-key-history_feedback_"][class*="_tmpl_"] button {
+            width: 28px !important;
+            min-width: 28px !important;
+            max-width: 28px !important;
+            height: 26px !important;
+            min-height: 26px !important;
+            font-size: 0.70rem !important;
         }
     }
     </style>
