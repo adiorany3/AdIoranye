@@ -1465,3 +1465,380 @@ def generate_answer(
 
     detail = "\n\n".join([f"{m}: {e}" for m, e in errors.items()])
     raise AllModelsFailedError(f"Semua model gagal.\n\n{detail}")
+
+
+# =========================
+# Realtime streaming support
+# =========================
+
+def _extract_stream_delta(payload: Any) -> str:
+    """Extract token text from OpenAI-compatible stream payload."""
+    if not isinstance(payload, dict):
+        return ""
+
+    choices = payload.get("choices") or []
+
+    if not choices or not isinstance(choices[0], dict):
+        return ""
+
+    choice = choices[0]
+    delta = choice.get("delta") or {}
+
+    content = delta.get("content")
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts: List[str] = []
+
+        for item in content:
+            if isinstance(item, dict):
+                parts.append(
+                    str(
+                        item.get("text")
+                        or item.get("content")
+                        or ""
+                    )
+                )
+            else:
+                parts.append(str(item or ""))
+
+        return "".join(parts)
+
+    message = choice.get("message") or {}
+    message_content = message.get("content")
+
+    if isinstance(message_content, str):
+        return message_content
+
+    text = choice.get("text")
+
+    if isinstance(text, str):
+        return text
+
+    return ""
+
+
+def _parse_stream_line(
+    line: Any,
+) -> Tuple[bool, str]:
+    """Return tuple `(done, content)` from one SSE line."""
+    if isinstance(line, bytes):
+        raw = line.decode(
+            "utf-8",
+            errors="ignore",
+        )
+    else:
+        raw = str(line or "")
+
+    raw = raw.strip()
+
+    if not raw or raw.startswith(":"):
+        return False, ""
+
+    if raw.startswith("data:"):
+        raw = raw[5:].strip()
+
+    if raw == "[DONE]":
+        return True, ""
+
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        return False, ""
+
+    return False, _extract_stream_delta(payload)
+
+
+def build_stream_payload(
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float = 0.3,
+    max_completion_tokens: int = 1600,
+) -> Dict[str, Any]:
+    payload = build_payload(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_completion_tokens=max_completion_tokens,
+    )
+
+    payload["stream"] = True
+
+    return payload
+
+
+def call_api_stream_once(
+    api_url: str,
+    api_key: str,
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float = 0.3,
+    max_completion_tokens: int = 1600,
+    timeout: int = 45,
+    meta: Optional[Dict[str, Any]] = None,
+):
+    """Yield token chunks from one model call.
+
+    This function is intentionally separate from `generate_answer()`.
+    If provider streaming fails, the caller can fall back to the normal
+    non-streaming path without breaking older behavior.
+    """
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    payload = build_stream_payload(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        max_completion_tokens=max_completion_tokens,
+    )
+
+    stream_meta = meta if isinstance(meta, dict) else {}
+    stream_meta.update(
+        {
+            "model_requested": model,
+            "streaming": True,
+            "stream_fallback_used": False,
+        }
+    )
+
+    response = _HTTP_SESSION.post(
+        api_url,
+        headers=headers,
+        json=payload,
+        timeout=timeout,
+        stream=True,
+    )
+
+    raw_error = ""
+
+    if response.status_code != 200:
+        try:
+            raw_error = response.text or ""
+        except Exception:
+            raw_error = ""
+
+        if is_content_filter_error(raw_error):
+            raise ContentFilterError(
+                f"Prompt ditolak oleh content filter provider. Raw: {raw_error[:900]}"
+            )
+
+        raise RuntimeError(
+            f"API status {response.status_code}: {raw_error[:1200]}"
+        )
+
+    content_parts: List[str] = []
+
+    for line in response.iter_lines(
+        decode_unicode=True,
+    ):
+        done,
+        chunk = _parse_stream_line(line)
+
+        if done:
+            break
+
+        if not chunk:
+            continue
+
+        content_parts.append(chunk)
+        yield chunk
+
+    full_content = "".join(content_parts).strip()
+
+    if not full_content:
+        raise EmptyResponseError(
+            "Streaming API berhasil dipanggil, tetapi isi jawaban kosong."
+        )
+
+    stream_meta.update(
+        {
+            "active_model_final": model,
+            "active_model_cost_tier": model_cost_tier(model),
+            "active_model_price": model_price(model),
+            "quality_score": answer_quality_score(full_content, messages[-1].get("content", ""))[0],
+            "algorithm": "realtime_streaming_router_v1",
+        }
+    )
+
+
+class StreamingAnswer:
+    """Iterable stream object with metadata after iteration."""
+
+    def __init__(
+        self,
+        api_url: str,
+        api_key: str,
+        model: str,
+        system_prompt: str,
+        user_text: str,
+        memory_text: str = "",
+        recent_messages: Optional[List[Dict[str, str]]] = None,
+        fallback_models: Optional[List[str]] = None,
+        expensive_fallback_models: Optional[List[str]] = None,
+        allow_expensive_fallback: bool = True,
+        max_expensive_models: int = 1,
+        temperature: float = 0.3,
+        max_completion_tokens: int = 1800,
+        timeout: int = 45,
+        safe_context: bool = True,
+        smart_model_router: bool = True,
+        return_to_primary: bool = True,
+        max_smart_models: int = 2,
+    ) -> None:
+        self.api_url = api_url
+        self.api_key = api_key
+        self.model = model
+        self.system_prompt = system_prompt
+        self.user_text = user_text
+        self.memory_text = memory_text
+        self.recent_messages = recent_messages
+        self.fallback_models = fallback_models
+        self.expensive_fallback_models = expensive_fallback_models
+        self.allow_expensive_fallback = allow_expensive_fallback
+        self.max_expensive_models = max_expensive_models
+        self.temperature = temperature
+        self.max_completion_tokens = max_completion_tokens
+        self.timeout = timeout
+        self.safe_context = safe_context
+        self.smart_model_router = smart_model_router
+        self.return_to_primary = return_to_primary
+        self.max_smart_models = max_smart_models
+        self.answer = ""
+        self.meta: Dict[str, Any] = {}
+
+    def _yield_text_in_chunks(
+        self,
+        text: str,
+        chunk_size: int = 18,
+    ):
+        for index in range(
+            0,
+            len(text),
+            max(1, int(chunk_size or 18)),
+        ):
+            yield text[index:index + chunk_size]
+
+    def __iter__(self):
+        task = classify_task(self.user_text)
+        max_context_messages = 2 if task["simple_chat"] else 4
+
+        messages = build_messages(
+            system_prompt=self.system_prompt,
+            user_text=self.user_text,
+            memory_text=self.memory_text,
+            recent_messages=self.recent_messages,
+            safe_context=self.safe_context,
+            max_context_messages=max_context_messages,
+        )
+
+        stream_meta: Dict[str, Any] = {}
+
+        try:
+            for chunk in call_api_stream_once(
+                api_url=self.api_url,
+                api_key=self.api_key,
+                model=self.model,
+                messages=messages,
+                temperature=self.temperature,
+                max_completion_tokens=adaptive_token_budget(
+                    self.user_text,
+                    self.model,
+                    self.max_completion_tokens,
+                ),
+                timeout=self.timeout,
+                meta=stream_meta,
+            ):
+                self.answer += chunk
+                yield chunk
+
+            self.meta.update(stream_meta)
+            self.meta["realtime_streaming_used"] = True
+            self.meta["stream_fallback_used"] = False
+
+        except Exception as exc:
+            self.meta["stream_error"] = str(exc)[:900]
+            self.meta["realtime_streaming_used"] = False
+
+            fallback_answer,
+            fallback_meta = generate_answer(
+                api_url=self.api_url,
+                api_key=self.api_key,
+                model=self.model,
+                system_prompt=self.system_prompt,
+                user_text=self.user_text,
+                memory_text=self.memory_text,
+                recent_messages=self.recent_messages,
+                fallback_models=self.fallback_models,
+                expensive_fallback_models=self.expensive_fallback_models,
+                allow_expensive_fallback=self.allow_expensive_fallback,
+                max_expensive_models=self.max_expensive_models,
+                temperature=self.temperature,
+                max_completion_tokens=self.max_completion_tokens,
+                timeout=self.timeout,
+                safe_context=self.safe_context,
+                smart_model_router=self.smart_model_router,
+                return_to_primary=self.return_to_primary,
+                max_smart_models=self.max_smart_models,
+            )
+
+            self.answer = fallback_answer
+            self.meta.update(fallback_meta or {})
+            self.meta["stream_fallback_used"] = True
+            self.meta["stream_fallback_reason"] = str(exc)[:900]
+
+            for chunk in self._yield_text_in_chunks(fallback_answer):
+                yield chunk
+
+
+def generate_answer_stream(
+    api_url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    user_text: str,
+    memory_text: str = "",
+    recent_messages: Optional[List[Dict[str, str]]] = None,
+    fallback_models: Optional[List[str]] = None,
+    expensive_fallback_models: Optional[List[str]] = None,
+    allow_expensive_fallback: bool = True,
+    max_expensive_models: int = 1,
+    temperature: float = 0.3,
+    max_completion_tokens: int = 1800,
+    timeout: int = 45,
+    safe_context: bool = True,
+    smart_model_router: bool = True,
+    return_to_primary: bool = True,
+    max_smart_models: int = 2,
+) -> StreamingAnswer:
+    """Create a realtime answer stream.
+
+    The object is iterable and stores final metadata in `.meta`.
+    If streaming is not supported by the provider, it falls back to
+    the existing non-streaming `generate_answer()` automatically.
+    """
+    return StreamingAnswer(
+        api_url=api_url,
+        api_key=api_key,
+        model=model,
+        system_prompt=system_prompt,
+        user_text=user_text,
+        memory_text=memory_text,
+        recent_messages=recent_messages,
+        fallback_models=fallback_models,
+        expensive_fallback_models=expensive_fallback_models,
+        allow_expensive_fallback=allow_expensive_fallback,
+        max_expensive_models=max_expensive_models,
+        temperature=temperature,
+        max_completion_tokens=max_completion_tokens,
+        timeout=timeout,
+        safe_context=safe_context,
+        smart_model_router=smart_model_router,
+        return_to_primary=return_to_primary,
+        max_smart_models=max_smart_models,
+    )
+

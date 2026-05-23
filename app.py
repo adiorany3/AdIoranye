@@ -27,6 +27,7 @@ from ai_core import (
     DEFAULT_FALLBACK_MODELS,
     MODEL_PRICE_IDR,
     generate_answer,
+    generate_answer_stream,
     model_cost_tier,
     model_price,
     model_price_label,
@@ -6211,6 +6212,83 @@ def render_admin_production_dashboard() -> None:
     )
 
 
+
+def should_use_realtime_streaming(
+    user_text: str,
+    runtime_options: Dict[str, Any],
+) -> bool:
+    """Aktifkan streaming langsung untuk permintaan yang tidak butuh RAG berat."""
+    if not bool(runtime_options.get("streaming_preview_enabled", True)):
+        return False
+
+    if bool(runtime_options.get("enable_rag")):
+        return False
+
+    if power_features_enabled and power_strict_rag_mode:
+        return False
+
+    return True
+
+
+def render_realtime_stream_answer(
+    placeholder: Any,
+    cfg: Dict[str, Any],
+    route: Dict[str, Any],
+    runtime_options: Dict[str, Any],
+    user_input: str,
+) -> Tuple[str, Dict[str, Any]]:
+    """Render jawaban streaming bertahap ke placeholder chat."""
+    stream_obj = generate_answer_stream(
+        api_url=api_url,
+        api_key=api_key,
+        model=route["primary_model"],
+        system_prompt=cfg["persona"],
+        user_text=user_input,
+        memory_text=build_memory_text(limit=12),
+        recent_messages=st.session_state.chat_messages[:-1][-6:],
+        fallback_models=route["cheap_fallback_models"],
+        expensive_fallback_models=route["expensive_fallback_models"],
+        allow_expensive_fallback=route["allow_expensive_fallback"],
+        max_expensive_models=route["max_expensive_models"],
+        temperature=float(cfg["temperature"]),
+        max_completion_tokens=int(runtime_options["max_completion_tokens"]),
+        timeout=60,
+        smart_model_router=bool(cfg["smart_model_router"]),
+        return_to_primary=route["return_to_primary"],
+        max_smart_models=route["max_smart_models"],
+    )
+
+    answer_parts: List[str] = []
+
+    for stream_chunk in stream_obj:
+        if not stream_chunk:
+            continue
+
+        answer_parts.append(str(stream_chunk))
+        streamed_answer = "".join(answer_parts)
+
+        placeholder.markdown(
+            streamed_answer + "▌",
+        )
+
+    answer = "".join(answer_parts).strip()
+    meta = getattr(
+        stream_obj,
+        "meta",
+        {},
+    ) or {}
+
+    if not isinstance(meta, dict):
+        meta = {}
+
+    meta["realtime_streaming_ui"] = True
+
+    placeholder.markdown(answer)
+
+    return answer, meta
+
+
+
 # =========================
 # Runtime config
 # =========================
@@ -8432,135 +8510,147 @@ def render_public_page() -> None:
                         target="loading",
                         delay_ms=120,
                     )
-                    answer, meta = safe_generate_power_answer(
-                        api_url=api_url,
-                        api_key=api_key,
-                        model=route["primary_model"],
-                        system_prompt=cfg["persona"],
-                        user_text=user_input,
-                        base_memory_text=build_memory_text(limit=12),
-                        recent_messages=st.session_state.chat_messages[:-1][-6:],
-                        fallback_models=route["cheap_fallback_models"],
-                        expensive_fallback_models=route["expensive_fallback_models"],
-                        allow_expensive_fallback=route["allow_expensive_fallback"],
-                        max_expensive_models=route["max_expensive_models"],
-                        temperature=float(cfg["temperature"]),
-                        max_completion_tokens=int(runtime_options["max_completion_tokens"]),
-                        timeout=60,
-                        smart_model_router=bool(cfg["smart_model_router"]),
-                        return_to_primary=route["return_to_primary"],
-                        max_smart_models=route["max_smart_models"],
-                        store=power_store,
-                        user_id=(
-                            "web-admin"
-                            if st.session_state.get("admin_authenticated", False)
-                            else "web-public"
-                        ),
-                        channel="web",
-                        enable_rag=bool(runtime_options["enable_rag"]),
-                        rag_top_k=int(runtime_options["rag_top_k"]),
-                        enable_persistent_memory=bool(
-                            power_features_enabled and power_persistent_memory_enabled
-                        ),
-                        enable_prompt_templates=bool(
-                            power_features_enabled and power_prompt_templates_enabled
-                        ),
-                        enable_self_verification=bool(
-                            runtime_options["enable_self_verification"]
-                        ),
-                        daily_cost_limit_idr=float(daily_cost_limit_idr),
-                        max_expensive_calls_per_day=int(max_expensive_calls_per_day),
-                        enable_response_cache=bool(power_response_cache_enabled),
-                        response_cache_ttl_seconds=int(
-                            runtime_options["response_cache_ttl_seconds"]
-                        ),
-                        enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
-                        enable_circuit_breaker=bool(power_circuit_breaker_enabled),
-                        circuit_max_failures=int(model_circuit_max_failures),
-                        circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
-                        anti_hallucination_enabled=bool(
-                            power_anti_hallucination_enabled
-                        ),
-                        anti_hallucination_auto_strict=bool(
-                            power_anti_hallucination_auto_strict
-                        ),
-                        anti_hallucination_min_sources=int(
-                            power_anti_hallucination_min_sources
-                        ),
-                        anti_hallucination_min_quality=float(
-                            power_anti_hallucination_min_quality
-                        ),
-                        anti_hallucination_min_freshness=float(
-                            power_anti_hallucination_min_freshness
-                        ),
-                        anti_hallucination_append_sources=bool(
-                            power_anti_hallucination_append_sources
-                        ),
-                        strict_rag_mode=bool(power_strict_rag_mode),
-                        rag_min_sources=int(power_rag_min_sources),
-                        rag_min_score=float(power_rag_min_score),
-                        quality_control_enabled=bool(
-                            runtime_options["quality_control_enabled"]
-                        ),
-                        quality_verifier_enabled=bool(
-                            runtime_options["quality_verifier_enabled"]
-                        ),
-                        quality_verifier_model=power_quality_verifier_model,
-                        quality_min_score=float(power_quality_min_score),
-                        answer_mode=power_default_answer_mode,
-                        append_quality_footer=bool(power_quality_append_footer),
-                        hide_kb_sources_for_casual=bool(
-                            power_hide_kb_sources_for_casual
-                        ),
-                        disable_rag_for_casual=bool(power_disable_rag_for_casual),
-                        performance_optimizer_enabled=bool(
-                            power_performance_optimizer_enabled
-                        ),
-                        query_rewriter_enabled=bool(
-                            runtime_options["query_rewriter_enabled"]
-                        ),
-                        reranker_enabled=bool(runtime_options["reranker_enabled"]),
-                        semantic_cache_enabled=bool(
-                            runtime_options["semantic_cache_enabled"]
-                        ),
-                        semantic_cache_threshold=float(power_semantic_cache_threshold),
-                        semantic_cache_ttl_seconds=int(
-                            power_semantic_cache_ttl_seconds
-                        ),
-                        latency_budget_enabled=bool(power_latency_budget_enabled),
-                        retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
-                        live_music_chart_enabled=bool(live_music_chart_enabled),
-                        live_music_chart_limit=int(live_music_chart_limit),
-                        live_music_chart_timeout_seconds=int(
-                            live_music_chart_timeout_seconds
-                        ),
-                        live_web_fallback_enabled=bool(live_web_fallback_enabled),
-                        live_web_fallback_provider=live_web_fallback_provider,
-                        tavily_api_key=tavily_api_key,
-                        live_web_fallback_max_results=int(
-                            live_web_fallback_max_results
-                        ),
-                        live_web_fallback_timeout_seconds=int(
-                            live_web_fallback_timeout_seconds
-                        ),
-                        live_web_fallback_min_sources=int(
-                            live_web_fallback_min_sources
-                        ),
-                        live_web_fallback_include_raw_content=bool(
-                            live_web_fallback_include_raw_content
-                        ),
-                        live_web_fallback_max_content_chars=int(
-                            live_web_fallback_max_content_chars
-                        ),
-                        live_web_fallback_auto_save_to_kb=bool(
-                            live_web_fallback_auto_save_to_kb
-                        ),
-                        live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
-                        live_web_fallback_force_for_current=bool(
-                            live_web_fallback_force_for_current
-                        ),
-                        live_web_fallback_topic=live_web_fallback_topic,
-                    )
+                    if should_use_realtime_streaming(
+                        user_input,
+                        runtime_options,
+                    ):
+                        answer, meta = render_realtime_stream_answer(
+                            placeholder=placeholder,
+                            cfg=cfg,
+                            route=route,
+                            runtime_options=runtime_options,
+                            user_input=user_input,
+                        )
+                    else:
+                        answer, meta = safe_generate_power_answer(
+                            api_url=api_url,
+                            api_key=api_key,
+                            model=route["primary_model"],
+                            system_prompt=cfg["persona"],
+                            user_text=user_input,
+                            base_memory_text=build_memory_text(limit=12),
+                            recent_messages=st.session_state.chat_messages[:-1][-6:],
+                            fallback_models=route["cheap_fallback_models"],
+                            expensive_fallback_models=route["expensive_fallback_models"],
+                            allow_expensive_fallback=route["allow_expensive_fallback"],
+                            max_expensive_models=route["max_expensive_models"],
+                            temperature=float(cfg["temperature"]),
+                            max_completion_tokens=int(runtime_options["max_completion_tokens"]),
+                            timeout=60,
+                            smart_model_router=bool(cfg["smart_model_router"]),
+                            return_to_primary=route["return_to_primary"],
+                            max_smart_models=route["max_smart_models"],
+                            store=power_store,
+                            user_id=(
+                                "web-admin"
+                                if st.session_state.get("admin_authenticated", False)
+                                else "web-public"
+                            ),
+                            channel="web",
+                            enable_rag=bool(runtime_options["enable_rag"]),
+                            rag_top_k=int(runtime_options["rag_top_k"]),
+                            enable_persistent_memory=bool(
+                                power_features_enabled and power_persistent_memory_enabled
+                            ),
+                            enable_prompt_templates=bool(
+                                power_features_enabled and power_prompt_templates_enabled
+                            ),
+                            enable_self_verification=bool(
+                                runtime_options["enable_self_verification"]
+                            ),
+                            daily_cost_limit_idr=float(daily_cost_limit_idr),
+                            max_expensive_calls_per_day=int(max_expensive_calls_per_day),
+                            enable_response_cache=bool(power_response_cache_enabled),
+                            response_cache_ttl_seconds=int(
+                                runtime_options["response_cache_ttl_seconds"]
+                            ),
+                            enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
+                            enable_circuit_breaker=bool(power_circuit_breaker_enabled),
+                            circuit_max_failures=int(model_circuit_max_failures),
+                            circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
+                            anti_hallucination_enabled=bool(
+                                power_anti_hallucination_enabled
+                            ),
+                            anti_hallucination_auto_strict=bool(
+                                power_anti_hallucination_auto_strict
+                            ),
+                            anti_hallucination_min_sources=int(
+                                power_anti_hallucination_min_sources
+                            ),
+                            anti_hallucination_min_quality=float(
+                                power_anti_hallucination_min_quality
+                            ),
+                            anti_hallucination_min_freshness=float(
+                                power_anti_hallucination_min_freshness
+                            ),
+                            anti_hallucination_append_sources=bool(
+                                power_anti_hallucination_append_sources
+                            ),
+                            strict_rag_mode=bool(power_strict_rag_mode),
+                            rag_min_sources=int(power_rag_min_sources),
+                            rag_min_score=float(power_rag_min_score),
+                            quality_control_enabled=bool(
+                                runtime_options["quality_control_enabled"]
+                            ),
+                            quality_verifier_enabled=bool(
+                                runtime_options["quality_verifier_enabled"]
+                            ),
+                            quality_verifier_model=power_quality_verifier_model,
+                            quality_min_score=float(power_quality_min_score),
+                            answer_mode=power_default_answer_mode,
+                            append_quality_footer=bool(power_quality_append_footer),
+                            hide_kb_sources_for_casual=bool(
+                                power_hide_kb_sources_for_casual
+                            ),
+                            disable_rag_for_casual=bool(power_disable_rag_for_casual),
+                            performance_optimizer_enabled=bool(
+                                power_performance_optimizer_enabled
+                            ),
+                            query_rewriter_enabled=bool(
+                                runtime_options["query_rewriter_enabled"]
+                            ),
+                            reranker_enabled=bool(runtime_options["reranker_enabled"]),
+                            semantic_cache_enabled=bool(
+                                runtime_options["semantic_cache_enabled"]
+                            ),
+                            semantic_cache_threshold=float(power_semantic_cache_threshold),
+                            semantic_cache_ttl_seconds=int(
+                                power_semantic_cache_ttl_seconds
+                            ),
+                            latency_budget_enabled=bool(power_latency_budget_enabled),
+                            retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
+                            live_music_chart_enabled=bool(live_music_chart_enabled),
+                            live_music_chart_limit=int(live_music_chart_limit),
+                            live_music_chart_timeout_seconds=int(
+                                live_music_chart_timeout_seconds
+                            ),
+                            live_web_fallback_enabled=bool(live_web_fallback_enabled),
+                            live_web_fallback_provider=live_web_fallback_provider,
+                            tavily_api_key=tavily_api_key,
+                            live_web_fallback_max_results=int(
+                                live_web_fallback_max_results
+                            ),
+                            live_web_fallback_timeout_seconds=int(
+                                live_web_fallback_timeout_seconds
+                            ),
+                            live_web_fallback_min_sources=int(
+                                live_web_fallback_min_sources
+                            ),
+                            live_web_fallback_include_raw_content=bool(
+                                live_web_fallback_include_raw_content
+                            ),
+                            live_web_fallback_max_content_chars=int(
+                                live_web_fallback_max_content_chars
+                            ),
+                            live_web_fallback_auto_save_to_kb=bool(
+                                live_web_fallback_auto_save_to_kb
+                            ),
+                            live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
+                            live_web_fallback_force_for_current=bool(
+                                live_web_fallback_force_for_current
+                            ),
+                            live_web_fallback_topic=live_web_fallback_topic,
+                        )
                     if not isinstance(meta, dict):
                         meta = {}
                     answer = sanitize_public_ai_answer(
