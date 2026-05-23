@@ -566,6 +566,7 @@ DEFAULT_PERSONA = (
     "Utamakan akurasi: jangan mengarang fakta, angka, sumber, hukum, medis, keuangan, atau informasi terbaru. Jika data belum cukup, jelaskan batasannya dan berikan langkah aman. "
     "Saat memperbaiki kode, sebutkan letak masalah, solusi inti, lalu berikan kode yang bisa langsung ditempel. "
     "Jika menulis kode, format kode harus vertikal ke bawah dengan line break yang rapi, bukan dipadatkan panjang ke samping. "
+    "Pecah parameter, list, dictionary, command, dan chain method panjang ke beberapa baris agar nyaman dibaca di layar HP. "
     "Pecah parameter, dictionary, list, fungsi, dan command panjang ke beberapa baris agar mudah dibaca. "
     "Saat membuat tulisan, ikuti format pengguna dan gunakan gaya bahasa manusiawi, rapi, serta mudah dipahami. "
     "Jika permintaan berisiko atau melanggar aturan, tolak singkat dan arahkan ke alternatif yang aman."
@@ -578,7 +579,7 @@ Memory default Adioranye:
 - Prinsip akurasi: jangan mengarang. Untuk data terbaru, hukum, medis, keuangan, harga, jadwal, atau keputusan berisiko, sampaikan bahwa data perlu diverifikasi atau gunakan sumber yang tersedia.
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
-- Format kode: tulis kode ke bawah dengan baris yang rapi. Jangan menulis kode panjang dalam satu baris jika bisa dipecah ke beberapa baris.
+- Format kode: tulis kode ke bawah dengan baris yang rapi. Jangan menulis kode panjang dalam satu baris jika bisa dipecah ke beberapa baris. Untuk parameter, list, dictionary, command, CSS, HTML attribute, dan function call panjang, pecah menjadi beberapa baris dengan indentasi.
 - Bisnis/konten/desain: berikan ide yang menarik, aman dipakai, mudah dieksekusi, dan sesuai platform.
 - Dokumen/Knowledge Base: jika ada data internal atau dokumen yang relevan, prioritaskan data tersebut. Jika sumber tidak cukup, jangan memaksakan jawaban.
 - Format: ikuti format pengguna. Jika format tidak disebutkan, gunakan struktur paling mudah dibaca.
@@ -3170,8 +3171,8 @@ st.markdown(
     div[data-testid="stCodeBlock"] pre {
         position: relative !important;
         max-width: 100% !important;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
         padding: 1rem 1.08rem !important;
         margin: 0.86rem 0 !important;
         border-radius: 18px !important;
@@ -3229,7 +3230,8 @@ st.markdown(
     div[data-testid="stMarkdownContainer"] pre code,
     div[data-testid="stCodeBlock"] pre code {
         display: block !important;
-        min-width: max-content !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
         padding: 0 !important;
         margin: 0 !important;
         border: 0 !important;
@@ -3239,10 +3241,27 @@ st.markdown(
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
         font-size: clamp(0.78rem, 2.65vw, 0.92rem) !important;
         line-height: 1.68 !important;
-        white-space: pre !important;
-        word-break: normal !important;
-        overflow-wrap: normal !important;
+        white-space: pre-wrap !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
         tab-size: 4;
+    }
+
+    div[data-testid="stMarkdownContainer"],
+    div[data-testid="stMarkdownContainer"] p,
+    div[data-testid="stMarkdownContainer"] li,
+    div[data-testid="stMarkdownContainer"] span {
+        max-width: 100% !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+    }
+
+    div[data-testid="stMarkdownContainer"] pre span,
+    div[data-testid="stCodeBlock"] pre span,
+    div[data-testid="stChatMessage"] pre span {
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
     }
 
     div[data-testid="stMarkdownContainer"] :not(pre) > code,
@@ -3287,6 +3306,9 @@ st.markdown(
         div[data-testid="stCodeBlock"] pre code {
             font-size: 0.78rem !important;
             line-height: 1.62 !important;
+            white-space: pre-wrap !important;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
         }
     }
 
@@ -3861,6 +3883,26 @@ st.markdown(
         color: var(--ui-code-text) !important;
         border-color: var(--ui-border) !important;
     }
+
+    div[data-testid="stChatMessage"] pre,
+    div[data-testid="stMarkdownContainer"] pre,
+    div[data-testid="stCodeBlock"] pre {
+        overflow-x: hidden !important;
+        max-width: 100% !important;
+        white-space: pre-wrap !important;
+    }
+
+    div[data-testid="stChatMessage"] pre code,
+    div[data-testid="stMarkdownContainer"] pre code,
+    div[data-testid="stCodeBlock"] pre code {
+        min-width: 0 !important;
+        max-width: 100% !important;
+        white-space: pre-wrap !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+    }
+
+
 
     div[data-testid="stChatMessage"] table,
     div[data-testid="stTable"] table {
