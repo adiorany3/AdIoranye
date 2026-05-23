@@ -6582,6 +6582,184 @@ def render_tavily_connection_panel() -> None:
                 )
 
 
+
+def fetch_tavily_live_context(
+    query: str,
+    max_results: int | None = None,
+) -> Dict[str, Any]:
+    """Ambil konteks langsung dari Tavily.
+
+    Ini menjadi jalur paksa untuk pertanyaan info terkini agar jawaban tidak
+    kembali memakai Knowledge Base lama.
+    """
+    api_key = str(tavily_api_key or os.getenv("TAVILY_API_KEY", "") or "").strip()
+
+    if not api_key:
+        return {
+            "ok": False,
+            "error": "TAVILY_API_KEY belum terbaca.",
+            "context": "",
+            "sources": [],
+        }
+
+    max_results_safe = int(max_results or live_web_fallback_max_results or 4)
+
+    payload = {
+        "query": str(query or "").strip(),
+        "topic": "general",
+        "search_depth": "advanced",
+        "max_results": max(1, min(max_results_safe, 8)),
+        "include_answer": True,
+        "include_raw_content": bool(live_web_fallback_include_raw_content),
+    }
+
+    try:
+        response = requests.post(
+            "https://api.tavily.com/search",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=int(live_web_fallback_timeout_seconds or 10),
+        )
+    except requests.Timeout:
+        return {
+            "ok": False,
+            "error": "Tavily timeout.",
+            "context": "",
+            "sources": [],
+        }
+    except requests.RequestException as exc:
+        return {
+            "ok": False,
+            "error": f"Request Tavily gagal: {exc}",
+            "context": "",
+            "sources": [],
+        }
+
+    try:
+        data = response.json()
+    except Exception:
+        data = {}
+
+    if response.status_code != 200:
+        return {
+            "ok": False,
+            "error": f"HTTP {response.status_code}: {response.text[:900]}",
+            "context": "",
+            "sources": [],
+        }
+
+    results = data.get("results") or []
+    sources: List[Dict[str, str]] = []
+
+    context_parts = [
+        "KONTEKS LIVE WEB/TAVILY UNTUK INFO TERKINI",
+        f"Query: {query}",
+        f"Waktu cek: {_wib_now_text()}",
+        "",
+    ]
+
+    answer_preview = str(data.get("answer") or "").strip()
+
+    if answer_preview:
+        context_parts.append("Ringkasan Tavily:")
+        context_parts.append(answer_preview[:1200])
+        context_parts.append("")
+
+    for index, item in enumerate(results, start=1):
+        if not isinstance(item, dict):
+            continue
+
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        content = str(
+            item.get("content")
+            or item.get("raw_content")
+            or ""
+        ).strip()
+
+        if not title and not url and not content:
+            continue
+
+        content = content[: int(live_web_fallback_max_content_chars or 3200)]
+
+        sources.append(
+            {
+                "title": title,
+                "url": url,
+                "content": content[:500],
+            }
+        )
+
+        context_parts.append(f"Sumber {index}: {title or 'Tanpa judul'}")
+        if url:
+            context_parts.append(f"URL: {url}")
+        if content:
+            context_parts.append(f"Isi ringkas: {content}")
+        context_parts.append("")
+
+    if not sources and not answer_preview:
+        return {
+            "ok": False,
+            "error": "Tavily tidak mengembalikan hasil yang bisa dipakai.",
+            "context": "",
+            "sources": [],
+        }
+
+    context_parts.append(
+        "Instruksi penggunaan: jawab hanya berdasarkan konteks live web di atas untuk bagian info terkini. "
+        "Jangan memakai Knowledge Base lama jika bertentangan dengan konteks live web."
+    )
+
+    return {
+        "ok": True,
+        "error": "",
+        "context": "\n".join(context_parts).strip(),
+        "sources": sources,
+        "answer_preview": answer_preview,
+    }
+
+
+def build_current_info_memory_context(
+    user_query: str,
+    runtime_options: Dict[str, Any],
+) -> Tuple[str, Dict[str, Any]]:
+    """Buat memory context khusus untuk pertanyaan info terkini."""
+    if not runtime_options.get("current_info_mode"):
+        return build_memory_text(limit=12), {
+            "live_context_used": False,
+            "live_context_error": "",
+            "live_sources": [],
+        }
+
+    tavily_result = fetch_tavily_live_context(
+        user_query,
+        max_results=int(live_web_fallback_max_results or 4),
+    )
+
+    if tavily_result.get("ok"):
+        return str(tavily_result.get("context") or ""), {
+            "live_context_used": True,
+            "live_context_error": "",
+            "live_sources": tavily_result.get("sources") or [],
+            "live_answer_preview": tavily_result.get("answer_preview", ""),
+        }
+
+    return (
+        "MODE INFO TERKINI AKTIF, tetapi Tavily/live web belum berhasil mengambil sumber terbaru.\n"
+        f"Error: {tavily_result.get('error', 'Tidak diketahui')}\n"
+        "Jika menjawab, jelaskan bahwa informasi terkini belum bisa diverifikasi.",
+        {
+            "live_context_used": False,
+            "live_context_error": str(tavily_result.get("error") or ""),
+            "live_sources": [],
+        },
+    )
+
+
+
 def render_public_status_summary() -> None:
     stats = _get_public_stats()
     active_blocks = _runtime_block_store()
@@ -9002,6 +9180,24 @@ def render_public_page() -> None:
                         target="loading",
                         delay_ms=120,
                     )
+                    current_info_memory_text, current_info_meta = build_current_info_memory_context(
+                        user_input,
+                        runtime_options,
+                    )
+                    if (
+                        runtime_options.get("current_info_mode")
+                        and not current_info_meta.get("live_context_used")
+                    ):
+                        placeholder.markdown(
+                            render_loading_animation_html(
+                                subtitle=(
+                                    "Mode info terkini aktif, tetapi Tavily belum memberi sumber. "
+                                    "Adioranye akan menjawab dengan pemberitahuan verifikasi."
+                                ),
+                            ),
+                            unsafe_allow_html=True,
+                        )
+
                     answer, meta = safe_generate_power_answer(
                         api_url=api_url,
                         api_key=api_key,
@@ -9012,7 +9208,8 @@ def render_public_page() -> None:
                                 "\n\nMODE INFO TERKINI AKTIF:\n"
                                 "- Untuk pertanyaan yang meminta info terbaru/hari ini/sekarang, prioritaskan sumber live web/Tavily.\n"
                                 "- Jangan menjawab berdasarkan Knowledge Base lama jika sumber live web tersedia.\n"
-                                "- Jika live web gagal atau tidak ada sumber baru, jelaskan bahwa info terkini belum dapat diverifikasi."
+                                "- Hasil live web/Tavily telah dimasukkan ke konteks. Gunakan konteks tersebut sebagai sumber utama.\n"
+                                "- Jika konteks live web kosong/gagal, jangan mengarang info terbaru; jelaskan bahwa info terkini belum dapat diverifikasi."
                                 if runtime_options.get("current_info_mode")
                                 else ""
                             )
@@ -9025,7 +9222,7 @@ def render_public_page() -> None:
                                 else ""
                             )
                         ),
-                        base_memory_text=build_memory_text(limit=12),
+                        base_memory_text=current_info_memory_text,
                         recent_messages=st.session_state.chat_messages[:-1][-6:],
                         fallback_models=route["cheap_fallback_models"],
                         expensive_fallback_models=route["expensive_fallback_models"],
@@ -9220,6 +9417,17 @@ def render_public_page() -> None:
                         )
                         meta["cache_disabled_for_current_info"] = bool(
                             runtime_options.get("current_info_mode")
+                        )
+                        meta["direct_tavily_context_used"] = bool(
+                            current_info_meta.get("live_context_used")
+                        )
+                        meta["direct_tavily_error"] = current_info_meta.get(
+                            "live_context_error",
+                            "",
+                        )
+                        meta["direct_tavily_sources"] = current_info_meta.get(
+                            "live_sources",
+                            [],
                         )
                     restore_active_model_to_cheap(route.get("primary_model"))
                     answer = sanitize_public_answer(

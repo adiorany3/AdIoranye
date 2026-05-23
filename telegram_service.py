@@ -197,6 +197,138 @@ TELEGRAM_CURRENT_INFO_DOMAINS = [
 ]
 
 
+
+def fetch_tavily_live_context_for_telegram(
+    query: str,
+    api_key: str,
+    max_results: int = 4,
+    timeout_seconds: int = 10,
+    include_raw_content: bool = True,
+    max_content_chars: int = 3200,
+) -> Dict[str, Any]:
+    """Ambil konteks langsung dari Tavily untuk Telegram."""
+    key = str(api_key or os.getenv("TAVILY_API_KEY", "") or "").strip()
+
+    if not key:
+        return {
+            "ok": False,
+            "error": "TAVILY_API_KEY belum terbaca.",
+            "context": "",
+            "sources": [],
+        }
+
+    try:
+        response = requests.post(
+            "https://api.tavily.com/search",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "query": str(query or "").strip(),
+                "topic": "general",
+                "search_depth": "advanced",
+                "max_results": max(1, min(int(max_results or 4), 8)),
+                "include_answer": True,
+                "include_raw_content": bool(include_raw_content),
+            },
+            timeout=int(timeout_seconds or 10),
+        )
+    except requests.Timeout:
+        return {
+            "ok": False,
+            "error": "Tavily timeout.",
+            "context": "",
+            "sources": [],
+        }
+    except requests.RequestException as exc:
+        return {
+            "ok": False,
+            "error": f"Request Tavily gagal: {exc}",
+            "context": "",
+            "sources": [],
+        }
+
+    try:
+        data = response.json()
+    except Exception:
+        data = {}
+
+    if response.status_code != 200:
+        return {
+            "ok": False,
+            "error": f"HTTP {response.status_code}: {response.text[:900]}",
+            "context": "",
+            "sources": [],
+        }
+
+    results = data.get("results") or []
+    sources: List[Dict[str, str]] = []
+
+    context_parts = [
+        "KONTEKS LIVE WEB/TAVILY UNTUK INFO TERKINI",
+        f"Query: {query}",
+        f"Waktu cek: {_wib_now_text()}",
+        "",
+    ]
+
+    answer_preview = str(data.get("answer") or "").strip()
+
+    if answer_preview:
+        context_parts.append("Ringkasan Tavily:")
+        context_parts.append(answer_preview[:1200])
+        context_parts.append("")
+
+    for index, item in enumerate(results, start=1):
+        if not isinstance(item, dict):
+            continue
+
+        title = str(item.get("title") or "").strip()
+        url = str(item.get("url") or "").strip()
+        content = str(item.get("content") or item.get("raw_content") or "").strip()
+        content = content[: int(max_content_chars or 3200)]
+
+        if not title and not url and not content:
+            continue
+
+        sources.append(
+            {
+                "title": title,
+                "url": url,
+                "content": content[:500],
+            }
+        )
+
+        context_parts.append(f"Sumber {index}: {title or 'Tanpa judul'}")
+        if url:
+            context_parts.append(f"URL: {url}")
+        if content:
+            context_parts.append(f"Isi ringkas: {content}")
+        context_parts.append("")
+
+    if not sources and not answer_preview:
+        return {
+            "ok": False,
+            "error": "Tavily tidak mengembalikan hasil yang bisa dipakai.",
+            "context": "",
+            "sources": [],
+        }
+
+    context_parts.append(
+        "Instruksi penggunaan: jawab hanya berdasarkan konteks live web di atas untuk bagian info terkini. "
+        "Jangan memakai Knowledge Base lama jika bertentangan dengan konteks live web."
+    )
+
+    return {
+        "ok": True,
+        "error": "",
+        "context": "\n".join(context_parts).strip(),
+        "sources": sources,
+        "answer_preview": answer_preview,
+    }
+
+
+
 def detect_telegram_auto_live_scraping_need(
     text: str,
     enabled: bool = True,
@@ -2510,6 +2642,46 @@ class TelegramBotService:
                             if live_scraping_needed and auto_live_scraping_show_status:
                                 self._send_typing(token, chat_id)
 
+                            direct_live_context = ""
+                            direct_live_meta: Dict[str, Any] = {
+                                "live_context_used": False,
+                                "live_context_error": "",
+                                "live_sources": [],
+                            }
+
+                            if live_scraping_needed:
+                                tavily_direct_result = fetch_tavily_live_context_for_telegram(
+                                    query=text,
+                                    api_key=tavily_api_key,
+                                    max_results=int(live_web_fallback_max_results),
+                                    timeout_seconds=int(live_web_fallback_timeout_seconds),
+                                    include_raw_content=bool(live_web_fallback_include_raw_content),
+                                    max_content_chars=int(live_web_fallback_max_content_chars),
+                                )
+
+                                if tavily_direct_result.get("ok"):
+                                    direct_live_context = str(
+                                        tavily_direct_result.get("context") or ""
+                                    )
+                                    direct_live_meta = {
+                                        "live_context_used": True,
+                                        "live_context_error": "",
+                                        "live_sources": tavily_direct_result.get("sources") or [],
+                                    }
+                                else:
+                                    direct_live_context = (
+                                        "MODE INFO TERKINI AKTIF, tetapi Tavily/live web belum berhasil mengambil sumber terbaru.\n"
+                                        f"Error: {tavily_direct_result.get('error', 'Tidak diketahui')}\n"
+                                        "Jika menjawab, jelaskan bahwa informasi terkini belum bisa diverifikasi."
+                                    )
+                                    direct_live_meta = {
+                                        "live_context_used": False,
+                                        "live_context_error": str(
+                                            tavily_direct_result.get("error") or ""
+                                        ),
+                                        "live_sources": [],
+                                    }
+
                             answer, meta = safe_generate_power_answer(
                                 api_url=api_url,
                                 api_key=api_key,
@@ -2533,7 +2705,11 @@ class TelegramBotService:
                                         else ""
                                     )
                                 ),
-                                base_memory_text=memory_text,
+                                base_memory_text=(
+                                    direct_live_context
+                                    if live_scraping_needed
+                                    else memory_text
+                                ),
                                 recent_messages=history,
                                 fallback_models=request_fallback_models,
                                 expensive_fallback_models=request_expensive_fallback_models,
@@ -2638,6 +2814,17 @@ class TelegramBotService:
                                 meta["telegram_current_info_mode"] = live_scraping_needed
                                 meta["telegram_kb_disabled_for_current_info"] = live_scraping_needed
                                 meta["telegram_cache_disabled_for_current_info"] = live_scraping_needed
+                                meta["telegram_direct_tavily_context_used"] = bool(
+                                    direct_live_meta.get("live_context_used")
+                                )
+                                meta["telegram_direct_tavily_error"] = direct_live_meta.get(
+                                    "live_context_error",
+                                    "",
+                                )
+                                meta["telegram_direct_tavily_sources"] = direct_live_meta.get(
+                                    "live_sources",
+                                    [],
+                                )
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
 
@@ -2704,7 +2891,11 @@ class TelegramBotService:
                                                 else ""
                                             )
                                         ),
-                                        base_memory_text=memory_text,
+                                        base_memory_text=(
+                                            direct_live_context
+                                            if live_scraping_needed
+                                            else memory_text
+                                        ),
                                         recent_messages=history,
                                         fallback_models=fallback_models,
                                         expensive_fallback_models=expensive_fallback_models,
@@ -2809,6 +3000,17 @@ class TelegramBotService:
                                         retry_meta["telegram_current_info_mode"] = live_scraping_needed
                                         retry_meta["telegram_kb_disabled_for_current_info"] = live_scraping_needed
                                         retry_meta["telegram_cache_disabled_for_current_info"] = live_scraping_needed
+                                        retry_meta["telegram_direct_tavily_context_used"] = bool(
+                                            direct_live_meta.get("live_context_used")
+                                        )
+                                        retry_meta["telegram_direct_tavily_error"] = direct_live_meta.get(
+                                            "live_context_error",
+                                            "",
+                                        )
+                                        retry_meta["telegram_direct_tavily_sources"] = direct_live_meta.get(
+                                            "live_sources",
+                                            [],
+                                        )
                                         retry_meta["telegram_speed_updated_at"] = self._model_health_checked_at
 
                                     history.append({"role": "user", "content": text})
