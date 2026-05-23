@@ -2,6 +2,7 @@ import base64
 import hmac
 import inspect
 import html
+import json
 import os
 import shutil
 import re
@@ -610,6 +611,30 @@ def init_state() -> None:
             get_secret("AI_OPERATION_MODE", "Seimbang") or "Seimbang"
         )
 
+    if "sound_enabled" not in st.session_state:
+        st.session_state.sound_enabled = parse_bool(
+            get_secret("ANSWER_SOUND_ENABLED", True),
+            default=True,
+        )
+    if "public_rate_events" not in st.session_state:
+        st.session_state.public_rate_events = []
+    if "model_runtime_blocks" not in st.session_state:
+        st.session_state.model_runtime_blocks = {}
+    if "public_usage_stats" not in st.session_state:
+        st.session_state.public_usage_stats = {
+            "total_questions": 0,
+            "blocked_by_rate_limit": 0,
+            "public_errors_hidden": 0,
+            "model_blocks_created": 0,
+            "last_error_summary": "",
+            "last_error_at": "",
+        }
+    if "answer_streaming_preview_enabled" not in st.session_state:
+        st.session_state.answer_streaming_preview_enabled = parse_bool(
+            get_secret("ANSWER_STREAMING_PREVIEW_ENABLED", True),
+            default=True,
+        )
+
 
 # =========================
 # Defaults
@@ -903,6 +928,39 @@ model_circuit_max_failures = int(get_secret("MODEL_CIRCUIT_MAX_FAILURES", 3) or 
 model_circuit_cooldown_seconds = int(
     get_secret("MODEL_CIRCUIT_COOLDOWN_SECONDS", 1800) or 1800
 )
+
+
+# Public safety / production controls
+public_rate_limit_enabled = parse_bool(
+    get_secret("PUBLIC_RATE_LIMIT_ENABLED", True),
+    default=True,
+)
+public_rate_limit_max_requests = int(
+    get_secret("PUBLIC_RATE_LIMIT_MAX_REQUESTS", 10) or 10
+)
+public_rate_limit_window_seconds = int(
+    get_secret("PUBLIC_RATE_LIMIT_WINDOW_SECONDS", 600) or 600
+)
+public_max_prompt_chars = int(
+    get_secret("PUBLIC_MAX_PROMPT_CHARS", 6000) or 6000
+)
+runtime_model_block_enabled = parse_bool(
+    get_secret("RUNTIME_MODEL_BLOCK_ENABLED", True),
+    default=True,
+)
+runtime_model_block_timeout_seconds = int(
+    get_secret("RUNTIME_MODEL_BLOCK_TIMEOUT_SECONDS", 900) or 900
+)
+runtime_model_block_quota_seconds = int(
+    get_secret("RUNTIME_MODEL_BLOCK_QUOTA_SECONDS", 3600) or 3600
+)
+runtime_model_block_invalid_seconds = int(
+    get_secret("RUNTIME_MODEL_BLOCK_INVALID_SECONDS", 86400) or 86400
+)
+runtime_model_block_generic_seconds = int(
+    get_secret("RUNTIME_MODEL_BLOCK_GENERIC_SECONDS", 1200) or 1200
+)
+
 
 # Daily Knowledge Base auto-update / scraper
 kb_scraper_sources_file = str(
@@ -2313,6 +2371,24 @@ def build_model_routing_plan(
         else ""
     )
     fastest_cheap_primary = fastest_cheap_models[0] if fastest_cheap_models else ""
+
+    if is_model_runtime_blocked(primary_model):
+        available_cheap = filter_runtime_blocked_models(active_cheap_models)
+        available_expensive = filter_runtime_blocked_models(active_expensive_models)
+
+        if available_cheap:
+            primary_model = available_cheap[0]
+            direct_to_expensive = False
+            thinking_direct_to_capable = False
+        elif available_expensive:
+            primary_model = available_expensive[0]
+            direct_to_expensive = True
+
+    cheap_fallback_models = filter_runtime_blocked_models(cheap_fallback_models)
+    expensive_fallback_models = filter_runtime_blocked_models(expensive_fallback_models)
+    active_cheap_models = filter_runtime_blocked_models(active_cheap_models)
+    active_expensive_models = filter_runtime_blocked_models(active_expensive_models)
+    fastest_cheap_models = filter_runtime_blocked_models(fastest_cheap_models)
 
     return {
         "primary_model": primary_model,
@@ -5708,6 +5784,436 @@ def render_answer_ready_sound_script(
     )
 
 
+
+def _get_public_stats() -> Dict[str, Any]:
+    stats = st.session_state.get("public_usage_stats") or {}
+
+    if not isinstance(stats, dict):
+        stats = {}
+
+    defaults = {
+        "total_questions": 0,
+        "blocked_by_rate_limit": 0,
+        "public_errors_hidden": 0,
+        "model_blocks_created": 0,
+        "last_error_summary": "",
+        "last_error_at": "",
+    }
+
+    for key, value in defaults.items():
+        stats.setdefault(key, value)
+
+    st.session_state.public_usage_stats = stats
+    return stats
+
+
+def _increment_public_stat(
+    key: str,
+    amount: int = 1,
+) -> None:
+    stats = _get_public_stats()
+
+    try:
+        stats[key] = int(stats.get(key, 0) or 0) + int(amount)
+    except Exception:
+        stats[key] = amount
+
+
+def _runtime_block_store() -> Dict[str, Dict[str, Any]]:
+    store = st.session_state.get("model_runtime_blocks") or {}
+
+    if not isinstance(store, dict):
+        store = {}
+
+    now = time.time()
+    cleaned: Dict[str, Dict[str, Any]] = {}
+
+    for model_name, info in store.items():
+        if not isinstance(info, dict):
+            continue
+
+        until = float(info.get("until") or 0)
+
+        if until > now:
+            cleaned[str(model_name)] = info
+
+    st.session_state.model_runtime_blocks = cleaned
+    return cleaned
+
+
+def is_model_runtime_blocked(
+    model_name: str,
+) -> bool:
+    if not bool(runtime_model_block_enabled):
+        return False
+
+    model_clean = str(model_name or "").strip()
+
+    if not model_clean:
+        return False
+
+    store = _runtime_block_store()
+    info = store.get(model_clean) or {}
+
+    return float(info.get("until") or 0) > time.time()
+
+
+def register_runtime_model_block(
+    model_name: str,
+    reason: str,
+    seconds: int,
+    detail: str = "",
+) -> None:
+    if not bool(runtime_model_block_enabled):
+        return
+
+    model_clean = str(model_name or "").strip()
+
+    if not model_clean:
+        return
+
+    seconds_safe = max(
+        60,
+        int(seconds or runtime_model_block_generic_seconds or 1200),
+    )
+
+    store = _runtime_block_store()
+    store[model_clean] = {
+        "reason": str(reason or "runtime_error")[:120],
+        "detail": str(detail or "")[:700],
+        "until": time.time() + seconds_safe,
+        "created_at": _wib_now_text(),
+    }
+
+    st.session_state.model_runtime_blocks = store
+    _increment_public_stat("model_blocks_created")
+
+
+def classify_runtime_error_detail(
+    detail: str,
+) -> Tuple[str, int]:
+    lowered = str(detail or "").lower()
+
+    if any(
+        marker in lowered
+        for marker in [
+            "insufficient balance",
+            "insufficient_user_quota",
+            "quota",
+            "billing",
+            "creditsdepleted",
+            "pre-consume",
+        ]
+    ):
+        return (
+            "saldo/quota tidak cukup",
+            int(runtime_model_block_quota_seconds or 3600),
+        )
+
+    if any(
+        marker in lowered
+        for marker in [
+            "invalid model",
+            "model not found",
+            "unknown model",
+            "does not exist",
+            "please select a different model",
+        ]
+    ):
+        return (
+            "model tidak valid",
+            int(runtime_model_block_invalid_seconds or 86400),
+        )
+
+    if any(
+        marker in lowered
+        for marker in [
+            "read timed out",
+            "timeout",
+            "timed out",
+            "connectionpool",
+        ]
+    ):
+        return (
+            "timeout koneksi",
+            int(runtime_model_block_timeout_seconds or 900),
+        )
+
+    return (
+        "error runtime",
+        int(runtime_model_block_generic_seconds or 1200),
+    )
+
+
+def register_model_blocks_from_error_text(
+    error_text: str,
+    route: Dict[str, Any] | None = None,
+) -> None:
+    if not bool(runtime_model_block_enabled):
+        return
+
+    detail = str(error_text or "")
+
+    if not detail.strip():
+        return
+
+    route_data = route or {}
+    candidate_models: List[str] = []
+
+    for key in [
+        "primary_model",
+        "capable_primary_model",
+        "fastest_cheap_primary_model",
+    ]:
+        value = str(route_data.get(key) or "").strip()
+
+        if value:
+            candidate_models.append(value)
+
+    for key in [
+        "cheap_fallback_models",
+        "expensive_fallback_models",
+        "active_cheap_models",
+        "active_expensive_models",
+    ]:
+        values = route_data.get(key) or []
+
+        if isinstance(values, list):
+            candidate_models.extend(
+                str(item).strip()
+                for item in values
+                if str(item).strip()
+            )
+
+    detected_models = re.findall(
+        r"slashai/[A-Za-z0-9_.:/+-]+",
+        detail,
+    )
+
+    candidate_models.extend(detected_models)
+
+    reason,
+    seconds = classify_runtime_error_detail(detail)
+
+    for model_name in unique_models(candidate_models):
+        if model_name and model_name in detail:
+            register_runtime_model_block(
+                model_name=model_name,
+                reason=reason,
+                seconds=seconds,
+                detail=detail,
+            )
+
+
+def filter_runtime_blocked_models(
+    models: List[str],
+) -> List[str]:
+    return [
+        model
+        for model in unique_models(models)
+        if not is_model_runtime_blocked(model)
+    ]
+
+
+def check_public_rate_limit(
+    user_text: str,
+) -> Tuple[bool, str]:
+    if st.session_state.get("admin_authenticated", False):
+        return True, ""
+
+    if not bool(public_rate_limit_enabled):
+        return True, ""
+
+    clean_text = str(user_text or "")
+
+    if len(clean_text) > int(public_max_prompt_chars or 6000):
+        return (
+            False,
+            "Pertanyaan terlalu panjang. Mohon ringkas dulu agar bisa diproses lebih stabil.",
+        )
+
+    now = time.time()
+    window = max(
+        60,
+        int(public_rate_limit_window_seconds or 600),
+    )
+    max_requests = max(
+        1,
+        int(public_rate_limit_max_requests or 10),
+    )
+
+    events = st.session_state.get("public_rate_events") or []
+
+    if not isinstance(events, list):
+        events = []
+
+    events = [
+        float(item)
+        for item in events
+        if now - float(item or 0) <= window
+    ]
+
+    if len(events) >= max_requests:
+        st.session_state.public_rate_events = events
+        _increment_public_stat("blocked_by_rate_limit")
+
+        return (
+            False,
+            "Terlalu banyak permintaan dalam waktu singkat. Coba lagi beberapa saat.",
+        )
+
+    events.append(now)
+    st.session_state.public_rate_events = events
+    _increment_public_stat("total_questions")
+
+    return True, ""
+
+
+def get_safe_public_error_message() -> str:
+    return (
+        "Maaf, Adioranye sedang mengalami gangguan koneksi/model. "
+        "Silakan coba lagi beberapa saat lagi."
+    )
+
+
+def looks_like_public_error_detail(
+    answer_text: str,
+) -> bool:
+    lowered = str(answer_text or "").lower()
+
+    markers = [
+        "semua model gagal",
+        "api status",
+        "httpsconnectionpool",
+        "read timed out",
+        "insufficient balance",
+        "insufficient_user_quota",
+        "invalid model",
+        "external billing",
+        "creditsdepleted",
+        "traceback",
+        "request id:",
+    ]
+
+    return any(marker in lowered for marker in markers)
+
+
+def sanitize_public_answer(
+    answer_text: str,
+    meta: Dict[str, Any] | None = None,
+    route: Dict[str, Any] | None = None,
+) -> str:
+    raw_answer = str(answer_text or "")
+
+    if not looks_like_public_error_detail(raw_answer):
+        return raw_answer
+
+    register_model_blocks_from_error_text(
+        raw_answer,
+        route=route,
+    )
+
+    stats = _get_public_stats()
+    stats["public_errors_hidden"] = int(stats.get("public_errors_hidden", 0) or 0) + 1
+    stats["last_error_summary"] = raw_answer[:500]
+    stats["last_error_at"] = _wib_now_text()
+
+    if isinstance(meta, dict):
+        meta["public_error_hidden"] = True
+        meta["public_error_original_preview"] = raw_answer[:700]
+
+    return get_safe_public_error_message()
+
+
+def render_public_status_summary() -> None:
+    stats = _get_public_stats()
+    active_blocks = _runtime_block_store()
+
+    blocked_count = len(active_blocks)
+    total_questions = int(stats.get("total_questions", 0) or 0)
+    hidden_errors = int(stats.get("public_errors_hidden", 0) or 0)
+    block_class = "danger" if blocked_count else "ok"
+
+    st.markdown(
+        f"""
+        <div class="production-status-card">
+            <span class="production-pill ok">Publik: {total_questions} pertanyaan</span>
+            <span class="production-pill {block_class}">Model diblokir: {blocked_count}</span>
+            <span class="production-pill">Error disamarkan: {hidden_errors}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_admin_production_dashboard() -> None:
+    stats = _get_public_stats()
+    active_blocks = _runtime_block_store()
+
+    st.subheader("🛡️ Produksi & Stabilitas")
+
+    col_a,
+    col_b,
+    col_c,
+    col_d = st.columns(4)
+
+    with col_a:
+        st.metric(
+            "Pertanyaan publik",
+            int(stats.get("total_questions", 0) or 0),
+        )
+
+    with col_b:
+        st.metric(
+            "Kena rate limit",
+            int(stats.get("blocked_by_rate_limit", 0) or 0),
+        )
+
+    with col_c:
+        st.metric(
+            "Error disamarkan",
+            int(stats.get("public_errors_hidden", 0) or 0),
+        )
+
+    with col_d:
+        st.metric(
+            "Model diblokir aktif",
+            len(active_blocks),
+        )
+
+    if active_blocks:
+        rows = []
+
+        for model_name, info in active_blocks.items():
+            rows.append(
+                {
+                    "model": model_name,
+                    "alasan": info.get("reason", ""),
+                    "sampai": _timestamp_to_wib_text(info.get("until", 0)),
+                    "dibuat": info.get("created_at", ""),
+                }
+            )
+
+        st.dataframe(
+            rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    last_error = str(stats.get("last_error_summary") or "").strip()
+
+    if last_error:
+        with st.expander("Detail error terakhir admin"):
+            st.code(
+                last_error,
+                language="text",
+            )
+
+    st.caption(
+        "Rate limit, penyamaran error, dan block model berjalan otomatis untuk halaman publik."
+    )
+
+
 # =========================
 # Runtime config
 # =========================
@@ -7617,6 +8123,89 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# =========================
+# Production safety UI styling
+# =========================
+st.markdown(
+    """
+    <style>
+    .production-status-card {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.42rem;
+        width: 100%;
+        margin: 0.35rem 0 0.75rem;
+        padding: 0.46rem 0.58rem;
+        border: 1px solid var(--mac-border);
+        border-radius: 18px;
+        background: var(--mac-panel-soft);
+        color: var(--mac-muted) !important;
+        font-size: 0.72rem;
+        font-weight: 750;
+        line-height: 1.45;
+        backdrop-filter: var(--mac-blur);
+        -webkit-backdrop-filter: var(--mac-blur);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    .production-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.34rem;
+        padding: 0.20rem 0.46rem;
+        border-radius: 999px;
+        background: var(--mac-blue-soft);
+        color: var(--mac-text) !important;
+        font-size: 0.68rem;
+        font-weight: 820;
+        white-space: nowrap;
+    }
+
+    .production-pill.danger {
+        background: rgba(255, 69, 58, 0.14);
+    }
+
+    .production-pill.ok {
+        background: var(--mac-green-soft);
+    }
+
+    .mini-toggle-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        margin: -0.15rem 0 0.55rem;
+    }
+
+    .mini-toggle-wrap div[data-testid="stCheckbox"] label {
+        min-height: 24px !important;
+        gap: 0.34rem !important;
+    }
+
+    .mini-toggle-wrap div[data-testid="stCheckbox"] p {
+        font-size: 0.72rem !important;
+        color: var(--mac-muted) !important;
+        font-weight: 820 !important;
+    }
+
+    @media (max-width: 760px) {
+        .production-status-card {
+            font-size: 0.66rem;
+            padding: 0.38rem 0.44rem;
+        }
+
+        .production-pill {
+            font-size: 0.62rem;
+            padding: 0.16rem 0.34rem;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # =========================
 # Page Router
 # =========================
@@ -7675,6 +8264,18 @@ def render_public_page() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    st.markdown('<div class="mini-toggle-wrap">', unsafe_allow_html=True)
+    st.session_state.sound_enabled = st.checkbox(
+        "🔔 Suara",
+        value=bool(st.session_state.get("sound_enabled", True)),
+        key="public_sound_enabled_toggle",
+        help="Aktifkan atau matikan suara kecil saat jawaban selesai.",
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if st.session_state.get("admin_authenticated", False):
+        render_public_status_summary()
 
     if not api_key:
         st.warning(
@@ -7753,6 +8354,34 @@ def render_public_page() -> None:
 
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
+        allowed_request, rate_limit_message = check_public_rate_limit(user_input)
+
+        if not allowed_request:
+            answer = rate_limit_message
+            meta = {
+                "rate_limited": True,
+                "public_safe_message": True,
+            }
+
+            with st.chat_message("assistant"):
+                st.markdown(answer)
+
+            st.session_state.chat_messages.append(
+                {
+                    "role": "assistant",
+                    "content": answer,
+                    "meta": meta,
+                }
+            )
+
+            st.markdown(
+                '<div class="auto-scroll-anchor"></div>'
+                '<div class="chat-input-safe-space"></div>',
+                unsafe_allow_html=True,
+            )
+
+            return
+
         local_reply = ""
         if st.session_state.admin_authenticated:
             local_reply = handle_local_memory_command(user_input, memory)
@@ -7785,6 +8414,12 @@ def render_public_page() -> None:
                         user_text=user_input,
                         route=route,
                         cfg=cfg,
+                    )
+                    runtime_options["streaming_preview_enabled"] = bool(
+                        st.session_state.get(
+                            "answer_streaming_preview_enabled",
+                            True,
+                        )
                     )
                     if route.get("thinking_direct_to_capable"):
                         loading_subtitle = (
@@ -7964,15 +8599,24 @@ def render_public_page() -> None:
                         meta["runtime_quality_verifier_enabled"] = bool(
                             runtime_options.get("quality_verifier_enabled")
                         )
+                        meta["streaming_preview_enabled"] = bool(
+                            runtime_options.get("streaming_preview_enabled")
+                        )
                     restore_active_model_to_cheap(route.get("primary_model"))
+                    answer = sanitize_public_answer(
+                        answer,
+                        meta=meta,
+                        route=route,
+                    )
                     placeholder.markdown(answer)
                     render_auto_scroll_script(
                         target="latest",
                         delay_ms=120,
                     )
-                    render_answer_ready_sound_script(
-                        sound_key=f"normal-{len(st.session_state.chat_messages)}",
-                    )
+                    if bool(st.session_state.get("sound_enabled", True)):
+                        render_answer_ready_sound_script(
+                            sound_key=f"normal-{len(st.session_state.chat_messages)}",
+                        )
                     st.session_state.last_answer_meta = meta or {}
                     final_model = (
                         (meta or {}).get("active_model_final")
@@ -8046,9 +8690,10 @@ def render_public_page() -> None:
         if local_reply:
             with st.chat_message("assistant"):
                 st.markdown(answer)
-                render_answer_ready_sound_script(
-                    sound_key=f"local-{len(st.session_state.chat_messages)}",
-                )
+                if bool(st.session_state.get("sound_enabled", True)):
+                    render_answer_ready_sound_script(
+                        sound_key=f"local-{len(st.session_state.chat_messages)}",
+                    )
                 answer_pdf_download_button(answer, key="download_pdf_local_reply")
 
         st.session_state.chat_messages.append(
@@ -8078,6 +8723,9 @@ def render_power_features_admin_panel() -> None:
     # =========================
     # Power Features Admin Panel
     # =========================
+    if st.session_state.get("admin_authenticated", False):
+        render_admin_production_dashboard()
+
     if power_features_enabled and st.session_state.get("admin_authenticated", False):
         try:
             with st.expander(
