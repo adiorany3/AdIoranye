@@ -612,10 +612,7 @@ def init_state() -> None:
         )
 
     if "sound_enabled" not in st.session_state:
-        st.session_state.sound_enabled = parse_bool(
-            get_secret("ANSWER_SOUND_ENABLED", True),
-            default=True,
-        )
+        st.session_state.sound_enabled = True
     if "public_rate_events" not in st.session_state:
         st.session_state.public_rate_events = []
     if "model_runtime_blocks" not in st.session_state:
@@ -8214,6 +8211,7 @@ def render_public_page() -> None:
     # Public Chat UI
     # =========================
     cfg = get_runtime_config()
+    st.session_state.sound_enabled = True
     render_sound_unlock_script()
     public_route_preview = build_model_routing_plan(user_text="halo")
     cheap_active = public_route_preview.get("active_cheap_models") or []
@@ -8264,15 +8262,6 @@ def render_public_page() -> None:
         """,
         unsafe_allow_html=True,
     )
-
-    st.markdown('<div class="mini-toggle-wrap">', unsafe_allow_html=True)
-    st.session_state.sound_enabled = st.checkbox(
-        "🔔 Suara",
-        value=bool(st.session_state.get("sound_enabled", True)),
-        key="public_sound_enabled_toggle",
-        help="Aktifkan atau matikan suara kecil saat jawaban selesai.",
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
 
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
