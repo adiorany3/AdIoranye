@@ -2684,6 +2684,465 @@ st.markdown(
 
 
 # =========================
+# Accessible light/dark visual tuning
+# =========================
+st.markdown(
+    """
+    <style>
+    /*
+      Final visual layer.
+      Tujuan: membuat tampilan tetap terbaca pada mode Light dan Dark,
+      sekaligus merapikan glass theme agar tidak terlalu transparan.
+    */
+    :root {
+        color-scheme: light dark;
+
+        --ui-bg-1: #f8fafc;
+        --ui-bg-2: #eef4ff;
+        --ui-bg-3: #fff7ed;
+        --ui-surface: rgba(255, 255, 255, 0.88);
+        --ui-surface-soft: rgba(255, 255, 255, 0.72);
+        --ui-surface-solid: #ffffff;
+        --ui-text: #0f172a;
+        --ui-text-strong: #020617;
+        --ui-muted: #475569;
+        --ui-muted-2: #64748b;
+        --ui-border: rgba(15, 23, 42, 0.14);
+        --ui-border-strong: rgba(15, 23, 42, 0.22);
+        --ui-accent: #2563eb;
+        --ui-accent-strong: #1d4ed8;
+        --ui-accent-soft: rgba(37, 99, 235, 0.12);
+        --ui-user-bg: #dbeafe;
+        --ui-user-text: #0f172a;
+        --ui-assistant-bg: rgba(255, 255, 255, 0.92);
+        --ui-assistant-text: #0f172a;
+        --ui-input-bg: rgba(255, 255, 255, 0.96);
+        --ui-input-text: #0f172a;
+        --ui-code-bg: #0f172a;
+        --ui-code-text: #e5e7eb;
+        --ui-shadow: 0 18px 55px rgba(15, 23, 42, 0.16);
+        --ui-shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.10);
+
+        --mac-bg-1: var(--ui-bg-1);
+        --mac-bg-2: var(--ui-bg-2);
+        --mac-bg-3: var(--ui-bg-3);
+        --mac-text: var(--ui-text);
+        --mac-muted: var(--ui-muted);
+        --mac-border: var(--ui-border);
+        --mac-border-strong: var(--ui-border-strong);
+        --mac-window: var(--ui-surface);
+        --mac-window-strong: var(--ui-surface-solid);
+        --mac-panel: var(--ui-surface);
+        --mac-panel-soft: var(--ui-surface-soft);
+        --mac-user: var(--ui-user-bg);
+        --mac-assistant: var(--ui-assistant-bg);
+        --mac-shadow: var(--ui-shadow);
+        --mac-shadow-soft: var(--ui-shadow-soft);
+    }
+
+    html[data-theme="dark"],
+    body[data-theme="dark"],
+    .stApp[data-theme="dark"],
+    [data-theme="dark"] {
+        --ui-bg-1: #020617;
+        --ui-bg-2: #0f172a;
+        --ui-bg-3: #111827;
+        --ui-surface: rgba(15, 23, 42, 0.92);
+        --ui-surface-soft: rgba(30, 41, 59, 0.78);
+        --ui-surface-solid: #111827;
+        --ui-text: #f8fafc;
+        --ui-text-strong: #ffffff;
+        --ui-muted: #cbd5e1;
+        --ui-muted-2: #94a3b8;
+        --ui-border: rgba(226, 232, 240, 0.16);
+        --ui-border-strong: rgba(226, 232, 240, 0.26);
+        --ui-accent: #60a5fa;
+        --ui-accent-strong: #93c5fd;
+        --ui-accent-soft: rgba(96, 165, 250, 0.18);
+        --ui-user-bg: rgba(37, 99, 235, 0.46);
+        --ui-user-text: #f8fafc;
+        --ui-assistant-bg: rgba(30, 41, 59, 0.94);
+        --ui-assistant-text: #f8fafc;
+        --ui-input-bg: rgba(15, 23, 42, 0.96);
+        --ui-input-text: #f8fafc;
+        --ui-code-bg: #020617;
+        --ui-code-text: #e2e8f0;
+        --ui-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+        --ui-shadow-soft: 0 13px 36px rgba(0, 0, 0, 0.34);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --ui-bg-1: #020617;
+            --ui-bg-2: #0f172a;
+            --ui-bg-3: #111827;
+            --ui-surface: rgba(15, 23, 42, 0.92);
+            --ui-surface-soft: rgba(30, 41, 59, 0.78);
+            --ui-surface-solid: #111827;
+            --ui-text: #f8fafc;
+            --ui-text-strong: #ffffff;
+            --ui-muted: #cbd5e1;
+            --ui-muted-2: #94a3b8;
+            --ui-border: rgba(226, 232, 240, 0.16);
+            --ui-border-strong: rgba(226, 232, 240, 0.26);
+            --ui-accent: #60a5fa;
+            --ui-accent-strong: #93c5fd;
+            --ui-accent-soft: rgba(96, 165, 250, 0.18);
+            --ui-user-bg: rgba(37, 99, 235, 0.46);
+            --ui-user-text: #f8fafc;
+            --ui-assistant-bg: rgba(30, 41, 59, 0.94);
+            --ui-assistant-text: #f8fafc;
+            --ui-input-bg: rgba(15, 23, 42, 0.96);
+            --ui-input-text: #f8fafc;
+            --ui-code-bg: #020617;
+            --ui-code-text: #e2e8f0;
+            --ui-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+            --ui-shadow-soft: 0 13px 36px rgba(0, 0, 0, 0.34);
+
+            --mac-bg-1: var(--ui-bg-1);
+            --mac-bg-2: var(--ui-bg-2);
+            --mac-bg-3: var(--ui-bg-3);
+            --mac-text: var(--ui-text);
+            --mac-muted: var(--ui-muted);
+            --mac-border: var(--ui-border);
+            --mac-border-strong: var(--ui-border-strong);
+            --mac-window: var(--ui-surface);
+            --mac-window-strong: var(--ui-surface-solid);
+            --mac-panel: var(--ui-surface);
+            --mac-panel-soft: var(--ui-surface-soft);
+            --mac-user: var(--ui-user-bg);
+            --mac-assistant: var(--ui-assistant-bg);
+            --mac-shadow: var(--ui-shadow);
+            --mac-shadow-soft: var(--ui-shadow-soft);
+        }
+    }
+
+    html,
+    body,
+    .stApp,
+    .main,
+    div[data-testid="stAppViewContainer"],
+    div[data-testid="stMain"] {
+        color: var(--ui-text) !important;
+        background:
+            radial-gradient(circle at 12% 8%, var(--ui-accent-soft), transparent 28%),
+            radial-gradient(circle at 88% 4%, rgba(249, 115, 22, 0.10), transparent 28%),
+            linear-gradient(145deg, var(--ui-bg-1), var(--ui-bg-2) 54%, var(--ui-bg-3)) !important;
+    }
+
+    .main .block-container {
+        border: 1px solid var(--ui-border-strong) !important;
+        background: linear-gradient(180deg, var(--ui-surface), var(--ui-surface-soft)) !important;
+        box-shadow: var(--ui-shadow) !important;
+    }
+
+    /* Global text contrast */
+    .stMarkdown,
+    .stMarkdown p,
+    .stMarkdown li,
+    .stMarkdown span,
+    .stMarkdown div,
+    label,
+    .stText,
+    div[data-testid="stMarkdownContainer"],
+    div[data-testid="stCaptionContainer"],
+    .stCaptionContainer,
+    .app-subtitle,
+    .developer-credit,
+    .ios-chat-meta,
+    .quick-help-card span,
+    .easy-admin-panel p {
+        color: var(--ui-text) !important;
+    }
+
+    .app-subtitle,
+    .developer-credit,
+    .ios-chat-meta,
+    .quick-help-card span,
+    .easy-admin-panel p,
+    .simple-note,
+    div[data-testid="stCaptionContainer"] {
+        color: var(--ui-muted) !important;
+    }
+
+    h1, h2, h3, h4, h5, h6,
+    .app-title,
+    .quick-help-title,
+    .model-status-title,
+    .easy-admin-panel h4,
+    .quick-help-card strong {
+        color: var(--ui-text-strong) !important;
+        letter-spacing: -0.018em;
+    }
+
+    /* Main cards */
+    .mac-windowbar,
+    .app-hero,
+    .model-status-panel,
+    .quick-help-panel,
+    .easy-admin-panel,
+    .ios-chat-meta,
+    .developer-credit span,
+    div[data-testid="stMetric"],
+    div[data-testid="stExpander"] details,
+    div[data-testid="stSidebar"] div[data-testid="stMetric"] {
+        border: 1px solid var(--ui-border) !important;
+        background: linear-gradient(145deg, var(--ui-surface), var(--ui-surface-soft)) !important;
+        box-shadow: var(--ui-shadow-soft) !important;
+        color: var(--ui-text) !important;
+    }
+
+    .app-hero {
+        align-items: flex-start !important;
+        padding: 22px !important;
+    }
+
+    .app-logo {
+        background: linear-gradient(145deg, var(--ui-surface-solid), var(--ui-surface-soft)) !important;
+        border: 1px solid var(--ui-border) !important;
+        color: var(--ui-text-strong) !important;
+    }
+
+    .app-title {
+        margin-bottom: 0.25rem !important;
+        font-size: clamp(1.25rem, 2vw, 1.75rem) !important;
+    }
+
+    .app-subtitle {
+        max-width: 820px !important;
+        line-height: 1.58 !important;
+        font-size: 0.98rem !important;
+    }
+
+    .quick-help-card,
+    .model-status-pill {
+        border: 1px solid var(--ui-border) !important;
+        background: var(--ui-surface-soft) !important;
+        color: var(--ui-text) !important;
+    }
+
+    /* Chat bubbles */
+    div[data-testid="stChatMessage"] {
+        border: 1px solid var(--ui-border) !important;
+        background: var(--ui-assistant-bg) !important;
+        color: var(--ui-assistant-text) !important;
+        box-shadow: var(--ui-shadow-soft) !important;
+    }
+
+    div[data-testid="stChatMessage"] * {
+        color: inherit !important;
+    }
+
+    div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+        background: var(--ui-user-bg) !important;
+        color: var(--ui-user-text) !important;
+        border-color: color-mix(in srgb, var(--ui-accent) 38%, transparent) !important;
+    }
+
+    div[data-testid="stChatMessage"] a {
+        color: var(--ui-accent-strong) !important;
+        font-weight: 700 !important;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+
+    div[data-testid="stChatMessage"] pre,
+    div[data-testid="stChatMessage"] code,
+    pre,
+    code {
+        background: var(--ui-code-bg) !important;
+        color: var(--ui-code-text) !important;
+        border-color: var(--ui-border) !important;
+    }
+
+    div[data-testid="stChatMessage"] table,
+    div[data-testid="stTable"] table {
+        color: var(--ui-text) !important;
+        background: var(--ui-surface-solid) !important;
+        border-color: var(--ui-border) !important;
+    }
+
+    div[data-testid="stChatMessage"] th,
+    div[data-testid="stChatMessage"] td {
+        border-color: var(--ui-border) !important;
+    }
+
+    /* Fixed input area: readable, not overly transparent */
+    div[data-testid="stChatInput"] {
+        border: 1px solid var(--ui-border-strong) !important;
+        background: linear-gradient(180deg, var(--ui-surface), var(--ui-surface-soft)) !important;
+        box-shadow: var(--ui-shadow) !important;
+    }
+
+    div[data-testid="stChatInput"] textarea,
+    textarea,
+    input,
+    div[data-baseweb="textarea"] textarea,
+    div[data-baseweb="input"] input {
+        background: var(--ui-input-bg) !important;
+        color: var(--ui-input-text) !important;
+        border: 1px solid var(--ui-border) !important;
+        caret-color: var(--ui-accent) !important;
+        box-shadow: none !important;
+    }
+
+    div[data-testid="stChatInput"] textarea::placeholder,
+    textarea::placeholder,
+    input::placeholder {
+        color: var(--ui-muted-2) !important;
+        opacity: 1 !important;
+    }
+
+    div[data-testid="stChatInput"] button {
+        border-radius: 14px !important;
+        background: var(--ui-accent) !important;
+        color: #ffffff !important;
+        border: 1px solid color-mix(in srgb, var(--ui-accent) 70%, transparent) !important;
+    }
+
+    /* Buttons, selectors, tabs */
+    .stButton > button,
+    .stDownloadButton > button,
+    button[kind],
+    div[data-testid="baseButton-secondary"] button {
+        min-height: 42px !important;
+        border-radius: 14px !important;
+        border: 1px solid var(--ui-border) !important;
+        background: var(--ui-surface-solid) !important;
+        color: var(--ui-text-strong) !important;
+        box-shadow: 0 5px 16px rgba(15, 23, 42, 0.08) !important;
+        font-weight: 750 !important;
+    }
+
+    .stButton > button:hover,
+    .stDownloadButton > button:hover,
+    button[kind]:hover {
+        border-color: var(--ui-accent) !important;
+        color: var(--ui-accent-strong) !important;
+        transform: translateY(-1px);
+    }
+
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="textarea"] > div,
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="slider"] {
+        background: var(--ui-input-bg) !important;
+        color: var(--ui-input-text) !important;
+        border-color: var(--ui-border) !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background: var(--ui-surface-soft) !important;
+        border: 1px solid var(--ui-border) !important;
+        color: var(--ui-text) !important;
+        font-weight: 760 !important;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: var(--ui-accent-soft) !important;
+        color: var(--ui-accent-strong) !important;
+        border-color: color-mix(in srgb, var(--ui-accent) 38%, transparent) !important;
+    }
+
+    /* Alerts and status boxes */
+    div[data-testid="stAlert"],
+    .stAlert {
+        border-radius: 16px !important;
+        border: 1px solid var(--ui-border) !important;
+        background: var(--ui-surface-solid) !important;
+        color: var(--ui-text) !important;
+    }
+
+    div[data-testid="stAlert"] * {
+        color: var(--ui-text) !important;
+    }
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, var(--ui-surface), var(--ui-surface-soft)) !important;
+        border-right: 1px solid var(--ui-border) !important;
+    }
+
+    section[data-testid="stSidebar"] * {
+        color: var(--ui-text) !important;
+    }
+
+    section[data-testid="stSidebar"] .stCaptionContainer,
+    section[data-testid="stSidebar"] small,
+    section[data-testid="stSidebar"] p {
+        color: var(--ui-muted) !important;
+    }
+
+    /* Dataframes and expanders */
+    div[data-testid="stDataFrame"],
+    div[data-testid="stTable"],
+    div[data-testid="stJson"] {
+        border-radius: 16px !important;
+        overflow: hidden !important;
+        border: 1px solid var(--ui-border) !important;
+        background: var(--ui-surface-solid) !important;
+    }
+
+    div[data-testid="stExpander"] details summary {
+        color: var(--ui-text-strong) !important;
+        font-weight: 760 !important;
+    }
+
+    /* Mobile layout */
+    @media (max-width: 760px) {
+        .main .block-container {
+            width: calc(100vw - 18px) !important;
+            margin: 9px auto 12px !important;
+            border-radius: 22px !important;
+            padding-left: 0.95rem !important;
+            padding-right: 0.95rem !important;
+            padding-bottom: 13rem !important;
+        }
+
+        .app-hero {
+            flex-direction: column !important;
+            gap: 12px !important;
+            padding: 18px !important;
+            border-radius: 20px !important;
+        }
+
+        .app-logo {
+            width: 54px !important;
+            height: 54px !important;
+            flex-basis: 54px !important;
+        }
+
+        div[data-testid="stChatInput"] {
+            width: calc(100vw - 22px) !important;
+            bottom: 8px !important;
+            border-radius: 20px !important;
+        }
+
+        div[data-testid="stChatMessage"] {
+            max-width: 100% !important;
+            border-radius: 18px !important;
+        }
+    }
+
+    @supports not (backdrop-filter: blur(12px)) {
+        .main .block-container,
+        .mac-windowbar,
+        .app-hero,
+        .model-status-panel,
+        .quick-help-panel,
+        .easy-admin-panel,
+        div[data-testid="stChatInput"] {
+            background: var(--ui-surface-solid) !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+
+# =========================
 # Runtime config
 # =========================
 def get_runtime_config() -> Dict[str, Any]:
@@ -3762,7 +4221,7 @@ st.markdown(
         <div class="app-logo">🤖</div>
         <div>
             <h3 class="app-title">Selamat Datang</h3>
-            <p class="app-subtitle">Tulis pertanyaan Anda dalam kolom. Tunggu beberapa saat, sehingga AI bot adioranye membantu dengan jawaban yang cerdas, ramah, detail, dan praktis. AI ini dikembangkan dengan tune yang ketat sehingga menghindari halusinasi, jawab asal tanpa adanya data dan memberikan asumsi. Terdapat {len(cheap_active)} model AI utama dan {len(expensive_active)} model kuat, yang akan mendiskusikan dibalik layar, untuk menjawab pertanyaan Anda (jumlah akan model akan berubah automatis sesuai dengan yang aktif saat server berjalan, sehingga bukan angka statis).</p>
+            <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dibaca di mode terang maupun gelap. Router otomatis memilih {len(cheap_active)} model utama dan {len(expensive_active)} model kuat sesuai tingkat kesulitan pertanyaan.</p>
         </div>
     </div>
     <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
