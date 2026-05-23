@@ -4467,7 +4467,7 @@ st.markdown(
 )
 
 # =========================
-# Loading animation style
+# Cute loading animation style
 # =========================
 st.markdown(
     """
@@ -4475,52 +4475,216 @@ st.markdown(
     .ai-loading-card {
         display: inline-flex;
         align-items: center;
-        gap: 0.78rem;
+        gap: 0.82rem;
         max-width: min(100%, 560px);
         margin: 0.15rem 0 0.65rem 0;
         padding: 0.78rem 0.9rem;
         border: 1px solid var(--mac-border);
-        border-radius: 18px;
+        border-radius: 20px;
         background:
             linear-gradient(135deg, var(--mac-panel), var(--mac-panel-soft));
         box-shadow: var(--mac-shadow-soft);
         backdrop-filter: var(--mac-blur);
         -webkit-backdrop-filter: var(--mac-blur);
         color: var(--mac-text);
-    }
-
-    .ai-loading-orb {
-        width: 34px;
-        height: 34px;
-        border-radius: 999px;
+        overflow: hidden;
         position: relative;
-        flex: 0 0 auto;
-        background:
-            radial-gradient(circle at 30% 28%, #ffffff, transparent 22%),
-            conic-gradient(
-                from 0deg,
-                var(--mac-blue),
-                rgba(255, 159, 10, 0.92),
-                rgba(48, 209, 88, 0.9),
-                var(--mac-blue)
-            );
-        animation: aiOrbSpin 1.15s linear infinite;
     }
 
-    .ai-loading-orb::after {
+    .ai-loading-card::before {
         content: "";
         position: absolute;
-        inset: 6px;
-        border-radius: inherit;
-        background: var(--mac-window-strong);
-        box-shadow: inset 0 0 0 1px var(--mac-border);
+        inset: -45% auto auto -12%;
+        width: 150px;
+        height: 150px;
+        border-radius: 999px;
+        background:
+            radial-gradient(
+                circle,
+                rgba(48, 209, 88, 0.16),
+                transparent 64%
+            );
+        pointer-events: none;
+        animation: aiCuteGlow 2.8s ease-in-out infinite;
+    }
+
+    .ai-loading-mascot {
+        width: 50px;
+        height: 54px;
+        position: relative;
+        flex: 0 0 50px;
+        display: grid;
+        place-items: center;
+        animation: aiRobotFloat 1.55s ease-in-out infinite;
+        transform-origin: center bottom;
+    }
+
+    .ai-robot-antenna {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 2px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--mac-blue);
+        transform: translateX(-50%);
+        animation: aiAntennaBob 1.2s ease-in-out infinite;
+    }
+
+    .ai-robot-antenna::after {
+        content: "";
+        position: absolute;
+        top: -5px;
+        left: 50%;
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: rgba(48, 209, 88, 0.96);
+        box-shadow: 0 0 14px rgba(48, 209, 88, 0.58);
+        transform: translateX(-50%);
+    }
+
+    .ai-robot-ear {
+        position: absolute;
+        top: 20px;
+        width: 8px;
+        height: 16px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.42);
+        border: 1px solid var(--mac-border);
+    }
+
+    .ai-robot-ear.left {
+        left: 2px;
+    }
+
+    .ai-robot-ear.right {
+        right: 2px;
+    }
+
+    .ai-robot-head {
+        width: 38px;
+        height: 34px;
+        margin-top: 10px;
+        border-radius: 13px;
+        position: relative;
+        z-index: 2;
+        background:
+            linear-gradient(
+                145deg,
+                rgba(255, 255, 255, 0.92),
+                rgba(226, 232, 240, 0.82)
+            );
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        box-shadow:
+            0 10px 22px rgba(15, 23, 42, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    @media (prefers-color-scheme: dark) {
+        .ai-robot-head {
+            background:
+                linear-gradient(
+                    145deg,
+                    rgba(51, 65, 85, 0.96),
+                    rgba(15, 23, 42, 0.9)
+                );
+            border-color: rgba(148, 163, 184, 0.36);
+        }
+    }
+
+    .ai-robot-eyes {
+        position: absolute;
+        top: 10px;
+        left: 8px;
+        right: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .ai-robot-eye {
+        width: 7px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--mac-blue);
+        box-shadow: 0 0 9px rgba(0, 122, 255, 0.42);
+        animation: aiRobotBlink 2.6s ease-in-out infinite;
+    }
+
+    .ai-robot-cheek {
+        position: absolute;
+        top: 20px;
+        width: 5px;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(255, 159, 10, 0.55);
+        opacity: 0.9;
+    }
+
+    .ai-robot-cheek.left {
+        left: 7px;
+    }
+
+    .ai-robot-cheek.right {
+        right: 7px;
+    }
+
+    .ai-robot-mouth {
+        position: absolute;
+        left: 50%;
+        bottom: 8px;
+        width: 10px;
+        height: 5px;
+        border-bottom: 2px solid rgba(48, 209, 88, 0.94);
+        border-radius: 0 0 999px 999px;
+        transform: translateX(-50%);
+        animation: aiRobotSmile 1.8s ease-in-out infinite;
+    }
+
+    .ai-robot-arm {
+        position: absolute;
+        top: 30px;
+        width: 10px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--mac-blue);
+        opacity: 0.78;
+        transform-origin: center;
+    }
+
+    .ai-robot-arm.left {
+        left: -1px;
+        transform: rotate(24deg);
+        animation: aiRobotWaveLeft 1.25s ease-in-out infinite;
+    }
+
+    .ai-robot-arm.right {
+        right: -1px;
+        transform: rotate(-24deg);
+        animation: aiRobotWaveRight 1.25s ease-in-out infinite;
+    }
+
+    .ai-robot-shadow {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        width: 32px;
+        height: 7px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.16);
+        filter: blur(1px);
+        transform: translateX(-50%);
+        animation: aiRobotShadow 1.55s ease-in-out infinite;
     }
 
     .ai-loading-copy {
         display: flex;
         flex-direction: column;
-        gap: 0.22rem;
+        gap: 0.24rem;
         min-width: 0;
+        position: relative;
+        z-index: 2;
     }
 
     .ai-loading-title {
@@ -4582,6 +4746,7 @@ st.markdown(
             linear-gradient(
                 90deg,
                 transparent,
+                rgba(48, 209, 88, 0.96),
                 var(--mac-blue),
                 rgba(255, 159, 10, 0.92),
                 transparent
@@ -4589,9 +4754,96 @@ st.markdown(
         animation: aiLoadingBar 1.35s ease-in-out infinite;
     }
 
-    @keyframes aiOrbSpin {
-        to {
-            transform: rotate(360deg);
+    @keyframes aiCuteGlow {
+        0%,
+        100% {
+            transform: scale(0.92);
+            opacity: 0.55;
+        }
+
+        50% {
+            transform: scale(1.08);
+            opacity: 0.9;
+        }
+    }
+
+    @keyframes aiRobotFloat {
+        0%,
+        100% {
+            transform: translateY(0) rotate(-1deg);
+        }
+
+        50% {
+            transform: translateY(-5px) rotate(1.5deg);
+        }
+    }
+
+    @keyframes aiAntennaBob {
+        0%,
+        100% {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        50% {
+            transform: translateX(-50%) translateY(-2px);
+        }
+    }
+
+    @keyframes aiRobotBlink {
+        0%,
+        88%,
+        100% {
+            transform: scaleY(1);
+        }
+
+        92% {
+            transform: scaleY(0.16);
+        }
+    }
+
+    @keyframes aiRobotSmile {
+        0%,
+        100% {
+            width: 9px;
+        }
+
+        50% {
+            width: 13px;
+        }
+    }
+
+    @keyframes aiRobotWaveLeft {
+        0%,
+        100% {
+            transform: rotate(22deg) translateY(0);
+        }
+
+        50% {
+            transform: rotate(42deg) translateY(-2px);
+        }
+    }
+
+    @keyframes aiRobotWaveRight {
+        0%,
+        100% {
+            transform: rotate(-22deg) translateY(0);
+        }
+
+        50% {
+            transform: rotate(-42deg) translateY(-2px);
+        }
+    }
+
+    @keyframes aiRobotShadow {
+        0%,
+        100% {
+            transform: translateX(-50%) scaleX(1);
+            opacity: 0.16;
+        }
+
+        50% {
+            transform: translateX(-50%) scaleX(0.72);
+            opacity: 0.09;
         }
     }
 
@@ -4622,26 +4874,64 @@ st.markdown(
     @media (max-width: 520px) {
         .ai-loading-card {
             width: 100%;
-            gap: 0.62rem;
-            padding: 0.66rem 0.72rem;
-            border-radius: 16px;
+            gap: 0.58rem;
+            padding: 0.62rem 0.68rem;
+            border-radius: 17px;
         }
 
-        .ai-loading-orb {
-            width: 28px;
-            height: 28px;
+        .ai-loading-mascot {
+            width: 42px;
+            height: 46px;
+            flex-basis: 42px;
+        }
+
+        .ai-robot-head {
+            width: 32px;
+            height: 29px;
+            border-radius: 11px;
+        }
+
+        .ai-robot-ear {
+            top: 18px;
+            width: 7px;
+            height: 13px;
+        }
+
+        .ai-robot-arm {
+            top: 27px;
+            width: 8px;
         }
 
         .ai-loading-title {
-            font-size: 0.84rem;
+            font-size: 0.82rem;
         }
 
         .ai-loading-subtitle {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
         }
 
         .ai-loading-bar {
-            width: min(210px, 64vw);
+            width: min(200px, 62vw);
+        }
+    }
+
+    @media (max-width: 380px) {
+        .ai-loading-card {
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+
+        .ai-loading-mascot {
+            transform: scale(0.92);
+            transform-origin: left top;
+        }
+
+        .ai-loading-title {
+            font-size: 0.78rem;
+        }
+
+        .ai-loading-subtitle {
+            font-size: 0.65rem;
         }
     }
 
@@ -4663,7 +4953,13 @@ st.markdown(
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .ai-loading-orb,
+        .ai-loading-card::before,
+        .ai-loading-mascot,
+        .ai-robot-antenna,
+        .ai-robot-eye,
+        .ai-robot-mouth,
+        .ai-robot-arm,
+        .ai-robot-shadow,
         .ai-loading-dot,
         .ai-loading-bar::before {
             animation: none !important;
@@ -4676,14 +4972,30 @@ st.markdown(
 
 
 def render_loading_animation_html(
-    title: str = "Adioranye sedang menyiapkan jawaban",
-    subtitle: str = "Menganalisis pertanyaan, memilih model terbaik, lalu menyusun respons.",
+    title: str = "Adioranye sedang mengetik jawaban",
+    subtitle: str = "Sebentar ya, robot kecilnya sedang berpikir dan merapikan respons.",
 ) -> str:
     safe_title = _html_escape(title)
     safe_subtitle = _html_escape(subtitle)
     return f"""
     <div class="ai-loading-card" role="status" aria-live="polite">
-        <div class="ai-loading-orb"></div>
+        <div class="ai-loading-mascot" aria-hidden="true">
+            <div class="ai-robot-antenna"></div>
+            <div class="ai-robot-ear left"></div>
+            <div class="ai-robot-ear right"></div>
+            <div class="ai-robot-arm left"></div>
+            <div class="ai-robot-arm right"></div>
+            <div class="ai-robot-head">
+                <div class="ai-robot-eyes">
+                    <span class="ai-robot-eye"></span>
+                    <span class="ai-robot-eye"></span>
+                </div>
+                <span class="ai-robot-cheek left"></span>
+                <span class="ai-robot-cheek right"></span>
+                <span class="ai-robot-mouth"></span>
+            </div>
+            <div class="ai-robot-shadow"></div>
+        </div>
         <div class="ai-loading-copy">
             <div class="ai-loading-title">
                 <span>{safe_title}</span>
@@ -6393,15 +6705,15 @@ def render_public_page() -> None:
                     )
                     if route.get("thinking_direct_to_capable"):
                         loading_subtitle = (
-                            "Mode analisis aktif. Pertanyaan diproses dengan model capable."
+                            "Mode analisis aktif. Robot kecilnya sedang membaca konteks lebih teliti."
                         )
                     elif route.get("normal_fast_mode"):
                         loading_subtitle = (
-                            "Mode cepat aktif. Pertanyaan diproses dengan model hemat tercepat."
+                            "Mode cepat aktif. Robot kecilnya sedang mengetik jawaban ringkas."
                         )
                     else:
                         loading_subtitle = (
-                            "Sistem memilih jalur model terbaik dan menyiapkan jawaban."
+                            "Adioranye memilih jalur terbaik, lalu merapikan jawaban untuk Anda."
                         )
                     placeholder.markdown(
                         render_loading_animation_html(
