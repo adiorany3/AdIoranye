@@ -7433,6 +7433,68 @@ def render_maintenance_tools() -> None:
             st.rerun()
 
 
+
+def render_admin_login() -> None:
+    """Render login admin untuk halaman /admin.
+
+    Fungsi ini sengaja dibuat sederhana dan tidak menampilkan detail secret.
+    Username/password diambil dari Streamlit Secrets:
+    - ADMIN_USERNAME
+    - ADMIN_PASSWORD
+    """
+    st.subheader("🔐 Login Admin")
+    st.caption(
+        "Masuk untuk mengatur model, Telegram, Knowledge Base, live web, dan maintenance."
+    )
+
+    with st.form(
+        "admin_login_form",
+        clear_on_submit=False,
+    ):
+        username = st.text_input(
+            "Username",
+            value="",
+            placeholder="Masukkan username admin",
+            key="admin_login_username",
+        )
+
+        password = st.text_input(
+            "Password",
+            value="",
+            placeholder="Masukkan password admin",
+            type="password",
+            key="admin_login_password",
+        )
+
+        submitted = st.form_submit_button(
+            "Masuk Admin",
+            use_container_width=True,
+        )
+
+    if submitted:
+        valid_username = safe_compare(
+            username,
+            admin_username,
+        )
+        valid_password = safe_compare(
+            password,
+            admin_password,
+        )
+
+        if valid_username and valid_password:
+            st.session_state.admin_authenticated = True
+            st.success("Login berhasil. Membuka panel admin...")
+            st.rerun()
+        else:
+            st.session_state.admin_authenticated = False
+            st.error("Username atau password admin salah.")
+
+    st.info(
+        "Jika lupa password, ubah nilai ADMIN_USERNAME dan ADMIN_PASSWORD "
+        "di Streamlit Secrets, lalu reboot app."
+    )
+
+
 def render_admin_settings() -> None:
     st.subheader("⚙️ Admin Settings")
     st.success(f"Login sebagai: {admin_username}")
