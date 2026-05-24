@@ -4188,6 +4188,78 @@ def render_auto_model_status_refresh_panel() -> None:
         unsafe_allow_html=True,
     )
 
+
+def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
+    """Ambil fallback model yang sudah diprioritaskan tanpa memicu health check.
+
+    Fungsi ini sengaja tidak melakukan probe API/model. Ia hanya membaca:
+    - session_state hasil health check terakhir,
+    - fallback list yang sudah ada,
+    - performa/latency cache lokal.
+
+    Tujuannya mencegah NameError sekaligus menjaga mode standby tetap hemat token.
+    """
+    health_cache = st.session_state.get("model_health_cache") or {}
+
+    cheap_candidates = unique_models(
+        (
+            st.session_state.get("active_cheap_fallback_models")
+            or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
+        )
+        + CHEAP_MODEL_OPTIONS
+        + TOP_USAGE_MODEL_CANDIDATES
+    )
+
+    medium_candidates = (
+        st.session_state.get("active_medium_fallback_models")
+        or MEDIUM_MODEL_OPTIONS.copy()
+    )
+    expensive_candidates = (
+        st.session_state.get("active_expensive_fallback_models")
+        or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+    )
+    higher_candidates = unique_models(
+        medium_candidates
+        + expensive_candidates
+        + HIGH_COST_MODEL_OPTIONS
+        + EXPENSIVE_MODEL_OPTIONS
+    )
+
+    active_cheap = sort_health_models_for_simple_chat(
+        cheap_candidates,
+        health_cache,
+    )
+    active_higher = sort_health_models_for_simple_chat(
+        higher_candidates,
+        health_cache,
+    )
+
+    # Jika belum ada health cache, jangan kosongkan routing. Pakai daftar fallback lokal
+    # agar halaman admin tetap hidup dan chat masih bisa mencoba model default/fallback.
+    if not active_cheap:
+        active_cheap = unique_models(
+            [
+                model
+                for model in cheap_candidates
+                if _tier_rank(model) == 0
+            ]
+        )
+
+    if not active_higher:
+        active_higher = unique_models(
+            [
+                model
+                for model in higher_candidates
+                if _tier_rank(model) >= 1
+            ]
+        )
+
+    active_cheap = filter_runtime_blocked_models(active_cheap)
+    active_higher = filter_runtime_blocked_models(active_higher)
+
+    return active_cheap, active_higher
+
+
 def build_model_routing_plan(
     advance_rotation: bool = False, user_text: str = ""
 ) -> Dict[str, Any]:
