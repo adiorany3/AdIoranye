@@ -10304,17 +10304,368 @@ def render_maintenance_tools() -> None:
 
 
 
-def render_admin_login() -> None:
-    """Render login admin untuk halaman /admin.
 
-    Fungsi ini sengaja dibuat sederhana dan tidak menampilkan detail secret.
-    Username/password diambil dari Streamlit Secrets:
-    - ADMIN_USERNAME
-    - ADMIN_PASSWORD
-    """
-    st.subheader("🔐 Login Admin")
-    st.caption(
-        "Masuk untuk mengatur model, Telegram, Knowledge Base, live web, dan maintenance."
+def render_admin_custom_css() -> None:
+    """CSS khusus agar halaman admin lebih rapi, konsisten light/dark, dan mobile-friendly."""
+    st.markdown(
+        """
+        <style>
+        .admin-page-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .admin-route-bar {
+            margin-bottom: 0.75rem !important;
+        }
+
+        .admin-route-hero {
+            position: relative;
+            overflow: hidden;
+            align-items: stretch !important;
+            gap: 1rem !important;
+            margin-bottom: 0.9rem !important;
+            border: 1px solid var(--ui-border, rgba(120,120,128,0.24)) !important;
+            box-shadow: 0 18px 48px rgba(15,23,42,0.10) !important;
+        }
+
+        .admin-route-hero::after {
+            content: "";
+            position: absolute;
+            inset: auto -12% -50% 36%;
+            height: 140px;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 30% 50%, rgba(10,132,255,0.20), transparent 34%),
+                radial-gradient(circle at 70% 55%, rgba(52,199,89,0.16), transparent 32%);
+            filter: blur(18px);
+            opacity: 0.72;
+        }
+
+        .admin-hero-copy {
+            position: relative;
+            z-index: 1;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .admin-hero-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.22rem 0.52rem;
+            margin-bottom: 0.52rem;
+            border-radius: 999px;
+            border: 1px solid rgba(10,132,255,0.24);
+            background: rgba(10,132,255,0.10);
+            color: var(--ui-text, inherit);
+            font-size: 0.72rem;
+            font-weight: 850;
+        }
+
+        .admin-hero-actions {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: center;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            min-width: 190px;
+        }
+
+        .admin-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.34rem 0.62rem;
+            border-radius: 999px;
+            border: 1px solid var(--ui-border, rgba(120,120,128,0.24));
+            background: var(--ui-surface, rgba(255,255,255,0.55));
+            color: var(--ui-text, inherit);
+            font-size: 0.74rem;
+            font-weight: 800;
+            white-space: nowrap;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        .admin-overview-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.72rem;
+            margin: 0.8rem 0 0.75rem;
+        }
+
+        .admin-overview-card,
+        .admin-login-card,
+        .admin-section-card {
+            border: 1px solid var(--ui-border, rgba(120,120,128,0.24));
+            border-radius: 22px;
+            background:
+                radial-gradient(circle at 18% 12%, rgba(255,255,255,0.30), transparent 28%),
+                var(--ui-surface, rgba(255,255,255,0.54));
+            color: var(--ui-text, inherit);
+            box-shadow: 0 14px 36px rgba(15,23,42,0.08);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .admin-overview-card {
+            padding: 0.86rem 0.92rem;
+            min-height: 116px;
+        }
+
+        .admin-overview-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.55rem;
+            color: var(--ui-muted, rgba(100,116,139,0.92));
+            font-size: 0.76rem;
+            font-weight: 820;
+        }
+
+        .admin-overview-value {
+            color: var(--ui-text-strong, var(--ui-text, inherit));
+            font-size: 1.05rem;
+            line-height: 1.2;
+            font-weight: 920;
+            word-break: break-word;
+        }
+
+        .admin-overview-caption {
+            margin-top: 0.44rem;
+            color: var(--ui-muted, rgba(100,116,139,0.92));
+            font-size: 0.72rem;
+            line-height: 1.35;
+        }
+
+        .admin-section-card {
+            padding: 0.95rem;
+            margin: 0.65rem 0 0.85rem;
+        }
+
+        .admin-section-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0 0 0.32rem;
+            color: var(--ui-text-strong, var(--ui-text, inherit));
+            font-size: 1rem;
+            font-weight: 900;
+        }
+
+        .admin-section-desc {
+            margin: 0;
+            color: var(--ui-muted, rgba(100,116,139,0.92));
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+
+        .admin-login-card {
+            max-width: 520px;
+            margin: 1.05rem auto 0.7rem;
+            padding: 1.25rem;
+        }
+
+        .admin-login-title {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            margin-bottom: 0.35rem;
+            color: var(--ui-text-strong, var(--ui-text, inherit));
+            font-size: 1.14rem;
+            font-weight: 930;
+        }
+
+        .admin-login-subtitle {
+            color: var(--ui-muted, rgba(100,116,139,0.92));
+            font-size: 0.84rem;
+            margin-bottom: 0.9rem;
+            line-height: 1.45;
+        }
+
+        div[data-testid="stTabs"] [role="tablist"] {
+            gap: 0.42rem;
+            padding: 0.28rem;
+            border-radius: 18px;
+            border: 1px solid var(--ui-border, rgba(120,120,128,0.22));
+            background: rgba(120,120,128,0.08);
+            overflow-x: auto;
+        }
+
+        div[data-testid="stTabs"] button[role="tab"] {
+            min-height: 38px;
+            border-radius: 14px !important;
+            padding: 0.42rem 0.72rem !important;
+            color: var(--ui-muted, rgba(100,116,139,0.95)) !important;
+            font-weight: 850 !important;
+        }
+
+        div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+            background:
+                linear-gradient(135deg, rgba(10,132,255,0.16), rgba(52,199,89,0.11)) !important;
+            color: var(--ui-text-strong, inherit) !important;
+            box-shadow: inset 0 0 0 1px rgba(10,132,255,0.22);
+        }
+
+        div[data-testid="stExpander"] {
+            border-radius: 18px !important;
+            border: 1px solid var(--ui-border, rgba(120,120,128,0.22)) !important;
+            overflow: hidden !important;
+            background: var(--ui-surface, rgba(255,255,255,0.48)) !important;
+            box-shadow: 0 8px 26px rgba(15,23,42,0.05);
+        }
+
+        div[data-testid="stMetric"] {
+            border-radius: 18px;
+            padding: 0.62rem 0.68rem;
+            border: 1px solid var(--ui-border, rgba(120,120,128,0.18));
+            background: rgba(120,120,128,0.07);
+        }
+
+        div[data-testid="stButton"] button,
+        div[data-testid="stDownloadButton"] button,
+        button[kind="primary"],
+        button[kind="secondary"] {
+            border-radius: 14px !important;
+            min-height: 39px !important;
+            font-weight: 850 !important;
+        }
+
+        .admin-divider-soft {
+            height: 1px;
+            margin: 0.85rem 0;
+            background: linear-gradient(90deg, transparent, var(--ui-border, rgba(120,120,128,0.28)), transparent);
+        }
+
+        @media (max-width: 980px) {
+            .admin-overview-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .admin-route-hero {
+                flex-direction: column !important;
+            }
+
+            .admin-hero-actions {
+                justify-content: flex-start;
+            }
+        }
+
+        @media (max-width: 620px) {
+            .admin-overview-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .admin-overview-card {
+                min-height: unset;
+            }
+
+            .admin-login-card {
+                margin: 0.6rem 0 0.7rem;
+                padding: 1rem;
+            }
+
+            div[data-testid="stTabs"] [role="tablist"] {
+                flex-wrap: nowrap;
+            }
+
+            div[data-testid="stTabs"] button[role="tab"] {
+                min-width: max-content;
+                font-size: 0.80rem !important;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _admin_status_badge(value: Any) -> str:
+    return _html_escape(str(value or "-"))
+
+
+def render_admin_overview_cards() -> None:
+    """Ringkasan cepat admin tanpa mengganggu logika kontrol."""
+    try:
+        cfg = get_runtime_config()
+    except Exception:
+        cfg = {
+            "model": st.session_state.get("active_model", default_model),
+        }
+
+    model_name = str(cfg.get("model") or st.session_state.get("active_model") or default_model)
+    tier = model_cost_tier(model_name)
+    telegram_status = "ON" if service.status().get("running") else "OFF"
+
+    try:
+        health_cache = st.session_state.get("model_health_cache") or {}
+        active_count = sum(
+            1
+            for item in health_cache.values()
+            if isinstance(item, dict) and item.get("active")
+        )
+    except Exception:
+        active_count = 0
+
+    try:
+        cache_stats = frequent_question_cache_stats()
+        cache_value = cache_stats.get("active", 0)
+        cache_caption = f"{cache_stats.get('total_hits', 0)} hit total"
+    except Exception:
+        cache_value = "-"
+        cache_caption = "cache belum terbaca"
+
+    checked_at = "-"
+    if st.session_state.get("model_health_checked_at"):
+        checked_at = _timestamp_to_wib_text(st.session_state.model_health_checked_at)
+
+    st.markdown(
+        f"""
+        <div class="admin-overview-grid">
+            <div class="admin-overview-card">
+                <div class="admin-overview-label"><span>🤖 Model aktif</span><span>{_admin_status_badge(tier)}</span></div>
+                <div class="admin-overview-value">{_html_escape(model_name)}</div>
+                <div class="admin-overview-caption">Dipakai sebagai model utama/routing awal.</div>
+            </div>
+            <div class="admin-overview-card">
+                <div class="admin-overview-label"><span>✅ Model sehat</span><span>health</span></div>
+                <div class="admin-overview-value">{_html_escape(active_count)}</div>
+                <div class="admin-overview-caption">Cek terakhir: {_html_escape(checked_at)}</div>
+            </div>
+            <div class="admin-overview-card">
+                <div class="admin-overview-label"><span>💬 Telegram</span><span>bot</span></div>
+                <div class="admin-overview-value">{_html_escape(telegram_status)}</div>
+                <div class="admin-overview-caption">Status worker Telegram saat ini.</div>
+            </div>
+            <div class="admin-overview-card">
+                <div class="admin-overview-label"><span>⚡ Cache</span><span>FAQ</span></div>
+                <div class="admin-overview-value">{_html_escape(cache_value)}</div>
+                <div class="admin-overview-caption">{_html_escape(cache_caption)}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+
+def render_admin_login() -> None:
+    """Render login admin untuk halaman /admin."""
+    st.markdown(
+        """
+        <div class="admin-login-card">
+            <div class="admin-login-title">🔐 Masuk Admin</div>
+            <div class="admin-login-subtitle">
+                Akses khusus untuk mengatur model, Telegram, Knowledge Base, live web, cache, dan maintenance.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
     with st.form(
@@ -10359,37 +10710,41 @@ def render_admin_login() -> None:
             st.session_state.admin_authenticated = False
             st.error("Username atau password admin salah.")
 
-    st.info(
-        "Jika lupa password, ubah nilai ADMIN_USERNAME dan ADMIN_PASSWORD "
-        "di Streamlit Secrets, lalu reboot app."
+    st.caption(
+        "Jika lupa password, ubah ADMIN_USERNAME dan ADMIN_PASSWORD di Streamlit Secrets, lalu reboot app."
     )
 
-
 def render_admin_settings() -> None:
-    st.subheader("⚙️ Admin Settings")
-    st.success(f"Login sebagai: {admin_username}")
     st.markdown(
-        """
-        <div class="easy-admin-panel">
-            <h4>Pusat Kontrol</h4>
-            <p>Gunakan tab di bawah untuk mengatur model, Telegram, memory, secrets, dan fitur power. Panel Knowledge Base, usage, optimizer, dan quality control tersedia di halaman admin ini setelah login.</p>
+        f"""
+        <div class="admin-section-card">
+            <div class="admin-section-title">⚙️ Pusat Kontrol Admin</div>
+            <p class="admin-section-desc">
+                Login sebagai <strong>{_html_escape(admin_username)}</strong>. Atur model, Telegram, memory, Knowledge Base,
+                live web, cache, optimizer, dan maintenance dari panel ini.
+            </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    render_admin_overview_cards()
     render_admin_status()
 
-    if st.button("🚪 Logout Admin", use_container_width=True, key="auto_btn_2646"):
-        st.session_state.admin_authenticated = False
-        st.rerun()
+    logout_col, spacer_col = st.columns([1, 3])
+    with logout_col:
+        if st.button("🚪 Logout Admin", use_container_width=True, key="auto_btn_2646"):
+            st.session_state.admin_authenticated = False
+            st.rerun()
+
+    st.markdown('<div class="admin-divider-soft"></div>', unsafe_allow_html=True)
 
     tab_ai, tab_bot, tab_memory, tab_health, tab_maint, tab_setup = st.tabs(
-        ["AI", "Telegram", "Memory", "Health", "Maintenance", "Setup"]
+        ["🤖 AI", "💬 Telegram", "🧠 Memory", "✅ Health", "🧹 Maintenance", "🔧 Setup"]
     )
 
     with tab_ai:
-        st.markdown("#### Model & Persona")
+        st.markdown("#### 🤖 Model & Persona")
         render_mode_selector()
         filter_choice = st.radio(
             "Tampilan model",
@@ -13663,22 +14018,30 @@ def render_power_features_admin_panel() -> None:
 
 
 def render_admin_page() -> None:
+    render_admin_custom_css()
     st.markdown(
         """
-        <div class="mac-windowbar admin-route-bar">
-            <div class="mac-traffic">
-                <span class="mac-close"></span>
-                <span class="mac-min"></span>
-                <span class="mac-max"></span>
+        <div class="admin-page-shell">
+            <div class="mac-windowbar admin-route-bar">
+                <div class="mac-traffic">
+                    <span class="mac-close"></span>
+                    <span class="mac-min"></span>
+                    <span class="mac-max"></span>
+                </div>
+                <div class="mac-window-title">adioranye admin</div>
+                <div class="mac-window-actions">Private</div>
             </div>
-            <div class="mac-window-title">adioranye admin</div>
-            <div class="mac-window-actions">Private</div>
-        </div>
-        <div class="app-hero admin-route-hero">
-            <div class="app-logo">🔐</div>
-            <div>
-                <h3 class="app-title">Admin Panel</h3>
-                <p class="app-subtitle">Halaman ini khusus pengaturan model, memory, Telegram, Knowledge Base, usage, optimizer, dan maintenance. Chat publik tetap berada di halaman utama.</p>
+            <div class="app-hero admin-route-hero">
+                <div class="app-logo">🔐</div>
+                <div class="admin-hero-copy">
+                    <div class="admin-hero-kicker">Admin workspace</div>
+                    <h3 class="app-title">Panel Kontrol Adioranye</h3>
+                    <p class="app-subtitle">Kelola model, Telegram, Knowledge Base, cache, health check, live web, optimizer, dan maintenance dari satu halaman yang lebih rapi.</p>
+                </div>
+                <div class="admin-hero-actions">
+                    <span class="admin-pill">🔒 Private</span>
+                    <span class="admin-pill">⚙️ System Control</span>
+                </div>
             </div>
         </div>
         """,
