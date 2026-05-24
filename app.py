@@ -2070,6 +2070,20 @@ standby_disable_model_discovery = parse_bool(
     get_secret("STANDBY_DISABLE_MODEL_DISCOVERY", True),
     default=True,
 )
+question_quick_check_enabled = parse_bool(
+    get_secret("QUESTION_QUICK_CHECK_ON_MESSAGE_ENABLED", True),
+    default=True,
+)
+question_quick_check_cooldown_seconds = int(
+    get_secret("QUESTION_QUICK_CHECK_COOLDOWN_SECONDS", 600) or 600
+)
+question_quick_check_trigger_file = str(
+    get_secret("QUESTION_QUICK_CHECK_TRIGGER_FILE", ".adioranye_question_quick_check.json")
+    or ".adioranye_question_quick_check.json"
+)
+question_quick_check_scope = str(
+    get_secret("QUESTION_QUICK_CHECK_SCOPE", "quick") or "quick"
+).strip().lower()
 model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 6) or 6)
 model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 2) or 2)
 model_health_retries = int(get_secret("MODEL_HEALTH_RETRIES", 0) or 0)
@@ -3852,6 +3866,176 @@ def effective_health_interval_seconds(force: bool = False) -> int:
 
     return max(60, int(model_health_check_interval or 90000))
 
+
+
+
+def default_question_quick_check_state() -> Dict[str, Any]:
+    return {
+        "version": 1,
+        "last_trigger_ts": 0,
+        "last_trigger_at": "",
+        "last_source": "",
+        "last_status": "",
+        "running_since_ts": 0,
+        "running_source": "",
+        "last_checked_count": 0,
+        "last_active_count": 0,
+        "last_error": "",
+    }
+
+
+def read_question_quick_check_state() -> Dict[str, Any]:
+    try:
+        if not question_quick_check_trigger_file or not os.path.exists(question_quick_check_trigger_file):
+            return default_question_quick_check_state()
+
+        with open(question_quick_check_trigger_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            return default_question_quick_check_state()
+
+        state = default_question_quick_check_state()
+        state.update(data)
+        return state
+    except Exception:
+        return default_question_quick_check_state()
+
+
+def write_question_quick_check_state(state: Dict[str, Any]) -> None:
+    try:
+        payload = default_question_quick_check_state()
+        payload.update(state or {})
+        with open(question_quick_check_trigger_file, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def should_trigger_question_quick_check(source: str = "web") -> Dict[str, Any]:
+    """Debounce quick check lintas web/Telegram dengan file state bersama."""
+    if not bool(question_quick_check_enabled):
+        return {"should_run": False, "reason": "disabled"}
+
+    if not api_key:
+        return {"should_run": False, "reason": "missing_api_key"}
+
+    now = time.time()
+    cooldown = max(60, int(question_quick_check_cooldown_seconds or 600))
+    running_window = max(30, min(300, cooldown))
+    state = read_question_quick_check_state()
+
+    last_trigger_ts = float(state.get("last_trigger_ts") or 0)
+    running_since_ts = float(state.get("running_since_ts") or 0)
+
+    if running_since_ts and now - running_since_ts < running_window:
+        return {
+            "should_run": False,
+            "reason": "another_quick_check_running",
+            "state": state,
+        }
+
+    if last_trigger_ts and now - last_trigger_ts < cooldown:
+        return {
+            "should_run": False,
+            "reason": "cooldown",
+            "state": state,
+        }
+
+    state.update(
+        {
+            "running_since_ts": now,
+            "running_source": str(source or "web"),
+            "last_status": "running",
+            "last_error": "",
+        }
+    )
+    write_question_quick_check_state(state)
+
+    return {
+        "should_run": True,
+        "reason": "scheduled",
+        "state": state,
+    }
+
+
+def finish_question_quick_check(
+    source: str,
+    status: str,
+    checked_count: int = 0,
+    active_count: int = 0,
+    error: str = "",
+) -> None:
+    now = time.time()
+    state = read_question_quick_check_state()
+    state.update(
+        {
+            "last_trigger_ts": now,
+            "last_trigger_at": _wib_now_text(),
+            "last_source": str(source or "web"),
+            "last_status": str(status or "done"),
+            "running_since_ts": 0,
+            "running_source": "",
+            "last_checked_count": int(checked_count or 0),
+            "last_active_count": int(active_count or 0),
+            "last_error": str(error or "")[:1000],
+        }
+    )
+    write_question_quick_check_state(state)
+
+
+def trigger_question_quick_check_if_needed(
+    source: str = "web",
+    user_text: str = "",
+) -> Dict[str, Any]:
+    """Trigger quick check saat pertanyaan masuk.
+
+    Tidak dipanggil saat standby kosong. Dipanggil hanya ketika ada pertanyaan
+    dari web atau Telegram, dan dilindungi cooldown file lintas channel.
+    """
+    decision = should_trigger_question_quick_check(source=source)
+    if not decision.get("should_run"):
+        st.session_state.question_quick_check_last_result = decision
+        return decision
+
+    try:
+        cache = refresh_model_health_if_needed(
+            force=True,
+            scope=question_quick_check_scope or "quick",
+        )
+        checked_count = int(st.session_state.get("model_health_last_checked_count") or 0)
+        active_count = sum(
+            1
+            for item in (cache or {}).values()
+            if isinstance(item, dict) and item.get("active")
+        )
+        finish_question_quick_check(
+            source=source,
+            status="done",
+            checked_count=checked_count,
+            active_count=active_count,
+        )
+        result = {
+            "should_run": True,
+            "reason": "done",
+            "checked_count": checked_count,
+            "active_count": active_count,
+        }
+        st.session_state.question_quick_check_last_result = result
+        return result
+    except Exception as exc:
+        finish_question_quick_check(
+            source=source,
+            status="error",
+            error=str(exc),
+        )
+        result = {
+            "should_run": True,
+            "reason": "error",
+            "error": str(exc)[:1000],
+        }
+        st.session_state.question_quick_check_last_result = result
+        return result
 
 
 def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> Dict[str, Dict[str, Any]]:
@@ -9231,6 +9415,11 @@ def render_admin_production_dashboard() -> None:
         f"auto health public panel: {'ON' if model_status_auto_refresh_public_panel else 'OFF'} • "
         f"interval standby: {int(standby_health_check_interval or 21600)} detik."
     )
+    st.caption(
+        f"Quick check saat pertanyaan masuk: {'ON' if question_quick_check_enabled else 'OFF'} • "
+        f"cooldown: {int(question_quick_check_cooldown_seconds or 600)} detik • "
+        f"scope: {question_quick_check_scope or 'quick'}."
+    )
 
     perf_stats = get_model_performance_stats()
     if perf_stats:
@@ -9510,6 +9699,10 @@ def build_telegram_config_payload(
         "standby_health_check_interval": int(standby_health_check_interval or 21600),
         "standby_health_quick_limit": int(standby_health_quick_limit or 2),
         "standby_disable_model_discovery": bool(standby_disable_model_discovery),
+        "question_quick_check_enabled": bool(question_quick_check_enabled),
+        "question_quick_check_cooldown_seconds": int(question_quick_check_cooldown_seconds or 600),
+        "question_quick_check_trigger_file": question_quick_check_trigger_file,
+        "question_quick_check_scope": question_quick_check_scope,
         "model_health_midnight_only": bool(model_health_midnight_only),
         "model_health_hour_wib": int(model_health_hour_wib or 0),
         "model_health_window_minutes": int(model_health_window_minutes or 60),
@@ -12685,6 +12878,10 @@ def render_public_page() -> None:
 
     if user_input:
         note_user_activity_for_health_saver()
+        trigger_question_quick_check_if_needed(
+            source="web",
+            user_text=user_input,
+        )
         maintenance_question_access_status: Dict[str, Any] = {}
         if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
             current_access = get_current_maintenance_access_key_status()

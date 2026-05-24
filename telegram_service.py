@@ -1833,6 +1833,108 @@ def telegram_set_maintenance_lock(
     return state
 
 
+
+def telegram_default_question_quick_check_state() -> Dict[str, Any]:
+    return {
+        "version": 1,
+        "last_trigger_ts": 0,
+        "last_trigger_at": "",
+        "last_source": "",
+        "last_status": "",
+        "running_since_ts": 0,
+        "running_source": "",
+        "last_checked_count": 0,
+        "last_active_count": 0,
+        "last_error": "",
+    }
+
+
+def telegram_read_question_quick_check_state(trigger_file: str) -> Dict[str, Any]:
+    try:
+        if not trigger_file or not os.path.exists(trigger_file):
+            return telegram_default_question_quick_check_state()
+
+        with open(trigger_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            return telegram_default_question_quick_check_state()
+
+        state = telegram_default_question_quick_check_state()
+        state.update(data)
+        return state
+    except Exception:
+        return telegram_default_question_quick_check_state()
+
+
+def telegram_write_question_quick_check_state(trigger_file: str, state: Dict[str, Any]) -> None:
+    try:
+        payload = telegram_default_question_quick_check_state()
+        payload.update(state or {})
+        with open(trigger_file, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def telegram_should_trigger_question_quick_check(
+    trigger_file: str,
+    cooldown_seconds: int = 600,
+    source: str = "telegram",
+) -> Dict[str, Any]:
+    now = time.time()
+    cooldown = max(60, int(cooldown_seconds or 600))
+    running_window = max(30, min(300, cooldown))
+    state = telegram_read_question_quick_check_state(trigger_file)
+
+    last_trigger_ts = float(state.get("last_trigger_ts") or 0)
+    running_since_ts = float(state.get("running_since_ts") or 0)
+
+    if running_since_ts and now - running_since_ts < running_window:
+        return {"should_run": False, "reason": "another_quick_check_running", "state": state}
+
+    if last_trigger_ts and now - last_trigger_ts < cooldown:
+        return {"should_run": False, "reason": "cooldown", "state": state}
+
+    state.update(
+        {
+            "running_since_ts": now,
+            "running_source": str(source or "telegram"),
+            "last_status": "running",
+            "last_error": "",
+        }
+    )
+    telegram_write_question_quick_check_state(trigger_file, state)
+
+    return {"should_run": True, "reason": "scheduled", "state": state}
+
+
+def telegram_finish_question_quick_check(
+    trigger_file: str,
+    source: str,
+    status: str,
+    checked_count: int = 0,
+    active_count: int = 0,
+    error: str = "",
+) -> None:
+    now = time.time()
+    state = telegram_read_question_quick_check_state(trigger_file)
+    state.update(
+        {
+            "last_trigger_ts": now,
+            "last_trigger_at": _wib_now_text(),
+            "last_source": str(source or "telegram"),
+            "last_status": str(status or "done"),
+            "running_since_ts": 0,
+            "running_source": "",
+            "last_checked_count": int(checked_count or 0),
+            "last_active_count": int(active_count or 0),
+            "last_error": str(error or "")[:1000],
+        }
+    )
+    telegram_write_question_quick_check_state(trigger_file, state)
+
+
 def telegram_command_name(text: str) -> str:
     raw = str(text or "").strip()
     if not raw:
@@ -3946,6 +4048,17 @@ class TelegramBotService:
         standby_health_check_interval = int(config.get("standby_health_check_interval", 21600) or 21600)
         standby_health_quick_limit = int(config.get("standby_health_quick_limit", 2) or 2)
         standby_disable_model_discovery = bool(config.get("standby_disable_model_discovery", True))
+        question_quick_check_enabled = str(
+            config.get("question_quick_check_enabled", os.getenv("QUESTION_QUICK_CHECK_ON_MESSAGE_ENABLED", "true"))
+        ).strip().lower() in {"1", "true", "yes", "y", "on"}
+        question_quick_check_cooldown_seconds = int(
+            config.get("question_quick_check_cooldown_seconds", os.getenv("QUESTION_QUICK_CHECK_COOLDOWN_SECONDS", 600))
+            or 600
+        )
+        question_quick_check_trigger_file = str(
+            config.get("question_quick_check_trigger_file")
+            or os.getenv("QUESTION_QUICK_CHECK_TRIGGER_FILE", ".adioranye_question_quick_check.json")
+        ).strip()
         power_features_enabled = bool(config.get("power_features_enabled", True))
         power_db_path = str(config.get("power_db_path") or ".adioranye_power.db")
         power_rag_enabled = bool(config.get("power_rag_enabled", True))
@@ -4466,6 +4579,71 @@ class TelegramBotService:
                             self._model_health_checked_ts = time.time()
                             return result
 
+                        def trigger_question_quick_check_from_telegram() -> Dict[str, Any]:
+                            if not bool(question_quick_check_enabled):
+                                return {"should_run": False, "reason": "disabled"}
+
+                            if not api_key:
+                                return {"should_run": False, "reason": "missing_api_key"}
+
+                            decision = telegram_should_trigger_question_quick_check(
+                                trigger_file=question_quick_check_trigger_file,
+                                cooldown_seconds=question_quick_check_cooldown_seconds,
+                                source="telegram",
+                            )
+                            if not decision.get("should_run"):
+                                return decision
+
+                            try:
+                                quick_result = refresh_or_cached_runtime_models(
+                                    preferred_mode=forced_model_mode,
+                                    force=True,
+                                )
+                                rotation = select_rotated_runtime_model(
+                                    result=quick_result,
+                                    current_mode=forced_model_mode,
+                                    current_model=model,
+                                )
+                                rotation["requested_mode"] = forced_model_mode
+                                apply_rotation_result(
+                                    quick_result,
+                                    rotation,
+                                    "question-quick-check",
+                                )
+                                health_cache = quick_result.get("model_health") or {}
+                                active_count = sum(
+                                    1
+                                    for item in health_cache.values()
+                                    if isinstance(item, dict) and item.get("active")
+                                )
+                                checked_count = len(health_cache)
+                                telegram_finish_question_quick_check(
+                                    trigger_file=question_quick_check_trigger_file,
+                                    source="telegram",
+                                    status="done",
+                                    checked_count=checked_count,
+                                    active_count=active_count,
+                                )
+                                return {
+                                    "should_run": True,
+                                    "reason": "done",
+                                    "checked_count": checked_count,
+                                    "active_count": active_count,
+                                }
+                            except Exception as exc:
+                                self._last_error = f"Telegram question quick check error: {exc}"
+                                telegram_finish_question_quick_check(
+                                    trigger_file=question_quick_check_trigger_file,
+                                    source="telegram",
+                                    status="error",
+                                    error=str(exc),
+                                )
+                                return {
+                                    "should_run": True,
+                                    "reason": "error",
+                                    "error": str(exc)[:1000],
+                                }
+
                         if is_telegram_admin_panel_command(text):
                             if not is_admin_chat:
                                 self._send_admin_required(token, chat_id, config)
@@ -4924,6 +5102,8 @@ class TelegramBotService:
                                 parse_mode=telegram_parse_mode,
                             )
                             continue
+
+                        trigger_question_quick_check_from_telegram()
 
                         local_reply = ""
                         local_meta: Dict[str, Any] = {}
