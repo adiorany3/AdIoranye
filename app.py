@@ -85,6 +85,19 @@ def safe_compare(left: Any, right: Any) -> bool:
     return hmac.compare_digest(str(left or ""), str(right or ""))
 
 
+def load_model_performance_stats_from_file() -> Dict[str, Dict[str, Any]]:
+    """Load performance stats early, before init_state is executed."""
+    path = str(globals().get("model_performance_state_file", ".adioranye_model_performance.json"))
+    try:
+        if not path or not os.path.exists(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 PUBLIC_AI_ERROR_MESSAGE = (
     "Maaf, Adioranye sedang mengalami gangguan koneksi/model. "
     "Silakan coba lagi beberapa saat lagi."
@@ -631,6 +644,12 @@ def init_state() -> None:
             get_secret("ANSWER_STREAMING_PREVIEW_ENABLED", True),
             default=True,
         )
+    if "model_performance_stats" not in st.session_state:
+        st.session_state.model_performance_stats = load_model_performance_stats_from_file()
+    if "last_model_performance_event" not in st.session_state:
+        st.session_state.last_model_performance_event = {}
+    if "active_health_check_scope" not in st.session_state:
+        st.session_state.active_health_check_scope = "quick"
 
 
 # =========================
@@ -752,6 +771,16 @@ model_health_check_interval = int(
 model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
 model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 8) or 8)
 model_health_retries = int(get_secret("MODEL_HEALTH_RETRIES", 1) or 1)
+model_health_quick_limit = int(get_secret("MODEL_HEALTH_QUICK_LIMIT", 8) or 8)
+model_performance_state_file = str(
+    get_secret("MODEL_PERFORMANCE_STATE_FILE", ".adioranye_model_performance.json")
+    or ".adioranye_model_performance.json"
+).strip()
+model_performance_routing_enabled = parse_bool(
+    get_secret("MODEL_PERFORMANCE_ROUTING_ENABLED", True), default=True
+)
+model_performance_min_samples = int(get_secret("MODEL_PERFORMANCE_MIN_SAMPLES", 2) or 2)
+request_timeout_seconds = int(get_secret("MODEL_REQUEST_TIMEOUT_SECONDS", 45) or 45)
 # Health check model aktif kapan saja.
 # Default baru: tidak perlu menunggu jendela waktu tertentu.
 model_health_midnight_only = parse_bool(
@@ -1182,6 +1211,208 @@ def persona_with_default_memory(persona: str) -> str:
     return f"{persona}\n\n" + "\n\n".join(context_sections)
 
 
+
+# =========================
+# Model performance tracking & latency-based routing
+# =========================
+def load_model_performance_stats_from_file() -> Dict[str, Dict[str, Any]]:
+    path = str(globals().get("model_performance_state_file", ".adioranye_model_performance.json"))
+    try:
+        if not path or not os.path.exists(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_model_performance_stats_to_file() -> None:
+    path = str(globals().get("model_performance_state_file", ".adioranye_model_performance.json"))
+    if not path:
+        return
+    try:
+        data = st.session_state.get("model_performance_stats") or {}
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def get_model_performance_stats() -> Dict[str, Dict[str, Any]]:
+    stats = st.session_state.get("model_performance_stats") or {}
+    if not isinstance(stats, dict):
+        stats = {}
+    st.session_state.model_performance_stats = stats
+    return stats
+
+
+def _model_perf_entry(model_name: str) -> Dict[str, Any]:
+    stats = get_model_performance_stats()
+    model = str(model_name or "").strip()
+    if not model:
+        model = "unknown"
+    entry = stats.get(model) or {}
+    defaults = {
+        "requests": 0,
+        "success": 0,
+        "failures": 0,
+        "timeouts": 0,
+        "quota_errors": 0,
+        "invalid_errors": 0,
+        "total_latency_ms": 0.0,
+        "avg_latency_ms": None,
+        "last_latency_ms": None,
+        "last_success_at": "",
+        "last_failure_at": "",
+        "last_error": "",
+    }
+    for key, value in defaults.items():
+        entry.setdefault(key, value)
+    stats[model] = entry
+    return entry
+
+
+def classify_error_category(error_text: str) -> str:
+    lowered = str(error_text or "").lower()
+    if any(marker in lowered for marker in ["timeout", "timed out", "read timed out"]):
+        return "timeout"
+    if any(marker in lowered for marker in ["insufficient", "quota", "billing", "creditsdepleted", "401002"]):
+        return "quota"
+    if any(marker in lowered for marker in ["invalid model", "model not found", "unknown model", "does not exist"]):
+        return "invalid_model"
+    if any(marker in lowered for marker in ["content filter", "filtered", "policy"]):
+        return "content_filter"
+    if any(marker in lowered for marker in ["502", "503", "504", "overload", "upstream"]):
+        return "provider_overload"
+    if any(marker in lowered for marker in ["connection", "network", "connectionpool"]):
+        return "network"
+    if any(marker in lowered for marker in ["empty", "kosong"]):
+        return "empty_response"
+    return "generic_error"
+
+
+def record_model_performance(
+    model_name: str,
+    latency_seconds: float,
+    success: bool,
+    error_text: str = "",
+) -> None:
+    model = str(model_name or "").strip()
+    if not model:
+        return
+    entry = _model_perf_entry(model)
+    latency_ms = max(0.0, float(latency_seconds or 0) * 1000)
+    entry["requests"] = int(entry.get("requests", 0) or 0) + 1
+    entry["last_latency_ms"] = round(latency_ms, 1)
+    entry["total_latency_ms"] = float(entry.get("total_latency_ms", 0) or 0) + latency_ms
+    entry["avg_latency_ms"] = round(
+        float(entry.get("total_latency_ms", 0) or 0) / max(1, int(entry.get("requests", 1) or 1)),
+        1,
+    )
+    if success:
+        entry["success"] = int(entry.get("success", 0) or 0) + 1
+        entry["last_success_at"] = _wib_now_text()
+        entry["last_error"] = ""
+    else:
+        entry["failures"] = int(entry.get("failures", 0) or 0) + 1
+        entry["last_failure_at"] = _wib_now_text()
+        entry["last_error"] = str(error_text or "")[:700]
+        category = classify_error_category(error_text)
+        if category == "timeout":
+            entry["timeouts"] = int(entry.get("timeouts", 0) or 0) + 1
+        elif category == "quota":
+            entry["quota_errors"] = int(entry.get("quota_errors", 0) or 0) + 1
+        elif category == "invalid_model":
+            entry["invalid_errors"] = int(entry.get("invalid_errors", 0) or 0) + 1
+    st.session_state.last_model_performance_event = {
+        "model": model,
+        "success": bool(success),
+        "latency_ms": round(latency_ms, 1),
+        "error_category": "" if success else classify_error_category(error_text),
+        "at": _wib_now_text(),
+    }
+    save_model_performance_stats_to_file()
+
+
+def record_model_performance_from_meta(
+    route: Dict[str, Any] | None,
+    meta: Dict[str, Any] | None,
+    latency_seconds: float,
+    answer_text: str = "",
+    error_text: str = "",
+) -> None:
+    route_data = route or {}
+    meta_data = meta or {}
+    model_name = str(
+        meta_data.get("active_model_final")
+        or meta_data.get("model")
+        or meta_data.get("model_requested")
+        or meta_data.get("telegram_model_requested")
+        or route_data.get("primary_model")
+        or ""
+    ).strip()
+    technical_error = bool(error_text) or looks_like_technical_error(answer_text)
+    public_error = is_public_connection_error_answer(answer_text, meta=meta_data)
+    record_model_performance(
+        model_name=model_name,
+        latency_seconds=latency_seconds,
+        success=not (technical_error or public_error),
+        error_text=error_text or answer_text,
+    )
+
+
+def get_model_success_rate(model_name: str) -> float:
+    entry = (st.session_state.get("model_performance_stats") or {}).get(str(model_name or ""), {})
+    requests_count = int(entry.get("requests", 0) or 0)
+    if requests_count <= 0:
+        return 0.92
+    return float(entry.get("success", 0) or 0) / max(1, requests_count)
+
+
+def get_model_effective_latency_ms(
+    model_name: str,
+    health_cache: Dict[str, Dict[str, Any]] | None = None,
+) -> float:
+    health = health_cache or {}
+    health_latency = health.get(model_name, {}).get("latency_ms")
+    perf = (st.session_state.get("model_performance_stats") or {}).get(str(model_name or ""), {})
+    perf_latency = perf.get("avg_latency_ms")
+    values = []
+    for value in [perf_latency, health_latency]:
+        try:
+            if value is not None and float(value) > 0:
+                values.append(float(value))
+        except Exception:
+            pass
+    if not values:
+        return 999999.0
+    return min(values)
+
+
+def get_model_performance_penalty(model_name: str) -> float:
+    if not bool(model_performance_routing_enabled):
+        return 0.0
+    entry = (st.session_state.get("model_performance_stats") or {}).get(str(model_name or ""), {})
+    requests_count = int(entry.get("requests", 0) or 0)
+    if requests_count < int(model_performance_min_samples or 2):
+        return 0.0
+    success_rate = get_model_success_rate(model_name)
+    timeouts = int(entry.get("timeouts", 0) or 0)
+    failures = int(entry.get("failures", 0) or 0)
+    penalty = (1.0 - success_rate) * 10000
+    penalty += min(5000, timeouts * 900)
+    penalty += min(3000, failures * 250)
+    return penalty
+
+
+def reset_model_runtime_and_performance() -> None:
+    st.session_state.model_runtime_blocks = {}
+    st.session_state.model_performance_stats = {}
+    st.session_state.last_model_performance_event = {}
+    save_model_performance_stats_to_file()
+
+
 # =========================
 # Model health check & active fallback priority
 # =========================
@@ -1275,10 +1506,18 @@ def prioritize_active_models(
         if health_cache.get(model, {}).get("active")
     ]
 
-    def sort_key(model: str) -> Tuple[int, int, float, str]:
+    def sort_key(model: str) -> Tuple[int, float, float, int, str]:
         price = model_price(model)
-        latency = float(health_cache.get(model, {}).get("latency_ms") or 999999)
-        return (_tier_rank(model), int(price.get("output", 999999999)), latency, model)
+        latency = get_model_effective_latency_ms(model, health_cache)
+        success_rate = get_model_success_rate(model)
+        penalty = get_model_performance_penalty(model)
+        return (
+            _tier_rank(model),
+            -success_rate,
+            latency + penalty,
+            int(price.get("output", 999999999)),
+            model,
+        )
 
     return sorted(active_models, key=sort_key)
 
@@ -1293,10 +1532,12 @@ def prioritize_fastest_active_models(
         if health_cache.get(model, {}).get("active")
     ]
 
-    def sort_key(model: str) -> Tuple[float, int, str]:
+    def sort_key(model: str) -> Tuple[float, float, int, str]:
         price = model_price(model)
-        latency = float(health_cache.get(model, {}).get("latency_ms") or 999999)
-        return (latency, int(price.get("output", 999999999)), model)
+        latency = get_model_effective_latency_ms(model, health_cache)
+        success_rate = get_model_success_rate(model)
+        penalty = get_model_performance_penalty(model)
+        return (latency + penalty, -success_rate, int(price.get("output", 999999999)), model)
 
     return sorted(active_models, key=sort_key)
 
@@ -1554,7 +1795,7 @@ def discover_api_model_candidates(force: bool = False) -> List[str]:
     return models
 
 
-def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, Any]]:
+def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> Dict[str, Dict[str, Any]]:
     """Refresh health model.
 
     Otomatis tetap mengikuti jendela tengah malam WIB. Namun force=True dari admin
@@ -1574,7 +1815,7 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
         return cache
 
     api_discovered_models = discover_api_model_candidates(force=force)
-    models_to_check = unique_models(
+    all_models_to_check = unique_models(
         [st.session_state.get("active_model") or default_model, default_model]
         + api_discovered_models
         + TOP_USAGE_MODEL_CANDIDATES
@@ -1584,6 +1825,20 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
         + DEFAULT_CHEAP_FALLBACK_MODELS
         + DEFAULT_EXPENSIVE_FALLBACK_MODELS
     )
+    scope_clean = str(scope or st.session_state.get("active_health_check_scope") or "auto").lower()
+    if scope_clean == "auto":
+        scope_clean = "quick" if not force else "full"
+    if scope_clean == "quick":
+        quick_pool = unique_models(
+            [st.session_state.get("active_model") or default_model, default_model]
+            + TOP_USAGE_MODEL_CANDIDATES
+            + DEFAULT_CHEAP_FALLBACK_MODELS
+            + DEFAULT_EXPENSIVE_FALLBACK_MODELS[:2]
+        )
+        limit = max(3, int(model_health_quick_limit or 8))
+        models_to_check = quick_pool[:limit]
+    else:
+        models_to_check = all_models_to_check
 
     fresh_cache: Dict[str, Dict[str, Any]] = {}
     max_workers = max(1, min(int(model_health_workers or 8), len(models_to_check), 12))
@@ -2323,16 +2578,34 @@ def choose_dynamic_runtime_options(
 
     configured_max_tokens = _clamp_int(
         cfg.get("max_completion_tokens", 2600),
-        minimum=900,
+        minimum=500,
         maximum=12000,
     )
-
-    if very_complex:
-        dynamic_max_tokens = min(configured_max_tokens, 5200)
+    operation_mode = _normalize_operation_mode(
+        st.session_state.get("active_operation_mode", ai_operation_mode_default)
+    )
+    complexity_hits = complexity.get("complexity_hits") or {}
+    code_or_file = bool(
+        complexity_hits.get("code")
+        or any(marker in str(user_text or "").lower() for marker in ["error", "kode", "code", "deploy", "file", "patch"])
+    )
+    if live_scraping_needed:
+        desired_tokens = 1500
+    elif very_complex:
+        desired_tokens = 4200
+    elif code_or_file:
+        desired_tokens = 2800
     elif complex_enough:
-        dynamic_max_tokens = min(configured_max_tokens, 3600)
+        desired_tokens = 2200
     else:
-        dynamic_max_tokens = min(configured_max_tokens, 2200)
+        desired_tokens = 850
+
+    if operation_mode == "Hemat":
+        desired_tokens = min(desired_tokens, 1600 if not code_or_file else 2400)
+    elif operation_mode == "Maksimal":
+        desired_tokens = int(desired_tokens * 1.25)
+
+    dynamic_max_tokens = min(configured_max_tokens, max(500, desired_tokens))
 
     rag_top_k = max(3, int(power_rag_top_k))
     response_cache_ttl_seconds = int(
@@ -2441,14 +2714,15 @@ def get_capable_primary_model(
     if not active_candidates:
         return ""
 
-    def sort_key(model_name: str) -> Tuple[int, float, int, str]:
+    def sort_key(model_name: str) -> Tuple[int, float, float, int, str]:
         price = model_price(model_name)
-        latency = float(
-            health_cache.get(model_name, {}).get("latency_ms") or 999999
-        )
+        latency = get_model_effective_latency_ms(model_name, health_cache)
+        success_rate = get_model_success_rate(model_name)
+        penalty = get_model_performance_penalty(model_name)
         return (
             -_model_capability_score(model_name),
-            latency,
+            -success_rate,
+            latency + penalty,
             int(price.get("output", 999999999)),
             model_name,
         )
@@ -6835,8 +7109,56 @@ def render_admin_production_dashboard() -> None:
             )
 
     st.caption(
-        "Rate limit, penyamaran error, dan block model berjalan otomatis untuk halaman publik."
+        "Rate limit, penyamaran error, block model, dan ranking performa berjalan otomatis untuk halaman publik."
     )
+
+    perf_stats = get_model_performance_stats()
+    if perf_stats:
+        perf_rows = []
+        for model_name, info in perf_stats.items():
+            requests_count = int(info.get("requests", 0) or 0)
+            if requests_count <= 0:
+                continue
+            success_count = int(info.get("success", 0) or 0)
+            perf_rows.append(
+                {
+                    "model": model_name,
+                    "request": requests_count,
+                    "sukses": success_count,
+                    "success_rate": f"{(success_count / max(1, requests_count)) * 100:.1f}%",
+                    "avg_latency_ms": info.get("avg_latency_ms"),
+                    "timeout": info.get("timeouts", 0),
+                    "error_terakhir": str(info.get("last_error") or "")[:120],
+                }
+            )
+        perf_rows.sort(
+            key=lambda row: (
+                -float(str(row["success_rate"]).replace("%", "") or 0),
+                float(row.get("avg_latency_ms") or 999999),
+            )
+        )
+        with st.expander("Ranking performa model", expanded=False):
+            st.dataframe(perf_rows[:25], use_container_width=True, hide_index=True)
+
+    reset_col_a, reset_col_b = st.columns(2)
+    with reset_col_a:
+        if st.button(
+            "♻️ Reset model block",
+            use_container_width=True,
+            key="reset_runtime_blocks_btn",
+        ):
+            st.session_state.model_runtime_blocks = {}
+            st.success("Model block aktif sudah direset.")
+            st.rerun()
+    with reset_col_b:
+        if st.button(
+            "🧹 Reset performa model",
+            use_container_width=True,
+            key="reset_model_perf_btn",
+        ):
+            reset_model_runtime_and_performance()
+            st.success("Log performa model sudah direset.")
+            st.rerun()
 
 
 
@@ -7454,8 +7776,8 @@ def render_ai_health_center() -> None:
             disabled=False,
             key="auto_btn_2532",
         ):
-            refresh_model_health_if_needed(force=True)
-            st.success("Cek model selesai.")
+            refresh_model_health_if_needed(force=True, scope="quick")
+            st.success("Quick health check selesai.")
             st.rerun()
     with col_b:
         if st.button(
@@ -7866,17 +8188,29 @@ def render_admin_settings() -> None:
             "Klik tombol cek model untuk ping/test model langsung tanpa menunggu jam tertentu. "
             "Urutan default: thinking → model capable aktif; non-thinking → model hemat aktif tercepat → backup hemat aktif lain → model menengah/mahal jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif."
         )
-        col_health_check, col_health_info = st.columns([1, 2])
+        col_health_check, col_health_full, col_health_info = st.columns([1, 1, 2])
         with col_health_check:
             if st.button(
-                "🔁 Cek model sekarang",
+                "⚡ Quick check",
                 use_container_width=True,
                 disabled=False,
-                key="auto_btn_2782",
+                key="model_health_quick_check_btn",
             ):
-                refresh_model_health_if_needed(force=True)
-                st.success("Cek model selesai.")
-            st.caption("Tombol aktif kapan saja.")
+                st.session_state.active_health_check_scope = "quick"
+                refresh_model_health_if_needed(force=True, scope="quick")
+                st.success("Quick health check selesai.")
+            st.caption("Cek model prioritas saja.")
+        with col_health_full:
+            if st.button(
+                "🔁 Full check",
+                use_container_width=True,
+                disabled=False,
+                key="model_health_full_check_btn",
+            ):
+                st.session_state.active_health_check_scope = "full"
+                refresh_model_health_if_needed(force=True, scope="full")
+                st.success("Full health check selesai.")
+            st.caption("Cek semua kandidat model.")
         with col_health_info:
             cheap_active, expensive_active = get_prioritized_fallback_models()
             st.info(
@@ -9187,6 +9521,7 @@ def render_public_page() -> None:
                             unsafe_allow_html=True,
                         )
 
+                    request_started_at = time.time()
                     answer, meta = safe_generate_power_answer(
                         api_url=api_url,
                         api_key=api_key,
@@ -9219,7 +9554,7 @@ def render_public_page() -> None:
                         max_expensive_models=route["max_expensive_models"],
                         temperature=float(cfg["temperature"]),
                         max_completion_tokens=int(runtime_options["max_completion_tokens"]),
-                        timeout=60,
+                        timeout=int(runtime_options.get("timeout") or request_timeout_seconds or 45),
                         smart_model_router=bool(cfg["smart_model_router"]),
                         return_to_primary=route["return_to_primary"],
                         max_smart_models=route["max_smart_models"],
@@ -9358,6 +9693,13 @@ def render_public_page() -> None:
                     )
                     if not isinstance(meta, dict):
                         meta = {}
+                    request_latency_seconds = time.time() - request_started_at
+                    record_model_performance_from_meta(
+                        route=route,
+                        meta=meta,
+                        latency_seconds=request_latency_seconds,
+                        answer_text=answer,
+                    )
                     answer = sanitize_public_ai_answer(
                         answer,
                         meta,
@@ -9513,6 +9855,15 @@ def render_public_page() -> None:
                     st.caption(caption_text)
                     render_feedback_controls(meta, answer, key_prefix="latest_feedback")
             except Exception as exc:
+                try:
+                    record_model_performance_from_meta(
+                        route=locals().get("route", {}),
+                        meta={},
+                        latency_seconds=time.time() - float(locals().get("request_started_at", time.time())),
+                        error_text=str(exc),
+                    )
+                except Exception:
+                    pass
                 meta = {
                     "public_error_sanitized": True,
                     "error_class": exc.__class__.__name__,
