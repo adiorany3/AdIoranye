@@ -170,31 +170,284 @@ def sanitize_public_ai_answer(
     return make_public_ai_error_message()
 
 
+
+def is_retryable_model_error_answer(
+    answer_text: Any,
+    meta: Dict[str, Any] | None = None,
+) -> bool:
+    """Cek apakah jawaban perlu dicoba ulang ke model aktif lain."""
+    answer = str(answer_text or "").strip()
+    meta_data = meta or {}
+
+    if not answer:
+        return True
+
+    if answer == str(PUBLIC_AI_ERROR_MESSAGE).strip():
+        return True
+
+    if bool(
+        meta_data.get("public_error_sanitized")
+        or meta_data.get("public_error_hidden")
+        or meta_data.get("public_safe_message")
+    ):
+        return True
+
+    if looks_like_technical_error(answer):
+        return True
+
+    return False
+
+
+def _simple_unique_models(
+    models: List[str],
+) -> List[str]:
+    seen = set()
+    result: List[str] = []
+
+    for model in models:
+        model_name = str(model or "").strip()
+
+        if not model_name or model_name in seen:
+            continue
+
+        seen.add(model_name)
+        result.append(model_name)
+
+    return result
+
+
+def get_active_model_retry_candidates(
+    failed_models: List[str] | None = None,
+) -> List[str]:
+    """Ambil kandidat model aktif lain dari health check dan fallback list."""
+    failed_set = {
+        str(model or "").strip()
+        for model in (failed_models or [])
+        if str(model or "").strip()
+    }
+
+    health_cache = st.session_state.get("model_health_cache") or {}
+
+    active_from_health = [
+        model_name
+        for model_name, item in health_cache.items()
+        if isinstance(item, dict)
+        and item.get("active")
+        and str(model_name or "").strip() not in failed_set
+    ]
+
+    def latency_value(model_name: str) -> float:
+        try:
+            value = health_cache.get(model_name, {}).get("latency_ms")
+            if value is not None:
+                return float(value)
+        except Exception:
+            pass
+
+        return 999999.0
+
+    active_from_health = sorted(
+        active_from_health,
+        key=latency_value,
+    )
+
+    fallback_lists: List[str] = []
+    fallback_lists.extend(
+        st.session_state.get("active_cheap_fallback_models")
+        or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
+    )
+    fallback_lists.extend(
+        st.session_state.get("active_expensive_fallback_models")
+        or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+    )
+    fallback_lists.extend(DEFAULT_FALLBACK_MODELS.copy())
+    fallback_lists.extend(TOP_USAGE_MODEL_CANDIDATES)
+
+    candidates = _simple_unique_models(
+        active_from_health
+        + fallback_lists
+    )
+
+    return [
+        model_name
+        for model_name in candidates
+        if model_name not in failed_set
+    ]
+
+
+def retry_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> Tuple[str, Dict[str, Any]]:
+    """Retry pertanyaan yang sama memakai model aktif lain.
+
+    Dipakai saat hasil awal adalah pesan gangguan/koneksi/model.
+    """
+    enabled = parse_bool(
+        get_secret("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", True),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not is_retryable_model_error_answer(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            int(get_secret("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", 2) or 2),
+            5,
+        ),
+    )
+    timeout_seconds = int(
+        get_secret("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", 35) or 35
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model]
+
+    fallback_models = original_kwargs.get("fallback_models") or []
+    expensive_fallback_models = original_kwargs.get("expensive_fallback_models") or []
+
+    failed_models.extend(
+        [
+            str(model or "").strip()
+            for model in fallback_models + expensive_fallback_models
+            if str(model or "").strip()
+        ]
+    )
+
+    candidates = get_active_model_retry_candidates(
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["auto_model_retry_enabled"] = True
+        meta_data["auto_model_retry_attempts"] = 0
+        meta_data["auto_model_retry_reason"] = "no-active-candidate"
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["timeout"] = min(
+            int(retry_kwargs.get("timeout") or timeout_seconds),
+            timeout_seconds,
+        )
+        retry_kwargs["_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        retry_answer_text = str(retry_answer or "").strip()
+
+        if not is_retryable_model_error_answer(
+            retry_answer_text,
+            meta=retry_meta,
+        ):
+            retry_meta["auto_model_retry_success"] = True
+            retry_meta["auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["auto_model_retry_models"] = tried_models
+            retry_meta["auto_model_retry_from_model"] = original_model
+            retry_meta["auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["auto_model_retry_errors"] = retry_errors
+            return retry_answer_text, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["auto_model_retry_enabled"] = True
+    meta_data["auto_model_retry_success"] = False
+    meta_data["auto_model_retry_attempts"] = len(tried_models)
+    meta_data["auto_model_retry_models"] = tried_models
+    meta_data["auto_model_retry_errors"] = retry_errors
+
+    return original_answer, meta_data
+
+
+
 def safe_generate_power_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
     """Call generate_power_answer safely across mixed app/power_features versions.
 
-    This prevents crashes like:
-    generate_power_answer() got an unexpected keyword argument 'performance_optimizer_enabled'
-    when Streamlit deploys a newer app.py with an older cached/merged power_features.py.
-    Unsupported keyword arguments are dropped only if the current function signature
-    does not accept them.
+    This also retries public model/connection error answers with another
+    health-checked active model, so the user does not immediately see the
+    generic connection/model failure message.
     """
+    retry_depth = int(kwargs.pop("_auto_retry_depth", 0) or 0)
+    original_kwargs = dict(kwargs)
+
     try:
         signature = inspect.signature(generate_power_answer)
         parameters = signature.parameters
         accepts_kwargs = any(
             p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()
         )
+
         if accepts_kwargs:
-            return generate_power_answer(**kwargs)
+            answer, meta = generate_power_answer(**kwargs)
+            return retry_power_answer_with_active_models(
+                str(answer or ""),
+                meta if isinstance(meta, dict) else {},
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
         filtered_kwargs = {
             key: value for key, value in kwargs.items() if key in parameters
         }
         dropped_keys = sorted(set(kwargs) - set(filtered_kwargs))
         answer, meta = generate_power_answer(**filtered_kwargs)
-        if dropped_keys and isinstance(meta, dict):
+
+        if not isinstance(meta, dict):
+            meta = {}
+
+        if dropped_keys:
             meta["power_answer_compat_dropped_kwargs"] = dropped_keys
-        return answer, meta
+
+        return retry_power_answer_with_active_models(
+            str(answer or ""),
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
     except TypeError as exc:
         # Extra fallback for older Python signatures or partially deployed files.
         message = str(exc)
@@ -204,6 +457,7 @@ def safe_generate_power_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
             if bad_key in kwargs:
                 retry_kwargs = dict(kwargs)
                 retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_auto_retry_depth"] = retry_depth
                 answer, meta = safe_generate_power_answer(**retry_kwargs)
                 if isinstance(meta, dict):
                     dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
@@ -211,6 +465,25 @@ def safe_generate_power_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
                         dropped.append(bad_key)
                     meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
                 return answer, meta
+
+        if retry_depth <= 0:
+            retry_answer, retry_meta = retry_power_answer_with_active_models(
+                make_public_ai_error_message(),
+                {
+                    "public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_public_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not is_retryable_model_error_answer(
+                retry_answer,
+                meta=retry_meta,
+            ):
+                return retry_answer, retry_meta
+
         raise
 
 
@@ -696,6 +969,7 @@ Memory default Adioranye:
 - Cache pertanyaan: untuk pertanyaan umum yang sering muncul dan tidak bergantung pada waktu terkini, gunakan cache jawaban agar respons lebih cepat. Jangan cache berita, harga, jadwal, cuaca, atau info yang cepat berubah.
 - Model utama sehat: jika model utama sedang tidak aktif tetapi fallback sehat tersedia, otomatis gunakan model sehat sebagai model utama agar status tidak berhenti di fallback saja.
 - Auto-refresh status model: lakukan quick health check berkala secara ringan agar status model aktif terverifikasi tetap terbaru tanpa mengganggu chat publik.
+- Retry gangguan model: jika jawaban awal adalah pesan gangguan koneksi/model, coba ulang pertanyaan yang sama memakai model aktif lain sebelum menampilkan pesan gagal.
 - Sapaan: gunakan sapaan profesional/netral. Jangan memakai panggilan seperti kakak, bro, atau sejenisnya kecuali pengguna memintanya.
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
@@ -9062,6 +9336,30 @@ def render_admin_status() -> None:
                 key="frequent_question_cache_export",
             )
 
+    with st.expander("Retry otomatis jika model gangguan"):
+        col_retry_a, col_retry_b, col_retry_c = st.columns(3)
+        col_retry_a.metric(
+            "Retry error model",
+            "ON"
+            if parse_bool(
+                get_secret("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", True),
+                default=True,
+            )
+            else "OFF",
+        )
+        col_retry_b.metric(
+            "Max percobaan",
+            int(get_secret("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", 2) or 2),
+        )
+        col_retry_c.metric(
+            "Timeout retry",
+            f"{int(get_secret('AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS', 35) or 35)} detik",
+        )
+        st.caption(
+            "Jika jawaban awal adalah pesan gangguan koneksi/model, sistem akan mencoba ulang "
+            "pertanyaan yang sama memakai model aktif lain dari hasil health check."
+        )
+
     with st.expander("Auto-refresh status model"):
         col_auto_a, col_auto_b, col_auto_c = st.columns(3)
         col_auto_a.metric(
@@ -11434,6 +11732,10 @@ def render_public_page() -> None:
                             runtime_options.get("streaming_preview_enabled")
                         )
                         meta["stable_typewriter_display"] = True
+                        meta["auto_retry_on_model_error_enabled"] = parse_bool(
+                            get_secret("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", True),
+                            default=True,
+                        )
                         meta["auto_live_scraping_needed"] = bool(
                             runtime_options.get("auto_live_scraping_needed")
                         )
@@ -11539,6 +11841,10 @@ def render_public_page() -> None:
                     if st.session_state.admin_authenticated:
                         caption_text += (
                             f" • skor kompleksitas: {route.get('complexity_score', 0)}"
+                        )
+                    if (meta or {}).get("auto_model_retry_success"):
+                        caption_text += (
+                            f" • retry model: {(meta or {}).get('auto_model_retry_final_model')}"
                         )
                     if (meta or {}).get("power_kb_sources") and (
                         bool((meta or {}).get("show_kb_sources", False))
