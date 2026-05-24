@@ -692,6 +692,7 @@ Memory default Adioranye:
 - Gaya jawaban: profesional, ramah, jelas, ringkas untuk pertanyaan ringan, dan detail bertahap untuk pekerjaan kompleks.
 - Prinsip akurasi: jangan mengarang. Untuk data terbaru, hukum, medis, keuangan, harga, jadwal, atau keputusan berisiko, sampaikan bahwa data perlu diverifikasi atau gunakan sumber yang tersedia.
 - Konteks waktu: jika pengguna bertanya dalam bahasa Indonesia, gunakan waktu Indonesia. Default gunakan WIB, tetapi sesuaikan ke WITA atau WIT jika wilayah/kota pengguna jelas. UTC hanya dipakai sebagai referensi teknis, bukan dianggap waktu lokal pengguna.
+- Sapaan waktu: jika pengguna hanya menyapa dengan selamat pagi/siang/sore/malam, sesuaikan sapaan dengan waktu Indonesia saat ini dan jawab sebagai sapaan, bukan sebagai pertanyaan.
 - Sapaan: gunakan sapaan profesional/netral. Jangan memakai panggilan seperti kakak, bro, atau sejenisnya kecuali pengguna memintanya.
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
@@ -1505,6 +1506,177 @@ def _indonesia_time_context_text() -> str:
         "- Jika wilayah/kota jelas masuk WITA atau WIT, gunakan zona tersebut.\n"
         "- Jangan menyebut UTC sebagai waktu lokal pengguna kecuali pengguna memang meminta UTC."
     )
+
+
+
+def _indonesia_part_of_day(
+    dt: datetime,
+) -> str:
+    """Tentukan sapaan berdasarkan jam lokal."""
+    hour = int(dt.hour)
+
+    if 4 <= hour <= 10:
+        return "pagi"
+
+    if 11 <= hour <= 14:
+        return "siang"
+
+    if 15 <= hour <= 17:
+        return "sore"
+
+    return "malam"
+
+
+def _normalize_short_greeting_text(
+    text: str,
+) -> str:
+    normalized = str(text or "").strip().lower()
+    normalized = re.sub(r"[!?.。,，:;]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def detect_indonesia_time_greeting(
+    user_text: str,
+) -> Dict[str, Any]:
+    """Deteksi sapaan waktu pendek, bukan pertanyaan/tugas.
+
+    Contoh yang ditangani lokal:
+    - selamat pagi
+    - selamat siang adioranye
+    - pagi
+    - malam min
+    """
+    normalized = _normalize_short_greeting_text(user_text)
+
+    if not normalized:
+        return {
+            "matched": False,
+            "said": "",
+        }
+
+    # Jangan ambil alih jika user sedang meminta dibuatkan teks/ucapan.
+    task_markers = {
+        "buat",
+        "buatkan",
+        "tulis",
+        "tuliskan",
+        "caption",
+        "template",
+        "contoh",
+        "arti",
+        "apa",
+        "kenapa",
+        "mengapa",
+        "jelaskan",
+        "translate",
+        "terjemahkan",
+    }
+
+    tokens = normalized.split()
+
+    if any(token in task_markers for token in tokens):
+        return {
+            "matched": False,
+            "said": "",
+        }
+
+    # Batasi hanya sapaan pendek agar tidak mengganggu prompt biasa.
+    if len(tokens) > 5:
+        return {
+            "matched": False,
+            "said": "",
+        }
+
+    greeting_patterns = [
+        ("pagi", r"^(selamat\s+)?pagi(\s+(adioranye|admin|min|ai|bot))?$"),
+        ("siang", r"^(selamat\s+)?siang(\s+(adioranye|admin|min|ai|bot))?$"),
+        ("sore", r"^(selamat\s+)?sore(\s+(adioranye|admin|min|ai|bot))?$"),
+        ("malam", r"^(selamat\s+)?malam(\s+(adioranye|admin|min|ai|bot))?$"),
+    ]
+
+    for label, pattern in greeting_patterns:
+        if re.match(pattern, normalized, flags=re.I):
+            return {
+                "matched": True,
+                "said": label,
+            }
+
+    return {
+        "matched": False,
+        "said": "",
+    }
+
+
+def build_indonesia_time_greeting_reply(
+    user_text: str,
+) -> Tuple[str, Dict[str, Any]]:
+    """Balas sapaan waktu sesuai waktu Indonesia saat ini tanpa memanggil model."""
+    detected = detect_indonesia_time_greeting(user_text)
+
+    if not detected.get("matched"):
+        return "", {}
+
+    now_utc = datetime.now(timezone.utc)
+    zone_rows = [
+        (
+            "WIB",
+            now_utc.astimezone(WIB_TZ),
+            "Jakarta/Sumatra/Jawa",
+        ),
+        (
+            "WITA",
+            now_utc.astimezone(WITA_TZ),
+            "Bali/Sulawesi/Nusa Tenggara",
+        ),
+        (
+            "WIT",
+            now_utc.astimezone(WIT_TZ),
+            "Maluku/Papua",
+        ),
+    ]
+
+    default_dt = zone_rows[0][1]
+    default_part = _indonesia_part_of_day(default_dt)
+    user_said = str(detected.get("said") or "").strip()
+
+    greeting = f"Selamat {default_part}."
+
+    detail_lines = [
+        f"Saat ini acuan default Indonesia adalah {default_dt.strftime('%H:%M')} WIB, jadi sapaan yang paling sesuai adalah **selamat {default_part}**."
+    ]
+
+    if user_said and user_said != default_part:
+        detail_lines.append(
+            f"Sapaan Anda tadi “selamat {user_said}”, saya sesuaikan dengan waktu Indonesia saat ini."
+        )
+
+    zone_summary = []
+
+    for zone_name, dt_value, area_label in zone_rows:
+        zone_part = _indonesia_part_of_day(dt_value)
+        zone_summary.append(
+            f"{zone_name} {dt_value.strftime('%H:%M')} ({zone_part})"
+        )
+
+    detail_lines.append(
+        "Ringkas zona Indonesia: "
+        + "; ".join(zone_summary)
+        + "."
+    )
+
+    answer = greeting + "\n\n" + "\n".join(detail_lines)
+
+    return answer, {
+        "local_time_greeting": True,
+        "greeting_detected": user_said,
+        "greeting_adjusted_to": default_part,
+        "timezone_default": "WIB",
+        "wib_time": zone_rows[0][1].strftime("%Y-%m-%d %H:%M:%S WIB"),
+        "wita_time": zone_rows[1][1].strftime("%Y-%m-%d %H:%M:%S WITA"),
+        "wit_time": zone_rows[2][1].strftime("%Y-%m-%d %H:%M:%S WIT"),
+        "model_skipped": True,
+    }
 
 
 def _health_window_label_wib() -> str:
@@ -9976,7 +10148,17 @@ def render_public_page() -> None:
             return
 
         local_reply = ""
-        if st.session_state.admin_authenticated:
+        local_meta: Dict[str, Any] = {}
+
+        greeting_reply, greeting_meta = build_indonesia_time_greeting_reply(
+            user_input
+        )
+
+        if greeting_reply:
+            local_reply = greeting_reply
+            local_meta = greeting_meta
+
+        if not local_reply and st.session_state.admin_authenticated:
             local_reply = handle_local_memory_command(user_input, memory)
             if not local_reply and power_features_enabled:
                 local_reply = handle_power_command(
@@ -9985,7 +10167,7 @@ def render_public_page() -> None:
 
         if local_reply:
             answer = local_reply
-            meta = {}
+            meta = local_meta or {}
             st.session_state.last_answer_meta = meta
         else:
             try:
