@@ -1962,6 +1962,7 @@ def build_telegram_admin_control_help() -> str:
         "• /keys — lihat access key akses terbatas aktif",
         "• /key revoke AK-XXXX — nonaktifkan key",
         "• /access AK-XXXX — user mengaktifkan key saat akses terbatas",
+        "• /logoutkey — user logout key dari chat ini",
         "",
         "Model & routing:",
         "• /health — quick health check model dan pilih model sehat",
@@ -2279,6 +2280,15 @@ def telegram_access_key_admin_command(text: str) -> str:
 def telegram_access_activate_command(text: str) -> bool:
     command = telegram_command_name(text) if "telegram_command_name" in globals() else str(text or "").split(maxsplit=1)[0].lower()
     return command in {"/access", "/akses"}
+
+
+def telegram_access_logout_command(text: str) -> bool:
+    command = telegram_command_name(text) if "telegram_command_name" in globals() else str(text or "").split(maxsplit=1)[0].lower()
+    arg = telegram_command_arg(text).strip().lower() if "telegram_command_arg" in globals() else ""
+    return (
+        command in {"/logoutkey", "/logout_key", "/keluarkey", "/keluar_key"}
+        or (command in {"/access", "/akses"} and arg in {"logout", "keluar", "off", "stop", "hapus"})
+    )
 
 
 def telegram_build_access_key_list(access_file: str, default_max_questions: int = 5) -> str:
@@ -4245,6 +4255,24 @@ class TelegramBotService:
                                 ),
                                 parse_mode=telegram_parse_mode,
                             )
+                            continue
+
+                        if telegram_access_logout_command(text):
+                            active_key = self._maintenance_access_by_chat.pop(str(chat_id), "")
+                            if active_key:
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    f"✅ Logout key berhasil. Key {active_key} dilepas dari chat ini.",
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            else:
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "Tidak ada access key aktif di chat ini.",
+                                    parse_mode=telegram_parse_mode,
+                                )
                             continue
 
                         if telegram_access_activate_command(text):

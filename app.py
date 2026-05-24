@@ -507,25 +507,56 @@ def get_current_maintenance_access_key_status() -> Dict[str, Any]:
     return status
 
 
+
+def logout_maintenance_access_key_session() -> None:
+    """Lepas access key dari session web saat ini.
+
+    Tidak revoke key global; hanya logout dari browser/session user.
+    """
+    st.session_state.maintenance_access_key = ""
+    st.session_state.maintenance_access_key_input = ""
+    st.session_state.maintenance_access_key_status = {}
+
+
 def render_maintenance_access_key_active_notice(status: Dict[str, Any]) -> None:
     key = str(status.get("key") or "")
+    used = int(status.get("used") or 0)
+
     if bool(status.get("unlimited")):
-        st.success("Access key akses terbatas aktif. Kuota: unlimited.")
+        st.success(f"Access key akses terbatas aktif. Kuota: unlimited. Terpakai: {used}.")
     else:
         remaining = int(status.get("remaining") or 0)
         st.success(f"Access key akses terbatas aktif. Sisa kuota: {remaining} pertanyaan.")
 
+    col_key_status, col_key_logout = st.columns([3, 1])
+    with col_key_status:
+        st.caption(f"Key aktif: {key}")
+    with col_key_logout:
+        if st.button(
+            "Logout key",
+            use_container_width=True,
+            key="maintenance_access_key_logout_visible",
+        ):
+            logout_maintenance_access_key_session()
+            st.success("Access key sudah logout dari sesi ini.")
+            st.rerun()
+
     with st.expander("Detail access key", expanded=False):
         st.code(key)
-        if st.button("Keluar dari access key", use_container_width=True, key="maintenance_access_key_logout"):
-            st.session_state.maintenance_access_key = ""
-            st.session_state.maintenance_access_key_status = {}
+        st.caption("Logout key hanya melepas key dari sesi/browser ini. Key tidak dinonaktifkan global.")
+        if st.button(
+            "Logout key dari sesi ini",
+            use_container_width=True,
+            key="maintenance_access_key_logout_detail",
+        ):
+            logout_maintenance_access_key_session()
+            st.success("Access key sudah logout dari sesi ini.")
             st.rerun()
 
 def render_maintenance_access_key_form(state: Dict[str, Any] | None = None) -> None:
     st.info(
         "Jika Anda punya access key dari admin, masukkan key agar tetap bisa chat selama akses terbatas. "
-        "Kuota mengikuti pengaturan key: angka tertentu atau unlimited."
+        "Kuota mengikuti pengaturan key: angka tertentu atau unlimited. Jika sudah aktif, gunakan tombol Logout key untuk melepas key dari sesi ini."
     )
     with st.form("maintenance_access_key_form", clear_on_submit=False):
         key_value = st.text_input(
