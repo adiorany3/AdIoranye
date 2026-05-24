@@ -16,111 +16,97 @@ import requests
 # health-check, /speed, /rotate, /ubah murah, dan /ubah mahal.
 # Satuan harga: Rupiah per 1M token.
 SLASHAI_MODEL_CATALOG: List[Dict[str, Any]] = [
-    {"model": 'slashai/claude-haiku-4.5:fast', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/claude-haiku-4.5:free', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/claude-haiku-4.5:slow', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/claude-opus-4.5', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/claude-opus-4.6', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/claude-opus-4.7:fast', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/claude-opus-4.7:slow', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/claude-sonnet-4.5:fast', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/claude-sonnet-4.5:free', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/claude-sonnet-4.5:slow', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/claude-sonnet-4.6', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/claude-sonnet-4:free', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/deepseek-3.2:fast', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/deepseek-3.2:free', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/deepseek-v3.2', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/deepseek-v4-flash:medium', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/deepseek-v4-flash:slow', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/deepseek-v4-pro:medium', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/deepseek-v4-pro:slow', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gemini-3-flash', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gemini-3.1-pro', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/glm-5.1:medium', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/glm-5.1:slow', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/glm-5:fast', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/glm-5:free', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/glm-5:medium', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/glm-5:slow', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5-codex', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5-codex-mini', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5-codex-mini-review', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5-codex-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5-mini', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5-nano', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.1', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.1-codex', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.1-codex-max', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gpt-5.1-codex-max-review', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gpt-5.1-codex-mini', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.1-codex-mini-high', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.1-codex-mini-high-review', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.1-codex-mini-review', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.1-codex-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.1-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.2-codex', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.2-codex-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.2-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.2:cx', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.2:slow', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.3-codex', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.3-codex-high', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gpt-5.3-codex-high-review', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gpt-5.3-codex-low', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.3-codex-low-review', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.3-codex-none', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.3-codex-none-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.3-codex-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.3-codex-spark', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.3-codex-spark-review', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.3-codex-xhigh', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gpt-5.3-codex-xhigh-review', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gpt-5.4-mini', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.4-nano', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.4-pro', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/gpt-5.4-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.4:cx', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.4:slow', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.5-instant', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/gpt-5.5-review', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.5:cx', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/gpt-5.5:slow', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/kimi-k2.5:medium', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/kimi-k2.5:slow', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/kimi-k2.6', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/mimo-v2-omni', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/mimo-v2-pro', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/mimo-v2.5', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/mimo-v2.5-pro', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/minimax-m2.1:free', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/minimax-m2.5:fast', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/minimax-m2.5:free', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/minimax-m2.5:medium', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/minimax-m2.5:slow', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/minimax-m2.7:medium', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/minimax-m2.7:slow', "aliases": [], "input": 50, "output": 200},
-    {"model": 'slashai/qwen3-coder-next:fast', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/qwen3-coder-next:free', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/qwen3.6-max-preview', "aliases": [], "input": 5000, "output": 25000},
-    {"model": 'slashai/qwen3.6-plus', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/step-3.5-flash', "aliases": [], "input": 50, "output": 200},
+    {"model": 'slashai/claude-haiku-4.5:fast', "aliases": [], "input": 12000, "output": 83000},
+    {"model": 'slashai/claude-opus-4-5', "aliases": [], "input": 85000, "output": 439000},
+    {"model": 'slashai/claude-opus-4.5', "aliases": [], "input": 85000, "output": 439000},
+    {"model": 'slashai/claude-opus-4.7:fast', "aliases": [], "input": 85000, "output": 439000},
+    {"model": 'slashai/claude-sonnet-4.5-free', "aliases": [], "input": 0, "output": 0},
+    {"model": 'slashai/claude-sonnet-4.5:free', "aliases": [], "input": 0, "output": 0},
+    {"model": 'slashai/deepseek-3.2:fast', "aliases": [], "input": 4100, "output": 6300},
+    {"model": 'slashai/deepseek-v4-flash-free', "aliases": [], "input": 0, "output": 0},
+    {"model": 'slashai/deepseek-v4-flash:medium', "aliases": [], "input": 1000, "output": 3200},
+    {"model": 'slashai/deepseek-v4-pro:medium', "aliases": [], "input": 7300, "output": 13000},
+    {"model": 'slashai/glm-5.1:medium', "aliases": [], "input": 14000, "output": 51000},
+    {"model": 'slashai/glm-5:fast', "aliases": [], "input": 7000, "output": 30000},
+    {"model": 'slashai/glm-5:medium', "aliases": [], "input": 7000, "output": 30000},
+    {"model": 'slashai/gpt-5-codex', "aliases": [], "input": 19000, "output": 170000},
+    {"model": 'slashai/gpt-5-codex-mini', "aliases": [], "input": 4100, "output": 32000},
+    {"model": 'slashai/gpt-5-codex-mini-review', "aliases": [], "input": 4100, "output": 32000},
+    {"model": 'slashai/gpt-5-codex-review', "aliases": [], "input": 19000, "output": 170000},
+    {"model": 'slashai/gpt-5.1', "aliases": [], "input": 20000, "output": 170000},
+    {"model": 'slashai/gpt-5.1-codex', "aliases": [], "input": 20000, "output": 170000},
+    {"model": 'slashai/gpt-5.1-codex-max', "aliases": [], "input": 22000, "output": 190000},
+    {"model": 'slashai/gpt-5.1-codex-max-review', "aliases": [], "input": 20000, "output": 170000},
+    {"model": 'slashai/gpt-5.1-codex-mini', "aliases": [], "input": 4000, "output": 31000},
+    {"model": 'slashai/gpt-5.1-codex-mini-high', "aliases": [], "input": 4200, "output": 31200},
+    {"model": 'slashai/gpt-5.1-codex-mini-high-review', "aliases": [], "input": 4200, "output": 31200},
+    {"model": 'slashai/gpt-5.1-codex-mini-review', "aliases": [], "input": 4000, "output": 30000},
+    {"model": 'slashai/gpt-5.1-codex-review', "aliases": [], "input": 20000, "output": 170000},
+    {"model": 'slashai/gpt-5.1-review', "aliases": [], "input": 20000, "output": 170000},
+    {"model": 'slashai/gpt-5.2-codex', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.2-codex-review', "aliases": [], "input": 23000, "output": 240000},
+    {"model": 'slashai/gpt-5.2-review', "aliases": [], "input": 23000, "output": 240000},
+    {"model": 'slashai/gpt-5.2:cx', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-high', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-high-review', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-low', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-low-review', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-none', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-none-review', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-review', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-spark', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-spark-review', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-xhigh', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.3-codex-xhigh-review', "aliases": [], "input": 27000, "output": 243000},
+    {"model": 'slashai/gpt-5.4-review', "aliases": [], "input": 41000, "output": 260000},
+    {"model": 'slashai/gpt-5.4:cx', "aliases": [], "input": 41000, "output": 260000},
+    {"model": 'slashai/gpt-5.5-review', "aliases": [], "input": 82000, "output": 527000},
+    {"model": 'slashai/gpt-5.5:cx', "aliases": [], "input": 82000, "output": 527000},
+    {"model": 'slashai/kimi-k2.5:medium', "aliases": [], "input": 5000, "output": 30000},
+    {"model": 'slashai/kimi-k2.6', "aliases": [], "input": 10000, "output": 30000},
+    {"model": 'slashai/mimo-v2-omni', "aliases": [], "input": 5000, "output": 32000},
+    {"model": 'slashai/mimo-v2-pro', "aliases": [], "input": 15000, "output": 50000},
+    {"model": 'slashai/mimo-v2.5', "aliases": [], "input": 5000, "output": 32000},
+    {"model": 'slashai/mimo-v2.5-pro', "aliases": [], "input": 15000, "output": 50000},
+    {"model": 'slashai/minimax-m2.5:fast', "aliases": [], "input": 500, "output": 2000},
+    {"model": 'slashai/minimax-m2.5:medium', "aliases": [], "input": 2000, "output": 17000},
+    {"model": 'slashai/minimax-m2.7:medium', "aliases": [], "input": 4200, "output": 13000},
+    {"model": 'slashai/nemotron-3-super-free', "aliases": [], "input": 0, "output": 0},
+    {"model": 'slashai/qwen3-coder-next:fast', "aliases": [], "input": 1600, "output": 11000},
+    {"model": 'slashai/qwen3.6-max-preview', "aliases": [], "input": 15000, "output": 100000},
+    {"model": 'slashai/qwen3.6-plus', "aliases": [], "input": 5000, "output": 30000},
+    {"model": 'slashai/step-3.5-flash', "aliases": [], "input": 1000, "output": 5000},
 ]
-
 
 def _unique_ordered(items: List[str]) -> List[str]:
     return list(dict.fromkeys(str(item).strip() for item in items if str(item).strip()))
 
 
 def _tier_from_price(input_price: int, output_price: int) -> str:
+    """Klasifikasi biaya berdasarkan harga Rupiah per 1M token.
+
+    Tier dipakai untuk routing hemat:
+    - cheap: gratis atau sangat murah untuk chat sederhana;
+    - medium: masih ekonomis untuk jawaban normal;
+    - expensive: model mahal/capable;
+    - ultra: sangat mahal, dipakai hanya jika memang perlu.
+    """
+    input_price = int(input_price or 0)
+    output_price = int(output_price or 0)
+
     if input_price == 0 and output_price == 0:
-        return "unknown"
-    if input_price <= 50 and output_price <= 200:
         return "cheap"
-    if input_price <= 500 and output_price <= 2000:
+
+    if input_price <= 5000 and output_price <= 13000:
+        return "cheap"
+
+    if input_price <= 15000 and output_price <= 100000:
         return "medium"
-    if input_price <= 5000 and output_price <= 25000:
+
+    if input_price <= 41000 and output_price <= 260000:
         return "expensive"
+
     return "ultra"
 
 
@@ -129,58 +115,69 @@ MODEL_PRICE_IDR: Dict[str, Dict[str, int]] = {
     for item in SLASHAI_MODEL_CATALOG
 }
 
-# Kompatibilitas nama lama/varian kapitalisasi dari patch sebelumnya.
+# Kompatibilitas nama lama/varian kapitalisasi/base-name.
 MODEL_PRICE_IDR.update({
-    'slashai/claude-haiku-4.5': {"input": 50, "output": 200},
-    'slashai/claude-sonnet-4.5': {"input": 500, "output": 2000},
-    'slashai/claude-opus-4.7': {"input": 5000, "output": 25000},
-    'slashai/deepseek-3.2': {"input": 500, "output": 2000},
-    'slashai/deepseek-v4-flash': {"input": 50, "output": 200},
-    'slashai/deepseek-v4-pro': {"input": 5000, "output": 25000},
-    'slashai/glm-5': {"input": 500, "output": 2000},
-    'slashai/GLM-5': {"input": 500, "output": 2000},
-    'slashai/glm-5.1': {"input": 500, "output": 2000},
-    'slashai/GLM-5.1': {"input": 500, "output": 2000},
-    'slashai/gpt-5.2': {"input": 500, "output": 2000},
-    'slashai/gpt-5.4': {"input": 500, "output": 2000},
-    'slashai/gpt-5.5': {"input": 500, "output": 2000},
-    'slashai/kimi-k2.5': {"input": 500, "output": 2000},
-    'slashai/Kimi-K2.5': {"input": 500, "output": 2000},
-    'slashai/Kimi-K2.6': {"input": 500, "output": 2000},
-    'slashai/minimax-m2.5': {"input": 50, "output": 200},
-    'slashai/MiniMax-M2.5': {"input": 50, "output": 200},
-    'slashai/minimax-m2.7': {"input": 50, "output": 200},
-    'slashai/MiniMax-M2.7': {"input": 50, "output": 200},
-    'slashai/qwen3-coder-next': {"input": 500, "output": 2000},
-    'slashai/Qwen3.6-Plus': {"input": 500, "output": 2000},
-    'slashai/Qwen3.6-Max-Preview': {"input": 5000, "output": 25000},
-    'slashai/Step-3.5-Flash': {"input": 50, "output": 200},
+    'slashai/claude-haiku-4.5': {"input": 12000, "output": 83000},
+    'slashai/claude-sonnet-4.5': {"input": 0, "output": 0},
+    'slashai/claude-sonnet-4.5:free': {"input": 0, "output": 0},
+    'slashai/claude-opus-4.5': {"input": 85000, "output": 439000},
+    'slashai/claude-opus-4-5': {"input": 85000, "output": 439000},
+    'slashai/claude-opus-4.7': {"input": 85000, "output": 439000},
+    'slashai/deepseek-3.2': {"input": 4100, "output": 6300},
+    'slashai/deepseek-v4-flash': {"input": 1000, "output": 3200},
+    'bai/deepseek-v4-flash': {"input": 1000, "output": 3200},
+    'slashai/deepseek-v4-flash-free': {"input": 0, "output": 0},
+    'slashai/deepseek-v4-pro': {"input": 7300, "output": 13000},
+    'slashai/glm-5': {"input": 7000, "output": 30000},
+    'slashai/GLM-5': {"input": 7000, "output": 30000},
+    'slashai/glm-5.1': {"input": 14000, "output": 51000},
+    'slashai/GLM-5.1': {"input": 14000, "output": 51000},
+    'slashai/gpt-5.2': {"input": 23000, "output": 240000},
+    'slashai/gpt-5.3': {"input": 27000, "output": 243000},
+    'slashai/gpt-5.4': {"input": 41000, "output": 260000},
+    'slashai/gpt-5.5': {"input": 82000, "output": 527000},
+    'slashai/kimi-k2.5': {"input": 5000, "output": 30000},
+    'slashai/Kimi-K2.5': {"input": 5000, "output": 30000},
+    'slashai/Kimi-K2.6': {"input": 10000, "output": 30000},
+    'slashai/minimax-m2.5': {"input": 500, "output": 2000},
+    'slashai/MiniMax-M2.5': {"input": 500, "output": 2000},
+    'slashai/minimax-m2.7': {"input": 4200, "output": 13000},
+    'slashai/MiniMax-M2.7': {"input": 4200, "output": 13000},
+    'slashai/qwen3-coder-next': {"input": 1600, "output": 11000},
+    'slashai/Qwen3.6-Plus': {"input": 5000, "output": 30000},
+    'slashai/Qwen3.6-Max-Preview': {"input": 15000, "output": 100000},
+    'slashai/Step-3.5-Flash': {"input": 1000, "output": 5000},
 })
 
-# Model yang terlihat dominan pada dashboard penggunaan terbaru pengguna.
-# Beberapa endpoint/provider memakai nama base tanpa suffix (:fast/:slow/:medium).
+# Model prioritas untuk health check dan routing hemat.
 TOP_USAGE_MODEL_CANDIDATES = _unique_ordered([
-    "slashai/gpt-5-nano",
-    "slashai/deepseek-v4-flash",
-    "slashai/gpt-5-mini",
-    "slashai/claude-haiku-4.5",
-    "slashai/deepseek-v3.2",
-    "slashai/gpt-5.4-nano",
-    "slashai/Kimi-K2.5",
-    "slashai/Qwen3.6-Plus",
-    "bai/deepseek-v4-flash",
-    "slashai/qwen3-coder-next",
+    'slashai/deepseek-v4-flash-free',
+    'slashai/claude-sonnet-4.5-free',
+    'slashai/nemotron-3-super-free',
+    'slashai/minimax-m2.5:fast',
+    'slashai/deepseek-v4-flash:medium',
+    'slashai/step-3.5-flash',
+    'slashai/qwen3-coder-next:fast',
+    'slashai/minimax-m2.7:medium',
+    'slashai/deepseek-3.2:fast',
+    'slashai/kimi-k2.5:medium',
+    'slashai/qwen3.6-plus',
 ])
 
+# Pastikan kandidat prioritas juga memiliki harga.
 MODEL_PRICE_IDR.update({
-    "slashai/deepseek-v4-flash": {"input": 50, "output": 200},
-    "bai/deepseek-v4-flash": {"input": 50, "output": 200},
-    "slashai/claude-haiku-4.5": {"input": 50, "output": 200},
-    "slashai/Kimi-K2.5": {"input": 500, "output": 2000},
-    "slashai/Qwen3.6-Plus": {"input": 500, "output": 2000},
-    "slashai/qwen3-coder-next": {"input": 500, "output": 2000},
+    'slashai/deepseek-v4-flash-free': {"input": 0, "output": 0},
+    'slashai/claude-sonnet-4.5-free': {"input": 0, "output": 0},
+    'slashai/nemotron-3-super-free': {"input": 0, "output": 0},
+    'slashai/minimax-m2.5:fast': {"input": 500, "output": 2000},
+    'slashai/deepseek-v4-flash:medium': {"input": 1000, "output": 3200},
+    'slashai/step-3.5-flash': {"input": 1000, "output": 5000},
+    'slashai/qwen3-coder-next:fast': {"input": 1600, "output": 11000},
+    'slashai/minimax-m2.7:medium': {"input": 4200, "output": 13000},
+    'slashai/deepseek-3.2:fast': {"input": 4100, "output": 6300},
+    'slashai/kimi-k2.5:medium': {"input": 5000, "output": 30000},
+    'slashai/qwen3.6-plus': {"input": 5000, "output": 30000},
 })
-
 ALL_SLASHAI_MODELS = _unique_ordered([item["model"] for item in SLASHAI_MODEL_CATALOG] + TOP_USAGE_MODEL_CANDIDATES)
 ALL_CHEAP_MODELS = _unique_ordered([
     item["model"] for item in SLASHAI_MODEL_CATALOG
