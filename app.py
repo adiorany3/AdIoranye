@@ -694,6 +694,7 @@ Memory default Adioranye:
 - Konteks waktu: jika pengguna bertanya dalam bahasa Indonesia, gunakan waktu Indonesia. Default gunakan WIB, tetapi sesuaikan ke WITA atau WIT jika wilayah/kota pengguna jelas. UTC hanya dipakai sebagai referensi teknis, bukan dianggap waktu lokal pengguna.
 - Sapaan waktu: jika pengguna hanya menyapa dengan selamat pagi/siang/sore/malam, sesuaikan sapaan dengan waktu Indonesia saat ini dan jawab sebagai sapaan, bukan sebagai pertanyaan.
 - Cache pertanyaan: untuk pertanyaan umum yang sering muncul dan tidak bergantung pada waktu terkini, gunakan cache jawaban agar respons lebih cepat. Jangan cache berita, harga, jadwal, cuaca, atau info yang cepat berubah.
+- Model utama sehat: jika model utama sedang tidak aktif tetapi fallback sehat tersedia, otomatis gunakan model sehat sebagai model utama agar status tidak berhenti di fallback saja.
 - Sapaan: gunakan sapaan profesional/netral. Jangan memakai panggilan seperti kakak, bro, atau sejenisnya kecuali pengguna memintanya.
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
@@ -1076,6 +1077,15 @@ frequent_question_cache_max_entries = int(
 )
 frequent_question_cache_min_chars = int(
     get_secret("FREQUENT_QUESTION_CACHE_MIN_CHARS", 4) or 4
+)
+
+auto_replace_inactive_primary_model = parse_bool(
+    get_secret("AUTO_REPLACE_INACTIVE_PRIMARY_MODEL", True),
+    default=True,
+)
+auto_replace_primary_prefer_cheap = parse_bool(
+    get_secret("AUTO_REPLACE_PRIMARY_PREFER_CHEAP", True),
+    default=True,
 )
 
 # Operational safety / retention
@@ -3373,6 +3383,143 @@ def get_capable_primary_model(
     return sorted(unique_models(active_candidates), key=sort_key)[0]
 
 
+
+def choose_healthy_primary_model(
+    selected_model: str,
+    active_cheap_models: List[str],
+    active_expensive_models: List[str],
+    health_cache: Dict[str, Dict[str, Any]],
+    operation_mode: str = "Seimbang",
+) -> Dict[str, Any]:
+    """Pilih model utama sehat.
+
+    Jika model utama admin tidak aktif, sistem otomatis mencari model sehat
+    dari daftar health check. Prioritas default: model hemat sehat dulu,
+    baru model capable sehat.
+    """
+    selected = str(selected_model or "").strip()
+    selected_health = health_cache.get(selected) or {}
+    selected_active = bool(selected_health.get("active"))
+
+    if selected and selected_active and not is_model_runtime_blocked(selected):
+        return {
+            "model": selected,
+            "changed": False,
+            "from_model": selected,
+            "reason": "selected-primary-healthy",
+            "source": "selected",
+        }
+
+    cheap_candidates = filter_runtime_blocked_models(
+        prioritize_fastest_active_models(
+            active_cheap_models,
+            health_cache,
+        )
+    )
+    expensive_candidates = filter_runtime_blocked_models(
+        prioritize_fastest_active_models(
+            active_expensive_models,
+            health_cache,
+        )
+    )
+
+    prefer_cheap = bool(auto_replace_primary_prefer_cheap)
+
+    if operation_mode == "Maksimal" and expensive_candidates and not prefer_cheap:
+        candidates = expensive_candidates + cheap_candidates
+    else:
+        candidates = cheap_candidates + expensive_candidates
+
+    candidates = unique_models(
+        [
+            model
+            for model in candidates
+            if health_cache.get(model, {}).get("active")
+            and not is_model_runtime_blocked(model)
+        ]
+    )
+
+    if candidates:
+        replacement = candidates[0]
+        return {
+            "model": replacement,
+            "changed": replacement != selected,
+            "from_model": selected,
+            "reason": "auto-replaced-inactive-primary",
+            "source": "health-check",
+        }
+
+    return {
+        "model": selected or default_model,
+        "changed": False,
+        "from_model": selected,
+        "reason": "no-healthy-primary-found",
+        "source": "fallback",
+    }
+
+
+def apply_healthy_primary_model(
+    selected_model: str = "",
+    reason: str = "auto",
+) -> Dict[str, Any]:
+    """Ganti session active_model ke model sehat jika primary saat ini mati."""
+    health_cache = st.session_state.get("model_health_cache") or {}
+
+    if not health_cache:
+        try:
+            refresh_model_health_if_needed(
+                force=True,
+                scope="quick",
+            )
+        except Exception as exc:
+            st.session_state.last_model_health_error = str(exc)[:500]
+
+        health_cache = st.session_state.get("model_health_cache") or {}
+
+    active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+    operation_mode = _normalize_operation_mode(
+        st.session_state.get(
+            "active_operation_mode",
+            ai_operation_mode_default,
+        )
+    )
+
+    selected = str(
+        selected_model
+        or st.session_state.get("active_model")
+        or default_model
+    ).strip()
+
+    result = choose_healthy_primary_model(
+        selected_model=selected,
+        active_cheap_models=active_cheap_models,
+        active_expensive_models=active_expensive_models,
+        health_cache=health_cache,
+        operation_mode=operation_mode,
+    )
+
+    replacement = str(result.get("model") or "").strip()
+
+    if (
+        bool(auto_replace_inactive_primary_model)
+        and replacement
+        and replacement != selected
+        and result.get("changed")
+    ):
+        st.session_state.active_model = replacement
+        sync_rotation_index_to_selected_model(active_cheap_models)
+        st.session_state.last_auto_primary_replacement = {
+            "from": selected,
+            "to": replacement,
+            "reason": reason,
+            "at": _wib_now_text(),
+            "routing_reason": result.get("reason", ""),
+        }
+
+    return result
+
+
+
 def build_model_routing_plan(
     advance_rotation: bool = False, user_text: str = ""
 ) -> Dict[str, Any]:
@@ -3390,6 +3537,36 @@ def build_model_routing_plan(
     )
     selected_model = str(st.session_state.get("active_model") or default_model).strip()
     health_cache = st.session_state.get("model_health_cache") or {}
+    if bool(auto_replace_inactive_primary_model) and health_cache:
+        healthy_primary_result = choose_healthy_primary_model(
+            selected_model=selected_model,
+            active_cheap_models=st.session_state.get("active_cheap_fallback_models")
+            or DEFAULT_CHEAP_FALLBACK_MODELS.copy(),
+            active_expensive_models=st.session_state.get("active_expensive_fallback_models")
+            or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy(),
+            health_cache=health_cache,
+            operation_mode=_normalize_operation_mode(
+                st.session_state.get(
+                    "active_operation_mode",
+                    ai_operation_mode_default,
+                )
+            ),
+        )
+        healthy_primary_model = str(healthy_primary_result.get("model") or "").strip()
+        if (
+            healthy_primary_model
+            and healthy_primary_model != selected_model
+            and healthy_primary_result.get("changed")
+        ):
+            st.session_state.active_model = healthy_primary_model
+            selected_model = healthy_primary_model
+            st.session_state.last_auto_primary_replacement = {
+                "from": healthy_primary_result.get("from_model", ""),
+                "to": healthy_primary_model,
+                "reason": "routing-auto-replace",
+                "at": _wib_now_text(),
+                "routing_reason": healthy_primary_result.get("reason", ""),
+            }
     complexity = estimate_prompt_complexity(user_text)
 
     selected_is_cheap = _tier_rank(selected_model) == 0
@@ -3559,6 +3736,11 @@ def build_model_routing_plan(
         ),
         "operation_mode": operation_mode,
         "routing_reason": routing_reason,
+        "auto_replace_inactive_primary_model": bool(auto_replace_inactive_primary_model),
+        "last_auto_primary_replacement": st.session_state.get(
+            "last_auto_primary_replacement",
+            {},
+        ),
         "complexity_score": int(complexity.get("score") or 0),
         "complexity_signals": complexity.get("signals", []),
         "complexity_hits": {
@@ -4087,15 +4269,43 @@ def get_model_readiness_state(
         }
 
     if active_total > 0:
-        fallback_model = active_models[0] if active_models else (
-            (route.get("active_cheap_models") or route.get("active_expensive_models") or [""])[0]
+        replacement_result = apply_healthy_primary_model(
+            selected_model=next_model,
+            reason="readiness-fallback-promote",
         )
+        promoted_model = str(replacement_result.get("model") or "").strip()
+        fallback_model = promoted_model or (
+            active_models[0] if active_models else (
+                (route.get("active_cheap_models") or route.get("active_expensive_models") or [""])[0]
+            )
+        )
+
+        if (
+            bool(auto_replace_inactive_primary_model)
+            and promoted_model
+            and promoted_model != next_model
+            and replacement_result.get("changed")
+        ):
+            return {
+                "class": "ready",
+                "label": "Model sehat dipilih",
+                "kicker": "model utama otomatis diganti ke model sehat",
+                "subtitle": f"Model utama lama tidak aktif. Sistem menggantinya ke model sehat: {promoted_model}.",
+                "next_model": promoted_model,
+                "checked_at": checked_at,
+                "active_total": active_total,
+                "primary_active": True,
+                "auto_primary_replaced": True,
+                "replacement_from": next_model,
+                "replacement_to": promoted_model,
+            }
+
         return {
             "class": "fallback",
             "label": "Fallback siap",
             "kicker": "model utama tidak aktif, fallback tersedia",
             "subtitle": f"Model utama belum lolos health check, tetapi fallback aktif tersedia: {fallback_model}.",
-            "next_model": next_model,
+            "next_model": fallback_model,
             "checked_at": checked_at,
             "active_total": active_total,
             "primary_active": False,
@@ -8695,6 +8905,21 @@ def render_admin_status() -> None:
                 st.success("Status model tersimpan direset.")
                 st.rerun()
 
+        if st.button(
+            "✅ Cari dan jadikan model sehat sebagai utama",
+            use_container_width=True,
+            key="auto_promote_healthy_primary_now",
+        ):
+            result = apply_healthy_primary_model(
+                reason="admin-manual-promote",
+            )
+            chosen = str(result.get("model") or "").strip()
+            if chosen:
+                st.success(f"Model utama sehat aktif sekarang: {chosen}")
+                st.rerun()
+            else:
+                st.warning("Belum ada model sehat yang bisa dijadikan model utama.")
+
 
 def render_mode_selector() -> None:
     st.markdown("#### Mode Operasional AI")
@@ -9129,6 +9354,29 @@ def render_admin_settings() -> None:
                 ",", "."
             )
         )
+        current_health = (st.session_state.get("model_health_cache") or {}).get(
+            st.session_state.active_model,
+            {},
+        )
+        if current_health and not current_health.get("active"):
+            st.warning(
+                "Model utama pilihan admin belum sehat. Gunakan tombol di bawah untuk mengganti ke model sehat otomatis."
+            )
+            if st.button(
+                "Ganti ke model sehat sekarang",
+                use_container_width=True,
+                key="admin_ai_promote_healthy_primary",
+            ):
+                result = apply_healthy_primary_model(
+                    selected_model=st.session_state.active_model,
+                    reason="admin-ai-tab-promote",
+                )
+                chosen = str(result.get("model") or "").strip()
+                if chosen:
+                    st.success(f"Model utama diganti ke: {chosen}")
+                    st.rerun()
+                else:
+                    st.error("Belum ada model sehat yang tersedia.")
         st.session_state.active_temperature = st.slider(
             "Temperature",
             0.0,
