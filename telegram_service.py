@@ -38,39 +38,350 @@ WIB_TZ = ZoneInfo("Asia/Jakarta")
 
 
 
-def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
-    """Compatibility wrapper for generate_power_answer keyword changes.
 
-    Telegram should keep answering even if app.py/telegram_service.py is newer
-    than power_features.py during deploy or merge. Unsupported kwargs are ignored.
-    """
+TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE = (
+    "Maaf, Adioranye sedang mengalami gangguan koneksi/model. "
+    "Silakan coba lagi beberapa saat lagi."
+)
+
+TELEGRAM_TECHNICAL_ERROR_PATTERNS = [
+    "semua model gagal",
+    "detail ringkas",
+    "httpsconnectionpool",
+    "read timed out",
+    "timeout=",
+    "api status",
+    "external billing",
+    "insufficient balance",
+    "insufficient_user_quota",
+    "invalid model",
+    "openai-compatible",
+    "slashai/",
+    "traceback",
+    "requests.exceptions",
+    "connectionerror",
+    "httperror",
+    "401002",
+    "creditsdepleted",
+    "quota",
+    "billing",
+]
+
+
+def telegram_parse_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        return value
+
+    return str(value).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def telegram_safe_int(value: Any, default: int) -> int:
     try:
-        signature = inspect.signature(generate_power_answer)
-        parameters = signature.parameters
-        accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())
-        if accepts_kwargs:
-            return generate_power_answer(**kwargs)
-        filtered_kwargs = {key: value for key, value in kwargs.items() if key in parameters}
-        dropped_keys = sorted(set(kwargs) - set(filtered_kwargs))
-        answer, meta = generate_power_answer(**filtered_kwargs)
-        if dropped_keys and isinstance(meta, dict):
-            meta["power_answer_compat_dropped_kwargs"] = dropped_keys
-        return answer, meta
+        return int(value)
+    except Exception:
+        return int(default)
+
+
+def telegram_unique_models(models: List[str]) -> List[str]:
+    seen = set()
+    result: List[str] = []
+
+    for model in models:
+        model_name = str(model or "").strip()
+
+        if not model_name or model_name in seen:
+            continue
+
+        seen.add(model_name)
+        result.append(model_name)
+
+    return result
+
+
+def telegram_looks_like_model_error(
+    answer_text: Any,
+    meta: Dict[str, Any] | None = None,
+) -> bool:
+    answer = str(answer_text or "").strip()
+    lowered = answer.lower()
+    meta_data = meta or {}
+
+    if not answer:
+        return True
+
+    if answer == TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE:
+        return True
+
+    if bool(
+        meta_data.get("public_error_sanitized")
+        or meta_data.get("public_error_hidden")
+        or meta_data.get("public_safe_message")
+        or meta_data.get("telegram_public_error_sanitized")
+    ):
+        return True
+
+    return any(
+        pattern in lowered
+        for pattern in TELEGRAM_TECHNICAL_ERROR_PATTERNS
+    )
+
+
+def telegram_get_retry_candidates(
+    kwargs: Dict[str, Any],
+    failed_models: List[str] | None = None,
+) -> List[str]:
+    failed_set = {
+        str(model or "").strip()
+        for model in (failed_models or [])
+        if str(model or "").strip()
+    }
+
+    candidates: List[str] = []
+    candidates.extend(kwargs.get("fallback_models") or [])
+    candidates.extend(kwargs.get("expensive_fallback_models") or [])
+    candidates.extend(DEFAULT_CHEAP_FALLBACK_MODELS)
+    candidates.extend(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
+    candidates.extend(TOP_USAGE_MODEL_CANDIDATES)
+    candidates.extend(ALL_CHEAP_MODELS or [])
+    candidates.extend(ALL_CAPABLE_MODELS or [])
+
+    unique = telegram_unique_models(candidates)
+
+    return [
+        model
+        for model in unique
+        if model not in failed_set
+    ]
+
+
+def call_generate_power_answer_compat(
+    kwargs: Dict[str, Any],
+) -> tuple[str, Dict[str, Any]]:
+    """Call generate_power_answer while dropping unsupported kwargs."""
+    signature = inspect.signature(generate_power_answer)
+    parameters = signature.parameters
+    accepts_kwargs = any(
+        param.kind == inspect.Parameter.VAR_KEYWORD
+        for param in parameters.values()
+    )
+
+    if accepts_kwargs:
+        answer, meta = generate_power_answer(**kwargs)
+        return str(answer or ""), meta if isinstance(meta, dict) else {}
+
+    filtered_kwargs = {
+        key: value
+        for key, value in kwargs.items()
+        if key in parameters
+    }
+    dropped_keys = sorted(set(kwargs) - set(filtered_kwargs))
+    answer, meta = generate_power_answer(**filtered_kwargs)
+
+    if not isinstance(meta, dict):
+        meta = {}
+
+    if dropped_keys:
+        meta["power_answer_compat_dropped_kwargs"] = dropped_keys
+
+    return str(answer or ""), meta
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "2"),
+                2,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
     except TypeError as exc:
         message = str(exc)
         match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
         if match:
             bad_key = match.group(1)
+
             if bad_key in kwargs:
                 retry_kwargs = dict(kwargs)
                 retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
                 answer, meta = safe_generate_power_answer(**retry_kwargs)
+
                 if isinstance(meta, dict):
                     dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
                     if bad_key not in dropped:
                         dropped.append(bad_key)
+
                     meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
                 return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
         raise
 
 def _wib_now_text() -> str:
@@ -2800,6 +3111,15 @@ class TelegramBotService:
                                     and live_scraping_needed
                                 ),
                                 live_web_fallback_topic=request_live_web_topic,
+                                auto_retry_on_model_error_enabled=bool(
+                                    config.get("auto_retry_on_model_error_enabled", True)
+                                ),
+                                auto_retry_on_model_error_max_attempts=int(
+                                    config.get("auto_retry_on_model_error_max_attempts", 2) or 2
+                                ),
+                                auto_retry_on_model_error_timeout_seconds=int(
+                                    config.get("auto_retry_on_model_error_timeout_seconds", 35) or 35
+                                ),
                             )
 
                             if isinstance(meta, dict):
@@ -2824,6 +3144,9 @@ class TelegramBotService:
                                 meta["telegram_direct_tavily_sources"] = direct_live_meta.get(
                                     "live_sources",
                                     [],
+                                )
+                                meta["telegram_auto_retry_on_model_error_enabled"] = bool(
+                                    config.get("auto_retry_on_model_error_enabled", True)
                                 )
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
