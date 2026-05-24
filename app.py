@@ -283,6 +283,45 @@ def render_maintenance_realtime_status(
 
     return state
 
+
+def render_maintenance_safe_meta_refresh(
+    state: Dict[str, Any] | None = None,
+    is_admin: bool = False,
+) -> None:
+    """Auto-refresh aman untuk sinkronisasi lock/unlock.
+
+    Tidak memakai JavaScript, st.fragment, components.html, atau st.rerun otomatis.
+    Hanya memakai meta refresh HTML.
+    """
+    if is_admin:
+        return
+
+    if not bool(maintenance_auto_refresh_enabled):
+        return
+
+    state = state or read_maintenance_lock_state()
+    locked = bool(state.get("locked"))
+
+    if not locked and not bool(maintenance_auto_refresh_when_unlocked):
+        return
+
+    interval = max(
+        5,
+        min(60, int(maintenance_auto_refresh_interval_seconds or 8)),
+    )
+    status_text = "lock aktif" if locked else "cek lock"
+
+    st.markdown(
+        f"""
+        <div class="maintenance-refresh-note">
+            🔄 Auto-check {status_text} setiap {interval} detik
+        </div>
+        <meta http-equiv="refresh" content="{interval}">
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def maintenance_public_message() -> str:
     state = read_maintenance_lock_state()
     message = str(state.get("message") or maintenance_default_message).strip()
@@ -1421,6 +1460,17 @@ maintenance_default_message = str(
 )
 maintenance_auto_check_interval_seconds = int(
     get_secret("MAINTENANCE_AUTO_CHECK_INTERVAL_SECONDS", 5) or 5
+)
+maintenance_auto_refresh_enabled = parse_bool(
+    get_secret("MAINTENANCE_AUTO_REFRESH_ENABLED", True),
+    default=True,
+)
+maintenance_auto_refresh_interval_seconds = int(
+    get_secret("MAINTENANCE_AUTO_REFRESH_INTERVAL_SECONDS", 8) or 8
+)
+maintenance_auto_refresh_when_unlocked = parse_bool(
+    get_secret("MAINTENANCE_AUTO_REFRESH_WHEN_UNLOCKED", True),
+    default=True,
 )
 maintenance_fragment_enabled = parse_bool(
     get_secret("MAINTENANCE_FRAGMENT_ENABLED", False),
@@ -9674,6 +9724,9 @@ def get_runtime_config() -> Dict[str, Any]:
         "maintenance_message": maintenance_default_message,
         "maintenance_locked": bool(is_maintenance_locked()),
         "maintenance_auto_check_interval_seconds": maintenance_auto_check_interval_seconds,
+        "maintenance_auto_refresh_enabled": bool(maintenance_auto_refresh_enabled),
+        "maintenance_auto_refresh_interval_seconds": maintenance_auto_refresh_interval_seconds,
+        "maintenance_auto_refresh_when_unlocked": bool(maintenance_auto_refresh_when_unlocked),
         "maintenance_fragment_enabled": bool(maintenance_fragment_enabled),
         "maintenance_browser_reload_enabled": bool(maintenance_browser_reload_enabled),
         "frontend_ultra_safe_mode": bool(frontend_ultra_safe_mode),
@@ -9814,8 +9867,8 @@ def render_admin_status() -> None:
         st.caption(
             f"Frontend ultra-safe: {'ON' if frontend_ultra_safe_mode else 'OFF'}; "
             f"custom JS/components: {'ON' if custom_components_enabled else 'OFF'}; "
-            f"auto-scroll: {'ON' if auto_scroll_enabled else 'OFF'}; "
-            f"sound: {'ON' if answer_sound_enabled else 'OFF'}."
+            f"auto-refresh lock: {'ON' if maintenance_auto_refresh_enabled else 'OFF'}; "
+            f"interval: {maintenance_auto_refresh_interval_seconds} detik."
         )
 
     with st.expander("Cache pertanyaan sering muncul"):
@@ -10587,6 +10640,20 @@ def render_admin_custom_css() -> None:
             margin-top: 0.36rem;
             font-size: 0.74rem;
             font-weight: 760;
+        }
+
+        .maintenance-refresh-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.42rem;
+            margin: 0.35rem 0 0.75rem;
+            padding: 0.36rem 0.62rem;
+            border-radius: 999px;
+            border: 1px solid var(--ui-border, rgba(120,120,128,0.22));
+            background: rgba(120,120,128,0.08);
+            color: var(--ui-muted, rgba(100,116,139,0.92));
+            font-size: 0.73rem;
+            font-weight: 780;
         }
 
         .maintenance-live-dot {
@@ -12283,6 +12350,10 @@ def render_public_page() -> None:
 
     maintenance_state = read_maintenance_lock_state()
     maintenance_state = render_maintenance_realtime_status(maintenance_state)
+    render_maintenance_safe_meta_refresh(
+        maintenance_state,
+        is_admin=bool(st.session_state.get("admin_authenticated", False)),
+    )
 
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
