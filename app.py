@@ -53,6 +53,13 @@ from daily_kb_scraper import (
     run_daily_kb_update,
 )
 
+from kb_manager import (
+    advanced_incremental_kb_update,
+    ensure_kb_sources_file,
+    init_kb_manager_schema,
+    kb_manager_overview,
+)
+
 st.set_page_config(
     page_title="Adioranye AI by Galuh Adi Insani",
     page_icon="🤖",
@@ -1040,6 +1047,16 @@ init_state()
 memory = MemoryStore(memory_file)
 service = get_telegram_service()
 power_store = get_power_store(power_db_path)
+try:
+    init_kb_manager_schema(power_db_path)
+    ensure_kb_sources_file(
+        kb_scraper_sources_file,
+        json.loads(DEFAULT_RELEVANT_KB_SOURCES_JSON)["sources"]
+        if "DEFAULT_RELEVANT_KB_SOURCES_JSON" in globals()
+        else [],
+    )
+except Exception:
+    pass
 if db_backup_enabled:
     try:
         maybe_create_periodic_backup(
@@ -10354,6 +10371,41 @@ def render_power_features_admin_panel() -> None:
                         st.code(
                             f"Sources: {kb_scraper_sources_file}\nState: {kb_scraper_state_file}\nDB: {power_db_path}"
                         )
+
+                        st.markdown("##### KB Manager v2: incremental, hash, summary, audit log")
+                        try:
+                            kb_overview = kb_manager_overview(power_db_path)
+                            kb_m1, kb_m2, kb_m3, kb_m4 = st.columns(4)
+                            kb_m1.metric("Doc aktif v2", kb_overview.get("documents_active", 0))
+                            kb_m2.metric("Doc archived", kb_overview.get("documents_archived", 0))
+                            kb_m3.metric("Chunks v2", kb_overview.get("chunks_active", 0))
+                            kb_m4.metric("Live cache", kb_overview.get("live_cache", 0))
+
+                            recent_logs = kb_overview.get("recent_logs") or []
+                            if recent_logs:
+                                with st.expander("Audit log KB terbaru"):
+                                    st.dataframe(
+                                        recent_logs,
+                                        use_container_width=True,
+                                        hide_index=True,
+                                    )
+                        except Exception as exc:
+                            st.warning(f"KB Manager v2 belum bisa dibaca: {exc}")
+
+                        if st.button(
+                            "🧩 Buat/isi kb_sources.json relevan",
+                            use_container_width=True,
+                            key="kb_manager_write_sources",
+                        ):
+                            created = ensure_kb_sources_file(
+                                kb_scraper_sources_file,
+                                json.loads(DEFAULT_RELEVANT_KB_SOURCES_JSON)["sources"],
+                            )
+                            if created:
+                                st.success("kb_sources.json dibuat dari sumber relevan default.")
+                            else:
+                                st.info("kb_sources.json sudah ada, tidak ditimpa.")
+
                         try:
                             scraper_sources = load_kb_scraper_sources(
                                 kb_scraper_sources_file
@@ -10432,6 +10484,38 @@ def render_power_features_admin_panel() -> None:
                                     )
                             except Exception as exc:
                                 st.error(f"Auto update gagal: {exc}")
+
+                        if st.button(
+                            "🧠 Incremental update v2: hash + summary + mirror ke KB",
+                            use_container_width=True,
+                            key="kb_manager_incremental_update_now",
+                        ):
+                            try:
+                                report = advanced_incremental_kb_update(
+                                    db_path=power_db_path,
+                                    sources_path=kb_scraper_sources_file,
+                                    power_store=power_store,
+                                    max_items_per_source=int(auto_max_items),
+                                    timeout=int(kb_scraper_timeout or 20),
+                                    dry_run=bool(auto_dry_run),
+                                    force=bool(auto_force),
+                                    max_chunk_chars=1800,
+                                )
+                                st.success(
+                                    f"KB v2 selesai. Updated: {report.get('documents_updated', 0)}, "
+                                    f"skipped: {report.get('documents_skipped', 0)}, "
+                                    f"chunks: {report.get('chunks_added', 0)}, "
+                                    f"error: {report.get('errors', 0)}"
+                                )
+                                items = report.get("items") or []
+                                if items:
+                                    st.dataframe(
+                                        items,
+                                        use_container_width=True,
+                                        hide_index=True,
+                                    )
+                            except Exception as exc:
+                                st.error(f"Incremental KB v2 gagal: {exc}")
 
                 with tabs_power[1]:
                     mem_text = st.text_area(
