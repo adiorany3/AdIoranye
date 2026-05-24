@@ -161,10 +161,6 @@ def default_maintenance_state() -> Dict[str, Any]:
         "updated_at": "",
         "updated_by": "",
         "channel": "",
-        "locked_until_ts": 0,
-        "locked_until_text": "",
-        "auto_unlock": False,
-        "auto_unlocked_at": "",
     }
 
 
@@ -184,24 +180,14 @@ def read_maintenance_lock_state() -> Dict[str, Any]:
         state["locked"] = bool(state.get("locked"))
         state["status"] = "locked" if state.get("locked") else "unlocked"
 
-        try:
-            locked_until_ts = float(state.get("locked_until_ts") or 0)
-        except Exception:
-            locked_until_ts = 0
-
-        if state.get("locked") and locked_until_ts and time.time() >= locked_until_ts:
-            state["locked"] = False
-            state["status"] = "unlocked"
-            state["auto_unlock"] = True
-            state["auto_unlocked_at"] = _maintenance_now_text()
-            state["updated_at"] = state["auto_unlocked_at"]
-            state["updated_by"] = "system-auto-unlock"
-            state["channel"] = "auto-check"
-
-            try:
-                write_maintenance_lock_state(state)
-            except Exception:
-                pass
+        # Bersihkan field lama dari fitur timed lock agar tidak dipakai lagi.
+        for legacy_key in [
+            "locked_until_ts",
+            "locked_until_text",
+            "auto_unlock",
+            "auto_unlocked_at",
+        ]:
+            state.pop(legacy_key, None)
 
         return state
     except Exception:
@@ -226,13 +212,8 @@ def set_maintenance_lock(
     updated_by: str = "admin",
     channel: str = "web-admin",
     reason: str = "",
-    locked_until_ts: float | int | None = None,
-    locked_until_text: str = "",
 ) -> Dict[str, Any]:
     state = read_maintenance_lock_state()
-    lock_until_value = float(locked_until_ts or 0) if locked else 0
-    lock_until_text_value = str(locked_until_text or "").strip() if locked else ""
-
     state.update(
         {
             "locked": bool(locked),
@@ -242,15 +223,19 @@ def set_maintenance_lock(
             "updated_at": _maintenance_now_text(),
             "updated_by": str(updated_by or "admin"),
             "channel": str(channel or "web-admin"),
-            "locked_until_ts": lock_until_value,
-            "locked_until_text": lock_until_text_value,
-            "auto_unlock": False,
-            "auto_unlocked_at": "",
         }
     )
+
+    for legacy_key in [
+        "locked_until_ts",
+        "locked_until_text",
+        "auto_unlock",
+        "auto_unlocked_at",
+    ]:
+        state.pop(legacy_key, None)
+
     write_maintenance_lock_state(state)
     return state
-
 
 def is_maintenance_locked() -> bool:
     return bool(read_maintenance_lock_state().get("locked"))
@@ -270,21 +255,8 @@ def maintenance_state_signature(state: Dict[str, Any]) -> str:
 def maintenance_until_text_from_ts(
     locked_until_ts: float | int | str | None,
 ) -> str:
-    try:
-        ts = float(locked_until_ts or 0)
-    except Exception:
-        ts = 0
-
-    if not ts:
-        return ""
-
-    try:
-        return datetime.fromtimestamp(ts, tz=WIB_TZ).strftime("%Y-%m-%d %H:%M WIB")
-    except Exception:
-        try:
-            return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
-        except Exception:
-            return ""
+    """Compatibility shim: timed maintenance lock sudah dinonaktifkan."""
+    return ""
 
 
 def parse_maintenance_until_datetime(
@@ -292,38 +264,8 @@ def parse_maintenance_until_datetime(
     until_time: Any,
     timezone_label: str = "WIB",
 ) -> Tuple[float, str]:
-    tz_map = {
-        "WIB": WIB_TZ,
-        "WITA": WITA_TZ if "WITA_TZ" in globals() else WIB_TZ,
-        "WIT": WIT_TZ if "WIT_TZ" in globals() else WIB_TZ,
-    }
-    tz = tz_map.get(str(timezone_label or "WIB").upper(), WIB_TZ)
-
-    try:
-        date_value = until_date
-        time_value = until_time
-
-        if hasattr(date_value, "year") and hasattr(time_value, "hour"):
-            dt = datetime.combine(date_value, time_value)
-
-            if getattr(dt, "tzinfo", None) is None:
-                dt = dt.replace(tzinfo=tz)
-
-            ts = dt.timestamp()
-            text = dt.strftime(f"%Y-%m-%d %H:%M {str(timezone_label or 'WIB').upper()}")
-            return ts, text
-    except Exception:
-        pass
-
+    """Compatibility shim: timed maintenance lock sudah dinonaktifkan."""
     return 0, ""
-
-
-
-def render_maintenance_browser_reload_script(
-    interval_seconds: int | None = None,
-) -> None:
-    """Disabled: browser reload otomatis dimatikan total untuk menghindari React #185."""
-    return
 
 def render_maintenance_realtime_status(
     initial_state: Dict[str, Any] | None = None,
@@ -353,16 +295,6 @@ def maintenance_public_message() -> str:
         message,
     ]
 
-    locked_until_text = str(
-        state.get("locked_until_text")
-        or maintenance_until_text_from_ts(state.get("locked_until_ts"))
-        or ""
-    ).strip()
-
-    if locked_until_text:
-        lines.append("")
-        lines.append(f"Dikunci sampai: {locked_until_text}")
-
     if reason:
         lines.append("")
         lines.append(f"Catatan admin: {reason}")
@@ -382,11 +314,6 @@ def render_maintenance_banner(state: Dict[str, Any] | None = None) -> None:
     reason = str(state.get("reason") or "").strip()
     updated_at = str(state.get("updated_at") or "").strip()
     updated_by = str(state.get("updated_by") or "admin").strip()
-    locked_until_text = str(
-        state.get("locked_until_text")
-        or maintenance_until_text_from_ts(state.get("locked_until_ts"))
-        or ""
-    ).strip()
 
     st.markdown(
         f"""
@@ -398,9 +325,7 @@ def render_maintenance_banner(state: Dict[str, Any] | None = None) -> None:
                     Chat publik sedang dikunci. Hanya admin yang dapat menggunakan Adioranye sampai status dibuka kembali.
                 </div>
                 <div class="maintenance-lock-meta">
-                    {"Sampai: " + _html_escape(locked_until_text) if locked_until_text else "Sampai: manual unlock"}
-                    {" • " if reason else ""}
-                    {_html_escape(reason)}
+                    {_html_escape(reason or "Manual unlock")}
                     {" • " if updated_at else ""}
                     {_html_escape(updated_at)}
                     {" • " if updated_by else ""}
@@ -9834,8 +9759,6 @@ def render_admin_status() -> None:
                         {"Chat publik dan Telegram non-admin sedang dikunci. Admin tetap dapat menggunakan Adioranye." if locked_now else "Chat publik dan Telegram dapat digunakan normal."}
                     </div>
                     <div class="maintenance-lock-meta">
-                        <span class="maintenance-live-dot"></span>
-                        Sampai: {_html_escape(maintenance_state.get("locked_until_text") or maintenance_until_text_from_ts(maintenance_state.get("locked_until_ts")) or "manual unlock")} •
                         Update: {_html_escape(maintenance_state.get("updated_at") or "-")} •
                         Oleh: {_html_escape(maintenance_state.get("updated_by") or "-")} •
                         Channel: {_html_escape(maintenance_state.get("channel") or "-")}
@@ -9852,43 +9775,6 @@ def render_admin_status() -> None:
             placeholder="Contoh: update model, maintenance database, deploy fitur baru",
             key="maintenance_lock_reason",
         )
-
-        use_until = st.checkbox(
-            "Lock sampai waktu tertentu",
-            value=bool(maintenance_state.get("locked_until_ts")),
-            key="maintenance_use_until",
-        )
-
-        until_ts = 0
-        until_text = ""
-        if use_until:
-            current_date = datetime.now(WIB_TZ).date()
-            until_date = st.date_input(
-                "Tanggal unlock otomatis",
-                value=current_date,
-                key="maintenance_until_date",
-            )
-            until_time = st.time_input(
-                "Jam unlock otomatis",
-                value=datetime.now(WIB_TZ).time().replace(second=0, microsecond=0),
-                key="maintenance_until_time",
-            )
-            until_zone = st.selectbox(
-                "Zona waktu",
-                ["WIB", "WITA", "WIT"],
-                index=0,
-                key="maintenance_until_zone",
-            )
-            until_ts, until_text = parse_maintenance_until_datetime(
-                until_date,
-                until_time,
-                until_zone,
-            )
-            if until_ts and until_ts <= time.time():
-                st.warning(
-                    "Waktu unlock otomatis sudah lewat. Pilih jam/tanggal yang lebih baru."
-                )
-
         col_lock, col_unlock = st.columns(2)
         with col_lock:
             if st.button(
@@ -9897,19 +9783,14 @@ def render_admin_status() -> None:
                 disabled=locked_now,
                 key="maintenance_lock_button",
             ):
-                if use_until and (not until_ts or until_ts <= time.time()):
-                    st.error("Waktu unlock otomatis tidak valid. Pilih waktu di masa depan.")
-                else:
-                    set_maintenance_lock(
-                        True,
-                        updated_by=admin_username,
-                        channel="web-admin",
-                        reason=reason_value,
-                        locked_until_ts=until_ts if use_until else 0,
-                        locked_until_text=until_text if use_until else "",
-                    )
-                    st.success("Maintenance lock aktif. Publik dan Telegram non-admin dikunci.")
-                    st.rerun()
+                set_maintenance_lock(
+                    True,
+                    updated_by=admin_username,
+                    channel="web-admin",
+                    reason=reason_value,
+                )
+                st.success("Maintenance lock aktif. Publik dan Telegram non-admin dikunci.")
+                st.rerun()
 
         with col_unlock:
             if st.button(
