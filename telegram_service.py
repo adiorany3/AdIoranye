@@ -564,6 +564,159 @@ def telegram_indonesia_time_context_text() -> str:
     )
 
 
+
+def telegram_clip_for_token_saver(
+    text: Any,
+    max_chars: int,
+    suffix: str = "\n...[dipangkas untuk hemat token]",
+) -> str:
+    value = str(text or "").strip()
+    limit = int(max_chars or 0)
+
+    if not value or limit <= 0:
+        return value
+
+    if len(value) <= limit:
+        return value
+
+    return value[: max(0, limit - len(suffix))].rstrip() + suffix
+
+
+def compact_telegram_history_for_token_saver(
+    history: List[Dict[str, Any]],
+    limit: int = 6,
+    recent_full: int = 4,
+    enabled: bool = True,
+) -> List[Dict[str, str]]:
+    if not enabled:
+        return history or []
+
+    raw_history = [
+        item
+        for item in (history or [])
+        if isinstance(item, dict)
+    ]
+
+    max_messages = max(2, int(limit or 6))
+    full_count = max(2, int(recent_full or 4))
+
+    if len(raw_history) <= max_messages:
+        return [
+            {
+                "role": str(item.get("role") or "user"),
+                "content": telegram_clip_for_token_saver(
+                    item.get("content", ""),
+                    1000,
+                ),
+            }
+            for item in raw_history[-max_messages:]
+        ]
+
+    older = raw_history[: -full_count]
+    recent = raw_history[-full_count:]
+    lines: List[str] = []
+
+    for item in older[-8:]:
+        content = telegram_clip_for_token_saver(
+            item.get("content", ""),
+            180,
+            suffix="...",
+        )
+        if content:
+            lines.append(f"{item.get('role', 'user')}: {content}")
+
+    compact: List[Dict[str, str]] = []
+
+    if lines:
+        compact.append(
+            {
+                "role": "system",
+                "content": "Ringkasan percakapan lama untuk hemat token:\n" + "\n".join(lines),
+            }
+        )
+
+    for item in recent:
+        compact.append(
+            {
+                "role": str(item.get("role") or "user"),
+                "content": telegram_clip_for_token_saver(
+                    item.get("content", ""),
+                    1200,
+                ),
+            }
+        )
+
+    return compact[-max_messages:]
+
+
+def telegram_dynamic_max_completion_tokens(
+    user_text: str,
+    base_max_tokens: int,
+    thinking_mode: bool,
+    live_scraping_needed: bool,
+    token_saver_enabled: bool,
+    casual: int,
+    normal: int,
+    technical: int,
+    long_budget: int,
+) -> int:
+    if not token_saver_enabled:
+        return int(base_max_tokens or 1800)
+
+    lowered = str(user_text or "").lower()
+
+    code_or_file = any(
+        marker in lowered
+        for marker in [
+            "error",
+            "kode",
+            "code",
+            "deploy",
+            "file",
+            "patch",
+            "traceback",
+            "log",
+            "bug",
+        ]
+    )
+    asks_long = any(
+        marker in lowered
+        for marker in [
+            "lengkap",
+            "detail",
+            "rinci",
+            "mendalam",
+            "full",
+            "step by step",
+        ]
+    )
+    asks_short = any(
+        marker in lowered
+        for marker in [
+            "singkat",
+            "ringkas",
+            "pendek",
+            "inti saja",
+        ]
+    )
+
+    if asks_short:
+        desired = min(casual, 400)
+    elif live_scraping_needed:
+        desired = normal
+    elif asks_long:
+        desired = long_budget
+    elif code_or_file:
+        desired = technical
+    elif thinking_mode:
+        desired = normal
+    else:
+        desired = casual
+
+    return max(256, min(int(base_max_tokens or 1800), int(desired)))
+
+
+
 def telegram_frequent_cache_config(
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -2914,7 +3067,52 @@ class TelegramBotService:
         live_web_fallback_timeout_seconds = int(config.get("live_web_fallback_timeout_seconds", 10) or 10)
         live_web_fallback_min_sources = int(config.get("live_web_fallback_min_sources", 1) or 1)
         live_web_fallback_include_raw_content = bool(config.get("live_web_fallback_include_raw_content", True))
-        live_web_fallback_max_content_chars = int(config.get("live_web_fallback_max_content_chars", 3200) or 3200)
+        live_web_fallback_max_content_chars = int(config.get("live_web_fallback_max_content_chars", 1200) or 1200)
+        token_saver_enabled = telegram_parse_bool(
+            config.get("token_saver_enabled")
+            or os.getenv("TOKEN_SAVER_ENABLED", "true"),
+            default=True,
+        )
+        telegram_history_limit = telegram_safe_int(
+            config.get("telegram_history_limit")
+            or os.getenv("TELEGRAM_HISTORY_LIMIT", "6"),
+            6,
+        )
+        telegram_history_recent_full = telegram_safe_int(
+            config.get("telegram_history_recent_full")
+            or os.getenv("TELEGRAM_HISTORY_RECENT_FULL", "4"),
+            4,
+        )
+        telegram_memory_context_max_chars = telegram_safe_int(
+            config.get("telegram_memory_context_max_chars")
+            or os.getenv("TELEGRAM_MEMORY_CONTEXT_MAX_CHARS", "2200"),
+            2200,
+        )
+        telegram_live_context_max_chars = telegram_safe_int(
+            config.get("telegram_live_context_max_chars")
+            or os.getenv("TELEGRAM_LIVE_CONTEXT_MAX_CHARS", "3800"),
+            3800,
+        )
+        telegram_max_tokens_casual = telegram_safe_int(
+            config.get("max_tokens_casual")
+            or os.getenv("MAX_TOKENS_CASUAL", "450"),
+            450,
+        )
+        telegram_max_tokens_normal = telegram_safe_int(
+            config.get("max_tokens_normal")
+            or os.getenv("MAX_TOKENS_NORMAL", "1100"),
+            1100,
+        )
+        telegram_max_tokens_technical = telegram_safe_int(
+            config.get("max_tokens_technical")
+            or os.getenv("MAX_TOKENS_TECHNICAL", "2000"),
+            2000,
+        )
+        telegram_max_tokens_long = telegram_safe_int(
+            config.get("max_tokens_long")
+            or os.getenv("MAX_TOKENS_LONG", "2800"),
+            2800,
+        )
         live_web_fallback_auto_save_to_kb = bool(config.get("live_web_fallback_auto_save_to_kb", True))
         live_web_fallback_ttl_hours = int(config.get("live_web_fallback_ttl_hours", 24) or 24)
         live_web_fallback_force_for_current = bool(config.get("live_web_fallback_force_for_current", True))
@@ -3357,10 +3555,11 @@ class TelegramBotService:
 
                         key = str(chat_id)
                         history = self._histories.setdefault(key, [])
-                        memory_text = (
+                        memory_text = telegram_clip_for_token_saver(
                             telegram_indonesia_time_context_text()
                             + "\n\n"
-                            + memory.as_prompt_text(limit=20)
+                            + memory.as_prompt_text(limit=8 if token_saver_enabled else 20),
+                            telegram_memory_context_max_chars,
                         )
                         active_health_models: List[str] = []
 
@@ -3525,8 +3724,9 @@ class TelegramBotService:
                                 )
 
                                 if tavily_direct_result.get("ok"):
-                                    direct_live_context = str(
-                                        tavily_direct_result.get("context") or ""
+                                    direct_live_context = telegram_clip_for_token_saver(
+                                        tavily_direct_result.get("context") or "",
+                                        telegram_live_context_max_chars,
                                     )
                                     direct_live_meta = {
                                         "live_context_used": True,
@@ -3575,13 +3775,28 @@ class TelegramBotService:
                                     if live_scraping_needed
                                     else memory_text
                                 ),
-                                recent_messages=history,
+                                recent_messages=compact_telegram_history_for_token_saver(
+                                    history,
+                                    limit=telegram_history_limit,
+                                    recent_full=telegram_history_recent_full,
+                                    enabled=token_saver_enabled,
+                                ),
                                 fallback_models=request_fallback_models,
                                 expensive_fallback_models=request_expensive_fallback_models,
                                 allow_expensive_fallback=request_allow_expensive,
                                 max_expensive_models=max_expensive_models,
                                 temperature=float(config.get("temperature", 0.3)),
-                                max_completion_tokens=int(config.get("max_completion_tokens", 1800)),
+                                max_completion_tokens=telegram_dynamic_max_completion_tokens(
+                                    user_text=text,
+                                    base_max_tokens=int(config.get("max_completion_tokens", 1800)),
+                                    thinking_mode=bool(thinking_mode),
+                                    live_scraping_needed=bool(live_scraping_needed),
+                                    token_saver_enabled=bool(token_saver_enabled),
+                                    casual=int(telegram_max_tokens_casual),
+                                    normal=int(telegram_max_tokens_normal),
+                                    technical=int(telegram_max_tokens_technical),
+                                    long_budget=int(telegram_max_tokens_long),
+                                ),
                                 timeout=int(config.get("timeout", 60)),
                                 smart_model_router=smart_model_router,
                                 return_to_primary=request_return_to_primary,
@@ -3709,6 +3924,11 @@ class TelegramBotService:
                                 meta["telegram_auto_replace_inactive_primary_model"] = bool(
                                     config.get("auto_replace_inactive_primary_model", True)
                                 )
+                                meta["telegram_token_saver_enabled"] = bool(token_saver_enabled)
+                                meta["telegram_history_limit"] = int(telegram_history_limit)
+                                meta["telegram_memory_context_max_chars"] = int(
+                                    telegram_memory_context_max_chars
+                                )
 
                             try:
                                 if save_telegram_frequent_question_cached_answer(
@@ -3789,13 +4009,28 @@ class TelegramBotService:
                                             if live_scraping_needed
                                             else memory_text
                                         ),
-                                        recent_messages=history,
+                                        recent_messages=compact_telegram_history_for_token_saver(
+                                    history,
+                                    limit=telegram_history_limit,
+                                    recent_full=telegram_history_recent_full,
+                                    enabled=token_saver_enabled,
+                                ),
                                         fallback_models=fallback_models,
                                         expensive_fallback_models=expensive_fallback_models,
                                         allow_expensive_fallback=allow_expensive_fallback,
                                         max_expensive_models=max_expensive_models,
                                         temperature=float(config.get("temperature", 0.3)),
-                                        max_completion_tokens=int(config.get("max_completion_tokens", 1800)),
+                                        max_completion_tokens=telegram_dynamic_max_completion_tokens(
+                                    user_text=text,
+                                    base_max_tokens=int(config.get("max_completion_tokens", 1800)),
+                                    thinking_mode=bool(thinking_mode),
+                                    live_scraping_needed=bool(live_scraping_needed),
+                                    token_saver_enabled=bool(token_saver_enabled),
+                                    casual=int(telegram_max_tokens_casual),
+                                    normal=int(telegram_max_tokens_normal),
+                                    technical=int(telegram_max_tokens_technical),
+                                    long_budget=int(telegram_max_tokens_long),
+                                ),
                                         timeout=int(config.get("timeout", 60)),
                                         smart_model_router=smart_model_router,
                                         return_to_primary=False,

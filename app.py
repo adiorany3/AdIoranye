@@ -967,7 +967,7 @@ Memory default Adioranye:
 - Konteks waktu: jika pengguna bertanya dalam bahasa Indonesia, gunakan waktu Indonesia. Default gunakan WIB, tetapi sesuaikan ke WITA atau WIT jika wilayah/kota pengguna jelas. UTC hanya dipakai sebagai referensi teknis, bukan dianggap waktu lokal pengguna.
 - Sapaan waktu: jika pengguna hanya menyapa dengan selamat pagi/siang/sore/malam, sesuaikan sapaan dengan waktu Indonesia saat ini dan jawab sebagai sapaan, bukan sebagai pertanyaan.
 - Cache pertanyaan: untuk pertanyaan umum yang sering muncul dan tidak bergantung pada waktu terkini, gunakan cache jawaban agar respons lebih cepat. Jangan cache berita, harga, jadwal, cuaca, atau info yang cepat berubah.
-- Model utama sehat: jika model utama sedang tidak aktif tetapi fallback sehat tersedia, otomatis gunakan model sehat sebagai model utama agar status tidak berhenti di fallback saja.
+- Model sehat: jika model pilihan awal belum siap tetapi model sehat tersedia, otomatis gunakan model sehat agar status tetap siap.
 - Auto-refresh status model: lakukan quick health check berkala secara ringan agar status model aktif terverifikasi tetap terbaru tanpa mengganggu chat publik.
 - Retry gangguan model: jika jawaban awal adalah pesan gangguan koneksi/model, coba ulang pertanyaan yang sama memakai model aktif lain sebelum menampilkan pesan gagal.
 - Sapaan: gunakan sapaan profesional/netral. Jangan memakai panggilan seperti kakak, bro, atau sejenisnya kecuali pengguna memintanya.
@@ -1375,6 +1375,28 @@ model_status_auto_refresh_scope = str(
 model_status_auto_refresh_public_panel = parse_bool(
     get_secret("MODEL_STATUS_AUTO_REFRESH_PUBLIC_PANEL", True),
     default=True,
+)
+
+token_saver_enabled = parse_bool(
+    get_secret("TOKEN_SAVER_ENABLED", True),
+    default=True,
+)
+token_saver_default_mode = str(
+    get_secret("TOKEN_SAVER_DEFAULT_MODE", "balanced") or "balanced"
+).strip().lower()
+max_tokens_casual = int(get_secret("MAX_TOKENS_CASUAL", 500) or 500)
+max_tokens_normal = int(get_secret("MAX_TOKENS_NORMAL", 1200) or 1200)
+max_tokens_technical = int(get_secret("MAX_TOKENS_TECHNICAL", 2200) or 2200)
+max_tokens_long = int(get_secret("MAX_TOKENS_LONG", 3000) or 3000)
+web_history_limit = int(get_secret("WEB_HISTORY_LIMIT", 6) or 6)
+web_history_recent_full = int(get_secret("WEB_HISTORY_RECENT_FULL", 4) or 4)
+memory_context_max_chars = int(get_secret("MEMORY_CONTEXT_MAX_CHARS", 2600) or 2600)
+kb_context_max_chars = int(get_secret("KB_CONTEXT_MAX_CHARS", 3500) or 3500)
+kb_chunk_max_chars = int(get_secret("KB_CHUNK_MAX_CHARS", 900) or 900)
+kb_max_chunks_token_saver = int(get_secret("KB_MAX_CHUNKS", 3) or 3)
+live_web_context_max_chars = int(get_secret("LIVE_WEB_CONTEXT_MAX_CHARS", 4200) or 4200)
+live_web_source_content_max_chars = int(
+    get_secret("LIVE_WEB_SOURCE_CONTENT_MAX_CHARS", 1200) or 1200
 )
 
 # Operational safety / retention
@@ -3485,6 +3507,219 @@ def detect_auto_live_scraping_need(
 
 
 
+
+def _token_saver_clip_text(
+    text: Any,
+    max_chars: int,
+    suffix: str = "\n...[dipangkas untuk hemat token]",
+) -> str:
+    value = str(text or "").strip()
+    limit = int(max_chars or 0)
+
+    if not value or limit <= 0:
+        return value
+
+    if len(value) <= limit:
+        return value
+
+    return value[: max(0, limit - len(suffix))].rstrip() + suffix
+
+
+def _token_saver_mode() -> str:
+    mode = str(token_saver_default_mode or "balanced").lower().strip()
+
+    if mode not in {"off", "light", "balanced", "aggressive"}:
+        mode = "balanced"
+
+    return mode
+
+
+def compact_recent_messages_for_token_saver(
+    messages: List[Dict[str, Any]],
+    limit: int | None = None,
+    recent_full: int | None = None,
+) -> List[Dict[str, str]]:
+    """Kirim history pendek saja ke model.
+
+    Pesan lama diringkas menjadi satu system note agar token tidak membengkak.
+    """
+    if not bool(token_saver_enabled):
+        return messages or []
+
+    raw_messages = [
+        item
+        for item in (messages or [])
+        if isinstance(item, dict)
+    ]
+
+    if not raw_messages:
+        return []
+
+    max_messages = max(2, int(limit or web_history_limit or 6))
+    full_count = max(2, int(recent_full or web_history_recent_full or 4))
+
+    if len(raw_messages) <= max_messages:
+        return [
+            {
+                "role": str(item.get("role") or "user"),
+                "content": _token_saver_clip_text(
+                    item.get("content", ""),
+                    1200,
+                ),
+            }
+            for item in raw_messages[-max_messages:]
+        ]
+
+    older = raw_messages[: -full_count]
+    recent = raw_messages[-full_count:]
+
+    older_lines: List[str] = []
+
+    for item in older[-8:]:
+        role = str(item.get("role") or "user")
+        content = _token_saver_clip_text(
+            item.get("content", ""),
+            220,
+            suffix="...",
+        )
+        if content:
+            older_lines.append(f"{role}: {content}")
+
+    compact: List[Dict[str, str]] = []
+
+    if older_lines:
+        compact.append(
+            {
+                "role": "system",
+                "content": (
+                    "Ringkasan percakapan lama untuk hemat token:\n"
+                    + "\n".join(older_lines)
+                ),
+            }
+        )
+
+    for item in recent:
+        compact.append(
+            {
+                "role": str(item.get("role") or "user"),
+                "content": _token_saver_clip_text(
+                    item.get("content", ""),
+                    1400,
+                ),
+            }
+        )
+
+    return compact[-max_messages:]
+
+
+def determine_dynamic_answer_token_budget(
+    user_text: str,
+    complexity: Dict[str, Any],
+    route: Dict[str, Any],
+    configured_max_tokens: int,
+    live_scraping_needed: bool = False,
+) -> int:
+    """Budget jawaban dinamis untuk hemat token."""
+    if not bool(token_saver_enabled):
+        return int(configured_max_tokens)
+
+    user_lower = str(user_text or "").lower()
+    score = int((route or {}).get("complexity_score") or 0)
+    very_complex = score >= 8
+    complex_enough = bool((route or {}).get("thinking_mode")) or score >= 5
+    complexity_hits = (route or {}).get("complexity_hits") or {}
+
+    code_or_file = bool(
+        complexity_hits.get("code")
+        or any(
+            marker in user_lower
+            for marker in [
+                "error",
+                "kode",
+                "code",
+                "deploy",
+                "file",
+                "patch",
+                "traceback",
+                "log",
+                "bug",
+            ]
+        )
+    )
+
+    asks_long = any(
+        marker in user_lower
+        for marker in [
+            "jelaskan detail",
+            "lengkap",
+            "full",
+            "panjang",
+            "rinci",
+            "mendalam",
+            "step by step",
+            "langkah lengkap",
+        ]
+    )
+
+    asks_short = any(
+        marker in user_lower
+        for marker in [
+            "singkat",
+            "ringkas",
+            "pendek",
+            "inti saja",
+            "langsung saja",
+            "quick",
+        ]
+    )
+
+    if asks_short:
+        desired = min(max_tokens_casual, 450)
+    elif live_scraping_needed:
+        desired = min(max_tokens_normal, 1200)
+    elif asks_long or very_complex:
+        desired = max_tokens_long
+    elif code_or_file:
+        desired = max_tokens_technical
+    elif complex_enough:
+        desired = max_tokens_normal
+    else:
+        desired = max_tokens_casual
+
+    operation_mode = _normalize_operation_mode(
+        st.session_state.get("active_operation_mode", ai_operation_mode_default)
+    )
+    saver_mode = _token_saver_mode()
+
+    if operation_mode == "Hemat":
+        desired = int(desired * 0.75)
+    elif operation_mode == "Maksimal":
+        desired = int(desired * 1.2)
+
+    if saver_mode == "light":
+        desired = int(desired * 1.15)
+    elif saver_mode == "aggressive":
+        desired = int(desired * 0.65)
+    elif saver_mode == "off":
+        desired = int(configured_max_tokens)
+
+    return max(256, min(int(configured_max_tokens), int(desired)))
+
+
+def limit_context_for_token_saver(
+    context: str,
+    max_chars: int,
+) -> str:
+    if not bool(token_saver_enabled):
+        return str(context or "")
+
+    return _token_saver_clip_text(
+        context,
+        int(max_chars or 0),
+    )
+
+
+
 def choose_dynamic_runtime_options(
     user_text: str,
     route: Dict[str, Any],
@@ -3531,25 +3766,20 @@ def choose_dynamic_runtime_options(
         complexity_hits.get("code")
         or any(marker in str(user_text or "").lower() for marker in ["error", "kode", "code", "deploy", "file", "patch"])
     )
-    if live_scraping_needed:
-        desired_tokens = 1500
-    elif very_complex:
-        desired_tokens = 4200
-    elif code_or_file:
-        desired_tokens = 2800
-    elif complex_enough:
-        desired_tokens = 2200
-    else:
-        desired_tokens = 850
+    dynamic_max_tokens = determine_dynamic_answer_token_budget(
+        user_text=user_text,
+        complexity=complexity,
+        route=route,
+        configured_max_tokens=configured_max_tokens,
+        live_scraping_needed=live_scraping_needed,
+    )
 
-    if operation_mode == "Hemat":
-        desired_tokens = min(desired_tokens, 1600 if not code_or_file else 2400)
-    elif operation_mode == "Maksimal":
-        desired_tokens = int(desired_tokens * 1.25)
-
-    dynamic_max_tokens = min(configured_max_tokens, max(500, desired_tokens))
-
-    rag_top_k = max(3, int(power_rag_top_k))
+    rag_top_k = max(1, int(power_rag_top_k))
+    if bool(token_saver_enabled):
+        rag_top_k = min(
+            rag_top_k,
+            max(1, int(kb_max_chunks_token_saver or 3)),
+        )
     response_cache_ttl_seconds = int(
         power_response_cache_ttl_seconds
         if not accuracy_needed
@@ -3913,7 +4143,9 @@ def build_live_model_status_html(
     """HTML kecil untuk status refresh model tanpa mengganggu chat."""
     refresh_meta = refresh_meta or {}
     status_class = str(readiness.get("class") or "checking")
-    status_label = str(readiness.get("label") or "Perlu cek model")
+    status_label = sanitize_model_readiness_text(
+        readiness.get("label") or "Perlu cek model"
+    )
     next_model = str(readiness.get("next_model") or "").strip()
     checked_at = str(readiness.get("checked_at") or "belum dicek")
     last_auto = str(
@@ -4615,7 +4847,11 @@ def build_kb_v2_context_for_prompt(
         )
 
         context = str(result.get("context") or "").strip()
-        sources = result.get("sources") or []
+        context = limit_context_for_token_saver(
+            context,
+            kb_context_max_chars,
+        )
+        sources = (result.get("sources") or [])[: max(1, int(kb_max_chunks_token_saver or 3))]
 
         return context, {
             "kb_v2_used": bool(context),
@@ -4749,8 +4985,8 @@ def get_model_readiness_state(
             return {
                 "class": "ready",
                 "label": "Model sehat dipilih",
-                "kicker": "model utama otomatis diganti ke model sehat",
-                "subtitle": f"Model utama lama tidak aktif. Sistem menggantinya ke model sehat: {promoted_model}.",
+                "kicker": "model sehat otomatis dipilih",
+                "subtitle": f"Sistem memilih model sehat yang siap digunakan: {promoted_model}.",
                 "next_model": promoted_model,
                 "checked_at": checked_at,
                 "active_total": active_total,
@@ -4761,10 +4997,10 @@ def get_model_readiness_state(
             }
 
         return {
-            "class": "fallback",
-            "label": "Fallback siap",
-            "kicker": "model utama tidak aktif, fallback tersedia",
-            "subtitle": f"Model utama belum lolos health check, tetapi fallback aktif tersedia: {fallback_model}.",
+            "class": "ready",
+            "label": "Model siap",
+            "kicker": "model aktif tersedia",
+            "subtitle": f"Sistem memakai model aktif yang tersedia: {fallback_model}.",
             "next_model": fallback_model,
             "checked_at": checked_at,
             "active_total": active_total,
@@ -4796,6 +5032,26 @@ def get_model_readiness_state(
 
 
 
+def sanitize_model_readiness_text(
+    value: Any,
+) -> str:
+    """Hilangkan wording teknis health check dari UI publik."""
+    text = str(value or "")
+
+    replacements = {
+        "Model utama belum lolos health check": "Sistem memakai model aktif yang tersedia",
+        "belum lolos health check": "belum siap digunakan",
+        "model utama tidak aktif, fallback tersedia": "model aktif tersedia",
+        "fallback tersedia": "model aktif tersedia",
+        "Fallback siap": "Model siap",
+    }
+
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+
+    return text
+
+
 def build_public_model_status_html(
     route: Dict[str, Any], last_meta: Dict[str, Any] | None = None
 ) -> str:
@@ -4810,7 +5066,9 @@ def build_public_model_status_html(
     expensive_count = len(route.get("active_expensive_models") or [])
     checked_at = str(readiness.get("checked_at") or "belum pernah dicek")
     status_class = str(readiness.get("class") or "checking")
-    status_label = str(readiness.get("label") or "Perlu cek model")
+    status_label = sanitize_model_readiness_text(
+        readiness.get("label") or "Perlu cek model"
+    )
 
     last_model_html = (
         f'<div class="model-status-pill">Jawaban terakhir: <strong>{_html_escape(last_model)}</strong></div>'
@@ -8575,7 +8833,12 @@ def fetch_tavily_live_context(
         if not title and not url and not content:
             continue
 
-        content = content[: int(live_web_fallback_max_content_chars or 3200)]
+        content = content[
+            : min(
+                int(live_web_fallback_max_content_chars or 3200),
+                int(live_web_source_content_max_chars or 1200),
+            )
+        ]
 
         sources.append(
             {
@@ -9254,7 +9517,9 @@ def render_admin_status() -> None:
     active_count = sum(1 for item in health_cache.values() if item.get("active"))
     admin_route_preview = build_model_routing_plan(user_text="halo")
     readiness = get_model_readiness_state(admin_route_preview)
-    readiness_label = str(readiness.get("label") or "Perlu cek model")
+    readiness_label = sanitize_model_readiness_text(
+        readiness.get("label") or "Perlu cek model"
+    )
     readiness_next_model = str(readiness.get("next_model") or cfg["model"])
     checked_at = "belum pernah"
     if st.session_state.get("model_health_checked_at"):
@@ -11262,9 +11527,15 @@ def render_public_page() -> None:
     expensive_active = public_route_preview.get("active_expensive_models") or []
     public_readiness = get_model_readiness_state(public_route_preview)
     public_status_class = str(public_readiness.get("class") or "checking")
-    public_status_label = str(public_readiness.get("label") or "Perlu cek model")
-    public_status_kicker = str(public_readiness.get("kicker") or "status model belum dicek")
-    public_status_subtitle = str(public_readiness.get("subtitle") or "")
+    public_status_label = sanitize_model_readiness_text(
+        public_readiness.get("label") or "Perlu cek model"
+    )
+    public_status_kicker = sanitize_model_readiness_text(
+        public_readiness.get("kicker") or "status model belum dicek"
+    )
+    public_status_subtitle = sanitize_model_readiness_text(
+        public_readiness.get("subtitle") or ""
+    )
     st.markdown(
         f"""
         <div class="mac-windowbar">
@@ -11735,6 +12006,11 @@ def render_public_page() -> None:
                         meta["auto_retry_on_model_error_enabled"] = parse_bool(
                             get_secret("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", True),
                             default=True,
+                        )
+                        meta["token_saver_enabled"] = bool(token_saver_enabled)
+                        meta["token_saver_mode"] = _token_saver_mode()
+                        meta["token_saver_max_completion_tokens"] = int(
+                            runtime_options.get("max_completion_tokens", 0) or 0
                         )
                         meta["auto_live_scraping_needed"] = bool(
                             runtime_options.get("auto_live_scraping_needed")
