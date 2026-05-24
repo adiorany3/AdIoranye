@@ -238,6 +238,91 @@ def set_maintenance_lock(
     return state
 
 
+
+def read_akses_terbatas_boot_guard() -> Dict[str, Any]:
+    try:
+        if not akses_terbatas_boot_guard_file or not os.path.exists(akses_terbatas_boot_guard_file):
+            return {}
+
+        with open(akses_terbatas_boot_guard_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def write_akses_terbatas_boot_guard(state: Dict[str, Any]) -> None:
+    try:
+        with open(akses_terbatas_boot_guard_file, "w", encoding="utf-8") as file:
+            json.dump(state or {}, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def current_process_boot_signature() -> str:
+    """Signature ringan untuk membedakan cold start/server reboot dari rerun biasa.
+
+    Streamlit rerun biasanya tetap memakai PID yang sama. Setelah server/container
+    restart, PID umumnya berubah. Jika `/proc` tersedia, starttime proses ikut
+    dipakai agar lebih akurat.
+    """
+    pid = os.getpid()
+    start_marker = ""
+
+    try:
+        with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as file:
+            parts = file.read().split()
+        if len(parts) > 21:
+            start_marker = parts[21]
+    except Exception:
+        start_marker = ""
+
+    return f"{pid}:{start_marker}"
+
+
+def apply_auto_akses_terbatas_on_boot() -> Dict[str, Any]:
+    """Aktifkan akses terbatas otomatis satu kali per proses server.
+
+    Tidak memakai st.rerun. Tidak mengunci ulang setiap rerun Streamlit.
+    """
+    if not bool(akses_terbatas_auto_on_boot):
+        return {"applied": False, "reason": "disabled"}
+
+    signature = current_process_boot_signature()
+    guard = read_akses_terbatas_boot_guard()
+
+    if str(guard.get("process_signature") or "") == signature:
+        return {
+            "applied": False,
+            "reason": "already_processed",
+            "process_signature": signature,
+        }
+
+    state = set_maintenance_lock(
+        True,
+        updated_by="system-boot",
+        channel="server-boot",
+        reason=akses_terbatas_boot_reason,
+    )
+
+    write_akses_terbatas_boot_guard(
+        {
+            "process_signature": signature,
+            "applied_at": _maintenance_now_text(),
+            "pid": os.getpid(),
+            "reason": akses_terbatas_boot_reason,
+        }
+    )
+
+    return {
+        "applied": True,
+        "reason": "boot_auto_lock",
+        "process_signature": signature,
+        "state": state,
+    }
+
+
 def normalize_maintenance_access_key(value: Any) -> str:
     return str(value or "").strip().upper().replace(" ", "")
 
@@ -1739,6 +1824,27 @@ maintenance_access_key_max_questions = int(
         get_secret("MAINTENANCE_ACCESS_KEY_MAX_QUESTIONS", 5),
     )
     or 5
+)
+akses_terbatas_auto_on_boot = parse_bool(
+    get_secret(
+        "AKSES_TERBATAS_AUTO_ON_BOOT",
+        get_secret("MAINTENANCE_AUTO_LOCK_ON_BOOT", True),
+    ),
+    default=True,
+)
+akses_terbatas_boot_guard_file = str(
+    get_secret(
+        "AKSES_TERBATAS_BOOT_GUARD_FILE",
+        get_secret("MAINTENANCE_BOOT_GUARD_FILE", ".adioranye_akses_terbatas_boot_guard.json"),
+    )
+    or ".adioranye_akses_terbatas_boot_guard.json"
+)
+akses_terbatas_boot_reason = str(
+    get_secret(
+        "AKSES_TERBATAS_BOOT_REASON",
+        get_secret("MAINTENANCE_BOOT_REASON", "Akses terbatas otomatis aktif setelah server reboot."),
+    )
+    or "Akses terbatas otomatis aktif setelah server reboot."
 )
 maintenance_default_message = str(
     get_secret(
@@ -10189,6 +10295,9 @@ def get_runtime_config() -> Dict[str, Any]:
         "maintenance_lock_file": maintenance_lock_file,
         "maintenance_access_key_file": maintenance_access_key_file,
         "maintenance_access_key_max_questions": maintenance_access_key_max_questions,
+        "akses_terbatas_auto_on_boot": bool(akses_terbatas_auto_on_boot),
+        "akses_terbatas_boot_guard_file": akses_terbatas_boot_guard_file,
+        "akses_terbatas_boot_reason": akses_terbatas_boot_reason,
         "maintenance_message": maintenance_default_message,
         "maintenance_locked": bool(is_maintenance_locked()),
         "maintenance_auto_check_interval_seconds": maintenance_auto_check_interval_seconds,
@@ -10399,6 +10508,9 @@ def render_admin_status() -> None:
 
         st.caption(
             "Saat akses terbatas aktif, hanya admin web, chat ID Telegram admin, dan user dengan access key yang dapat menggunakan Adioranye."
+        )
+        st.caption(
+            f"Auto akses terbatas setelah server reboot: {'ON' if akses_terbatas_auto_on_boot else 'OFF'}."
         )
         st.caption(
             f"Frontend ultra-safe: {'ON' if frontend_ultra_safe_mode else 'OFF'}; "
@@ -14964,6 +15076,8 @@ def run_adioranye_router() -> None:
     st.Page/st.navigation dipakai karena Streamlit mendukung URL pathname untuk page,
     sehingga admin bisa dibuka langsung lewat /admin tanpa menampilkan menu sidebar.
     """
+    apply_auto_akses_terbatas_on_boot()
+
     if hasattr(st, "Page") and hasattr(st, "navigation"):
         public_page = st.Page(
             render_public_page,
