@@ -1,0 +1,307 @@
+{
+  "slashai/claude-haiku-4.5:fast": {
+    "input_per_1m": 12000,
+    "output_per_1m": 83000,
+    "tier": "medium"
+  },
+  "slashai/claude-opus-4-5": {
+    "input_per_1m": 85000,
+    "output_per_1m": 439000,
+    "tier": "ultra"
+  },
+  "slashai/claude-opus-4.5": {
+    "input_per_1m": 85000,
+    "output_per_1m": 439000,
+    "tier": "ultra"
+  },
+  "slashai/claude-opus-4.7:fast": {
+    "input_per_1m": 85000,
+    "output_per_1m": 439000,
+    "tier": "ultra"
+  },
+  "slashai/claude-sonnet-4.5-free": {
+    "input_per_1m": 0,
+    "output_per_1m": 0,
+    "tier": "cheap"
+  },
+  "slashai/claude-sonnet-4.5:free": {
+    "input_per_1m": 0,
+    "output_per_1m": 0,
+    "tier": "cheap"
+  },
+  "slashai/deepseek-3.2:fast": {
+    "input_per_1m": 4100,
+    "output_per_1m": 6300,
+    "tier": "cheap"
+  },
+  "slashai/deepseek-v4-flash-free": {
+    "input_per_1m": 0,
+    "output_per_1m": 0,
+    "tier": "cheap"
+  },
+  "slashai/deepseek-v4-flash:medium": {
+    "input_per_1m": 1000,
+    "output_per_1m": 3200,
+    "tier": "cheap"
+  },
+  "slashai/deepseek-v4-pro:medium": {
+    "input_per_1m": 7300,
+    "output_per_1m": 13000,
+    "tier": "medium"
+  },
+  "slashai/glm-5.1:medium": {
+    "input_per_1m": 14000,
+    "output_per_1m": 51000,
+    "tier": "medium"
+  },
+  "slashai/glm-5:fast": {
+    "input_per_1m": 7000,
+    "output_per_1m": 30000,
+    "tier": "medium"
+  },
+  "slashai/glm-5:medium": {
+    "input_per_1m": 7000,
+    "output_per_1m": 30000,
+    "tier": "medium"
+  },
+  "slashai/gpt-5-codex": {
+    "input_per_1m": 19000,
+    "output_per_1m": 170000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5-codex-mini": {
+    "input_per_1m": 4100,
+    "output_per_1m": 32000,
+    "tier": "medium"
+  },
+  "slashai/gpt-5-codex-mini-review": {
+    "input_per_1m": 4100,
+    "output_per_1m": 32000,
+    "tier": "medium"
+  },
+  "slashai/gpt-5-codex-review": {
+    "input_per_1m": 19000,
+    "output_per_1m": 170000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.1": {
+    "input_per_1m": 20000,
+    "output_per_1m": 170000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.1-codex": {
+    "input_per_1m": 20000,
+    "output_per_1m": 170000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.1-codex-max": {
+    "input_per_1m": 22000,
+    "output_per_1m": 190000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.1-codex-max-review": {
+    "input_per_1m": 20000,
+    "output_per_1m": 170000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.1-codex-mini": {
+    "input_per_1m": 4000,
+    "output_per_1m": 31000,
+    "tier": "medium"
+  },
+  "slashai/gpt-5.1-codex-mini-high": {
+    "input_per_1m": 4200,
+    "output_per_1m": 31200,
+    "tier": "medium"
+  },
+  "slashai/gpt-5.1-codex-mini-high-review": {
+    "input_per_1m": 4200,
+    "output_per_1m": 31200,
+    "tier": "medium"
+  },
+  "slashai/gpt-5.1-codex-mini-review": {
+    "input_per_1m": 4000,
+    "output_per_1m": 30000,
+    "tier": "medium"
+  },
+  "slashai/gpt-5.1-codex-review": {
+    "input_per_1m": 20000,
+    "output_per_1m": 170000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.1-review": {
+    "input_per_1m": 20000,
+    "output_per_1m": 170000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.2-codex": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.2-codex-review": {
+    "input_per_1m": 23000,
+    "output_per_1m": 240000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.2-review": {
+    "input_per_1m": 23000,
+    "output_per_1m": 240000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.2:cx": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-high": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-high-review": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-low": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-low-review": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-none": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-none-review": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-review": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-spark": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-spark-review": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-xhigh": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.3-codex-xhigh-review": {
+    "input_per_1m": 27000,
+    "output_per_1m": 243000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.4-review": {
+    "input_per_1m": 41000,
+    "output_per_1m": 260000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.4:cx": {
+    "input_per_1m": 41000,
+    "output_per_1m": 260000,
+    "tier": "expensive"
+  },
+  "slashai/gpt-5.5-review": {
+    "input_per_1m": 82000,
+    "output_per_1m": 527000,
+    "tier": "ultra"
+  },
+  "slashai/gpt-5.5:cx": {
+    "input_per_1m": 82000,
+    "output_per_1m": 527000,
+    "tier": "ultra"
+  },
+  "slashai/kimi-k2.5:medium": {
+    "input_per_1m": 5000,
+    "output_per_1m": 30000,
+    "tier": "medium"
+  },
+  "slashai/kimi-k2.6": {
+    "input_per_1m": 10000,
+    "output_per_1m": 30000,
+    "tier": "medium"
+  },
+  "slashai/mimo-v2-omni": {
+    "input_per_1m": 5000,
+    "output_per_1m": 32000,
+    "tier": "medium"
+  },
+  "slashai/mimo-v2-pro": {
+    "input_per_1m": 15000,
+    "output_per_1m": 50000,
+    "tier": "medium"
+  },
+  "slashai/mimo-v2.5": {
+    "input_per_1m": 5000,
+    "output_per_1m": 32000,
+    "tier": "medium"
+  },
+  "slashai/mimo-v2.5-pro": {
+    "input_per_1m": 15000,
+    "output_per_1m": 50000,
+    "tier": "medium"
+  },
+  "slashai/minimax-m2.5:fast": {
+    "input_per_1m": 500,
+    "output_per_1m": 2000,
+    "tier": "cheap"
+  },
+  "slashai/minimax-m2.5:medium": {
+    "input_per_1m": 2000,
+    "output_per_1m": 17000,
+    "tier": "medium"
+  },
+  "slashai/minimax-m2.7:medium": {
+    "input_per_1m": 4200,
+    "output_per_1m": 13000,
+    "tier": "cheap"
+  },
+  "slashai/nemotron-3-super-free": {
+    "input_per_1m": 0,
+    "output_per_1m": 0,
+    "tier": "cheap"
+  },
+  "slashai/qwen3-coder-next:fast": {
+    "input_per_1m": 1600,
+    "output_per_1m": 11000,
+    "tier": "cheap"
+  },
+  "slashai/qwen3.6-max-preview": {
+    "input_per_1m": 15000,
+    "output_per_1m": 100000,
+    "tier": "medium"
+  },
+  "slashai/qwen3.6-plus": {
+    "input_per_1m": 5000,
+    "output_per_1m": 30000,
+    "tier": "medium"
+  },
+  "slashai/step-3.5-flash": {
+    "input_per_1m": 1000,
+    "output_per_1m": 5000,
+    "tier": "cheap"
+  }
+}

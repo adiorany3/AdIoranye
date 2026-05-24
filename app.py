@@ -237,6 +237,219 @@ def set_maintenance_lock(
     write_maintenance_lock_state(state)
     return state
 
+
+def normalize_maintenance_access_key(value: Any) -> str:
+    return str(value or "").strip().upper().replace(" ", "")
+
+
+def default_maintenance_access_key_state() -> Dict[str, Any]:
+    return {"version": 1, "keys": {}, "updated_at": ""}
+
+
+def read_maintenance_access_key_state() -> Dict[str, Any]:
+    try:
+        if not maintenance_access_key_file or not os.path.exists(maintenance_access_key_file):
+            return default_maintenance_access_key_state()
+        with open(maintenance_access_key_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        if not isinstance(data, dict):
+            return default_maintenance_access_key_state()
+        state = default_maintenance_access_key_state()
+        state.update(data)
+        if not isinstance(state.get("keys"), dict):
+            state["keys"] = {}
+        return state
+    except Exception:
+        return default_maintenance_access_key_state()
+
+
+def write_maintenance_access_key_state(state: Dict[str, Any]) -> None:
+    try:
+        payload = default_maintenance_access_key_state()
+        payload.update(state or {})
+        payload["updated_at"] = _maintenance_now_text()
+        if not isinstance(payload.get("keys"), dict):
+            payload["keys"] = {}
+        with open(maintenance_access_key_file, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def generate_maintenance_access_key(
+    note: str = "",
+    created_by: str = "admin",
+    max_questions: int | None = None,
+) -> Dict[str, Any]:
+    state = read_maintenance_access_key_state()
+    keys = state.setdefault("keys", {})
+    max_uses = max(1, int(max_questions or maintenance_access_key_max_questions or 5))
+
+    for _ in range(20):
+        raw = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
+        key = normalize_maintenance_access_key(f"AK-{raw}")
+        if key not in keys:
+            break
+    else:
+        key = normalize_maintenance_access_key(f"AK-{int(time.time())}")
+
+    record = {
+        "key": key,
+        "active": True,
+        "max_uses": max_uses,
+        "used": 0,
+        "note": str(note or "").strip(),
+        "created_at": _maintenance_now_text(),
+        "created_by": str(created_by or "admin"),
+        "last_used_at": "",
+        "last_used_by": "",
+    }
+    keys[key] = record
+    write_maintenance_access_key_state(state)
+    return record
+
+
+def validate_maintenance_access_key(value: Any) -> Dict[str, Any]:
+    key = normalize_maintenance_access_key(value)
+    state = read_maintenance_access_key_state()
+    record = (state.get("keys") or {}).get(key)
+
+    if not key:
+        return {"valid": False, "key": "", "reason": "empty", "remaining": 0}
+    if not isinstance(record, dict):
+        return {"valid": False, "key": key, "reason": "not_found", "remaining": 0}
+    if not bool(record.get("active", True)):
+        return {"valid": False, "key": key, "reason": "inactive", "remaining": 0, "record": record}
+
+    max_uses = max(1, int(record.get("max_uses") or maintenance_access_key_max_questions or 5))
+    used = max(0, int(record.get("used") or 0))
+    remaining = max(0, max_uses - used)
+
+    if remaining <= 0:
+        return {"valid": False, "key": key, "reason": "quota_exhausted", "remaining": 0, "record": record}
+
+    return {
+        "valid": True,
+        "key": key,
+        "reason": "ok",
+        "remaining": remaining,
+        "max_uses": max_uses,
+        "used": used,
+        "record": record,
+    }
+
+
+def consume_maintenance_access_question(value: Any, used_by: str = "web-public") -> Dict[str, Any]:
+    key = normalize_maintenance_access_key(value)
+    validation = validate_maintenance_access_key(key)
+    if not validation.get("valid"):
+        validation["allowed"] = False
+        return validation
+
+    state = read_maintenance_access_key_state()
+    keys = state.setdefault("keys", {})
+    record = keys.get(key)
+    if not isinstance(record, dict):
+        validation["allowed"] = False
+        validation["reason"] = "not_found"
+        return validation
+
+    record["used"] = int(record.get("used") or 0) + 1
+    record["last_used_at"] = _maintenance_now_text()
+    record["last_used_by"] = str(used_by or "web-public")
+    keys[key] = record
+    write_maintenance_access_key_state(state)
+
+    refreshed = validate_maintenance_access_key(key)
+    refreshed["allowed"] = True
+    refreshed["used_now"] = int(record.get("used") or 0)
+    return refreshed
+
+
+def revoke_maintenance_access_key(value: Any, revoked_by: str = "admin") -> Dict[str, Any]:
+    key = normalize_maintenance_access_key(value)
+    state = read_maintenance_access_key_state()
+    keys = state.setdefault("keys", {})
+    record = keys.get(key)
+    if not isinstance(record, dict):
+        return {"ok": False, "key": key, "reason": "not_found"}
+
+    record["active"] = False
+    record["revoked_at"] = _maintenance_now_text()
+    record["revoked_by"] = str(revoked_by or "admin")
+    keys[key] = record
+    write_maintenance_access_key_state(state)
+    return {"ok": True, "key": key, "record": record}
+
+
+def get_current_maintenance_access_key_status() -> Dict[str, Any]:
+    status = validate_maintenance_access_key(st.session_state.get("maintenance_access_key", ""))
+    st.session_state.maintenance_access_key_status = status
+    return status
+
+
+def render_maintenance_access_key_active_notice(status: Dict[str, Any]) -> None:
+    remaining = int(status.get("remaining") or 0)
+    key = str(status.get("key") or "")
+    st.success(f"Access key akses terbatas aktif. Sisa kuota: {remaining} pertanyaan.")
+    with st.expander("Detail access key", expanded=False):
+        st.code(key)
+        if st.button("Keluar dari access key", use_container_width=True, key="maintenance_access_key_logout"):
+            st.session_state.maintenance_access_key = ""
+            st.session_state.maintenance_access_key_status = {}
+            st.rerun()
+
+
+def render_maintenance_access_key_form(state: Dict[str, Any] | None = None) -> None:
+    st.info(
+        "Jika Anda punya access key dari admin, masukkan key agar tetap bisa chat maksimal "
+        f"{maintenance_access_key_max_questions} pertanyaan selama maintenance."
+    )
+    with st.form("maintenance_access_key_form", clear_on_submit=False):
+        key_value = st.text_input(
+            "Access key akses terbatas",
+            value=str(st.session_state.get("maintenance_access_key_input", "")),
+            placeholder="Contoh: AK-XXXXXX",
+        )
+        submitted = st.form_submit_button("Gunakan access key")
+
+    if submitted:
+        key = normalize_maintenance_access_key(key_value)
+        status = validate_maintenance_access_key(key)
+        if status.get("valid"):
+            st.session_state.maintenance_access_key = key
+            st.session_state.maintenance_access_key_input = ""
+            st.session_state.maintenance_access_key_status = status
+            st.success(f"Access key valid. Sisa kuota: {int(status.get('remaining') or 0)} pertanyaan.")
+            st.rerun()
+
+        reason = status.get("reason")
+        if reason == "quota_exhausted":
+            st.error("Access key sudah habis kuotanya.")
+        elif reason == "inactive":
+            st.error("Access key sudah tidak aktif.")
+        else:
+            st.error("Access key tidak valid.")
+
+
+def maintenance_access_key_summary() -> Dict[str, Any]:
+    state = read_maintenance_access_key_state()
+    keys = state.get("keys") or {}
+    total = len(keys)
+    active = 0
+    exhausted = 0
+    for record in keys.values():
+        if not isinstance(record, dict):
+            continue
+        max_uses = max(1, int(record.get("max_uses") or maintenance_access_key_max_questions or 5))
+        used = max(0, int(record.get("used") or 0))
+        if bool(record.get("active", True)) and used < max_uses:
+            active += 1
+        if used >= max_uses:
+            exhausted += 1
+    return {"total": total, "active": active, "exhausted": exhausted}
+
+
 def is_maintenance_locked() -> bool:
     return bool(read_maintenance_lock_state().get("locked"))
 
@@ -382,7 +595,7 @@ def maintenance_public_message() -> str:
     updated_at = str(state.get("updated_at") or "").strip()
 
     lines = [
-        "🛠️ **Under maintenance**",
+        "🛠️ **Akses terbatas**",
         "",
         message,
     ]
@@ -412,9 +625,9 @@ def render_maintenance_banner(state: Dict[str, Any] | None = None) -> None:
         <div class="maintenance-lock-banner">
             <div class="maintenance-lock-icon">🛠️</div>
             <div>
-                <div class="maintenance-lock-title">Under maintenance</div>
+                <div class="maintenance-lock-title">Akses terbatas</div>
                 <div class="maintenance-lock-text">
-                    Chat publik sedang dikunci. Hanya admin yang dapat menggunakan Adioranye sampai status dibuka kembali.
+                    Chat publik sedang dalam akses terbatas. Hanya admin atau user dengan access key yang dapat menggunakan Adioranye sampai akses dibuka kembali.
                 </div>
                 <div class="maintenance-lock-meta">
                     {_html_escape(reason or "Manual unlock")}
@@ -1507,15 +1720,35 @@ telegram_lock_file = str(
     get_secret("TELEGRAM_LOCK_FILE", "/tmp/adioranye_telegram_bot_worker.lock")
 )
 maintenance_lock_file = str(
-    get_secret("MAINTENANCE_LOCK_FILE", ".adioranye_maintenance_lock.json")
+    get_secret(
+        "AKSES_TERBATAS_LOCK_FILE",
+        get_secret("MAINTENANCE_LOCK_FILE", ".adioranye_maintenance_lock.json"),
+    )
     or ".adioranye_maintenance_lock.json"
+)
+maintenance_access_key_file = str(
+    get_secret(
+        "AKSES_TERBATAS_KEY_FILE",
+        get_secret("MAINTENANCE_ACCESS_KEY_FILE", ".adioranye_maintenance_access_keys.json"),
+    )
+    or ".adioranye_maintenance_access_keys.json"
+)
+maintenance_access_key_max_questions = int(
+    get_secret(
+        "AKSES_TERBATAS_KEY_MAX_QUESTIONS",
+        get_secret("MAINTENANCE_ACCESS_KEY_MAX_QUESTIONS", 5),
+    )
+    or 5
 )
 maintenance_default_message = str(
     get_secret(
-        "MAINTENANCE_MESSAGE",
-        "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses.",
+        "AKSES_TERBATAS_MESSAGE",
+        get_secret(
+            "MAINTENANCE_MESSAGE",
+            "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses.",
+        ),
     )
-    or "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses."
+    or "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses."
 )
 maintenance_auto_check_interval_seconds = int(
     get_secret("MAINTENANCE_AUTO_CHECK_INTERVAL_SECONDS", 5) or 5
@@ -9954,6 +10187,8 @@ def get_runtime_config() -> Dict[str, Any]:
             or "Seimbang"
         ),
         "maintenance_lock_file": maintenance_lock_file,
+        "maintenance_access_key_file": maintenance_access_key_file,
+        "maintenance_access_key_max_questions": maintenance_access_key_max_questions,
         "maintenance_message": maintenance_default_message,
         "maintenance_locked": bool(is_maintenance_locked()),
         "maintenance_auto_check_interval_seconds": maintenance_auto_check_interval_seconds,
@@ -10041,10 +10276,10 @@ def render_admin_status() -> None:
             force_button_key="telegram_verified_status_card_test_btn",
         )
 
-    with st.expander("🛠️ Maintenance Lock", expanded=bool(is_maintenance_locked())):
+    with st.expander("🛠️ Akses Terbatas", expanded=bool(is_maintenance_locked())):
         maintenance_state = read_maintenance_lock_state()
         locked_now = bool(maintenance_state.get("locked"))
-        status_label = "Under maintenance" if locked_now else "Unlocked"
+        status_label = "Akses terbatas" if locked_now else "Akses dibuka"
         st.markdown(
             f"""
             <div class="maintenance-admin-card">
@@ -10066,7 +10301,7 @@ def render_admin_status() -> None:
         )
 
         reason_value = st.text_input(
-            "Catatan maintenance",
+            "Catatan akses terbatas",
             value=str(maintenance_state.get("reason") or ""),
             placeholder="Contoh: update model, maintenance database, deploy fitur baru",
             key="maintenance_lock_reason",
@@ -10074,7 +10309,7 @@ def render_admin_status() -> None:
         col_lock, col_unlock = st.columns(2)
         with col_lock:
             if st.button(
-                "🔒 Lock / Under maintenance",
+                "🔒 Aktifkan akses terbatas",
                 use_container_width=True,
                 disabled=locked_now,
                 key="maintenance_lock_button",
@@ -10085,12 +10320,12 @@ def render_admin_status() -> None:
                     channel="web-admin",
                     reason=reason_value,
                 )
-                st.success("Maintenance lock aktif. Publik dan Telegram non-admin dikunci.")
+                st.success("Akses terbatas aktif. Publik dan Telegram non-admin dikunci.")
                 st.rerun()
 
         with col_unlock:
             if st.button(
-                "🔓 Unlock / Buka akses",
+                "🔓 Buka akses",
                 use_container_width=True,
                 disabled=not locked_now,
                 key="maintenance_unlock_button",
@@ -10101,11 +10336,69 @@ def render_admin_status() -> None:
                     channel="web-admin",
                     reason=reason_value,
                 )
-                st.success("Maintenance lock dibuka. Publik dan Telegram dapat digunakan lagi.")
+                st.success("Akses terbatas dibuka. Publik dan Telegram dapat digunakan lagi.")
                 st.rerun()
 
+        st.divider()
+        st.markdown("##### 🔑 Access key akses terbatas")
         st.caption(
-            "Saat lock aktif, hanya admin web dan chat ID Telegram admin yang dapat menggunakan Adioranye."
+            f"User yang punya key tetap bisa chat saat akses terbatas aktif, maksimal {maintenance_access_key_max_questions} pertanyaan per key."
+        )
+        key_note = st.text_input(
+            "Catatan key",
+            value="",
+            placeholder="Contoh: akses sementara untuk user A",
+            key="maintenance_access_key_note",
+        )
+        col_key_a, col_key_b, col_key_c = st.columns(3)
+        with col_key_a:
+            if st.button("Generate access key", use_container_width=True, key="generate_maintenance_access_key_btn"):
+                new_key_record = generate_maintenance_access_key(
+                    note=key_note,
+                    created_by=admin_username,
+                    max_questions=maintenance_access_key_max_questions,
+                )
+                st.session_state.latest_maintenance_access_key = new_key_record.get("key", "")
+                st.success("Access key berhasil dibuat.")
+                st.rerun()
+        summary = maintenance_access_key_summary()
+        with col_key_b:
+            st.metric("Key aktif", summary.get("active", 0))
+        with col_key_c:
+            st.metric("Key total", summary.get("total", 0))
+
+        latest_key = str(st.session_state.get("latest_maintenance_access_key") or "")
+        if latest_key:
+            st.caption("Key terakhir dibuat:")
+            st.code(latest_key)
+
+        access_state = read_maintenance_access_key_state()
+        active_records = []
+        for record in (access_state.get("keys") or {}).values():
+            if not isinstance(record, dict):
+                continue
+            max_uses = int(record.get("max_uses") or maintenance_access_key_max_questions or 5)
+            used = int(record.get("used") or 0)
+            if bool(record.get("active", True)) and used < max_uses:
+                active_records.append(record)
+
+        if active_records:
+            with st.expander("Daftar access key aktif", expanded=False):
+                for idx, record in enumerate(sorted(active_records, key=lambda item: str(item.get("created_at") or ""), reverse=True)[:20]):
+                    key = str(record.get("key") or "")
+                    used = int(record.get("used") or 0)
+                    max_uses = int(record.get("max_uses") or maintenance_access_key_max_questions or 5)
+                    note = str(record.get("note") or "")
+                    st.markdown(f"**{_html_escape(key)}** — {used}/{max_uses} terpakai" + (f" — {_html_escape(note)}" if note else ""))
+                    if st.button("Nonaktifkan", key=f"revoke_maintenance_key_{idx}_{key}", use_container_width=True):
+                        revoke_maintenance_access_key(key, revoked_by=admin_username)
+                        st.success(f"Key {key} dinonaktifkan.")
+                        st.rerun()
+        else:
+            st.caption("Belum ada access key aktif.")
+
+        st.caption(
+            "Saat akses terbatas aktif, hanya admin web, chat ID Telegram admin, dan user dengan access key yang dapat menggunakan Adioranye."
         )
         st.caption(
             f"Frontend ultra-safe: {'ON' if frontend_ultra_safe_mode else 'OFF'}; "
@@ -11287,7 +11580,7 @@ def render_admin_settings() -> None:
     st.markdown('<div class="admin-divider-soft"></div>', unsafe_allow_html=True)
 
     tab_ai, tab_bot, tab_memory, tab_health, tab_maint, tab_setup = st.tabs(
-        ["🤖 AI", "💬 Telegram", "🧠 Memory", "✅ Health", "🧹 Maintenance", "🔧 Setup"]
+        ["🤖 AI", "💬 Telegram", "🧠 Memory", "✅ Health", "🧹 Akses Terbatas", "🔧 Setup"]
     )
 
     with tab_ai:
@@ -11618,7 +11911,7 @@ def render_admin_settings() -> None:
             f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model kapan saja dan memakai hanya model yang hidup."
         )
         st.info(
-            "Kontrol admin juga tersedia dari Telegram: /admin, /status, /telegramtest, /health, /router auto|murah|mahal, /lock, /unlock, /update, /reset_runtime, /reset_telegram."
+            "Kontrol admin juga tersedia dari Telegram: /admin, /status, /telegramtest, /health, /router auto|murah|mahal, /lock, /unlock, /key generate, /keys, /akses, /update, /reset_runtime, /reset_telegram."
         )
 
         status = service.status()
@@ -12766,7 +13059,18 @@ def render_public_page() -> None:
     render_auto_model_status_refresh_panel()
 
     maintenance_state = read_maintenance_lock_state()
-    maintenance_state = render_maintenance_realtime_status(maintenance_state)
+    public_locked = bool(
+        maintenance_state.get("locked")
+        and not st.session_state.get("admin_authenticated", False)
+    )
+    maintenance_access_status = get_current_maintenance_access_key_status()
+    maintenance_access_allowed = bool(public_locked and maintenance_access_status.get("valid"))
+
+    if maintenance_access_allowed:
+        render_maintenance_access_key_active_notice(maintenance_access_status)
+    else:
+        maintenance_state = render_maintenance_realtime_status(maintenance_state)
+
     render_maintenance_safe_meta_refresh(
         maintenance_state,
         is_admin=bool(st.session_state.get("admin_authenticated", False)),
@@ -12775,9 +13079,8 @@ def render_public_page() -> None:
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
 
-    if maintenance_state.get("locked") and not st.session_state.get("admin_authenticated", False):
-        # Banner maintenance sudah dirender oleh render_maintenance_realtime_status().
-        # Jangan render pesan maintenance tambahan agar status tidak dobel.
+    if public_locked and not maintenance_access_allowed:
+        render_maintenance_access_key_form(maintenance_state)
         render_maintenance_locked_public_guard(maintenance_state)
         st.markdown(
             '<div class="auto-scroll-anchor"></div>'
@@ -12851,6 +13154,27 @@ def render_public_page() -> None:
         st.session_state.pending_prompt = ""
 
     if user_input:
+        maintenance_question_access_status: Dict[str, Any] = {}
+        if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
+            current_access = get_current_maintenance_access_key_status()
+            if not current_access.get("valid"):
+                with st.chat_message("assistant"):
+                    st.warning("Akses terbatas sedang aktif. Masukkan access key valid untuk tetap chat.")
+                return
+
+            consumed_access = consume_maintenance_access_question(
+                current_access.get("key"),
+                used_by="web-public",
+            )
+            if not consumed_access.get("allowed"):
+                st.session_state.maintenance_access_key = ""
+                with st.chat_message("assistant"):
+                    st.warning("Access key sudah habis atau tidak aktif. Minta key baru ke admin.")
+                return
+
+            maintenance_question_access_status = consumed_access
+            st.session_state.maintenance_access_key_status = consumed_access
+
         # Public chat: memory commands are disabled unless admin is logged in.
         # This prevents random visitors from changing global memory.
         with st.chat_message("user"):
@@ -12864,23 +13188,9 @@ def render_public_page() -> None:
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
         if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
-            answer = maintenance_public_message()
-            meta = {
-                "maintenance_locked": True,
-                "public_safe_message": True,
-            }
-
-            with st.chat_message("assistant"):
-                st.markdown(answer)
-
-            st.session_state.chat_messages.append(
-                {
-                    "role": "assistant",
-                    "content": answer,
-                    "meta": meta,
-                }
-            )
-            return
+            if maintenance_question_access_status:
+                remaining_after_access = int(maintenance_question_access_status.get("remaining") or 0)
+                st.caption(f"Access key akses terbatas: sisa {remaining_after_access} pertanyaan setelah ini.")
 
         allowed_request, rate_limit_message = check_public_rate_limit(user_input)
 

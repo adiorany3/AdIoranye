@@ -1,3 +1,4 @@
+import base64
 import os
 import inspect
 import json
@@ -1678,9 +1679,9 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
             "• /speed 4321 — cek model aktif dan pilih tercepat",
             "• /rotate — ganti ke model aktif terbaik saat ini",
             "• /router auto|murah|mahal — ganti mode routing",
-            "• /lock [catatan] — aktifkan Under maintenance",
+            "• /lock [catatan] — aktifkan akses terbatas",
             "• /unlock [catatan] — buka akses kembali",
-            "• /maintenance — lihat status maintenance",
+            "• /akses — lihat status akses terbatas",
             "• /ubah murah — pakai model murah/cepat",
             "• /ubah mahal — pakai model medium/mahal",
             "• /model skor — lihat skor model adaptif",
@@ -1731,7 +1732,7 @@ def telegram_default_maintenance_state(message: str = "") -> Dict[str, Any]:
         "locked": False,
         "status": "unlocked",
         "message": message
-        or "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses.",
+        or "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses.",
         "reason": "",
         "updated_at": "",
         "updated_by": "",
@@ -1949,13 +1950,17 @@ def build_telegram_admin_control_help() -> str:
         "🔐 Pusat Kontrol Admin Telegram",
         "",
         "Status & diagnosa:",
-        "• /status — ringkasan sistem, model, maintenance, Telegram",
+        "• /status — ringkasan sistem, model, akses terbatas, Telegram",
         "• /telegramtest — test API Telegram getMe + webhook",
-        "• /maintenance — status maintenance",
+        "• /akses — status akses terbatas",
         "",
-        "Maintenance:",
-        "• /lock [catatan] — kunci chat publik dan Telegram non-admin",
+        "Akses terbatas:",
+        "• /lock [catatan] — aktifkan akses terbatas untuk publik dan Telegram non-admin",
         "• /unlock [catatan] — buka kembali akses publik",
+        "• /key generate [catatan] — buat access key akses terbatas 5 pertanyaan",
+        "• /keys — lihat access key akses terbatas aktif",
+        "• /key revoke AK-XXXX — nonaktifkan key",
+        "• /access AK-XXXX — user mengaktifkan key saat akses terbatas",
         "",
         "Model & routing:",
         "• /health — quick health check model dan pilih model sehat",
@@ -2025,11 +2030,11 @@ def build_telegram_admin_status_text(
         f"Pending update: {diag.get('pending_update_count') if diag.get('pending_update_count') is not None else '-'}",
         f"Webhook: {'aktif' if diag.get('webhook_url') else 'kosong'}",
         "",
-        f"Maintenance: {'LOCKED / Under maintenance' if locked else 'UNLOCKED'}",
+        f"Akses terbatas: {'AKTIF' if locked else 'DIBUKA'}",
     ]
 
     if maintenance_state.get("reason"):
-        lines.append(f"Catatan maintenance: {maintenance_state.get('reason')}")
+        lines.append(f"Catatan akses terbatas: {maintenance_state.get('reason')}")
 
     lines.extend(
         [
@@ -2058,6 +2063,173 @@ def build_telegram_admin_status_text(
     return "\n".join(lines)
 
 
+
+def telegram_normalize_maintenance_access_key(value: Any) -> str:
+    return str(value or "").strip().upper().replace(" ", "")
+
+
+def telegram_default_maintenance_access_state() -> Dict[str, Any]:
+    return {"version": 1, "keys": {}, "updated_at": ""}
+
+
+def telegram_read_maintenance_access_state(access_file: str) -> Dict[str, Any]:
+    try:
+        if not access_file or not os.path.exists(access_file):
+            return telegram_default_maintenance_access_state()
+        with open(access_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        if not isinstance(data, dict):
+            return telegram_default_maintenance_access_state()
+        state = telegram_default_maintenance_access_state()
+        state.update(data)
+        if not isinstance(state.get("keys"), dict):
+            state["keys"] = {}
+        return state
+    except Exception:
+        return telegram_default_maintenance_access_state()
+
+
+def telegram_write_maintenance_access_state(access_file: str, state: Dict[str, Any]) -> None:
+    try:
+        payload = telegram_default_maintenance_access_state()
+        payload.update(state or {})
+        payload["updated_at"] = _wib_now_text()
+        if not isinstance(payload.get("keys"), dict):
+            payload["keys"] = {}
+        with open(access_file, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def telegram_generate_maintenance_access_key(
+    access_file: str,
+    note: str = "",
+    created_by: str = "telegram-admin",
+    max_questions: int = 5,
+) -> Dict[str, Any]:
+    state = telegram_read_maintenance_access_state(access_file)
+    keys = state.setdefault("keys", {})
+    max_uses = max(1, int(max_questions or 5))
+    for _ in range(20):
+        raw = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
+        key = telegram_normalize_maintenance_access_key(f"AK-{raw}")
+        if key not in keys:
+            break
+    else:
+        key = telegram_normalize_maintenance_access_key(f"AK-{int(time.time())}")
+    record = {
+        "key": key,
+        "active": True,
+        "max_uses": max_uses,
+        "used": 0,
+        "note": str(note or "").strip(),
+        "created_at": _wib_now_text(),
+        "created_by": str(created_by or "telegram-admin"),
+        "last_used_at": "",
+        "last_used_by": "",
+    }
+    keys[key] = record
+    telegram_write_maintenance_access_state(access_file, state)
+    return record
+
+
+def telegram_validate_maintenance_access_key(access_file: str, value: Any, default_max_questions: int = 5) -> Dict[str, Any]:
+    key = telegram_normalize_maintenance_access_key(value)
+    state = telegram_read_maintenance_access_state(access_file)
+    record = (state.get("keys") or {}).get(key)
+    if not key:
+        return {"valid": False, "key": "", "reason": "empty", "remaining": 0}
+    if not isinstance(record, dict):
+        return {"valid": False, "key": key, "reason": "not_found", "remaining": 0}
+    if not bool(record.get("active", True)):
+        return {"valid": False, "key": key, "reason": "inactive", "remaining": 0, "record": record}
+    max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
+    used = max(0, int(record.get("used") or 0))
+    remaining = max(0, max_uses - used)
+    if remaining <= 0:
+        return {"valid": False, "key": key, "reason": "quota_exhausted", "remaining": 0, "record": record}
+    return {"valid": True, "key": key, "reason": "ok", "remaining": remaining, "max_uses": max_uses, "used": used, "record": record}
+
+
+def telegram_consume_maintenance_access_question(
+    access_file: str,
+    value: Any,
+    used_by: str = "telegram-user",
+    default_max_questions: int = 5,
+) -> Dict[str, Any]:
+    key = telegram_normalize_maintenance_access_key(value)
+    validation = telegram_validate_maintenance_access_key(access_file, key, default_max_questions)
+    if not validation.get("valid"):
+        validation["allowed"] = False
+        return validation
+    state = telegram_read_maintenance_access_state(access_file)
+    keys = state.setdefault("keys", {})
+    record = keys.get(key)
+    if not isinstance(record, dict):
+        validation["allowed"] = False
+        validation["reason"] = "not_found"
+        return validation
+    record["used"] = int(record.get("used") or 0) + 1
+    record["last_used_at"] = _wib_now_text()
+    record["last_used_by"] = str(used_by or "telegram-user")
+    keys[key] = record
+    telegram_write_maintenance_access_state(access_file, state)
+    refreshed = telegram_validate_maintenance_access_key(access_file, key, default_max_questions)
+    refreshed["allowed"] = True
+    refreshed["used_now"] = int(record.get("used") or 0)
+    return refreshed
+
+
+def telegram_revoke_maintenance_access_key(access_file: str, value: Any, revoked_by: str = "telegram-admin") -> Dict[str, Any]:
+    key = telegram_normalize_maintenance_access_key(value)
+    state = telegram_read_maintenance_access_state(access_file)
+    keys = state.setdefault("keys", {})
+    record = keys.get(key)
+    if not isinstance(record, dict):
+        return {"ok": False, "key": key, "reason": "not_found"}
+    record["active"] = False
+    record["revoked_at"] = _wib_now_text()
+    record["revoked_by"] = str(revoked_by or "telegram-admin")
+    keys[key] = record
+    telegram_write_maintenance_access_state(access_file, state)
+    return {"ok": True, "key": key, "record": record}
+
+
+def telegram_access_key_admin_command(text: str) -> str:
+    command = telegram_command_name(text) if "telegram_command_name" in globals() else str(text or "").split(maxsplit=1)[0].lower()
+    return command if command in {"/key", "/keys", "/accesskey", "/accesskeys", "/akseskey"} else ""
+
+
+def telegram_access_activate_command(text: str) -> bool:
+    command = telegram_command_name(text) if "telegram_command_name" in globals() else str(text or "").split(maxsplit=1)[0].lower()
+    return command in {"/access", "/akses"}
+
+
+def telegram_build_access_key_list(access_file: str, default_max_questions: int = 5) -> str:
+    state = telegram_read_maintenance_access_state(access_file)
+    keys = state.get("keys") or {}
+    active_records = []
+    exhausted = 0
+    for record in keys.values():
+        if not isinstance(record, dict):
+            continue
+        max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
+        used = max(0, int(record.get("used") or 0))
+        if used >= max_uses:
+            exhausted += 1
+        if bool(record.get("active", True)) and used < max_uses:
+            active_records.append(record)
+    lines = ["🔑 Access key akses terbatas", f"Aktif: {len(active_records)}", f"Habis: {exhausted}", f"Total: {len(keys)}"]
+    for idx, record in enumerate(sorted(active_records, key=lambda item: str(item.get("created_at") or ""), reverse=True)[:10], start=1):
+        key = str(record.get("key") or "")
+        used = int(record.get("used") or 0)
+        max_uses = int(record.get("max_uses") or default_max_questions or 5)
+        note = str(record.get("note") or "")
+        lines.append(f"{idx}. {key} — {used}/{max_uses}" + (f" — {note}" if note else ""))
+    return "\n".join(lines)
+
+
 def telegram_is_maintenance_command(text: str) -> bool:
     raw = str(text or "").strip()
     if not raw:
@@ -2070,6 +2242,8 @@ def telegram_is_maintenance_command(text: str) -> bool:
     return command in {
         "/lock",
         "/unlock",
+        "/akses",
+        "/akses_terbatas",
         "/maintenance",
         "/maint",
     }
@@ -2077,9 +2251,9 @@ def telegram_is_maintenance_command(text: str) -> bool:
 
 def telegram_maintenance_reply(state: Dict[str, Any]) -> str:
     locked = bool(state.get("locked"))
-    status = "Under maintenance" if locked else "Unlocked"
+    status = "Akses terbatas" if locked else "Akses dibuka"
     lines = [
-        f"🛠️ Maintenance status: {status}",        f"Update: {state.get('updated_at') or '-'}",
+        f"🛠️ Status akses: {status}",        f"Update: {state.get('updated_at') or '-'}",
         f"Oleh: {state.get('updated_by') or '-'}",
     ]
     reason = str(state.get("reason") or "").strip()
@@ -2089,10 +2263,10 @@ def telegram_maintenance_reply(state: Dict[str, Any]) -> str:
 
 
 def telegram_under_maintenance_message(state: Dict[str, Any]) -> str:
-    message = str(state.get("message") or "Adioranye sedang dalam mode Under maintenance.").strip()
+    message = str(state.get("message") or "Adioranye sedang dalam mode akses terbatas.").strip()
     reason = str(state.get("reason") or "").strip()
     lines = [
-        "🛠️ Under maintenance",
+        "🛠️ Akses terbatas",
         "",
         message,
     ]
@@ -3148,6 +3322,7 @@ class TelegramBotService:
         self._last_model_update_source = ""
         self._runtime_primary_model = ""
         self._forced_model_mode = "auto"
+        self._maintenance_access_by_chat: Dict[str, str] = {}
 
     def status(self) -> Dict[str, Any]:
         alive = self._thread is not None and self._thread.is_alive() and self._running
@@ -3553,15 +3728,28 @@ class TelegramBotService:
         memory_file = config.get("memory_file", "assistant_memory.json")
         maintenance_lock_file = str(
             config.get("maintenance_lock_file")
+            or os.getenv("AKSES_TERBATAS_LOCK_FILE")
             or os.getenv("MAINTENANCE_LOCK_FILE", ".adioranye_maintenance_lock.json")
         ).strip()
         maintenance_message = str(
             config.get("maintenance_message")
+            or os.getenv("AKSES_TERBATAS_MESSAGE")
             or os.getenv(
                 "MAINTENANCE_MESSAGE",
-                "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses.",
+                "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses.",
             )
         ).strip()
+        maintenance_access_key_file = str(
+            config.get("maintenance_access_key_file")
+            or os.getenv("AKSES_TERBATAS_KEY_FILE")
+            or os.getenv("MAINTENANCE_ACCESS_KEY_FILE", ".adioranye_maintenance_access_keys.json")
+        ).strip()
+        maintenance_access_key_max_questions = int(
+            config.get("maintenance_access_key_max_questions")
+            or os.getenv("AKSES_TERBATAS_KEY_MAX_QUESTIONS")
+            or os.getenv("MAINTENANCE_ACCESS_KEY_MAX_QUESTIONS", 5)
+            or 5
+        )
         fallback_models = config.get("fallback_models") or []
         expensive_fallback_models = config.get("expensive_fallback_models") or []
         allow_expensive_fallback = bool(config.get("allow_expensive_fallback", True))
@@ -3889,18 +4077,126 @@ class TelegramBotService:
                             )
                             continue
 
+                        access_command = telegram_access_key_admin_command(text)
+                        if access_command:
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            arg = telegram_command_arg(text) if "telegram_command_arg" in globals() else ""
+                            arg_parts = arg.split(maxsplit=1)
+                            action = arg_parts[0].lower() if arg_parts else "list"
+                            action_arg = arg_parts[1].strip() if len(arg_parts) > 1 else ""
+
+                            if action in {"generate", "gen", "buat", "baru", "new"}:
+                                record = telegram_generate_maintenance_access_key(
+                                    maintenance_access_key_file,
+                                    note=action_arg,
+                                    created_by=f"telegram:{chat_id}",
+                                    max_questions=maintenance_access_key_max_questions,
+                                )
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "🔑 Access key dibuat.\n\n"
+                                    f"Key: {record.get('key')}\n"
+                                    f"Kuota: {record.get('max_uses')} pertanyaan\n"
+                                    f"Catatan: {record.get('note') or '-'}\n\n"
+                                    "Kirim ke user. User dapat memakai: /access KEY",
+                                    parse_mode=telegram_parse_mode,
+                                )
+                                continue
+
+                            if action in {"revoke", "off", "nonaktif", "hapus"}:
+                                result = telegram_revoke_maintenance_access_key(
+                                    maintenance_access_key_file,
+                                    action_arg,
+                                    revoked_by=f"telegram:{chat_id}",
+                                )
+                                msg = f"✅ Access key dinonaktifkan: {result.get('key')}" if result.get("ok") else "❌ Access key tidak ditemukan."
+                                self._send_message(token, chat_id, msg, parse_mode=telegram_parse_mode)
+                                continue
+
+                            self._send_message(
+                                token,
+                                chat_id,
+                                telegram_build_access_key_list(
+                                    maintenance_access_key_file,
+                                    default_max_questions=maintenance_access_key_max_questions,
+                                ),
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if telegram_access_activate_command(text):
+                            access_arg = telegram_command_arg(text) if "telegram_command_arg" in globals() else ""
+                            status = telegram_validate_maintenance_access_key(
+                                maintenance_access_key_file,
+                                access_arg,
+                                default_max_questions=maintenance_access_key_max_questions,
+                            )
+                            if status.get("valid"):
+                                self._maintenance_access_by_chat[str(chat_id)] = status.get("key", "")
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    f"✅ Access key aktif. Sisa kuota: {status.get('remaining')} pertanyaan.",
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            else:
+                                reason = status.get("reason")
+                                if reason == "quota_exhausted":
+                                    msg = "❌ Access key sudah habis kuotanya."
+                                elif reason == "inactive":
+                                    msg = "❌ Access key sudah tidak aktif."
+                                else:
+                                    msg = "❌ Access key tidak valid."
+                                self._send_message(token, chat_id, msg, parse_mode=telegram_parse_mode)
+                            continue
+
                         maintenance_state = telegram_read_maintenance_state(
                             maintenance_lock_file,
                             message=maintenance_message,
                         )
                         if maintenance_state.get("locked") and not is_admin_chat:
-                            self._send_message(
-                                token,
-                                chat_id,
-                                telegram_under_maintenance_message(maintenance_state),
-                                parse_mode=telegram_parse_mode,
+                            active_access_key = self._maintenance_access_by_chat.get(str(chat_id), "")
+                            access_status = telegram_validate_maintenance_access_key(
+                                maintenance_access_key_file,
+                                active_access_key,
+                                default_max_questions=maintenance_access_key_max_questions,
                             )
-                            continue
+                            if access_status.get("valid"):
+                                consumed_access = telegram_consume_maintenance_access_question(
+                                    maintenance_access_key_file,
+                                    active_access_key,
+                                    used_by=f"telegram:{chat_id}",
+                                    default_max_questions=maintenance_access_key_max_questions,
+                                )
+                                if consumed_access.get("allowed"):
+                                    self._send_message(
+                                        token,
+                                        chat_id,
+                                        f"🔑 Access key akses terbatas dipakai. Sisa setelah ini: {consumed_access.get('remaining')} pertanyaan.",
+                                        parse_mode=telegram_parse_mode,
+                                    )
+                                else:
+                                    self._maintenance_access_by_chat.pop(str(chat_id), None)
+                                    self._send_message(
+                                        token,
+                                        chat_id,
+                                        "Access key sudah habis atau tidak aktif. Minta key baru ke admin.",
+                                        parse_mode=telegram_parse_mode,
+                                    )
+                                    continue
+                            else:
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    telegram_under_maintenance_message(maintenance_state)
+                                    + "\n\nJika punya access key, kirim: /access AK-XXXX",
+                                    parse_mode=telegram_parse_mode,
+                                )
+                                continue
 
                         if text_lower in {"/start", "start"}:
                             self._send_message(
