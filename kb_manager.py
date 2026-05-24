@@ -742,3 +742,418 @@ def write_live_cache(
         return int(cur.lastrowid)
     finally:
         conn.close()
+
+
+def _parse_iso_datetime(value: str) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def read_live_cache(
+    db_path: str,
+    query: str,
+    provider: str = "tavily",
+) -> Optional[Dict[str, Any]]:
+    """Ambil live cache yang belum expired berdasarkan hash query."""
+    init_kb_manager_schema(db_path)
+    query_hash = _sha256(query)
+    now = datetime.now(timezone.utc)
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, answer, sources_json, expires_at, created_at
+            FROM live_cache_v2
+            WHERE query_hash=? AND provider=?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (
+                query_hash,
+                provider,
+            ),
+        )
+        row = cur.fetchone()
+
+        if not row:
+            return None
+
+        expires_at = _parse_iso_datetime(row[3])
+
+        if expires_at and expires_at < now:
+            return None
+
+        try:
+            sources = json.loads(row[2] or "[]")
+        except Exception:
+            sources = []
+
+        return {
+            "id": row[0],
+            "answer": row[1] or "",
+            "sources": sources,
+            "expires_at": row[3],
+            "created_at": row[4],
+            "provider": provider,
+            "query": query,
+        }
+    finally:
+        conn.close()
+
+
+def clear_live_cache(
+    db_path: str,
+) -> int:
+    init_kb_manager_schema(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM live_cache_v2")
+        count = int(cur.rowcount or 0)
+        conn.commit()
+        return count
+    finally:
+        conn.close()
+
+
+def delete_archived_documents(
+    db_path: str,
+) -> Dict[str, int]:
+    init_kb_manager_schema(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM kb_documents_v2 WHERE status='archived'")
+        doc_ids = [
+            int(row[0])
+            for row in cur.fetchall()
+        ]
+
+        chunks_deleted = 0
+        docs_deleted = 0
+
+        for doc_id in doc_ids:
+            cur.execute(
+                "DELETE FROM kb_chunks_v2 WHERE document_id=?",
+                (doc_id,),
+            )
+            chunks_deleted += int(cur.rowcount or 0)
+            cur.execute(
+                "DELETE FROM kb_summaries_v2 WHERE document_id=?",
+                (doc_id,),
+            )
+            cur.execute(
+                "DELETE FROM kb_documents_v2 WHERE id=?",
+                (doc_id,),
+            )
+            docs_deleted += int(cur.rowcount or 0)
+
+        conn.commit()
+
+        return {
+            "documents_deleted": docs_deleted,
+            "chunks_deleted": chunks_deleted,
+        }
+    finally:
+        conn.close()
+
+
+def archive_documents_by_source(
+    db_path: str,
+    source_id: str,
+) -> Dict[str, int]:
+    init_kb_manager_schema(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id FROM kb_documents_v2 WHERE source_id=? AND status='active'",
+            (source_id,),
+        )
+        ids = [
+            int(row[0])
+            for row in cur.fetchall()
+        ]
+
+        now = _utc_now()
+
+        cur.execute(
+            "UPDATE kb_documents_v2 SET status='archived', updated_at=? WHERE source_id=? AND status='active'",
+            (
+                now,
+                source_id,
+            ),
+        )
+        docs = int(cur.rowcount or 0)
+
+        chunks = 0
+        for doc_id in ids:
+            cur.execute(
+                "UPDATE kb_chunks_v2 SET status='archived' WHERE document_id=? AND status='active'",
+                (doc_id,),
+            )
+            chunks += int(cur.rowcount or 0)
+
+        conn.commit()
+
+        return {
+            "documents_archived": docs,
+            "chunks_archived": chunks,
+        }
+    finally:
+        conn.close()
+
+
+def export_kb_audit_log(
+    db_path: str,
+    limit: int = 500,
+) -> List[Dict[str, Any]]:
+    init_kb_manager_schema(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                started_at,
+                finished_at,
+                source_id,
+                action,
+                status,
+                message,
+                documents_added,
+                documents_updated,
+                documents_skipped,
+                chunks_added,
+                metadata_json
+            FROM kb_update_log_v2
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (int(limit or 500),),
+        )
+
+        rows = []
+        for row in cur.fetchall():
+            rows.append(
+                {
+                    "id": row[0],
+                    "started_at": row[1],
+                    "finished_at": row[2],
+                    "source_id": row[3],
+                    "action": row[4],
+                    "status": row[5],
+                    "message": row[6],
+                    "documents_added": row[7],
+                    "documents_updated": row[8],
+                    "documents_skipped": row[9],
+                    "chunks_added": row[10],
+                    "metadata_json": row[11],
+                }
+            )
+
+        return rows
+    finally:
+        conn.close()
+
+
+def search_kb_v2_context(
+    db_path: str,
+    query: str,
+    limit: int = 5,
+    include_archived: bool = False,
+) -> Dict[str, Any]:
+    """Retrieval langsung dari kb_summaries_v2 + kb_chunks_v2."""
+    init_kb_manager_schema(db_path)
+    query_clean = str(query or "").strip()
+    lowered = query_clean.lower()
+    tokens = [
+        token
+        for token in re.findall(r"[A-Za-z0-9À-ÿ_]{3,}", lowered)
+        if token not in {
+            "yang",
+            "dan",
+            "atau",
+            "untuk",
+            "dengan",
+            "dari",
+            "pada",
+            "apa",
+            "bagaimana",
+            "dimana",
+            "kapan",
+            "this",
+            "that",
+            "with",
+            "from",
+            "about",
+        }
+    ][:12]
+
+    if not tokens:
+        return {
+            "context": "",
+            "sources": [],
+        }
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.cursor()
+        status_filter = "" if include_archived else "AND d.status='active' AND c.status='active'"
+        cur.execute(
+            f"""
+            SELECT
+                d.id,
+                d.title,
+                d.url,
+                d.source_type,
+                d.collection,
+                d.confidence,
+                d.freshness,
+                d.summary,
+                c.heading,
+                c.content,
+                c.chunk_index
+            FROM kb_chunks_v2 c
+            JOIN kb_documents_v2 d ON d.id = c.document_id
+            WHERE 1=1 {status_filter}
+            ORDER BY d.updated_at DESC, c.id DESC
+            LIMIT 1200
+            """
+        )
+
+        scored = []
+
+        confidence_weight = {
+            "high": 1.0,
+            "medium": 0.75,
+            "low": 0.45,
+        }
+
+        freshness_weight = {
+            "current": 1.0,
+            "recent": 0.82,
+            "old": 0.48,
+            "archived": 0.25,
+        }
+
+        for row in cur.fetchall():
+            (
+                doc_id,
+                title,
+                url,
+                source_type,
+                collection,
+                confidence,
+                freshness,
+                summary,
+                heading,
+                content,
+                chunk_index,
+            ) = row
+
+            haystack = " ".join(
+                [
+                    str(title or ""),
+                    str(collection or ""),
+                    str(summary or ""),
+                    str(heading or ""),
+                    str(content or ""),
+                ]
+            ).lower()
+
+            hits = sum(
+                1
+                for token in tokens
+                if token in haystack
+            )
+
+            if hits <= 0:
+                continue
+
+            score = hits
+            score += confidence_weight.get(str(confidence or "medium").lower(), 0.6)
+            score += freshness_weight.get(str(freshness or "recent").lower(), 0.6)
+
+            if str(source_type or "").lower() in {
+                "official",
+                "official-docs",
+                "research",
+            }:
+                score += 0.4
+
+            scored.append(
+                {
+                    "score": score,
+                    "document_id": doc_id,
+                    "title": title or "",
+                    "url": url or "",
+                    "source_type": source_type or "",
+                    "collection": collection or "",
+                    "confidence": confidence or "",
+                    "freshness": freshness or "",
+                    "summary": summary or "",
+                    "heading": heading or "",
+                    "content": content or "",
+                    "chunk_index": chunk_index,
+                }
+            )
+
+        scored.sort(
+            key=lambda item: item["score"],
+            reverse=True,
+        )
+
+        selected = scored[: max(1, int(limit or 5))]
+
+        if not selected:
+            return {
+                "context": "",
+                "sources": [],
+            }
+
+        context_parts = [
+            "KONTEKS KB v2 TERPILIH",
+            f"Query: {query_clean}",
+            "",
+        ]
+
+        sources = []
+
+        for index, item in enumerate(selected, start=1):
+            source_label = item["title"] or item["url"] or f"Dokumen {item['document_id']}"
+            context_parts.append(f"Sumber KB {index}: {source_label}")
+            if item["url"]:
+                context_parts.append(f"URL: {item['url']}")
+            if item["summary"]:
+                context_parts.append(f"Ringkasan dokumen: {item['summary'][:700]}")
+            if item["heading"]:
+                context_parts.append(f"Heading: {item['heading']}")
+            context_parts.append(f"Isi: {item['content'][:1800]}")
+            context_parts.append("")
+
+            sources.append(
+                {
+                    "document_id": item["document_id"],
+                    "title": item["title"],
+                    "url": item["url"],
+                    "heading": item["heading"],
+                    "score": round(float(item["score"]), 3),
+                    "confidence": item["confidence"],
+                    "freshness": item["freshness"],
+                    "source_type": item["source_type"],
+                }
+            )
+
+        return {
+            "context": "\n".join(context_parts).strip(),
+            "sources": sources,
+        }
+    finally:
+        conn.close()
+

@@ -55,9 +55,16 @@ from daily_kb_scraper import (
 
 from kb_manager import (
     advanced_incremental_kb_update,
+    archive_documents_by_source,
+    clear_live_cache,
+    delete_archived_documents,
     ensure_kb_sources_file,
+    export_kb_audit_log,
     init_kb_manager_schema,
     kb_manager_overview,
+    read_live_cache,
+    search_kb_v2_context,
+    write_live_cache,
 )
 
 st.set_page_config(
@@ -1033,6 +1040,21 @@ kb_scraper_max_items_per_source = int(
 )
 kb_scraper_timeout = int(get_secret("KB_SCRAPER_TIMEOUT", 20) or 20)
 
+model_readiness_state_file = str(
+    get_secret("MODEL_READINESS_STATE_FILE", ".adioranye_model_readiness.json")
+    or ".adioranye_model_readiness.json"
+).strip()
+model_readiness_stale_seconds = int(
+    get_secret("MODEL_READINESS_STALE_SECONDS", 1800) or 1800
+)
+kb_v2_retrieval_enabled = parse_bool(
+    get_secret("KB_V2_RETRIEVAL_ENABLED", True),
+    default=True,
+)
+kb_v2_retrieval_limit = int(
+    get_secret("KB_V2_RETRIEVAL_LIMIT", 5) or 5
+)
+
 # Operational safety / retention
 ai_operation_mode_default = str(
     get_secret("AI_OPERATION_MODE", "Seimbang") or "Seimbang"
@@ -1899,6 +1921,10 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
 
     st.session_state.model_health_cache = fresh_cache
     st.session_state.model_health_checked_at = now
+    save_model_readiness_state_to_file(
+        fresh_cache,
+        now,
+    )
 
     if active_cheap:
         st.session_state.active_cheap_fallback_models = active_cheap
@@ -3239,6 +3265,130 @@ def render_feedback_controls(
 
 
 
+
+def save_model_readiness_state_to_file(
+    cache: Dict[str, Dict[str, Any]],
+    checked_at: float,
+) -> None:
+    """Simpan status health check agar tetap ada setelah Streamlit restart."""
+    try:
+        payload = {
+            "checked_at": float(checked_at or time.time()),
+            "checked_at_text": _timestamp_to_wib_text(float(checked_at or time.time())),
+            "cache": cache or {},
+            "saved_at": time.time(),
+        }
+
+        with open(
+            model_readiness_state_file,
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                payload,
+                file,
+                ensure_ascii=False,
+                indent=2,
+            )
+    except Exception:
+        pass
+
+
+def load_model_readiness_state_from_file() -> Dict[str, Any]:
+    """Baca status health check persistent dari file JSON."""
+    try:
+        if not model_readiness_state_file or not os.path.exists(model_readiness_state_file):
+            return {}
+
+        with open(
+            model_readiness_state_file,
+            "r",
+            encoding="utf-8",
+        ) as file:
+            payload = json.load(file)
+
+        if not isinstance(payload, dict):
+            return {}
+
+        cache = payload.get("cache") or {}
+
+        if not isinstance(cache, dict):
+            return {}
+
+        return payload
+    except Exception:
+        return {}
+
+
+def hydrate_model_readiness_from_file() -> None:
+    """Isi session health cache dari persistent file jika session masih kosong."""
+    if st.session_state.get("model_health_cache"):
+        return
+
+    payload = load_model_readiness_state_from_file()
+
+    if not payload:
+        return
+
+    cache = payload.get("cache") or {}
+    checked_at = float(payload.get("checked_at") or 0)
+
+    if cache and checked_at:
+        st.session_state.model_health_cache = cache
+        st.session_state.model_health_checked_at = checked_at
+
+
+def is_model_readiness_stale(
+    checked_at_ts: float,
+) -> bool:
+    if not checked_at_ts:
+        return True
+
+    max_age = max(
+        60,
+        int(model_readiness_stale_seconds or 1800),
+    )
+
+    return (time.time() - float(checked_at_ts)) > max_age
+
+
+def build_kb_v2_context_for_prompt(
+    user_query: str,
+    limit: int | None = None,
+) -> Tuple[str, Dict[str, Any]]:
+    """Ambil konteks langsung dari kb_summaries_v2 + kb_chunks_v2."""
+    if not bool(kb_v2_retrieval_enabled):
+        return "", {
+            "kb_v2_used": False,
+            "kb_v2_sources": [],
+            "kb_v2_error": "",
+        }
+
+    try:
+        result = search_kb_v2_context(
+            power_db_path,
+            user_query,
+            limit=int(limit or kb_v2_retrieval_limit or 5),
+            include_archived=False,
+        )
+
+        context = str(result.get("context") or "").strip()
+        sources = result.get("sources") or []
+
+        return context, {
+            "kb_v2_used": bool(context),
+            "kb_v2_sources": sources,
+            "kb_v2_error": "",
+        }
+    except Exception as exc:
+        return "", {
+            "kb_v2_used": False,
+            "kb_v2_sources": [],
+            "kb_v2_error": str(exc)[:700],
+        }
+
+
+
 def get_model_readiness_state(
     route: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
@@ -3247,6 +3397,7 @@ def get_model_readiness_state(
     Ini mengganti status statis seperti "aktif dan siap membantu".
     """
     route = route or {}
+    hydrate_model_readiness_from_file()
     health_cache = st.session_state.get("model_health_cache") or {}
     checked_at_ts = float(st.session_state.get("model_health_checked_at") or 0)
     checked_at = (
@@ -3303,6 +3454,22 @@ def get_model_readiness_state(
             "checked_at": checked_at,
             "active_total": active_total,
             "primary_active": False,
+        }
+
+    if is_model_readiness_stale(checked_at_ts):
+        return {
+            "class": "checking",
+            "label": "Perlu cek ulang",
+            "kicker": "status model sudah basi",
+            "subtitle": (
+                f"Health check terakhir sudah lewat dari {int(model_readiness_stale_seconds or 1800)} detik. "
+                "Klik Cek model di admin untuk memastikan model masih siap."
+            ),
+            "next_model": next_model,
+            "checked_at": checked_at,
+            "active_total": active_total,
+            "primary_active": False,
+            "stale": True,
         }
 
     if primary_active:
@@ -6983,11 +7150,64 @@ def fetch_tavily_live_context(
     query: str,
     max_results: int | None = None,
 ) -> Dict[str, Any]:
-    """Ambil konteks langsung dari Tavily.
+    """Ambil konteks langsung dari Tavily dengan live_cache_v2."""
+    query_clean = str(query or "").strip()
 
-    Ini menjadi jalur paksa untuk pertanyaan info terkini agar jawaban tidak
-    kembali memakai Knowledge Base lama.
-    """
+    cached = None
+
+    try:
+        cached = read_live_cache(
+            power_db_path,
+            query_clean,
+            provider=live_web_fallback_provider or "tavily",
+        )
+    except Exception:
+        cached = None
+
+    if cached:
+        cached_sources = cached.get("sources") or []
+        context_parts = [
+            "KONTEKS LIVE CACHE UNTUK INFO TERKINI",
+            f"Query: {query_clean}",
+            f"Provider: {cached.get('provider', 'tavily')}",
+            f"Cached at: {cached.get('created_at', '')}",
+            f"Expires at: {cached.get('expires_at', '')}",
+            "",
+        ]
+
+        answer = str(cached.get("answer") or "").strip()
+
+        if answer:
+            context_parts.append("Ringkasan cache:")
+            context_parts.append(answer[:1600])
+            context_parts.append("")
+
+        for index, item in enumerate(cached_sources, start=1):
+            title = str(item.get("title") or "").strip()
+            url = str(item.get("url") or "").strip()
+            content = str(item.get("content") or "").strip()
+
+            context_parts.append(f"Sumber cache {index}: {title or 'Tanpa judul'}")
+            if url:
+                context_parts.append(f"URL: {url}")
+            if content:
+                context_parts.append(f"Isi ringkas: {content[:1000]}")
+            context_parts.append("")
+
+        context_parts.append(
+            "Instruksi penggunaan: jawab berdasarkan live cache ini untuk bagian info terkini. "
+            "Jangan memakai Knowledge Base lama jika bertentangan."
+        )
+
+        return {
+            "ok": True,
+            "error": "",
+            "context": "\n".join(context_parts).strip(),
+            "sources": cached_sources,
+            "answer_preview": answer,
+            "cache_hit": True,
+        }
+
     api_key = str(tavily_api_key or os.getenv("TAVILY_API_KEY", "") or "").strip()
 
     if not api_key:
@@ -6996,12 +7216,13 @@ def fetch_tavily_live_context(
             "error": "TAVILY_API_KEY belum terbaca.",
             "context": "",
             "sources": [],
+            "cache_hit": False,
         }
 
     max_results_safe = int(max_results or live_web_fallback_max_results or 4)
 
     payload = {
-        "query": str(query or "").strip(),
+        "query": query_clean,
         "topic": "general",
         "search_depth": "advanced",
         "max_results": max(1, min(max_results_safe, 8)),
@@ -7025,6 +7246,7 @@ def fetch_tavily_live_context(
             "error": "Tavily timeout.",
             "context": "",
             "sources": [],
+            "cache_hit": False,
         }
     except requests.RequestException as exc:
         return {
@@ -7032,6 +7254,7 @@ def fetch_tavily_live_context(
             "error": f"Request Tavily gagal: {exc}",
             "context": "",
             "sources": [],
+            "cache_hit": False,
         }
 
     try:
@@ -7045,6 +7268,7 @@ def fetch_tavily_live_context(
             "error": f"HTTP {response.status_code}: {response.text[:900]}",
             "context": "",
             "sources": [],
+            "cache_hit": False,
         }
 
     results = data.get("results") or []
@@ -7052,7 +7276,7 @@ def fetch_tavily_live_context(
 
     context_parts = [
         "KONTEKS LIVE WEB/TAVILY UNTUK INFO TERKINI",
-        f"Query: {query}",
+        f"Query: {query_clean}",
         f"Waktu cek: {_wib_now_text()}",
         "",
     ]
@@ -7102,6 +7326,7 @@ def fetch_tavily_live_context(
             "error": "Tavily tidak mengembalikan hasil yang bisa dipakai.",
             "context": "",
             "sources": [],
+            "cache_hit": False,
         }
 
     context_parts.append(
@@ -7109,12 +7334,27 @@ def fetch_tavily_live_context(
         "Jangan memakai Knowledge Base lama jika bertentangan dengan konteks live web."
     )
 
+    context = "\n".join(context_parts).strip()
+
+    try:
+        write_live_cache(
+            power_db_path,
+            query=query_clean,
+            provider=live_web_fallback_provider or "tavily",
+            answer=answer_preview,
+            sources=sources,
+            ttl_seconds=int(live_web_fallback_ttl_hours or 24) * 3600,
+        )
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "error": "",
-        "context": "\n".join(context_parts).strip(),
+        "context": context,
         "sources": sources,
         "answer_preview": answer_preview,
+        "cache_hit": False,
     }
 
 
@@ -7124,10 +7364,26 @@ def build_current_info_memory_context(
 ) -> Tuple[str, Dict[str, Any]]:
     """Buat memory context khusus untuk pertanyaan info terkini."""
     if not runtime_options.get("current_info_mode"):
-        return build_memory_text(limit=12), {
+        base_memory = build_memory_text(limit=12)
+        kb_v2_context, kb_v2_meta = build_kb_v2_context_for_prompt(
+            user_query,
+            limit=int(kb_v2_retrieval_limit or 5),
+        )
+
+        merged_sections = [
+            section
+            for section in [
+                base_memory,
+                kb_v2_context,
+            ]
+            if str(section or "").strip()
+        ]
+
+        return "\n\n".join(merged_sections), {
             "live_context_used": False,
             "live_context_error": "",
             "live_sources": [],
+            **kb_v2_meta,
         }
 
     tavily_result = fetch_tavily_live_context(
@@ -7141,6 +7397,7 @@ def build_current_info_memory_context(
             "live_context_error": "",
             "live_sources": tavily_result.get("sources") or [],
             "live_answer_preview": tavily_result.get("answer_preview", ""),
+            "live_cache_hit": bool(tavily_result.get("cache_hit")),
         }
 
     return (
@@ -7749,6 +8006,36 @@ def render_admin_status() -> None:
         f"Cek model terakhir: {checked_at}"
     ).replace(",", ".")
     st.info(status_text)
+
+    with st.expander("Kontrol status model"):
+        col_ready_a, col_ready_b = st.columns(2)
+        with col_ready_a:
+            if st.button(
+                "🔁 Cek model sekarang",
+                use_container_width=True,
+                key="real_status_quick_check_now",
+            ):
+                refresh_model_health_if_needed(
+                    force=True,
+                    scope="quick",
+                )
+                st.success("Quick health check selesai dan status disimpan.")
+                st.rerun()
+        with col_ready_b:
+            if st.button(
+                "🧽 Reset status model tersimpan",
+                use_container_width=True,
+                key="real_status_clear_saved",
+            ):
+                st.session_state.model_health_cache = {}
+                st.session_state.model_health_checked_at = 0.0
+                try:
+                    if os.path.exists(model_readiness_state_file):
+                        os.remove(model_readiness_state_file)
+                except Exception:
+                    pass
+                st.success("Status model tersimpan direset.")
+                st.rerun()
 
 
 def render_mode_selector() -> None:
@@ -9474,6 +9761,7 @@ def render_public_page() -> None:
     cfg = get_runtime_config()
     st.session_state.sound_enabled = True
     render_sound_unlock_script()
+    hydrate_model_readiness_from_file()
     if (
         api_key
         and not st.session_state.get("model_health_cache")
@@ -9968,6 +10256,20 @@ def render_public_page() -> None:
                         meta["direct_tavily_sources"] = current_info_meta.get(
                             "live_sources",
                             [],
+                        )
+                        meta["direct_tavily_cache_hit"] = bool(
+                            current_info_meta.get("live_cache_hit")
+                        )
+                        meta["kb_v2_used"] = bool(
+                            current_info_meta.get("kb_v2_used")
+                        )
+                        meta["kb_v2_sources"] = current_info_meta.get(
+                            "kb_v2_sources",
+                            [],
+                        )
+                        meta["kb_v2_error"] = current_info_meta.get(
+                            "kb_v2_error",
+                            "",
                         )
                     restore_active_model_to_cheap(route.get("primary_model"))
                     answer = sanitize_public_answer(
@@ -10583,6 +10885,75 @@ def render_power_features_admin_panel() -> None:
                                     )
                         except Exception as exc:
                             st.warning(f"KB Manager v2 belum bisa dibaca: {exc}")
+
+                        st.markdown("##### Maintenance KB v2")
+                        col_kbv2_a, col_kbv2_b, col_kbv2_c = st.columns(3)
+
+                        with col_kbv2_a:
+                            if st.button(
+                                "🧹 Reset live cache",
+                                use_container_width=True,
+                                key="kb_v2_clear_live_cache",
+                            ):
+                                try:
+                                    deleted = clear_live_cache(power_db_path)
+                                    st.success(f"Live cache dihapus: {deleted} baris.")
+                                except Exception as exc:
+                                    st.error(f"Gagal reset live cache: {exc}")
+
+                        with col_kbv2_b:
+                            if st.button(
+                                "🗑️ Hapus archived v2",
+                                use_container_width=True,
+                                key="kb_v2_delete_archived",
+                            ):
+                                try:
+                                    result = delete_archived_documents(power_db_path)
+                                    st.success(
+                                        f"Archived terhapus. Dokumen: {result.get('documents_deleted', 0)}, "
+                                        f"chunks: {result.get('chunks_deleted', 0)}"
+                                    )
+                                except Exception as exc:
+                                    st.error(f"Gagal hapus archived: {exc}")
+
+                        with col_kbv2_c:
+                            audit_rows = export_kb_audit_log(power_db_path, limit=500)
+                            st.download_button(
+                                "⬇️ Export audit log",
+                                data=json.dumps(
+                                    audit_rows,
+                                    ensure_ascii=False,
+                                    indent=2,
+                                ),
+                                file_name="kb_audit_log_v2.json",
+                                mime="application/json",
+                                use_container_width=True,
+                                key="kb_v2_export_audit_log",
+                            )
+
+                        with st.expander("Archive dokumen aktif berdasarkan source_id"):
+                            archive_source_id = st.text_input(
+                                "source_id yang akan di-archive",
+                                value="",
+                                key="kb_v2_archive_source_id",
+                            )
+                            if st.button(
+                                "Archive source_id",
+                                use_container_width=True,
+                                key="kb_v2_archive_source_button",
+                            ) and archive_source_id.strip():
+                                try:
+                                    result = archive_documents_by_source(
+                                        power_db_path,
+                                        archive_source_id.strip(),
+                                    )
+                                    st.success(
+                                        f"Diarsipkan. Dokumen: {result.get('documents_archived', 0)}, "
+                                        f"chunks: {result.get('chunks_archived', 0)}"
+                                    )
+                                except Exception as exc:
+                                    st.error(f"Gagal archive source: {exc}")
+
 
                         if st.button(
                             "🧩 Buat/isi kb_sources.json relevan",
