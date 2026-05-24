@@ -166,10 +166,30 @@ def telegram_get_retry_candidates(
     ]
 
 
+TELEGRAM_INTERNAL_POWER_KWARGS = {
+    "active_health_models",
+    "auto_retry_on_model_error_enabled",
+    "auto_retry_on_model_error_max_attempts",
+    "auto_retry_on_model_error_timeout_seconds",
+    "_telegram_auto_retry_depth",
+}
+
+
 def call_generate_power_answer_compat(
     kwargs: Dict[str, Any],
 ) -> tuple[str, Dict[str, Any]]:
-    """Call generate_power_answer while dropping unsupported kwargs."""
+    """Call generate_power_answer while dropping unsupported/internal kwargs.
+
+    Some versions of power_features accept **kwargs, but internal Telegram-only
+    options should still not be forwarded because older implementations may pass
+    them deeper and break the worker thread.
+    """
+    safe_kwargs = {
+        key: value
+        for key, value in dict(kwargs or {}).items()
+        if key not in TELEGRAM_INTERNAL_POWER_KWARGS
+    }
+
     signature = inspect.signature(generate_power_answer)
     parameters = signature.parameters
     accepts_kwargs = any(
@@ -178,15 +198,19 @@ def call_generate_power_answer_compat(
     )
 
     if accepts_kwargs:
-        answer, meta = generate_power_answer(**kwargs)
-        return str(answer or ""), meta if isinstance(meta, dict) else {}
+        answer, meta = generate_power_answer(**safe_kwargs)
+        meta = meta if isinstance(meta, dict) else {}
+        dropped_internal = sorted(set(kwargs or {}) - set(safe_kwargs))
+        if dropped_internal:
+            meta["telegram_internal_dropped_kwargs"] = dropped_internal
+        return str(answer or ""), meta
 
     filtered_kwargs = {
         key: value
-        for key, value in kwargs.items()
+        for key, value in safe_kwargs.items()
         if key in parameters
     }
-    dropped_keys = sorted(set(kwargs) - set(filtered_kwargs))
+    dropped_keys = sorted(set(kwargs or {}) - set(filtered_kwargs))
     answer, meta = generate_power_answer(**filtered_kwargs)
 
     if not isinstance(meta, dict):
@@ -3291,21 +3315,27 @@ class TelegramBotService:
                         local_reply = ""
                         local_meta: Dict[str, Any] = {}
 
-                        greeting_reply, greeting_meta = build_telegram_indonesia_time_greeting_reply(
-                            text
-                        )
-                        if greeting_reply:
-                            local_reply = greeting_reply
-                            local_meta = greeting_meta
+                        try:
+                            greeting_reply, greeting_meta = build_telegram_indonesia_time_greeting_reply(
+                                text
+                            )
+                            if greeting_reply:
+                                local_reply = greeting_reply
+                                local_meta = greeting_meta
+                        except Exception as exc:
+                            self._last_error = f"Telegram local greeting error: {exc}"
 
                         if not local_reply:
-                            cached_reply, cached_meta = get_telegram_frequent_question_cached_answer(
-                                text,
-                                config,
-                            )
-                            if cached_reply:
-                                local_reply = cached_reply
-                                local_meta = cached_meta
+                            try:
+                                cached_reply, cached_meta = get_telegram_frequent_question_cached_answer(
+                                    text,
+                                    config,
+                                )
+                                if cached_reply:
+                                    local_reply = cached_reply
+                                    local_meta = cached_meta
+                            except Exception as exc:
+                                self._last_error = f"Telegram frequent cache read error: {exc}"
 
                         if not local_reply:
                             local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
@@ -3332,6 +3362,7 @@ class TelegramBotService:
                             + "\n\n"
                             + memory.as_prompt_text(limit=20)
                         )
+                        active_health_models: List[str] = []
 
                         if send_processing_message:
                             self._send_message(token, chat_id, "⏳ Sedang diproses...", parse_mode=telegram_parse_mode)
@@ -3355,32 +3386,47 @@ class TelegramBotService:
                             request_allow_expensive = allow_expensive_fallback
                             request_return_to_primary = return_to_primary
 
-                            active_health_models = [
-                                model_name
-                                for model_name, item in (self._model_health_cache or {}).items()
-                                if isinstance(item, dict) and item.get("active")
-                            ]
-                            active_health_models = sorted(
-                                active_health_models,
-                                key=lambda model_name: float(
-                                    (self._model_health_cache.get(model_name, {}) or {}).get("latency_ms", 999999)
-                                    or 999999
-                                ),
-                            )
-                            if bool(config.get("auto_replace_inactive_primary_model", True)):
-                                current_health = (self._model_health_cache or {}).get(request_model, {})
-                                if active_health_models and not current_health.get("active"):
-                                    previous_runtime_model = request_model
-                                    request_model = active_health_models[0]
-                                    model = request_model
-                                    self._runtime_primary_model = request_model
-                                    self._last_model_update_source = "auto_healthy_primary"
-                                    persist_current_runtime_state("auto_healthy_primary")
-                                    request_fallback_models = [
-                                        item
-                                        for item in active_health_models
-                                        if item != request_model
-                                    ] + request_fallback_models
+                            try:
+                                active_health_models = [
+                                    model_name
+                                    for model_name, item in (self._model_health_cache or {}).items()
+                                    if isinstance(item, dict) and item.get("active")
+                                ]
+
+                                def _telegram_latency_value(model_name: str) -> float:
+                                    try:
+                                        value = (
+                                            (self._model_health_cache.get(model_name, {}) or {})
+                                            .get("latency_ms", 999999)
+                                        )
+                                        return float(value or 999999)
+                                    except Exception:
+                                        return 999999.0
+
+                                active_health_models = sorted(
+                                    active_health_models,
+                                    key=_telegram_latency_value,
+                                )
+
+                                if bool(config.get("auto_replace_inactive_primary_model", True)):
+                                    current_health = (self._model_health_cache or {}).get(request_model, {})
+                                    if active_health_models and not current_health.get("active"):
+                                        request_model = active_health_models[0]
+                                        model = request_model
+                                        self._runtime_primary_model = request_model
+                                        self._last_model_update_source = "auto_healthy_primary"
+                                        try:
+                                            persist_current_runtime_state("auto_healthy_primary")
+                                        except Exception as exc:
+                                            self._last_error = f"Telegram auto healthy persist error: {exc}"
+                                        request_fallback_models = [
+                                            item
+                                            for item in active_health_models
+                                            if item != request_model
+                                        ] + request_fallback_models
+                            except Exception as exc:
+                                self._last_error = f"Telegram auto healthy primary error: {exc}"
+                                active_health_models = []
 
                             fast_normal_mode = False
 
@@ -3619,7 +3665,7 @@ class TelegramBotService:
                                     and live_scraping_needed
                                 ),
                                 live_web_fallback_topic=request_live_web_topic,
-                                active_health_models=active_health_models,
+                                active_health_models=(active_health_models if 'active_health_models' in locals() else []),
                                 auto_retry_on_model_error_enabled=bool(
                                     config.get("auto_retry_on_model_error_enabled", True)
                                 ),
@@ -3664,13 +3710,16 @@ class TelegramBotService:
                                     config.get("auto_replace_inactive_primary_model", True)
                                 )
 
-                            if save_telegram_frequent_question_cached_answer(
-                                text,
-                                answer,
-                                meta if isinstance(meta, dict) else {},
-                                config,
-                            ) and isinstance(meta, dict):
-                                meta["telegram_frequent_question_cache_saved"] = True
+                            try:
+                                if save_telegram_frequent_question_cached_answer(
+                                    text,
+                                    answer,
+                                    meta if isinstance(meta, dict) else {},
+                                    config,
+                                ) and isinstance(meta, dict):
+                                    meta["telegram_frequent_question_cache_saved"] = True
+                            except Exception as exc:
+                                self._last_error = f"Telegram frequent cache save error: {exc}"
 
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})
