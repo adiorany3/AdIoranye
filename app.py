@@ -1374,7 +1374,7 @@ def init_state() -> None:
         )
 
     if "sound_enabled" not in st.session_state:
-        st.session_state.sound_enabled = bool(answer_sound_enabled) and not bool(frontend_ultra_safe_mode)
+        st.session_state.sound_enabled = bool(message_effects_enabled and answer_sound_enabled)
     if "public_rate_events" not in st.session_state:
         st.session_state.public_rate_events = []
     if "model_runtime_blocks" not in st.session_state:
@@ -1545,17 +1545,21 @@ frontend_ultra_safe_mode = parse_bool(
     get_secret("FRONTEND_ULTRA_SAFE_MODE", True),
     default=True,
 )
+message_effects_enabled = parse_bool(
+    get_secret("MESSAGE_EFFECTS_ENABLED", True),
+    default=True,
+)
 custom_components_enabled = parse_bool(
-    get_secret("CUSTOM_COMPONENTS_ENABLED", False),
-    default=False,
+    get_secret("CUSTOM_COMPONENTS_ENABLED", True),
+    default=True,
 )
 auto_scroll_enabled = parse_bool(
-    get_secret("AUTO_SCROLL_ENABLED", False),
-    default=False,
+    get_secret("AUTO_SCROLL_ENABLED", True),
+    default=True,
 )
 answer_sound_enabled = parse_bool(
-    get_secret("ANSWER_SOUND_ENABLED", False),
-    default=False,
+    get_secret("ANSWER_SOUND_ENABLED", True),
+    default=True,
 )
 typewriter_enabled = parse_bool(
     get_secret("TYPEWRITER_ENABLED", False),
@@ -8432,18 +8436,182 @@ def render_auto_scroll_script(
     target: str = "latest",
     delay_ms: int = 120,
 ) -> None:
-    """Disabled: auto-scroll JS dimatikan total untuk menghindari React #185."""
-    return
+    """Auto-scroll one-shot ke pesan terakhir.
+
+    Tidak memakai polling, interval, fragment, atau reload. Hanya komponen kecil
+    sekali render untuk mengarahkan layar ke pesan terakhir.
+    """
+    if not bool(message_effects_enabled and custom_components_enabled and auto_scroll_enabled):
+        return
+
+    safe_target = _html_escape(str(target or "latest"))
+    safe_delay = max(0, min(800, int(delay_ms or 0)))
+    scroll_key = f"{safe_target}-{int(time.time() * 1000)}"
+
+    components.html(
+        f"""
+        <script>
+        (function () {{
+            const key = "adioranye-scroll-{scroll_key}";
+            try {{
+                const parentWindow = window.parent || window;
+                if (parentWindow.__adioranyeLastScrollKey === key) {{
+                    return;
+                }}
+                parentWindow.__adioranyeLastScrollKey = key;
+
+                const run = function () {{
+                    try {{
+                        const doc = parentWindow.document || document;
+                        const candidates = doc.querySelectorAll(
+                            'div[data-testid="stChatMessage"], .auto-scroll-anchor, .ai-loading-card'
+                        );
+                        const targetElement = candidates && candidates.length
+                            ? candidates[candidates.length - 1]
+                            : doc.body;
+
+                        if (targetElement && targetElement.scrollIntoView) {{
+                            targetElement.scrollIntoView({{
+                                behavior: "smooth",
+                                block: "{'center' if safe_target == 'loading' else 'end'}",
+                                inline: "nearest"
+                            }});
+                        }}
+                    }} catch (err) {{}}
+                }};
+
+                if ({safe_delay} > 0) {{
+                    window.setTimeout(run, {safe_delay});
+                }} else if (window.requestAnimationFrame) {{
+                    window.requestAnimationFrame(run);
+                }} else {{
+                    run();
+                }}
+            }} catch (err) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
 
 def render_sound_unlock_script() -> None:
-    """Disabled: audio bridge dimatikan total untuk menghindari React #185."""
-    return
+    """Siapkan izin suara secara best-effort.
+
+    Browser modern bisa tetap membatasi autoplay. Script ini hanya menandai
+    bahwa efek suara boleh dicoba setelah user berinteraksi dengan halaman.
+    """
+    if not bool(message_effects_enabled and custom_components_enabled and answer_sound_enabled):
+        return
+
+    components.html(
+        """
+        <script>
+        (function () {
+            try {
+                const parentWindow = window.parent || window;
+                parentWindow.__adioranyeSoundEnabled = true;
+
+                const unlock = function () {
+                    try {
+                        parentWindow.__adioranyeSoundEnabled = true;
+                        parentWindow.removeEventListener("pointerdown", unlock, true);
+                        parentWindow.removeEventListener("keydown", unlock, true);
+                    } catch (err) {}
+                };
+
+                parentWindow.addEventListener("pointerdown", unlock, true);
+                parentWindow.addEventListener("keydown", unlock, true);
+            } catch (err) {}
+        })();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
 
 def render_answer_ready_sound_script(
     sound_key: str = "latest",
 ) -> None:
-    """Disabled: sound notification dimatikan total untuk menghindari React #185."""
-    return
+    """Mainkan suara pendek saat jawaban baru muncul.
+
+    Efek ini one-shot berdasarkan `sound_key`, sehingga tidak berbunyi berulang
+    pada render yang sama.
+    """
+    if (
+        not bool(message_effects_enabled and custom_components_enabled and answer_sound_enabled)
+        or not bool(st.session_state.get("sound_enabled", False))
+    ):
+        return
+
+    safe_key = _html_escape(str(sound_key or "latest"))
+
+    components.html(
+        f"""
+        <script>
+        (function () {{
+            try {{
+                const parentWindow = window.parent || window;
+                const key = "adioranye-answer-sound-{safe_key}";
+
+                if (parentWindow.__adioranyeLastSoundKey === key) {{
+                    return;
+                }}
+                parentWindow.__adioranyeLastSoundKey = key;
+
+                const AudioContextClass =
+                    parentWindow.AudioContext ||
+                    parentWindow.webkitAudioContext ||
+                    window.AudioContext ||
+                    window.webkitAudioContext;
+
+                if (!AudioContextClass) {{
+                    return;
+                }}
+
+                const audioContext = new AudioContextClass();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.type = "sine";
+                oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(
+                    660,
+                    audioContext.currentTime + 0.16
+                );
+
+                gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(
+                    0.12,
+                    audioContext.currentTime + 0.018
+                );
+                gainNode.gain.exponentialRampToValueAtTime(
+                    0.0001,
+                    audioContext.currentTime + 0.18
+                );
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                const startSound = function () {{
+                    try {{
+                        oscillator.start();
+                        oscillator.stop(audioContext.currentTime + 0.20);
+                    }} catch (err) {{}}
+                }};
+
+                if (audioContext.state === "suspended") {{
+                    audioContext.resume().then(startSound).catch(function () {{}});
+                }} else {{
+                    startSound();
+                }}
+            }} catch (err) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+        scrolling=False,
+    )
 
 def _get_public_stats() -> Dict[str, Any]:
     stats = st.session_state.get("public_usage_stats") or {}
@@ -9788,6 +9956,7 @@ def get_runtime_config() -> Dict[str, Any]:
         "maintenance_fragment_enabled": bool(maintenance_fragment_enabled),
         "maintenance_browser_reload_enabled": bool(maintenance_browser_reload_enabled),
         "frontend_ultra_safe_mode": bool(frontend_ultra_safe_mode),
+        "message_effects_enabled": bool(message_effects_enabled),
         "custom_components_enabled": bool(custom_components_enabled),
         "auto_scroll_enabled": bool(auto_scroll_enabled),
         "answer_sound_enabled": bool(answer_sound_enabled),
@@ -9924,10 +10093,10 @@ def render_admin_status() -> None:
         )
         st.caption(
             f"Frontend ultra-safe: {'ON' if frontend_ultra_safe_mode else 'OFF'}; "
-            f"custom JS/components: {'ON' if custom_components_enabled else 'OFF'}; "
-            f"auto-refresh lock: {'ON' if maintenance_auto_refresh_enabled else 'OFF'}; "
-            f"hide chat locked: {'ON' if maintenance_hide_chat_when_locked else 'OFF'}; "
-            f"interval: {maintenance_auto_refresh_interval_seconds} detik."
+            f"message effects: {'ON' if message_effects_enabled else 'OFF'}; "
+            f"sound: {'ON' if answer_sound_enabled else 'OFF'}; "
+            f"auto-scroll: {'ON' if auto_scroll_enabled else 'OFF'}; "
+            f"refresh lock: {'ON' if maintenance_auto_refresh_enabled else 'OFF'}."
         )
 
     with st.expander("Cache pertanyaan sering muncul"):
@@ -12336,8 +12505,10 @@ def render_public_page() -> None:
     # Public Chat UI
     # =========================
     cfg = get_runtime_config()
-    if bool(frontend_ultra_safe_mode):
-        st.session_state.sound_enabled = False
+    st.session_state.sound_enabled = bool(
+        message_effects_enabled
+        and answer_sound_enabled
+    )
     render_sound_unlock_script()
     hydrate_model_readiness_from_file()
     if parse_bool(get_secret("MODEL_READINESS_AUTO_QUICK_CHECK", True), default=True):
@@ -13124,6 +13295,15 @@ def render_public_page() -> None:
                         else:
                             st.markdown(answer)
 
+                if not is_public_connection_error_answer(answer, meta=meta):
+                    render_answer_ready_sound_script(
+                        sound_key=f"model-{len(st.session_state.chat_messages)}-{int(time.time() * 1000)}",
+                    )
+                    render_auto_scroll_script(
+                        target="latest",
+                        delay_ms=80,
+                    )
+
         if local_reply:
             with st.chat_message("assistant"):
                 st.markdown(answer)
@@ -13133,7 +13313,11 @@ def render_public_page() -> None:
                     and not is_public_connection_error_answer(answer, meta=meta)
                 ):
                     render_answer_ready_sound_script(
-                        sound_key=f"local-{len(st.session_state.chat_messages)}",
+                        sound_key=f"local-{len(st.session_state.chat_messages)}-{int(time.time() * 1000)}",
+                    )
+                    render_auto_scroll_script(
+                        target="latest",
+                        delay_ms=80,
                     )
                 answer_pdf_download_button(answer, key="download_pdf_local_reply")
 
