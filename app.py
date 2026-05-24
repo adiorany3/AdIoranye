@@ -365,22 +365,37 @@ def generate_maintenance_access_key(
     note: str = "",
     created_by: str = "admin",
     max_questions: int | None = None,
+    key_value: str = "",
+    unlimited: bool = False,
 ) -> Dict[str, Any]:
     state = read_maintenance_access_key_state()
     keys = state.setdefault("keys", {})
-    max_uses = max(1, int(max_questions or maintenance_access_key_max_questions or 5))
 
-    for _ in range(20):
-        raw = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
-        key = normalize_maintenance_access_key(f"AK-{raw}")
-        if key not in keys:
-            break
+    is_unlimited = bool(unlimited)
+    max_uses = 0 if is_unlimited else max(
+        1,
+        int(max_questions or maintenance_access_key_max_questions or 5),
+    )
+
+    custom_key = normalize_maintenance_access_key(key_value)
+
+    if custom_key:
+        key = custom_key
+        if key in keys:
+            raise ValueError(f"Access key sudah ada: {key}")
     else:
-        key = normalize_maintenance_access_key(f"AK-{int(time.time())}")
+        for _ in range(20):
+            raw = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
+            key = normalize_maintenance_access_key(f"AK-{raw}")
+            if key not in keys:
+                break
+        else:
+            key = normalize_maintenance_access_key(f"AK-{int(time.time())}")
 
     record = {
         "key": key,
         "active": True,
+        "unlimited": is_unlimited,
         "max_uses": max_uses,
         "used": 0,
         "note": str(note or "").strip(),
@@ -393,7 +408,6 @@ def generate_maintenance_access_key(
     write_maintenance_access_key_state(state)
     return record
 
-
 def validate_maintenance_access_key(value: Any) -> Dict[str, Any]:
     key = normalize_maintenance_access_key(value)
     state = read_maintenance_access_key_state()
@@ -401,13 +415,32 @@ def validate_maintenance_access_key(value: Any) -> Dict[str, Any]:
 
     if not key:
         return {"valid": False, "key": "", "reason": "empty", "remaining": 0}
+
     if not isinstance(record, dict):
         return {"valid": False, "key": key, "reason": "not_found", "remaining": 0}
+
     if not bool(record.get("active", True)):
         return {"valid": False, "key": key, "reason": "inactive", "remaining": 0, "record": record}
 
-    max_uses = max(1, int(record.get("max_uses") or maintenance_access_key_max_questions or 5))
     used = max(0, int(record.get("used") or 0))
+    is_unlimited = bool(record.get("unlimited", False))
+
+    if is_unlimited:
+        return {
+            "valid": True,
+            "key": key,
+            "reason": "ok",
+            "remaining": "unlimited",
+            "unlimited": True,
+            "max_uses": 0,
+            "used": used,
+            "record": record,
+        }
+
+    max_uses = max(
+        1,
+        int(record.get("max_uses") or maintenance_access_key_max_questions or 5),
+    )
     remaining = max(0, max_uses - used)
 
     if remaining <= 0:
@@ -418,15 +451,16 @@ def validate_maintenance_access_key(value: Any) -> Dict[str, Any]:
         "key": key,
         "reason": "ok",
         "remaining": remaining,
+        "unlimited": False,
         "max_uses": max_uses,
         "used": used,
         "record": record,
     }
 
-
 def consume_maintenance_access_question(value: Any, used_by: str = "web-public") -> Dict[str, Any]:
     key = normalize_maintenance_access_key(value)
     validation = validate_maintenance_access_key(key)
+
     if not validation.get("valid"):
         validation["allowed"] = False
         return validation
@@ -434,6 +468,7 @@ def consume_maintenance_access_question(value: Any, used_by: str = "web-public")
     state = read_maintenance_access_key_state()
     keys = state.setdefault("keys", {})
     record = keys.get(key)
+
     if not isinstance(record, dict):
         validation["allowed"] = False
         validation["reason"] = "not_found"
@@ -449,7 +484,6 @@ def consume_maintenance_access_question(value: Any, used_by: str = "web-public")
     refreshed["allowed"] = True
     refreshed["used_now"] = int(record.get("used") or 0)
     return refreshed
-
 
 def revoke_maintenance_access_key(value: Any, revoked_by: str = "admin") -> Dict[str, Any]:
     key = normalize_maintenance_access_key(value)
@@ -474,9 +508,13 @@ def get_current_maintenance_access_key_status() -> Dict[str, Any]:
 
 
 def render_maintenance_access_key_active_notice(status: Dict[str, Any]) -> None:
-    remaining = int(status.get("remaining") or 0)
     key = str(status.get("key") or "")
-    st.success(f"Access key akses terbatas aktif. Sisa kuota: {remaining} pertanyaan.")
+    if bool(status.get("unlimited")):
+        st.success("Access key akses terbatas aktif. Kuota: unlimited.")
+    else:
+        remaining = int(status.get("remaining") or 0)
+        st.success(f"Access key akses terbatas aktif. Sisa kuota: {remaining} pertanyaan.")
+
     with st.expander("Detail access key", expanded=False):
         st.code(key)
         if st.button("Keluar dari access key", use_container_width=True, key="maintenance_access_key_logout"):
@@ -484,11 +522,10 @@ def render_maintenance_access_key_active_notice(status: Dict[str, Any]) -> None:
             st.session_state.maintenance_access_key_status = {}
             st.rerun()
 
-
 def render_maintenance_access_key_form(state: Dict[str, Any] | None = None) -> None:
     st.info(
-        "Jika Anda punya access key dari admin, masukkan key agar tetap bisa chat maksimal "
-        f"{maintenance_access_key_max_questions} pertanyaan selama maintenance."
+        "Jika Anda punya access key dari admin, masukkan key agar tetap bisa chat selama akses terbatas. "
+        "Kuota mengikuti pengaturan key: angka tertentu atau unlimited."
     )
     with st.form("maintenance_access_key_form", clear_on_submit=False):
         key_value = st.text_input(
@@ -501,11 +538,17 @@ def render_maintenance_access_key_form(state: Dict[str, Any] | None = None) -> N
     if submitted:
         key = normalize_maintenance_access_key(key_value)
         status = validate_maintenance_access_key(key)
+
         if status.get("valid"):
             st.session_state.maintenance_access_key = key
             st.session_state.maintenance_access_key_input = ""
             st.session_state.maintenance_access_key_status = status
-            st.success(f"Access key valid. Sisa kuota: {int(status.get('remaining') or 0)} pertanyaan.")
+
+            if bool(status.get("unlimited")):
+                st.success("Access key valid. Kuota: unlimited.")
+            else:
+                st.success(f"Access key valid. Sisa kuota: {int(status.get('remaining') or 0)} pertanyaan.")
+
             st.rerun()
 
         reason = status.get("reason")
@@ -516,24 +559,44 @@ def render_maintenance_access_key_form(state: Dict[str, Any] | None = None) -> N
         else:
             st.error("Access key tidak valid.")
 
-
 def maintenance_access_key_summary() -> Dict[str, Any]:
     state = read_maintenance_access_key_state()
     keys = state.get("keys") or {}
     total = len(keys)
     active = 0
     exhausted = 0
+    unlimited = 0
+
     for record in keys.values():
         if not isinstance(record, dict):
             continue
-        max_uses = max(1, int(record.get("max_uses") or maintenance_access_key_max_questions or 5))
+
         used = max(0, int(record.get("used") or 0))
+        is_unlimited = bool(record.get("unlimited", False))
+
+        if is_unlimited:
+            if bool(record.get("active", True)):
+                active += 1
+                unlimited += 1
+            continue
+
+        max_uses = max(
+            1,
+            int(record.get("max_uses") or maintenance_access_key_max_questions or 5),
+        )
+
         if bool(record.get("active", True)) and used < max_uses:
             active += 1
+
         if used >= max_uses:
             exhausted += 1
-    return {"total": total, "active": active, "exhausted": exhausted}
 
+    return {
+        "total": total,
+        "active": active,
+        "exhausted": exhausted,
+        "unlimited": unlimited,
+    }
 
 def is_maintenance_locked() -> bool:
     return bool(read_maintenance_lock_state().get("locked"))
@@ -10451,7 +10514,13 @@ def render_admin_status() -> None:
         st.divider()
         st.markdown("##### 🔑 Access key akses terbatas")
         st.caption(
-            f"User yang punya key tetap bisa chat saat akses terbatas aktif, maksimal {maintenance_access_key_max_questions} pertanyaan per key."
+            "User yang punya key tetap bisa chat saat akses terbatas aktif. Kuota bisa angka tertentu atau unlimited."
+        )
+        key_custom_value = st.text_input(
+            "Custom key opsional",
+            value="",
+            placeholder="Contoh: VIP-USER-A. Kosongkan untuk generate otomatis.",
+            key="maintenance_access_key_custom_value",
         )
         key_note = st.text_input(
             "Catatan key",
@@ -10459,21 +10528,42 @@ def render_admin_status() -> None:
             placeholder="Contoh: akses sementara untuk user A",
             key="maintenance_access_key_note",
         )
-        col_key_a, col_key_b, col_key_c = st.columns(3)
+        key_unlimited = st.checkbox(
+            "Unlimited",
+            value=False,
+            key="maintenance_access_key_unlimited",
+        )
+        key_quota = st.number_input(
+            "Jumlah akses/pertanyaan",
+            min_value=1,
+            max_value=1000000,
+            value=int(maintenance_access_key_max_questions or 5),
+            step=1,
+            disabled=key_unlimited,
+            key="maintenance_access_key_quota",
+        )
+        col_key_a, col_key_b, col_key_c, col_key_d = st.columns(4)
         with col_key_a:
             if st.button("Generate access key", use_container_width=True, key="generate_maintenance_access_key_btn"):
-                new_key_record = generate_maintenance_access_key(
-                    note=key_note,
-                    created_by=admin_username,
-                    max_questions=maintenance_access_key_max_questions,
-                )
-                st.session_state.latest_maintenance_access_key = new_key_record.get("key", "")
-                st.success("Access key berhasil dibuat.")
-                st.rerun()
+                try:
+                    new_key_record = generate_maintenance_access_key(
+                        note=key_note,
+                        created_by=admin_username,
+                        max_questions=int(key_quota),
+                        key_value=key_custom_value,
+                        unlimited=bool(key_unlimited),
+                    )
+                    st.session_state.latest_maintenance_access_key = new_key_record.get("key", "")
+                    st.success("Access key berhasil dibuat.")
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
         summary = maintenance_access_key_summary()
         with col_key_b:
             st.metric("Key aktif", summary.get("active", 0))
         with col_key_c:
+            st.metric("Unlimited", summary.get("unlimited", 0))
+        with col_key_d:
             st.metric("Key total", summary.get("total", 0))
 
         latest_key = str(st.session_state.get("latest_maintenance_access_key") or "")
@@ -10486,9 +10576,10 @@ def render_admin_status() -> None:
         for record in (access_state.get("keys") or {}).values():
             if not isinstance(record, dict):
                 continue
-            max_uses = int(record.get("max_uses") or maintenance_access_key_max_questions or 5)
             used = int(record.get("used") or 0)
-            if bool(record.get("active", True)) and used < max_uses:
+            is_unlimited = bool(record.get("unlimited", False))
+            max_uses = int(record.get("max_uses") or maintenance_access_key_max_questions or 5)
+            if bool(record.get("active", True)) and (is_unlimited or used < max_uses):
                 active_records.append(record)
 
         if active_records:
@@ -10496,9 +10587,11 @@ def render_admin_status() -> None:
                 for idx, record in enumerate(sorted(active_records, key=lambda item: str(item.get("created_at") or ""), reverse=True)[:20]):
                     key = str(record.get("key") or "")
                     used = int(record.get("used") or 0)
+                    is_unlimited = bool(record.get("unlimited", False))
                     max_uses = int(record.get("max_uses") or maintenance_access_key_max_questions or 5)
+                    quota_label = "unlimited" if is_unlimited else f"{used}/{max_uses} terpakai"
                     note = str(record.get("note") or "")
-                    st.markdown(f"**{_html_escape(key)}** — {used}/{max_uses} terpakai" + (f" — {_html_escape(note)}" if note else ""))
+                    st.markdown(f"**{_html_escape(key)}** — {quota_label}" + (f" — {_html_escape(note)}" if note else ""))
                     if st.button("Nonaktifkan", key=f"revoke_maintenance_key_{idx}_{key}", use_container_width=True):
                         revoke_maintenance_access_key(key, revoked_by=admin_username)
                         st.success(f"Key {key} dinonaktifkan.")
@@ -13301,8 +13394,11 @@ def render_public_page() -> None:
 
         if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
             if maintenance_question_access_status:
-                remaining_after_access = int(maintenance_question_access_status.get("remaining") or 0)
-                st.caption(f"Access key akses terbatas: sisa {remaining_after_access} pertanyaan setelah ini.")
+                if bool(maintenance_question_access_status.get("unlimited")):
+                    st.caption("Access key akses terbatas: kuota unlimited.")
+                else:
+                    remaining_after_access = int(maintenance_question_access_status.get("remaining") or 0)
+                    st.caption(f"Access key akses terbatas: sisa {remaining_after_access} pertanyaan setelah ini.")
 
         allowed_request, rate_limit_message = check_public_rate_limit(user_input)
 

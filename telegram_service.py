@@ -1957,7 +1957,8 @@ def build_telegram_admin_control_help() -> str:
         "Akses terbatas:",
         "• /lock [catatan] — aktifkan akses terbatas untuk publik dan Telegram non-admin",
         "• /unlock [catatan] — buka kembali akses publik",
-        "• /key generate [catatan] — buat access key akses terbatas 5 pertanyaan",
+        "• /key generate [jumlah|unlimited] [catatan] — buat key otomatis",
+        "• /key create KEY [jumlah|unlimited] [catatan] — buat custom key",
         "• /keys — lihat access key akses terbatas aktif",
         "• /key revoke AK-XXXX — nonaktifkan key",
         "• /access AK-XXXX — user mengaktifkan key saat akses terbatas",
@@ -2107,20 +2108,32 @@ def telegram_generate_maintenance_access_key(
     note: str = "",
     created_by: str = "telegram-admin",
     max_questions: int = 5,
+    key_value: str = "",
+    unlimited: bool = False,
 ) -> Dict[str, Any]:
     state = telegram_read_maintenance_access_state(access_file)
     keys = state.setdefault("keys", {})
-    max_uses = max(1, int(max_questions or 5))
-    for _ in range(20):
-        raw = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
-        key = telegram_normalize_maintenance_access_key(f"AK-{raw}")
-        if key not in keys:
-            break
+    is_unlimited = bool(unlimited)
+    max_uses = 0 if is_unlimited else max(1, int(max_questions or 5))
+    custom_key = telegram_normalize_maintenance_access_key(key_value)
+
+    if custom_key:
+        key = custom_key
+        if key in keys:
+            raise ValueError(f"Access key sudah ada: {key}")
     else:
-        key = telegram_normalize_maintenance_access_key(f"AK-{int(time.time())}")
+        for _ in range(20):
+            raw = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
+            key = telegram_normalize_maintenance_access_key(f"AK-{raw}")
+            if key not in keys:
+                break
+        else:
+            key = telegram_normalize_maintenance_access_key(f"AK-{int(time.time())}")
+
     record = {
         "key": key,
         "active": True,
+        "unlimited": is_unlimited,
         "max_uses": max_uses,
         "used": 0,
         "note": str(note or "").strip(),
@@ -2133,24 +2146,37 @@ def telegram_generate_maintenance_access_key(
     telegram_write_maintenance_access_state(access_file, state)
     return record
 
-
 def telegram_validate_maintenance_access_key(access_file: str, value: Any, default_max_questions: int = 5) -> Dict[str, Any]:
     key = telegram_normalize_maintenance_access_key(value)
     state = telegram_read_maintenance_access_state(access_file)
     record = (state.get("keys") or {}).get(key)
+
     if not key:
         return {"valid": False, "key": "", "reason": "empty", "remaining": 0}
     if not isinstance(record, dict):
         return {"valid": False, "key": key, "reason": "not_found", "remaining": 0}
     if not bool(record.get("active", True)):
         return {"valid": False, "key": key, "reason": "inactive", "remaining": 0, "record": record}
-    max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
+
     used = max(0, int(record.get("used") or 0))
+    if bool(record.get("unlimited", False)):
+        return {
+            "valid": True,
+            "key": key,
+            "reason": "ok",
+            "remaining": "unlimited",
+            "unlimited": True,
+            "max_uses": 0,
+            "used": used,
+            "record": record,
+        }
+
+    max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
     remaining = max(0, max_uses - used)
     if remaining <= 0:
         return {"valid": False, "key": key, "reason": "quota_exhausted", "remaining": 0, "record": record}
-    return {"valid": True, "key": key, "reason": "ok", "remaining": remaining, "max_uses": max_uses, "used": used, "record": record}
 
+    return {"valid": True, "key": key, "reason": "ok", "remaining": remaining, "unlimited": False, "max_uses": max_uses, "used": used, "record": record}
 
 def telegram_consume_maintenance_access_question(
     access_file: str,
@@ -2163,6 +2189,7 @@ def telegram_consume_maintenance_access_question(
     if not validation.get("valid"):
         validation["allowed"] = False
         return validation
+
     state = telegram_read_maintenance_access_state(access_file)
     keys = state.setdefault("keys", {})
     record = keys.get(key)
@@ -2170,16 +2197,17 @@ def telegram_consume_maintenance_access_question(
         validation["allowed"] = False
         validation["reason"] = "not_found"
         return validation
+
     record["used"] = int(record.get("used") or 0) + 1
     record["last_used_at"] = _wib_now_text()
     record["last_used_by"] = str(used_by or "telegram-user")
     keys[key] = record
     telegram_write_maintenance_access_state(access_file, state)
+
     refreshed = telegram_validate_maintenance_access_key(access_file, key, default_max_questions)
     refreshed["allowed"] = True
     refreshed["used_now"] = int(record.get("used") or 0)
     return refreshed
-
 
 def telegram_revoke_maintenance_access_key(access_file: str, value: Any, revoked_by: str = "telegram-admin") -> Dict[str, Any]:
     key = telegram_normalize_maintenance_access_key(value)
@@ -2194,6 +2222,53 @@ def telegram_revoke_maintenance_access_key(access_file: str, value: Any, revoked
     keys[key] = record
     telegram_write_maintenance_access_state(access_file, state)
     return {"ok": True, "key": key, "record": record}
+
+
+
+def telegram_parse_access_key_create_args(raw_arg: str, default_max_questions: int = 5) -> Dict[str, Any]:
+    """Parse:
+    - /key generate 20 catatan
+    - /key generate unlimited catatan
+    - /key create CUSTOMKEY 20 catatan
+    - /key create CUSTOMKEY unlimited catatan
+    """
+    arg = str(raw_arg or "").strip()
+    parts = arg.split()
+    action = parts[0].lower() if parts else "list"
+    rest = parts[1:]
+
+    result: Dict[str, Any] = {
+        "action": action,
+        "key_value": "",
+        "max_questions": int(default_max_questions or 5),
+        "unlimited": False,
+        "note": "",
+    }
+
+    if action in {"create", "custom", "buatcustom", "key"}:
+        if rest:
+            result["key_value"] = rest[0]
+            rest = rest[1:]
+    elif action not in {"generate", "gen", "buat", "baru", "new"}:
+        result["note"] = " ".join(rest)
+        return result
+
+    if rest:
+        quota_token = rest[0].lower()
+        if quota_token in {"unlimited", "unlimit", "tanpabatas", "tanpa_batas", "bebas", "∞"}:
+            result["unlimited"] = True
+            rest = rest[1:]
+        else:
+            try:
+                quota_value = int(quota_token)
+                if quota_value > 0:
+                    result["max_questions"] = quota_value
+                    rest = rest[1:]
+            except ValueError:
+                pass
+
+    result["note"] = " ".join(rest).strip()
+    return result
 
 
 def telegram_access_key_admin_command(text: str) -> str:
@@ -2211,24 +2286,49 @@ def telegram_build_access_key_list(access_file: str, default_max_questions: int 
     keys = state.get("keys") or {}
     active_records = []
     exhausted = 0
+    unlimited_count = 0
+
     for record in keys.values():
         if not isinstance(record, dict):
             continue
-        max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
+
         used = max(0, int(record.get("used") or 0))
+        is_unlimited = bool(record.get("unlimited", False))
+
+        if is_unlimited:
+            if bool(record.get("active", True)):
+                unlimited_count += 1
+                active_records.append(record)
+            continue
+
+        max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
         if used >= max_uses:
             exhausted += 1
         if bool(record.get("active", True)) and used < max_uses:
             active_records.append(record)
-    lines = ["🔑 Access key akses terbatas", f"Aktif: {len(active_records)}", f"Habis: {exhausted}", f"Total: {len(keys)}"]
+
+    lines = [
+        "🔑 Access key akses terbatas",
+        f"Aktif: {len(active_records)}",
+        f"Unlimited: {unlimited_count}",
+        f"Habis: {exhausted}",
+        f"Total: {len(keys)}",
+    ]
+
     for idx, record in enumerate(sorted(active_records, key=lambda item: str(item.get("created_at") or ""), reverse=True)[:10], start=1):
         key = str(record.get("key") or "")
         used = int(record.get("used") or 0)
-        max_uses = int(record.get("max_uses") or default_max_questions or 5)
         note = str(record.get("note") or "")
-        lines.append(f"{idx}. {key} — {used}/{max_uses}" + (f" — {note}" if note else ""))
-    return "\n".join(lines)
 
+        if bool(record.get("unlimited", False)):
+            quota_label = f"unlimited, terpakai {used}"
+        else:
+            max_uses = int(record.get("max_uses") or default_max_questions or 5)
+            quota_label = f"{used}/{max_uses}"
+
+        lines.append(f"{idx}. {key} — {quota_label}" + (f" — {note}" if note else ""))
+
+    return "\n".join(lines)
 
 def telegram_is_maintenance_command(text: str) -> bool:
     raw = str(text or "").strip()
@@ -4088,23 +4188,42 @@ class TelegramBotService:
                             action = arg_parts[0].lower() if arg_parts else "list"
                             action_arg = arg_parts[1].strip() if len(arg_parts) > 1 else ""
 
-                            if action in {"generate", "gen", "buat", "baru", "new"}:
-                                record = telegram_generate_maintenance_access_key(
-                                    maintenance_access_key_file,
-                                    note=action_arg,
-                                    created_by=f"telegram:{chat_id}",
-                                    max_questions=maintenance_access_key_max_questions,
+                            if action in {"generate", "gen", "buat", "baru", "new", "create", "custom", "buatcustom", "key"}:
+                                create_args = telegram_parse_access_key_create_args(
+                                    arg,
+                                    default_max_questions=maintenance_access_key_max_questions,
                                 )
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "🔑 Access key dibuat.\n\n"
-                                    f"Key: {record.get('key')}\n"
-                                    f"Kuota: {record.get('max_uses')} pertanyaan\n"
-                                    f"Catatan: {record.get('note') or '-'}\n\n"
-                                    "Kirim ke user. User dapat memakai: /access KEY",
-                                    parse_mode=telegram_parse_mode,
-                                )
+                                try:
+                                    record = telegram_generate_maintenance_access_key(
+                                        maintenance_access_key_file,
+                                        note=create_args.get("note", ""),
+                                        created_by=f"telegram:{chat_id}",
+                                        max_questions=int(create_args.get("max_questions") or maintenance_access_key_max_questions),
+                                        key_value=str(create_args.get("key_value") or ""),
+                                        unlimited=bool(create_args.get("unlimited")),
+                                    )
+                                    quota_label = (
+                                        "unlimited"
+                                        if record.get("unlimited")
+                                        else f"{record.get('max_uses')} pertanyaan"
+                                    )
+                                    self._send_message(
+                                        token,
+                                        chat_id,
+                                        "🔑 Access key dibuat.\n\n"
+                                        f"Key: {record.get('key')}\n"
+                                        f"Kuota: {quota_label}\n"
+                                        f"Catatan: {record.get('note') or '-'}\n\n"
+                                        "Kirim ke user. User dapat memakai: /access KEY",
+                                        parse_mode=telegram_parse_mode,
+                                    )
+                                except ValueError as exc:
+                                    self._send_message(
+                                        token,
+                                        chat_id,
+                                        "❌ Gagal membuat access key.\n\n" + str(exc),
+                                        parse_mode=telegram_parse_mode,
+                                    )
                                 continue
 
                             if action in {"revoke", "off", "nonaktif", "hapus"}:
@@ -4137,10 +4256,11 @@ class TelegramBotService:
                             )
                             if status.get("valid"):
                                 self._maintenance_access_by_chat[str(chat_id)] = status.get("key", "")
+                                quota_label = "unlimited" if status.get("unlimited") else f"{status.get('remaining')} pertanyaan"
                                 self._send_message(
                                     token,
                                     chat_id,
-                                    f"✅ Access key aktif. Sisa kuota: {status.get('remaining')} pertanyaan.",
+                                    f"✅ Access key aktif. Sisa kuota: {quota_label}.",
                                     parse_mode=telegram_parse_mode,
                                 )
                             else:
@@ -4173,10 +4293,11 @@ class TelegramBotService:
                                     default_max_questions=maintenance_access_key_max_questions,
                                 )
                                 if consumed_access.get("allowed"):
+                                    quota_label = "unlimited" if consumed_access.get("unlimited") else f"{consumed_access.get('remaining')} pertanyaan"
                                     self._send_message(
                                         token,
                                         chat_id,
-                                        f"🔑 Access key akses terbatas dipakai. Sisa setelah ini: {consumed_access.get('remaining')} pertanyaan.",
+                                        f"🔑 Access key akses terbatas dipakai. Sisa setelah ini: {quota_label}.",
                                         parse_mode=telegram_parse_mode,
                                     )
                                 else:
