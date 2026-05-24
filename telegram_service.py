@@ -3451,6 +3451,72 @@ class TelegramBotService:
             "model_health_active_count": sum(1 for item in self._model_health_cache.values() if item.get("active")),
         }
 
+    def _health_cache_is_fresh(self, ttl_seconds: int) -> bool:
+        if not self._model_health_cache:
+            return False
+
+        if not self._model_health_checked_at:
+            return False
+
+        try:
+            # _model_health_checked_at disimpan sebagai teks WIB. Untuk cache runtime
+            # service ini, cukup pakai usia status berdasarkan last model update source
+            # dan cache timestamp tersendiri jika ada.
+            checked_ts = float(getattr(self, "_model_health_checked_ts", 0) or 0)
+        except Exception:
+            checked_ts = 0
+
+        if not checked_ts:
+            return False
+
+        return (time.time() - checked_ts) < max(300, int(ttl_seconds or 21600))
+
+    def _runtime_health_result_from_cache(
+        self,
+        current_model: str,
+        config: Dict[str, Any],
+        preferred_mode: str = "auto",
+    ) -> Dict[str, Any]:
+        cache = self._model_health_cache or {}
+        active_models = [
+            model
+            for model, item in cache.items()
+            if isinstance(item, dict) and item.get("active")
+        ]
+
+        cheap_models = [
+            model for model in active_models
+            if _candidate_tier(model) in {"cheap", "free"}
+        ]
+        expensive_models = [
+            model for model in active_models
+            if model not in cheap_models
+        ]
+        primary = current_model or str(config.get("model") or "")
+
+        if preferred_mode == "cheap" and cheap_models:
+            primary = cheap_models[0]
+        elif preferred_mode == "expensive" and expensive_models:
+            primary = expensive_models[0]
+        elif cheap_models:
+            primary = cheap_models[0]
+        elif active_models:
+            primary = active_models[0]
+
+        return {
+            "primary_model": primary,
+            "fallback_models": [m for m in cheap_models if m != primary],
+            "expensive_fallback_models": [m for m in expensive_models if m != primary],
+            "fast_cheap_models": cheap_models,
+            "thinking_capable_models": expensive_models,
+            "active_cheap_models": cheap_models,
+            "active_expensive_models": expensive_models,
+            "model_health": cache,
+            "checked_at": self._model_health_checked_at,
+            "source": "standby-cache",
+            "cache_used": True,
+        }
+
     def _runtime_state_path(self, config: Dict[str, Any]) -> str:
         """Return the file path used to persist Telegram model routing state."""
         raw_path = str(config.get("telegram_runtime_state_file") or DEFAULT_RUNTIME_STATE_FILE).strip()
@@ -3875,7 +3941,11 @@ class TelegramBotService:
         thinking_min_chars = int(config.get("thinking_min_chars", 180) or 180)
         fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
         speed_update_code = str(config.get("speed_update_code") or "4321").strip()
-        model_health_timeout = int(config.get("model_health_timeout", 12) or 12)
+        model_health_timeout = int(config.get("model_health_timeout", 6) or 6)
+        standby_health_saver_enabled = bool(config.get("standby_health_saver_enabled", True))
+        standby_health_check_interval = int(config.get("standby_health_check_interval", 21600) or 21600)
+        standby_health_quick_limit = int(config.get("standby_health_quick_limit", 2) or 2)
+        standby_disable_model_discovery = bool(config.get("standby_disable_model_discovery", True))
         power_features_enabled = bool(config.get("power_features_enabled", True))
         power_db_path = str(config.get("power_db_path") or ".adioranye_power.db")
         power_rag_enabled = bool(config.get("power_rag_enabled", True))
@@ -4365,6 +4435,37 @@ class TelegramBotService:
                             )
                             continue
 
+                        def runtime_health_config_for_standby(force: bool = False) -> Dict[str, Any]:
+                            runtime_config = dict(config)
+                            if standby_health_saver_enabled and not force:
+                                runtime_config["model_discovery_enabled"] = not bool(standby_disable_model_discovery)
+                                runtime_config["model_health_quick_limit"] = int(standby_health_quick_limit or 2)
+                                runtime_config["model_health_workers"] = min(int(config.get("model_health_workers", 2) or 2), 2)
+                                runtime_config["model_health_timeout"] = int(model_health_timeout or 6)
+                            return runtime_config
+
+                        def refresh_or_cached_runtime_models(preferred_mode: str, force: bool = False) -> Dict[str, Any]:
+                            if (
+                                standby_health_saver_enabled
+                                and not force
+                                and self._health_cache_is_fresh(standby_health_check_interval)
+                            ):
+                                return self._runtime_health_result_from_cache(
+                                    current_model=model,
+                                    config=config,
+                                    preferred_mode=preferred_mode,
+                                )
+                            result = refresh_telegram_runtime_models(
+                                api_url=api_url,
+                                api_key=api_key,
+                                current_model=model,
+                                config=runtime_health_config_for_standby(force=force),
+                                timeout=model_health_timeout,
+                                preferred_mode=preferred_mode,
+                            )
+                            self._model_health_checked_ts = time.time()
+                            return result
+
                         if is_telegram_admin_panel_command(text):
                             if not is_admin_chat:
                                 self._send_admin_required(token, chat_id, config)
@@ -4470,17 +4571,13 @@ class TelegramBotService:
                             self._send_message(
                                 token,
                                 chat_id,
-                                f"⏳ Health check model berjalan. Mode: {preferred}.",
+                                f"⏳ Health check manual berjalan. Mode: {preferred}.",
                                 parse_mode=telegram_parse_mode,
                             )
                             try:
-                                health_result = refresh_telegram_runtime_models(
-                                    api_url=api_url,
-                                    api_key=api_key,
-                                    current_model=model,
-                                    config=config,
-                                    timeout=model_health_timeout,
+                                health_result = refresh_or_cached_runtime_models(
                                     preferred_mode=preferred,
+                                    force=True,
                                 )
                                 rotation = select_rotated_runtime_model(
                                     result=health_result,
@@ -4519,13 +4616,9 @@ class TelegramBotService:
                             )
                             try:
                                 previous_model = model
-                                switch_result = refresh_telegram_runtime_models(
-                                    api_url=api_url,
-                                    api_key=api_key,
-                                    current_model=model,
-                                    config=config,
-                                    timeout=model_health_timeout,
+                                switch_result = refresh_or_cached_runtime_models(
                                     preferred_mode=router_mode,
+                                    force=False,
                                 )
                                 rotation = select_rotated_runtime_model(
                                     result=switch_result,
@@ -4629,17 +4722,13 @@ class TelegramBotService:
                             self._send_message(
                                 token,
                                 chat_id,
-                                "⏳ Mengecek semua model. Setelah selesai, hanya model yang hidup yang akan dipakai...",
+                                "⏳ Mengecek model secara manual. Setelah selesai, hanya model yang hidup yang akan dipakai...",
                                 parse_mode=telegram_parse_mode,
                             )
                             try:
-                                speed_result = refresh_telegram_runtime_models(
-                                    api_url=api_url,
-                                    api_key=api_key,
-                                    current_model=model,
-                                    config=config,
-                                    timeout=model_health_timeout,
+                                speed_result = refresh_or_cached_runtime_models(
                                     preferred_mode="auto",
+                                    force=True,
                                 )
                                 model = speed_result.get("primary_model") or model
                                 fallback_models = speed_result.get("fallback_models") or []

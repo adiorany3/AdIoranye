@@ -2053,10 +2053,27 @@ max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 model_health_check_interval = int(
     get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 90000) or 90000
 )
-model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 8) or 8)
-model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 4) or 4)
+standby_health_saver_enabled = parse_bool(
+    get_secret("STANDBY_HEALTH_SAVER_ENABLED", True),
+    default=True,
+)
+standby_health_recent_activity_seconds = int(
+    get_secret("STANDBY_HEALTH_RECENT_ACTIVITY_SECONDS", 300) or 300
+)
+standby_health_check_interval = int(
+    get_secret("STANDBY_HEALTH_CHECK_INTERVAL_SECONDS", 21600) or 21600
+)
+standby_health_quick_limit = int(
+    get_secret("STANDBY_HEALTH_QUICK_LIMIT", 2) or 2
+)
+standby_disable_model_discovery = parse_bool(
+    get_secret("STANDBY_DISABLE_MODEL_DISCOVERY", True),
+    default=True,
+)
+model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 6) or 6)
+model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 2) or 2)
 model_health_retries = int(get_secret("MODEL_HEALTH_RETRIES", 0) or 0)
-model_health_quick_limit = int(get_secret("MODEL_HEALTH_QUICK_LIMIT", 6) or 6)
+model_health_quick_limit = int(get_secret("MODEL_HEALTH_QUICK_LIMIT", 4) or 4)
 model_health_probe_max_tokens = int(get_secret("MODEL_HEALTH_PROBE_MAX_TOKENS", 2) or 2)
 model_health_probe_gpt5_max_tokens = int(
     get_secret("MODEL_HEALTH_PROBE_GPT5_MAX_TOKENS", 8) or 8
@@ -2104,7 +2121,7 @@ fast_normal_model_router_default = parse_bool(
     get_secret("FAST_NORMAL_MODEL_ROUTER", True), default=True
 )
 model_discovery_enabled = parse_bool(
-    get_secret("MODEL_DISCOVERY_ENABLED", True), default=True
+    get_secret("MODEL_DISCOVERY_ENABLED", False), default=False
 )
 models_api_url = str(get_secret("SLASHAI_MODELS_API_URL", "") or "").strip()
 model_discovery_timeout = int(get_secret("MODEL_DISCOVERY_TIMEOUT_SECONDS", 12) or 12)
@@ -2327,7 +2344,7 @@ model_readiness_state_file = str(
     or ".adioranye_model_readiness.json"
 ).strip()
 model_readiness_stale_seconds = int(
-    get_secret("MODEL_READINESS_STALE_SECONDS", 1800) or 1800
+    get_secret("MODEL_READINESS_STALE_SECONDS", 21600) or 21600
 )
 kb_v2_retrieval_enabled = parse_bool(
     get_secret("KB_V2_RETRIEVAL_ENABLED", True),
@@ -2364,18 +2381,18 @@ auto_replace_primary_prefer_cheap = parse_bool(
     default=True,
 )
 model_status_auto_refresh_enabled = parse_bool(
-    get_secret("MODEL_STATUS_AUTO_REFRESH_ENABLED", True),
-    default=True,
+    get_secret("MODEL_STATUS_AUTO_REFRESH_ENABLED", False),
+    default=False,
 )
 model_status_auto_refresh_interval_seconds = int(
-    get_secret("MODEL_STATUS_AUTO_REFRESH_INTERVAL_SECONDS", 90) or 90
+    get_secret("MODEL_STATUS_AUTO_REFRESH_INTERVAL_SECONDS", 21600) or 21600
 )
 model_status_auto_refresh_scope = str(
     get_secret("MODEL_STATUS_AUTO_REFRESH_SCOPE", "quick") or "quick"
 ).strip().lower()
 model_status_auto_refresh_public_panel = parse_bool(
-    get_secret("MODEL_STATUS_AUTO_REFRESH_PUBLIC_PANEL", True),
-    default=True,
+    get_secret("MODEL_STATUS_AUTO_REFRESH_PUBLIC_PANEL", False),
+    default=False,
 )
 
 token_saver_enabled = parse_bool(
@@ -3809,11 +3826,41 @@ def discover_api_model_candidates(force: bool = False) -> List[str]:
     return models
 
 
-def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> Dict[str, Dict[str, Any]]:
-    """Refresh health model.
 
-    Otomatis tetap mengikuti jendela tengah malam WIB. Namun force=True dari admin
-    boleh menjalankan cek saat itu juga, supaya tombol manual dan /rotate tidak memakai cache basi.
+def note_user_activity_for_health_saver() -> None:
+    st.session_state.last_user_activity_ts = time.time()
+
+
+def is_app_in_standby_mode() -> bool:
+    if not bool(standby_health_saver_enabled):
+        return False
+
+    last_activity = float(st.session_state.get("last_user_activity_ts") or 0)
+
+    if not last_activity:
+        return True
+
+    return (time.time() - last_activity) > max(30, int(standby_health_recent_activity_seconds or 300))
+
+
+def effective_health_interval_seconds(force: bool = False) -> int:
+    if force:
+        return max(60, int(model_health_check_interval or 90000))
+
+    if is_app_in_standby_mode():
+        return max(3600, int(standby_health_check_interval or 21600))
+
+    return max(60, int(model_health_check_interval or 90000))
+
+
+
+def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> Dict[str, Dict[str, Any]]:
+    """Refresh health model dengan mode hemat token saat standby.
+
+    - Standby tidak melakukan discovery model otomatis.
+    - Standby memakai interval cache lebih panjang.
+    - Standby quick check hanya mengecek sedikit model prioritas.
+    - force=True dari admin/Telegram tetap bisa menjalankan cek manual.
     """
     if not api_key:
         st.session_state.last_model_health_error = "SLASHAI_API_KEY belum diisi."
@@ -3822,13 +3869,22 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
     now = time.time()
     last_checked = float(st.session_state.get("model_health_checked_at") or 0)
     cache = st.session_state.get("model_health_cache") or {}
-    interval = max(60, int(model_health_check_interval or 900))
-
+    standby_mode = is_app_in_standby_mode()
+    interval = effective_health_interval_seconds(force=force)
 
     if not force and cache and now - last_checked < interval:
+        st.session_state.model_health_last_skip_reason = (
+            "standby-cache"
+            if standby_mode
+            else "fresh-cache"
+        )
         return cache
 
-    api_discovered_models = discover_api_model_candidates(force=force)
+    if standby_mode and not force and bool(standby_disable_model_discovery):
+        api_discovered_models = TOP_USAGE_MODEL_CANDIDATES.copy()
+    else:
+        api_discovered_models = discover_api_model_candidates(force=force)
+
     all_models_to_check = unique_models(
         [st.session_state.get("active_model") or default_model, default_model]
         + api_discovered_models
@@ -3856,11 +3912,13 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
             + DEFAULT_CHEAP_FALLBACK_MODELS[:4]
             + CHEAP_MODEL_OPTIONS[:6]
             + MEDIUM_MODEL_OPTIONS[:4]
-            + DEFAULT_EXPENSIVE_FALLBACK_MODELS[:3]
-            + HIGH_COST_MODEL_OPTIONS[:4]
+            + DEFAULT_EXPENSIVE_FALLBACK_MODELS[:2]
             + TOP_USAGE_MODEL_CANDIDATES
         )
-        limit = max(3, int(model_health_quick_limit or 8))
+        if standby_mode and not force:
+            limit = max(1, int(standby_health_quick_limit or 2))
+        else:
+            limit = max(2, int(model_health_quick_limit or 4))
         models_to_check = quick_pool[:limit]
     else:
         full_limit = int(model_health_full_limit or 0)
@@ -3875,7 +3933,7 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
         if bool(model_health_preserve_cache) and isinstance(cache, dict)
         else {}
     )
-    max_workers = max(1, min(int(model_health_workers or 4), len(models_to_check), 8))
+    max_workers = max(1, min(int(model_health_workers or 2), len(models_to_check), 4))
     retries = max(0, min(int(model_health_retries or 0), 1))
 
     if not models_to_check:
@@ -3886,7 +3944,7 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
             executor.submit(
                 check_single_model_health,
                 model_name,
-                int(model_health_timeout or 12),
+                int(model_health_timeout or 6),
                 retries,
             ): model_name
             for model_name in models_to_check
@@ -3936,12 +3994,17 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
     )
     st.session_state.model_health_last_checked_count = len(models_to_check)
     st.session_state.model_health_last_scope = scope_clean
+    st.session_state.model_health_last_standby = standby_mode
+    st.session_state.model_health_last_skip_reason = ""
     st.session_state.model_health_token_saver = {
         "probe_max_tokens": int(model_health_probe_max_tokens or 2),
         "probe_gpt5_max_tokens": int(model_health_probe_gpt5_max_tokens or 8),
         "retries": retries,
         "workers": max_workers,
         "preserve_cache": bool(model_health_preserve_cache),
+        "standby_mode": standby_mode,
+        "standby_limit": int(standby_health_quick_limit or 2),
+        "interval_seconds": interval,
     }
 
     if active_cheap:
@@ -3966,1199 +4029,17 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
     return fresh_cache
 
 
-def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
-    """Ambil fallback aktif.
-
-    Return kedua tetap kompatibel, tetapi urutannya sekarang:
-    medium dulu, lalu mahal. Model murah tetap pada return pertama.
-    """
-    refresh_model_health_if_needed(force=False)
-    cheap = (
-        st.session_state.get("active_cheap_fallback_models")
-        or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
-    )
-    medium = (
-        st.session_state.get("active_medium_fallback_models")
-        or MEDIUM_MODEL_OPTIONS.copy()
-    )
-    expensive = (
-        st.session_state.get("active_expensive_fallback_models")
-        or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
-    )
-    return unique_models(cheap), unique_models(medium + expensive)
-
-
-def get_rotating_cheap_primary(
-    active_cheap_models: List[str], advance: bool = False
-) -> str:
-    """
-    Ambil model murah aktif secara round-robin.
-    - advance=False: hanya mengintip model murah berikutnya, aman untuk render UI.
-    - advance=True: dipakai saat request benar-benar dikirim, lalu indeks digeser ke model murah berikutnya.
-    """
-    models = unique_models(active_cheap_models)
-    if not models:
-        return ""
-
-    try:
-        index = int(st.session_state.get("cheap_model_rotation_index", 0) or 0)
-    except Exception:
-        index = 0
-
-    index = index % len(models)
-    primary_model = models[index]
-
-    if advance:
-        st.session_state.cheap_model_rotation_index = (index + 1) % len(models)
-        st.session_state.last_rotated_primary_model = primary_model
-        st.session_state.active_model = primary_model
-
-    return primary_model
-
-
-def sync_rotation_index_to_selected_model(active_cheap_models: List[str]) -> None:
-    """Jika admin memilih model murah tertentu, jadikan pilihan itu titik awal rotasi berikutnya."""
-    models = unique_models(active_cheap_models)
-    selected_model = str(st.session_state.get("active_model") or default_model).strip()
-    if selected_model in models:
-        st.session_state.cheap_model_rotation_index = models.index(selected_model)
-
-
-def _contains_any(text: str, keywords: List[str]) -> bool:
-    lowered = f" {str(text or '').lower()} "
-    return any(keyword in lowered for keyword in keywords)
-
-
-LIGHTWEIGHT_INTENT_KEYWORDS = [
-    "hai",
-    "halo",
-    "hello",
-    "thanks",
-    "terima kasih",
-    "makasih",
-    "siapa kamu",
-    "apa kabar",
-    "oke",
-    "ok",
-    "sip",
-    "lanjut",
-    "ya",
-    "tidak",
-    "bisa",
-    "test",
-]
-
-THINKING_INTENT_KEYWORDS = [
-    "thinking",
-    "reasoning",
-    "berpikir",
-    "nalar",
-    "logika",
-    "analisis",
-    "analisa",
-    "evaluasi",
-    "bandingkan",
-    "pertimbangkan",
-    "strategi",
-    "arsitektur",
-    "algoritma",
-    "debug",
-    "error",
-    "traceback",
-    "exception",
-    "bug",
-    "refactor",
-    "optimasi",
-    "optimize",
-    "perbaiki kode",
-    "cek kode",
-    "review kode",
-    "audit kode",
-    "skripsi",
-    "tesis",
-    "jurnal",
-    "riset",
-    "metodologi",
-    "smartpls",
-    "statistik",
-    "regresi",
-    "sentimen",
-    "indobert",
-    "buatkan alur",
-    "bagan alur",
-    "step by step",
-    "langkah-langkah",
-    "kenapa",
-    "mengapa",
-    "apa penyebab",
-    "solusi terbaik",
-    "rekomendasi terbaik",
-    "prioritaskan",
-    "model yang capable",
-    "jawaban mendalam",
-    "berpikir dalam",
-    "tuning",
-    "tune",
-    "deploy",
-    "vercel",
-    "streamlit",
-]
-
-CODE_OR_LOG_MARKERS = [
-    "```",
-    "def ",
-    "class ",
-    "import ",
-    "from ",
-    "return ",
-    "npm ",
-    "pip ",
-    "vercel",
-    "status code",
-    "response:",
-    "build failed",
-    "failed",
-    "unauthorized",
-    "creditsdepleted",
-    "traceback",
-    "exception",
-    "streamlit",
-    "session_state",
-    "generate_answer",
-    "generate_power_answer",
-    "<html",
-    "<script",
-    "select * from",
-]
-
-FILE_EDITING_INTENT_KEYWORDS = [
-    "kerjakan ke file",
-    "buat file",
-    "generate file",
-    "download file",
-    "replace app.py",
-    "patch",
-    "diff",
-    "zip",
-    "perbaiki file",
-    "ubah file",
-    "edit file",
-    "upload ke github",
-    "redeploy",
-]
-
-ACCURACY_CRITICAL_KEYWORDS = [
-    "jangan mengarang",
-    "akurat",
-    "valid",
-    "verifikasi",
-    "fakta",
-    "hukum",
-    "medis",
-    "keuangan",
-    "regulasi",
-    "sumber resmi",
-    "kutipan",
-    "referensi",
-    "terbaru",
-    "hari ini",
-]
-
-CAPABLE_MODEL_PRIORITY_PATTERNS = [
-    ("gpt-5", 100),
-    ("gpt-4.1", 92),
-    ("gpt-4o", 86),
-    ("o3", 84),
-    ("o4", 82),
-    ("claude", 80),
-    ("sonnet", 78),
-    ("opus", 82),
-    ("gemini-2.5-pro", 78),
-    ("gemini", 68),
-    ("deepseek-r1", 72),
-    ("qwen", 62),
-    ("llama", 58),
-]
-
-FAST_MODEL_PENALTY_PATTERNS = [
-    ("nano", -18),
-    ("mini", -10),
-    ("flash", -8),
-    ("lite", -10),
-]
-
-RETRIEVAL_TRIGGER_KEYWORDS = [
-    "berdasarkan file",
-    "berdasarkan dokumen",
-    "dari file",
-    "dari dokumen",
-    "kb",
-    "knowledge base",
-    "sumber",
-    "referensi",
-    "kutipan",
-    "jurnal",
-    "pdf",
-    "docx",
-    "data terbaru",
-    "terbaru",
-    "hari ini",
-    "update",
-    "berita",
-    "harga",
-    "jadwal",
-    "aturan",
-    "hukum",
-    "regulasi",
-    "medis",
-    "keuangan",
-    "riset",
-    "paper",
-]
-
-
-def _keyword_hits(text: str, keywords: List[str]) -> List[str]:
-    lowered = f" {str(text or '').lower()} "
-    return [keyword for keyword in keywords if keyword in lowered]
-
-
-def _normalize_operation_mode(value: Any) -> str:
-    raw = str(value or "Seimbang").strip().lower()
-    aliases = {
-        "hemat": "Hemat",
-        "murah": "Hemat",
-        "cheap": "Hemat",
-        "balanced": "Seimbang",
-        "balance": "Seimbang",
-        "seimbang": "Seimbang",
-        "maksimal": "Maksimal",
-        "max": "Maksimal",
-        "maximum": "Maksimal",
-        "pintar": "Maksimal",
-    }
-    return aliases.get(raw, "Seimbang")
-
-
-def estimate_prompt_complexity(user_text: str) -> Dict[str, Any]:
-    """Skor kompleksitas prompt untuk router model, RAG, dan quality control.
-
-    Prinsip algoritma:
-    - Prompt ringan tetap cepat dan hemat.
-    - Prompt teknis/akademik/kode/file memakai jalur lebih capable.
-    - Prompt yang membutuhkan fakta/sumber memicu retrieval dan verifikasi.
-    - Skor tidak hanya berdasarkan panjang, tetapi juga jenis tugas.
-    """
-    text = str(user_text or "").strip()
-    lowered = text.lower()
-    words = re.findall(r"\b\w+\b", lowered)
-    word_count = len(words)
-    line_count = max(1, len(text.splitlines()))
-    char_count = len(text)
-    score = 0
-    signals: List[str] = []
-
-    light_hits = _keyword_hits(lowered, LIGHTWEIGHT_INTENT_KEYWORDS)
-    thinking_hits = _keyword_hits(lowered, THINKING_INTENT_KEYWORDS)
-    code_hits = _keyword_hits(lowered, CODE_OR_LOG_MARKERS)
-    file_hits = _keyword_hits(lowered, FILE_EDITING_INTENT_KEYWORDS)
-    retrieval_hits = _keyword_hits(lowered, RETRIEVAL_TRIGGER_KEYWORDS)
-    accuracy_hits = _keyword_hits(lowered, ACCURACY_CRITICAL_KEYWORDS)
-
-    if thinking_hits:
-        score += min(7, 2 + len(thinking_hits) * 2)
-        signals.append("thinking-task")
-
-    if code_hits:
-        score += min(8, 4 + len(code_hits) * 2)
-        signals.append("code-or-log-task")
-
-    if file_hits:
-        score += min(7, 4 + len(file_hits))
-        signals.append("file-editing-task")
-
-    if retrieval_hits:
-        score += min(5, 2 + len(retrieval_hits))
-        signals.append("retrieval-needed")
-
-    if accuracy_hits:
-        score += min(4, 1 + len(accuracy_hits))
-        signals.append("accuracy-critical")
-
-    min_chars = int(
-        st.session_state.get("active_thinking_min_chars", thinking_min_chars_default)
-        or 180
-    )
-
-    if char_count >= min_chars and word_count >= 24:
-        score += 2
-        signals.append("long-context")
-
-    if char_count >= 700 or word_count >= 95:
-        score += 2
-        signals.append("very-long-context")
-
-    if line_count >= 8:
-        score += 2
-        signals.append("multi-line-context")
-
-    if text.count("?") >= 2 and word_count >= 18:
-        score += 2
-        signals.append("multi-question")
-
-    if (
-        any(token in lowered for token in ["1.", "2.", "3.", "- ", "• "])
-        and word_count >= 25
-    ):
-        score += 1
-        signals.append("structured-request")
-
-    if any(
-        ext in lowered
-        for ext in [".py", ".js", ".tsx", ".jsx", ".html", ".css", ".sql", ".toml", ".json"]
-    ):
-        score += 3
-        signals.append("file-extension")
-
-    if re.search(r"\b(error|exception|traceback|failed|status\s*code|unauthorized)\b", lowered):
-        score += 3
-        signals.append("error-diagnostic")
-
-    if re.search(r"\b(api|database|sqlite|streamlit|vercel|github|deploy|router|cache|rag)\b", lowered):
-        score += 2
-        signals.append("technical-system")
-
-    if light_hits and word_count <= 10 and not code_hits and not thinking_hits and not file_hits:
-        score -= 4
-        signals.append("casual-short")
-    elif word_count <= 6 and not code_hits and not thinking_hits and not file_hits:
-        score -= 2
-        signals.append("short-prompt")
-
-    score = max(0, min(score, 20))
-
-    return {
-        "score": score,
-        "signals": signals,
-        "thinking_hits": thinking_hits[:8],
-        "code_hits": code_hits[:8],
-        "file_hits": file_hits[:8],
-        "retrieval_hits": retrieval_hits[:8],
-        "accuracy_hits": accuracy_hits[:8],
-        "word_count": word_count,
-        "char_count": char_count,
-        "line_count": line_count,
-    }
-
-
-def should_use_retrieval_for_prompt(user_text: str) -> bool:
-    """Aktifkan RAG/web fallback hanya ketika manfaatnya jelas."""
-    if not bool(power_features_enabled and power_rag_enabled):
-        return False
-    if bool(power_strict_rag_mode):
-        return True
-
-    info = estimate_prompt_complexity(user_text)
-    text = str(user_text or "").strip().lower()
-
-    if info.get("retrieval_hits") or info.get("accuracy_hits"):
-        return True
-
-    if info.get("file_hits") and any(
-        token in text
-        for token in [
-            "file",
-            "dokumen",
-            "lampiran",
-            "pdf",
-            "docx",
-            "data",
-            "sumber",
-        ]
-    ):
-        return True
-
-    if len(text) >= 320 and not _contains_any(text, LIGHTWEIGHT_INTENT_KEYWORDS):
-        return True
-
-    if any(
-        token in text
-        for token in [
-            "lampiran",
-            "upload",
-            "database",
-            "dokumen",
-            "sumber",
-            "referensi",
-            "berdasarkan",
-        ]
-    ):
-        return True
-
-    return False
-
-
-def _clamp_int(value: Any, minimum: int, maximum: int) -> int:
-    try:
-        parsed = int(value)
-    except Exception:
-        parsed = minimum
-    return max(minimum, min(parsed, maximum))
-
-
-def _model_capability_score(model: str) -> int:
-    """Skor kasar kapabilitas model dari nama model.
-
-    Dipakai hanya untuk memilih primary model pada prompt kompleks.
-    Health check tetap menjadi syarat utama.
-    """
-    lowered = str(model or "").lower()
-    score = 50
-
-    for pattern, value in CAPABLE_MODEL_PRIORITY_PATTERNS:
-        if pattern in lowered:
-            score = max(score, value)
-
-    for pattern, penalty in FAST_MODEL_PENALTY_PATTERNS:
-        if pattern in lowered:
-            score += penalty
-
-    if model_cost_tier(model) == "cheap":
-        score -= 12
-
-    return max(0, score)
-
-
-
-CURRENT_INFO_KEYWORDS = [
-    "terbaru",
-    "terkini",
-    "hari ini",
-    "sekarang",
-    "saat ini",
-    "barusan",
-    "minggu ini",
-    "bulan ini",
-    "tahun ini",
-    "update",
-    "berita",
-    "news",
-    "viral",
-    "tren",
-    "trend",
-    "jadwal",
-    "harga",
-    "kurs",
-    "cuaca",
-    "rilis",
-    "rilisan",
-    "regulasi",
-    "aturan terbaru",
-    "kebijakan terbaru",
-    "presiden sekarang",
-    "ceo sekarang",
-    "siapa sekarang",
-    "data terbaru",
-    "statistik terbaru",
-    "live",
-    "real time",
-    "real-time",
-]
-
-CURRENT_INFO_DOMAINS = [
-    "politik",
-    "pemerintah",
-    "hukum",
-    "regulasi",
-    "harga",
-    "kurs",
-    "emas",
-    "saham",
-    "crypto",
-    "cuaca",
-    "jadwal",
-    "olahraga",
-    "film",
-    "musik",
-    "teknologi",
-    "ai",
-    "openai",
-    "gemini",
-    "chatgpt",
-    "streamlit",
-    "vercel",
-    "github",
-    "telegram",
-    "bpjs",
-    "kemenkes",
-    "kementerian",
-]
-
-
-def detect_auto_live_scraping_need(
-    user_text: str,
-) -> Dict[str, Any]:
-    """Deteksi apakah pertanyaan perlu info web/scraping terkini."""
-    text = str(user_text or "").strip()
-    lowered = text.lower()
-    word_count = len(re.findall(r"\w+", lowered))
-
-    if not bool(auto_live_scraping_enabled):
-        return {
-            "needed": False,
-            "reason": "disabled",
-            "topic": "auto",
-            "keywords": [],
-        }
-
-    if len(text) < int(auto_live_scraping_min_query_chars or 8):
-        return {
-            "needed": False,
-            "reason": "too_short",
-            "topic": "auto",
-            "keywords": [],
-        }
-
-    keyword_hits = [
-        keyword
-        for keyword in CURRENT_INFO_KEYWORDS
-        if keyword in lowered
-    ]
-
-    domain_hits = [
-        keyword
-        for keyword in CURRENT_INFO_DOMAINS
-        if keyword in lowered
-    ]
-
-    explicit_need = bool(keyword_hits)
-    external_question = bool(
-        domain_hits
-        and any(
-            marker in lowered
-            for marker in [
-                "apa",
-                "berapa",
-                "siapa",
-                "kapan",
-                "dimana",
-                "di mana",
-                "cek",
-                "cari",
-                "update",
-                "info",
-                "berita",
-            ]
-        )
-    )
-
-    dated_dynamic = bool(
-        re.search(
-            r"\b(20[2-9][0-9]|2026|2027|2028)\b",
-            lowered,
-        )
-        and any(
-            marker in lowered
-            for marker in [
-                "terbaru",
-                "update",
-                "data",
-                "aturan",
-                "jadwal",
-                "harga",
-            ]
-        )
-    )
-
-    likely_current = bool(
-        explicit_need
-        or external_question
-        or dated_dynamic
-    )
-
-    local_work_markers = [
-        "perbaiki file",
-        "kerjakan file",
-        "ubah kode ini",
-        "patch file",
-        "buatkan desain",
-        "lanjutkan",
-    ]
-
-    if any(marker in lowered for marker in local_work_markers) and not explicit_need:
-        likely_current = False
-
-    if not likely_current:
-        return {
-            "needed": False,
-            "reason": "not_current_info",
-            "topic": "auto",
-            "keywords": keyword_hits + domain_hits,
-        }
-
-    if word_count <= 3 and not explicit_need:
-        return {
-            "needed": False,
-            "reason": "too_short_without_current_marker",
-            "topic": "auto",
-            "keywords": keyword_hits + domain_hits,
-        }
-
-    return {
-        "needed": True,
-        "reason": "explicit_current_keyword"
-        if explicit_need
-        else "external_dynamic_question",
-        "topic": text[:160].strip() or "auto",
-        "keywords": keyword_hits + domain_hits,
-    }
-
-
-
-
-def _token_saver_clip_text(
-    text: Any,
-    max_chars: int,
-    suffix: str = "\n...[dipangkas untuk hemat token]",
-) -> str:
-    value = str(text or "").strip()
-    limit = int(max_chars or 0)
-
-    if not value or limit <= 0:
-        return value
-
-    if len(value) <= limit:
-        return value
-
-    return value[: max(0, limit - len(suffix))].rstrip() + suffix
-
-
-def _token_saver_mode() -> str:
-    mode = str(token_saver_default_mode or "balanced").lower().strip()
-
-    if mode not in {"off", "light", "balanced", "aggressive"}:
-        mode = "balanced"
-
-    return mode
-
-
-def compact_recent_messages_for_token_saver(
-    messages: List[Dict[str, Any]],
-    limit: int | None = None,
-    recent_full: int | None = None,
-) -> List[Dict[str, str]]:
-    """Kirim history pendek saja ke model.
-
-    Pesan lama diringkas menjadi satu system note agar token tidak membengkak.
-    """
-    if not bool(token_saver_enabled):
-        return messages or []
-
-    raw_messages = [
-        item
-        for item in (messages or [])
-        if isinstance(item, dict)
-    ]
-
-    if not raw_messages:
-        return []
-
-    max_messages = max(2, int(limit or web_history_limit or 6))
-    full_count = max(2, int(recent_full or web_history_recent_full or 4))
-
-    if len(raw_messages) <= max_messages:
-        return [
-            {
-                "role": str(item.get("role") or "user"),
-                "content": _token_saver_clip_text(
-                    item.get("content", ""),
-                    1200,
-                ),
-            }
-            for item in raw_messages[-max_messages:]
-        ]
-
-    older = raw_messages[: -full_count]
-    recent = raw_messages[-full_count:]
-
-    older_lines: List[str] = []
-
-    for item in older[-8:]:
-        role = str(item.get("role") or "user")
-        content = _token_saver_clip_text(
-            item.get("content", ""),
-            220,
-            suffix="...",
-        )
-        if content:
-            older_lines.append(f"{role}: {content}")
-
-    compact: List[Dict[str, str]] = []
-
-    if older_lines:
-        compact.append(
-            {
-                "role": "system",
-                "content": (
-                    "Ringkasan percakapan lama untuk hemat token:\n"
-                    + "\n".join(older_lines)
-                ),
-            }
-        )
-
-    for item in recent:
-        compact.append(
-            {
-                "role": str(item.get("role") or "user"),
-                "content": _token_saver_clip_text(
-                    item.get("content", ""),
-                    1400,
-                ),
-            }
-        )
-
-    return compact[-max_messages:]
-
-
-def determine_dynamic_answer_token_budget(
-    user_text: str,
-    complexity: Dict[str, Any],
-    route: Dict[str, Any],
-    configured_max_tokens: int,
-    live_scraping_needed: bool = False,
-) -> int:
-    """Budget jawaban dinamis untuk hemat token."""
-    if not bool(token_saver_enabled):
-        return int(configured_max_tokens)
-
-    user_lower = str(user_text or "").lower()
-    score = int((route or {}).get("complexity_score") or 0)
-    very_complex = score >= 8
-    complex_enough = bool((route or {}).get("thinking_mode")) or score >= 5
-    complexity_hits = (route or {}).get("complexity_hits") or {}
-
-    code_or_file = bool(
-        complexity_hits.get("code")
-        or any(
-            marker in user_lower
-            for marker in [
-                "error",
-                "kode",
-                "code",
-                "deploy",
-                "file",
-                "patch",
-                "traceback",
-                "log",
-                "bug",
-            ]
-        )
-    )
-
-    asks_long = any(
-        marker in user_lower
-        for marker in [
-            "jelaskan detail",
-            "lengkap",
-            "full",
-            "panjang",
-            "rinci",
-            "mendalam",
-            "step by step",
-            "langkah lengkap",
-        ]
-    )
-
-    asks_short = any(
-        marker in user_lower
-        for marker in [
-            "singkat",
-            "ringkas",
-            "pendek",
-            "inti saja",
-            "langsung saja",
-            "quick",
-        ]
-    )
-
-    if asks_short:
-        desired = min(max_tokens_casual, 450)
-    elif live_scraping_needed:
-        desired = min(max_tokens_normal, 1200)
-    elif asks_long or very_complex:
-        desired = max_tokens_long
-    elif code_or_file:
-        desired = max_tokens_technical
-    elif complex_enough:
-        desired = max_tokens_normal
-    else:
-        desired = max_tokens_casual
-
-    operation_mode = _normalize_operation_mode(
-        st.session_state.get("active_operation_mode", ai_operation_mode_default)
-    )
-    saver_mode = _token_saver_mode()
-
-    if operation_mode == "Hemat":
-        desired = int(desired * 0.75)
-    elif operation_mode == "Maksimal":
-        desired = int(desired * 1.2)
-
-    if saver_mode == "light":
-        desired = int(desired * 1.15)
-    elif saver_mode == "aggressive":
-        desired = int(desired * 0.65)
-    elif saver_mode == "off":
-        desired = int(configured_max_tokens)
-
-    return max(256, min(int(configured_max_tokens), int(desired)))
-
-
-def limit_context_for_token_saver(
-    context: str,
-    max_chars: int,
-) -> str:
-    if not bool(token_saver_enabled):
-        return str(context or "")
-
-    return _token_saver_clip_text(
-        context,
-        int(max_chars or 0),
-    )
-
-
-
-def choose_dynamic_runtime_options(
-    user_text: str,
-    route: Dict[str, Any],
-    cfg: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Bangun opsi runtime AI berdasarkan jenis prompt.
-
-    Prompt sederhana tetap cepat; prompt kompleks memakai RAG/verifier/self-check.
-    Jika pertanyaan membutuhkan info terkini, live web fallback dipaksa aktif
-    melalui metadata runtime.
-    """
-    complexity = route or {}
-    score = int(complexity.get("complexity_score") or 0)
-    thinking_mode = bool(complexity.get("thinking_mode"))
-    live_scraping_profile = detect_auto_live_scraping_need(user_text)
-    live_scraping_needed = bool(live_scraping_profile.get("needed"))
-
-    retrieval_enabled = bool(
-        power_features_enabled
-        and power_rag_enabled
-        and (
-            should_use_retrieval_for_prompt(user_text)
-            or live_scraping_needed
-        )
-    )
-    accuracy_needed = bool(
-        (complexity.get("complexity_hits") or {}).get("retrieval")
-        or estimate_prompt_complexity(user_text).get("accuracy_hits")
-        or live_scraping_needed
-    )
-    complex_enough = thinking_mode or score >= 5 or live_scraping_needed
-    very_complex = score >= 8
-
-    configured_max_tokens = _clamp_int(
-        cfg.get("max_completion_tokens", 2600),
-        minimum=500,
-        maximum=12000,
-    )
-    operation_mode = _normalize_operation_mode(
-        st.session_state.get("active_operation_mode", ai_operation_mode_default)
-    )
-    complexity_hits = complexity.get("complexity_hits") or {}
-    code_or_file = bool(
-        complexity_hits.get("code")
-        or any(marker in str(user_text or "").lower() for marker in ["error", "kode", "code", "deploy", "file", "patch"])
-    )
-    dynamic_max_tokens = determine_dynamic_answer_token_budget(
-        user_text=user_text,
-        complexity=complexity,
-        route=route,
-        configured_max_tokens=configured_max_tokens,
-        live_scraping_needed=live_scraping_needed,
-    )
-
-    rag_top_k = max(1, int(power_rag_top_k))
-    if bool(token_saver_enabled):
-        rag_top_k = min(
-            rag_top_k,
-            max(1, int(kb_max_chunks_token_saver or 3)),
-        )
-    response_cache_ttl_seconds = int(
-        power_response_cache_ttl_seconds
-        if not accuracy_needed
-        else min(power_response_cache_ttl_seconds, 600)
-    )
-
-    current_info_mode = bool(live_scraping_needed)
-
-    if current_info_mode:
-        # Pertanyaan info terkini tidak boleh dijawab dari KB/cache lama.
-        # Live web/Tavily harus menjadi sumber utama.
-        retrieval_enabled = False
-        rag_top_k = 0
-        response_cache_ttl_seconds = 0
-
-    return {
-        "current_info_mode": current_info_mode,
-        "enable_rag": bool(retrieval_enabled and not current_info_mode),
-        "rag_top_k": rag_top_k,
-        "enable_self_verification": bool(
-            power_features_enabled
-            and power_self_verification_enabled
-            and (very_complex or accuracy_needed or retrieval_enabled)
-        ),
-        "quality_control_enabled": bool(
-            power_quality_control_enabled and (complex_enough or retrieval_enabled)
-        ),
-        "quality_verifier_enabled": bool(
-            power_quality_verifier_enabled and (very_complex or accuracy_needed)
-        ),
-        "query_rewriter_enabled": bool(
-            power_query_rewriter_enabled and (retrieval_enabled or current_info_mode)
-        ),
-        "reranker_enabled": bool(power_reranker_enabled and retrieval_enabled),
-        "semantic_cache_enabled": bool(
-            power_semantic_cache_enabled and not very_complex and not current_info_mode
-        ),
-        "response_cache_ttl_seconds": response_cache_ttl_seconds,
-        "max_completion_tokens": dynamic_max_tokens,
-        "timeout": 90 if very_complex or live_scraping_needed else 60,
-        "strategy_label": (
-            "live-current-info"
-            if live_scraping_needed
-            else "analisis-mendalam"
-            if very_complex
-            else "analisis-standar"
-            if complex_enough
-            else "cepat-hemat"
-        ),
-        "accuracy_needed": accuracy_needed,
-        "complex_enough": complex_enough,
-        "very_complex": very_complex,
-        "auto_live_scraping_needed": live_scraping_needed,
-        "auto_live_scraping_reason": live_scraping_profile.get("reason", ""),
-        "auto_live_scraping_topic": live_scraping_profile.get("topic", "auto"),
-        "auto_live_scraping_keywords": live_scraping_profile.get("keywords", []),
-    }
-
-
-
-
-def is_thinking_question(user_text: str) -> bool:
-    """Deteksi pertanyaan yang perlu model lebih capable/reasoning."""
-    if not bool(st.session_state.get("active_thinking_model_router", True)):
-        st.session_state.last_prompt_complexity = {
-            "score": 0,
-            "signals": ["thinking-router-off"],
-        }
-        return False
-
-    complexity = estimate_prompt_complexity(user_text)
-    st.session_state.last_prompt_complexity = complexity
-    operation_mode = _normalize_operation_mode(
-        st.session_state.get("active_operation_mode", ai_operation_mode_default)
-    )
-
-    if operation_mode == "Maksimal":
-        threshold = 2
-    elif operation_mode == "Hemat":
-        threshold = 6
-    else:
-        threshold = 4
-
-    return int(complexity.get("score") or 0) >= threshold
-
-
-def get_capable_primary_model(
-    active_expensive_models: List[str], health_cache: Dict[str, Dict[str, Any]]
-) -> str:
-    """Pilih model capable aktif untuk prompt kompleks.
-
-    Versi ini tidak hanya mengambil model pertama dari daftar fallback.
-    Model diperingkat dari estimasi kapabilitas, status aktif, latency, dan harga.
-    """
-    override = str(thinking_capable_model_override or "").strip()
-    if override and health_cache.get(override, {}).get("active"):
-        return override
-
-    active_candidates: List[str] = []
-    for model_name in unique_models(active_expensive_models + MODEL_OPTIONS):
-        if health_cache.get(model_name, {}).get("active") and _tier_rank(model_name) > 0:
-            active_candidates.append(model_name)
-
-    if not active_candidates:
-        return ""
-
-    def sort_key(model_name: str) -> Tuple[int, float, float, int, str]:
-        price = model_price(model_name)
-        latency = get_model_effective_latency_ms(model_name, health_cache)
-        success_rate = get_model_success_rate(model_name)
-        penalty = get_model_performance_penalty(model_name)
-        return (
-            -_model_capability_score(model_name),
-            -success_rate,
-            latency + penalty,
-            int(price.get("output", 999999999)),
-            model_name,
-        )
-
-    return sorted(unique_models(active_candidates), key=sort_key)[0]
-
-
-
-def choose_healthy_primary_model(
-    selected_model: str,
-    active_cheap_models: List[str],
-    active_expensive_models: List[str],
-    health_cache: Dict[str, Dict[str, Any]],
-    operation_mode: str = "Seimbang",
-) -> Dict[str, Any]:
-    """Pilih model utama sehat.
-
-    Jika model utama admin tidak aktif, sistem otomatis mencari model sehat
-    dari daftar health check. Prioritas default: model hemat sehat dulu,
-    baru model capable sehat.
-    """
-    selected = str(selected_model or "").strip()
-    selected_health = health_cache.get(selected) or {}
-    selected_active = bool(selected_health.get("active"))
-
-    if selected and selected_active and not is_model_runtime_blocked(selected):
-        return {
-            "model": selected,
-            "changed": False,
-            "from_model": selected,
-            "reason": "selected-primary-healthy",
-            "source": "selected",
-        }
-
-    cheap_candidates = filter_runtime_blocked_models(
-        sort_health_models_for_simple_chat(
-            active_cheap_models,
-            health_cache,
-        )
-    )
-    higher_candidates = filter_runtime_blocked_models(
-        prioritize_active_models(
-            active_expensive_models,
-            health_cache,
-        )
-    )
-
-    prefer_cheap = bool(auto_replace_primary_prefer_cheap)
-
-    if operation_mode == "Maksimal" and higher_candidates and not prefer_cheap:
-        candidates = higher_candidates + cheap_candidates
-    else:
-        candidates = cheap_candidates + higher_candidates
-
-    candidates = unique_models(
-        [
-            model
-            for model in candidates
-            if health_cache.get(model, {}).get("active")
-            and not is_model_runtime_blocked(model)
-        ]
-    )
-
-    if candidates:
-        replacement = candidates[0]
-        return {
-            "model": replacement,
-            "changed": replacement != selected,
-            "from_model": selected,
-            "reason": "auto-replaced-inactive-primary",
-            "source": "health-check",
-        }
-
-    return {
-        "model": selected or default_model,
-        "changed": False,
-        "from_model": selected,
-        "reason": "no-healthy-primary-found",
-        "source": "fallback",
-    }
-
-
-def apply_healthy_primary_model(
-    selected_model: str = "",
-    reason: str = "auto",
-) -> Dict[str, Any]:
-    """Ganti session active_model ke model sehat jika primary saat ini mati."""
-    health_cache = st.session_state.get("model_health_cache") or {}
-
-    if not health_cache:
-        try:
-            refresh_model_health_if_needed(
-                force=True,
-                scope="quick",
-            )
-        except Exception as exc:
-            st.session_state.last_model_health_error = str(exc)[:500]
-
-        health_cache = st.session_state.get("model_health_cache") or {}
-
-    active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
-    active_medium_models = (
-        st.session_state.get("active_medium_fallback_models")
-        or MEDIUM_MODEL_OPTIONS.copy()
-    )
-    active_high_cost_models = (
-        st.session_state.get("active_expensive_fallback_models")
-        or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
-    )
-    active_higher_models = unique_models(active_medium_models + active_high_cost_models)
-    operation_mode = _normalize_operation_mode(
-        st.session_state.get(
-            "active_operation_mode",
-            ai_operation_mode_default,
-        )
-    )
-
-    selected = str(
-        selected_model
-        or st.session_state.get("active_model")
-        or default_model
-    ).strip()
-
-    result = choose_healthy_primary_model(
-        selected_model=selected,
-        active_cheap_models=active_cheap_models,
-        active_expensive_models=active_expensive_models,
-        health_cache=health_cache,
-        operation_mode=operation_mode,
-    )
-
-    replacement = str(result.get("model") or "").strip()
-
-    if (
-        bool(auto_replace_inactive_primary_model)
-        and replacement
-        and replacement != selected
-        and result.get("changed")
-    ):
-        st.session_state.active_model = replacement
-        sync_rotation_index_to_selected_model(active_cheap_models)
-        st.session_state.last_auto_primary_replacement = {
-            "from": selected,
-            "to": replacement,
-            "reason": reason,
-            "at": _wib_now_text(),
-            "routing_reason": result.get("reason", ""),
-        }
-
-    return result
-
-
-
 
 def should_auto_refresh_model_status() -> bool:
-    """Tentukan apakah auto-refresh status model perlu berjalan."""
+    """Tentukan apakah auto-refresh status model perlu berjalan.
+
+    Saat standby, auto health check dimatikan supaya tidak boros token.
+    Manual check dari admin/Telegram tetap tersedia.
+    """
     if not bool(model_status_auto_refresh_enabled):
+        return False
+
+    if bool(standby_health_saver_enabled) and is_app_in_standby_mode():
         return False
 
     if not api_key:
@@ -5166,8 +4047,8 @@ def should_auto_refresh_model_status() -> bool:
 
     now = time.time()
     interval = max(
-        30,
-        int(model_status_auto_refresh_interval_seconds or 90),
+        3600,
+        int(model_status_auto_refresh_interval_seconds or 21600),
     )
     last_auto = float(
         st.session_state.get("model_status_auto_refresh_last_ts") or 0
@@ -5177,13 +4058,12 @@ def should_auto_refresh_model_status() -> bool:
     )
 
     if not checked_at:
-        return True
+        return False
 
     if is_model_readiness_stale(checked_at):
-        return True
+        return (now - last_auto) >= interval
 
     return (now - last_auto) >= interval
-
 
 def maybe_auto_refresh_model_status(
     reason: str = "auto",
@@ -9942,6 +8822,11 @@ def render_admin_production_dashboard() -> None:
     st.caption(
         "Rate limit, penyamaran error, block model, dan ranking performa berjalan otomatis untuk halaman publik."
     )
+    st.caption(
+        f"Standby health saver: {'ON' if standby_health_saver_enabled else 'OFF'} • "
+        f"auto health public panel: {'ON' if model_status_auto_refresh_public_panel else 'OFF'} • "
+        f"interval standby: {int(standby_health_check_interval or 21600)} detik."
+    )
 
     perf_stats = get_model_performance_stats()
     if perf_stats:
@@ -10213,9 +9098,14 @@ def build_telegram_config_payload(
         "model_discovery_enabled": bool(model_discovery_enabled),
         "models_api_url": models_api_url,
         "model_discovery_timeout": int(model_discovery_timeout or 12),
-        "model_health_timeout": int(model_health_timeout or 12),
+        "model_health_timeout": int(model_health_timeout or 6),
         "model_health_workers": model_health_workers,
         "model_health_retries": model_health_retries,
+        "standby_health_saver_enabled": bool(standby_health_saver_enabled),
+        "standby_health_recent_activity_seconds": int(standby_health_recent_activity_seconds or 300),
+        "standby_health_check_interval": int(standby_health_check_interval or 21600),
+        "standby_health_quick_limit": int(standby_health_quick_limit or 2),
+        "standby_disable_model_discovery": bool(standby_disable_model_discovery),
         "model_health_midnight_only": bool(model_health_midnight_only),
         "model_health_hour_wib": int(model_health_hour_wib or 0),
         "model_health_window_minutes": int(model_health_window_minutes or 60),
@@ -13390,6 +12280,7 @@ def render_public_page() -> None:
         st.session_state.pending_prompt = ""
 
     if user_input:
+        note_user_activity_for_health_saver()
         maintenance_question_access_status: Dict[str, Any] = {}
         if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
             current_access = get_current_maintenance_access_key_status()
