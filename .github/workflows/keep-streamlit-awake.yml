@@ -1,16 +1,124 @@
-name: Keep Streamlit Awake
+name: ping-streamlit
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 */6 * * *"
-      timezone: "Asia/Jakarta"
+    # GitHub Actions minimum schedule adalah sekitar 5 menit.
+    # Pakai 10 menit agar lebih ringan dan tidak terlalu sering ping.
+    - cron: "*/10 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ping-streamlit
+  cancel-in-progress: true
 
 jobs:
-  ping-streamlit:
+  ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    env:
+      # Isi di GitHub:
+      # Settings → Secrets and variables → Actions → Secrets
+      # STREAMLIT_APP_URL = https://nama-app.streamlit.app
+      STREAMLIT_APP_URL: ${{ secrets.STREAMLIT_APP_URL }}
 
     steps:
-      - name: Ping Streamlit app
+      - name: Check app URL
+        shell: bash
         run: |
-          curl -L --max-time 60 "https://adioranye.streamlit.app/?keepalive=1"
+          set -euo pipefail
+
+          if [ -z "${STREAMLIT_APP_URL:-}" ]; then
+            echo "::error::STREAMLIT_APP_URL belum diisi di GitHub Secrets."
+            echo "Isi contoh: https://adioranye.streamlit.app"
+            exit 1
+          fi
+
+          echo "Target: ${STREAMLIT_APP_URL}"
+
+      - name: Ping Streamlit safely
+        shell: bash
+        run: |
+          set +e
+
+          URL="${STREAMLIT_APP_URL}"
+
+          # Pastikan URL pakai https://
+          case "$URL" in
+            http://*|https://*) ;;
+            *) URL="https://${URL}" ;;
+          esac
+
+          # Hilangkan slash akhir agar tidak memicu redirect bolak-balik di sebagian URL.
+          URL="${URL%/}"
+
+          echo "Pinging: $URL"
+
+          CURL_OUTPUT="$(mktemp)"
+          CURL_BODY="$(mktemp)"
+
+          HTTP_CODE="$(
+            curl \
+              --silent \
+              --show-error \
+              --location \
+              --max-redirs 5 \
+              --connect-timeout 10 \
+              --max-time 35 \
+              --user-agent "Adioranye-GitHub-Ping/1.0" \
+              --output "$CURL_BODY" \
+              --write-out "%{http_code}" \
+              "$URL" \
+              2>"$CURL_OUTPUT"
+          )"
+          CURL_EXIT=$?
+
+          echo "curl exit: $CURL_EXIT"
+          echo "http code: $HTTP_CODE"
+
+          if [ "$CURL_EXIT" -eq 47 ]; then
+            echo "::warning::curl exit 47 = too many redirects. Mencoba ping tanpa mengikuti redirect."
+
+            HTTP_CODE="$(
+              curl \
+                --silent \
+                --show-error \
+                --connect-timeout 10 \
+                --max-time 25 \
+                --user-agent "Adioranye-GitHub-Ping/1.0" \
+                --output "$CURL_BODY" \
+                --write-out "%{http_code}" \
+                "$URL" \
+                2>"$CURL_OUTPUT"
+            )"
+            CURL_EXIT=$?
+
+            echo "fallback curl exit: $CURL_EXIT"
+            echo "fallback http code: $HTTP_CODE"
+          fi
+
+          if [ -s "$CURL_OUTPUT" ]; then
+            echo "curl stderr:"
+            cat "$CURL_OUTPUT"
+          fi
+
+          # 2xx = OK, 3xx = redirect tetapi app merespons.
+          # Untuk ping/keepalive, 3xx tetap dianggap berhasil agar workflow tidak error 47 terus.
+          if [[ "$HTTP_CODE" =~ ^2|^3 ]]; then
+            echo "Ping berhasil atau app merespons redirect: HTTP $HTTP_CODE"
+            exit 0
+          fi
+
+          # Jika curl sukses tapi HTTP bukan 2xx/3xx, tampilkan warning namun jangan langsung gagal
+          # untuk mencegah workflow merah terus saat Streamlit sedang waking up.
+          if [ "$CURL_EXIT" -eq 0 ]; then
+            echo "::warning::App merespons HTTP $HTTP_CODE. Mungkin sedang waking up atau route butuh waktu."
+            exit 0
+          fi
+
+          # Timeout/network tetap diberi warning, bukan gagal permanen.
+          echo "::warning::Ping belum berhasil. curl exit=$CURL_EXIT, HTTP=$HTTP_CODE"
+          exit 0
