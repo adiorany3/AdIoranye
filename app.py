@@ -322,50 +322,24 @@ def parse_maintenance_until_datetime(
 def render_maintenance_browser_reload_script(
     interval_seconds: int | None = None,
 ) -> None:
-    """Browser reload otomatis dimatikan default untuk mencegah React #185."""
-    if (
-        bool(frontend_ultra_safe_mode)
-        or not bool(maintenance_browser_reload_enabled)
-        or not bool(custom_components_enabled)
-    ):
-        return
-
+    """Disabled: browser reload otomatis dimatikan total untuk menghindari React #185."""
     return
 
 def render_maintenance_realtime_status(
     initial_state: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Render status maintenance yang aman untuk Streamlit/React.
+    """Render status maintenance tanpa fragment, reload, script, atau rerun otomatis.
 
-    Fragment hanya menampilkan status. Reload halaman dilakukan via browser
-    saat lock aktif supaya chat input ikut berubah setelah auto-unlock.
+    Ini mode paling aman untuk menghindari React error #185.
+    Status lock tetap dibaca saat rerun normal Streamlit.
     """
-    initial_state = initial_state or read_maintenance_lock_state()
-    interval = max(5, int(maintenance_auto_check_interval_seconds or 5))
+    state = read_maintenance_lock_state()
+    st.session_state.maintenance_lock_signature = maintenance_state_signature(state)
 
-    def _body() -> Dict[str, Any]:
-        state = read_maintenance_lock_state()
-        signature = maintenance_state_signature(state)
-        st.session_state.maintenance_lock_signature = signature
+    if state.get("locked"):
+        render_maintenance_banner(state)
 
-        if state.get("locked"):
-            render_maintenance_banner(state)
-            render_maintenance_browser_reload_script(interval)
-
-        return state
-
-    if bool(maintenance_fragment_enabled) and hasattr(st, "fragment"):
-        try:
-            @st.fragment(run_every=f"{interval}s")
-            def _maintenance_realtime_fragment() -> None:
-                _body()
-
-            _maintenance_realtime_fragment()
-            return initial_state
-        except Exception:
-            pass
-
-    return _body()
+    return state
 
 def maintenance_public_message() -> str:
     state = read_maintenance_lock_state()
@@ -1411,6 +1385,13 @@ def init_state() -> None:
         st.session_state.last_model_performance_event = {}
     if "active_health_check_scope" not in st.session_state:
         st.session_state.active_health_check_scope = "quick"
+
+
+    # Frontend React #185 safe guard:
+    # paksa fitur frontend agresif mati walaupun session lama menyimpan True.
+    if bool(frontend_ultra_safe_mode):
+        st.session_state.sound_enabled = False
+        st.session_state.answer_streaming_preview_enabled = False
 
 
 # =========================
@@ -4833,7 +4814,7 @@ def build_live_model_status_html(
 
 
 def render_auto_model_status_refresh_panel() -> None:
-    """Panel status model tanpa st.fragment dan tanpa polling frontend."""
+    """Panel status model tanpa fragment/polling frontend."""
     if not bool(model_status_auto_refresh_public_panel):
         return
 
@@ -8419,72 +8400,17 @@ def render_auto_scroll_script(
     target: str = "latest",
     delay_ms: int = 120,
 ) -> None:
-    """Auto-scroll dinonaktifkan default untuk mencegah React update loop."""
-    if (
-        bool(frontend_ultra_safe_mode)
-        or not bool(custom_components_enabled)
-        or not bool(auto_scroll_enabled)
-    ):
-        return
-
-    safe_delay = max(0, int(delay_ms or 0))
-    components.html(
-        f"""
-        <script>
-        (function () {{
-            if (window.__adioranyeScrollBusy) {{
-                return;
-            }}
-            window.__adioranyeScrollBusy = true;
-            window.setTimeout(function () {{
-                try {{
-                    const doc = window.parent && window.parent.document
-                        ? window.parent.document
-                        : document;
-                    const items = doc.querySelectorAll('div[data-testid="stChatMessage"], .auto-scroll-anchor, .ai-loading-card');
-                    const targetElement = items && items.length
-                        ? items[items.length - 1]
-                        : doc.body;
-                    if (targetElement && targetElement.scrollIntoView) {{
-                        targetElement.scrollIntoView({{
-                            behavior: "auto",
-                            block: "end",
-                            inline: "nearest"
-                        }});
-                    }}
-                }} catch (error) {{}}
-                window.__adioranyeScrollBusy = false;
-            }}, {safe_delay});
-        }})();
-        </script>
-        """,
-        height=0,
-        scrolling=False,
-    )
+    """Disabled: auto-scroll JS dimatikan total untuk menghindari React #185."""
+    return
 
 def render_sound_unlock_script() -> None:
-    """Suara dinonaktifkan default untuk stabilitas frontend."""
-    if (
-        bool(frontend_ultra_safe_mode)
-        or not bool(custom_components_enabled)
-        or not bool(answer_sound_enabled)
-    ):
-        return
-
+    """Disabled: audio bridge dimatikan total untuk menghindari React #185."""
     return
 
 def render_answer_ready_sound_script(
     sound_key: str = "latest",
 ) -> None:
-    """Suara jawaban dinonaktifkan default untuk mencegah loop frontend."""
-    if (
-        bool(frontend_ultra_safe_mode)
-        or not bool(custom_components_enabled)
-        or not bool(answer_sound_enabled)
-        or not bool(st.session_state.get("sound_enabled", False))
-    ):
-        return
-
+    """Disabled: sound notification dimatikan total untuk menghindari React #185."""
     return
 
 def _get_public_stats() -> Dict[str, Any]:
@@ -12675,12 +12601,7 @@ def render_public_page() -> None:
                         route=route,
                         cfg=cfg,
                     )
-                    runtime_options["streaming_preview_enabled"] = bool(
-                        st.session_state.get(
-                            "answer_streaming_preview_enabled",
-                            True,
-                        )
-                    )
+                    runtime_options["streaming_preview_enabled"] = False
                     if runtime_options.get("auto_live_scraping_needed"):
                         loading_title = "Adioranye sedang mengecek info terkini"
                         loading_subtitle = (
