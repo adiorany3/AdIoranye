@@ -695,6 +695,7 @@ Memory default Adioranye:
 - Sapaan waktu: jika pengguna hanya menyapa dengan selamat pagi/siang/sore/malam, sesuaikan sapaan dengan waktu Indonesia saat ini dan jawab sebagai sapaan, bukan sebagai pertanyaan.
 - Cache pertanyaan: untuk pertanyaan umum yang sering muncul dan tidak bergantung pada waktu terkini, gunakan cache jawaban agar respons lebih cepat. Jangan cache berita, harga, jadwal, cuaca, atau info yang cepat berubah.
 - Model utama sehat: jika model utama sedang tidak aktif tetapi fallback sehat tersedia, otomatis gunakan model sehat sebagai model utama agar status tidak berhenti di fallback saja.
+- Auto-refresh status model: lakukan quick health check berkala secara ringan agar status model aktif terverifikasi tetap terbaru tanpa mengganggu chat publik.
 - Sapaan: gunakan sapaan profesional/netral. Jangan memakai panggilan seperti kakak, bro, atau sejenisnya kecuali pengguna memintanya.
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
@@ -1085,6 +1086,20 @@ auto_replace_inactive_primary_model = parse_bool(
 )
 auto_replace_primary_prefer_cheap = parse_bool(
     get_secret("AUTO_REPLACE_PRIMARY_PREFER_CHEAP", True),
+    default=True,
+)
+model_status_auto_refresh_enabled = parse_bool(
+    get_secret("MODEL_STATUS_AUTO_REFRESH_ENABLED", True),
+    default=True,
+)
+model_status_auto_refresh_interval_seconds = int(
+    get_secret("MODEL_STATUS_AUTO_REFRESH_INTERVAL_SECONDS", 90) or 90
+)
+model_status_auto_refresh_scope = str(
+    get_secret("MODEL_STATUS_AUTO_REFRESH_SCOPE", "quick") or "quick"
+).strip().lower()
+model_status_auto_refresh_public_panel = parse_bool(
+    get_secret("MODEL_STATUS_AUTO_REFRESH_PUBLIC_PANEL", True),
     default=True,
 )
 
@@ -3517,6 +3532,177 @@ def apply_healthy_primary_model(
         }
 
     return result
+
+
+
+
+def should_auto_refresh_model_status() -> bool:
+    """Tentukan apakah auto-refresh status model perlu berjalan."""
+    if not bool(model_status_auto_refresh_enabled):
+        return False
+
+    if not api_key:
+        return False
+
+    now = time.time()
+    interval = max(
+        30,
+        int(model_status_auto_refresh_interval_seconds or 90),
+    )
+    last_auto = float(
+        st.session_state.get("model_status_auto_refresh_last_ts") or 0
+    )
+    checked_at = float(
+        st.session_state.get("model_health_checked_at") or 0
+    )
+
+    if not checked_at:
+        return True
+
+    if is_model_readiness_stale(checked_at):
+        return True
+
+    return (now - last_auto) >= interval
+
+
+def maybe_auto_refresh_model_status(
+    reason: str = "auto",
+) -> Dict[str, Any]:
+    """Refresh status model secara berkala tanpa memaksa reload halaman.
+
+    - Hanya quick health check secara default.
+    - Throttled memakai MODEL_STATUS_AUTO_REFRESH_INTERVAL_SECONDS.
+    - Hasil disimpan ke session dan file persistent.
+    - Jika model utama lama tidak sehat, otomatis dipromosikan ke model sehat.
+    """
+    if not should_auto_refresh_model_status():
+        return {
+            "ran": False,
+            "reason": "not_due",
+        }
+
+    if st.session_state.get("model_status_auto_refresh_running"):
+        return {
+            "ran": False,
+            "reason": "already_running",
+        }
+
+    st.session_state.model_status_auto_refresh_running = True
+    started_at = time.time()
+
+    try:
+        scope = str(model_status_auto_refresh_scope or "quick").lower().strip()
+
+        if scope not in {"quick", "full", "auto"}:
+            scope = "quick"
+
+        refresh_model_health_if_needed(
+            force=True,
+            scope=scope,
+        )
+
+        replacement_result = apply_healthy_primary_model(
+            reason=f"auto-refresh-{reason}",
+        )
+
+        st.session_state.model_status_auto_refresh_last_ts = time.time()
+        st.session_state.model_status_auto_refresh_last_text = _wib_now_text()
+        st.session_state.model_status_auto_refresh_last_reason = reason
+        st.session_state.model_status_auto_refresh_last_duration_ms = int(
+            (time.time() - started_at) * 1000
+        )
+
+        return {
+            "ran": True,
+            "reason": reason,
+            "scope": scope,
+            "duration_ms": st.session_state.model_status_auto_refresh_last_duration_ms,
+            "replacement": replacement_result,
+        }
+    except Exception as exc:
+        st.session_state.last_model_health_error = str(exc)[:500]
+        st.session_state.model_status_auto_refresh_last_error = str(exc)[:500]
+
+        return {
+            "ran": False,
+            "reason": "error",
+            "error": str(exc)[:500],
+        }
+    finally:
+        st.session_state.model_status_auto_refresh_running = False
+
+
+def build_live_model_status_html(
+    readiness: Dict[str, Any],
+    refresh_meta: Dict[str, Any] | None = None,
+) -> str:
+    """HTML kecil untuk status refresh model tanpa mengganggu chat."""
+    refresh_meta = refresh_meta or {}
+    status_class = str(readiness.get("class") or "checking")
+    status_label = str(readiness.get("label") or "Perlu cek model")
+    next_model = str(readiness.get("next_model") or "").strip()
+    checked_at = str(readiness.get("checked_at") or "belum dicek")
+    last_auto = str(
+        st.session_state.get("model_status_auto_refresh_last_text")
+        or "-"
+    )
+    duration = st.session_state.get("model_status_auto_refresh_last_duration_ms")
+    duration_text = f" • {duration} ms" if duration else ""
+
+    if refresh_meta.get("ran"):
+        refresh_text = f"auto-refresh: baru saja{duration_text}"
+    else:
+        refresh_text = f"auto-refresh terakhir: {last_auto}{duration_text}"
+
+    return f"""
+    <div class="model-auto-refresh-panel status-{_html_escape(status_class)}">
+        <span class="model-auto-dot"></span>
+        <span><strong>{_html_escape(status_label)}</strong></span>
+        <span>Model: {_html_escape(next_model or '-')}</span>
+        <span>Cek: {_html_escape(checked_at)}</span>
+        <span>{_html_escape(refresh_text)}</span>
+    </div>
+    """
+
+
+def render_auto_model_status_refresh_panel() -> None:
+    """Panel status model yang bisa refresh periodik tanpa reload penuh jika fragment tersedia."""
+    if not bool(model_status_auto_refresh_public_panel):
+        return
+
+    def _render_panel_body() -> None:
+        refresh_meta = maybe_auto_refresh_model_status(
+            reason="public-status-panel",
+        )
+        route_preview = build_model_routing_plan(
+            user_text="halo",
+        )
+        readiness = get_model_readiness_state(route_preview)
+        st.markdown(
+            build_live_model_status_html(
+                readiness,
+                refresh_meta=refresh_meta,
+            ),
+            unsafe_allow_html=True,
+        )
+
+    interval = max(
+        30,
+        int(model_status_auto_refresh_interval_seconds or 90),
+    )
+
+    if hasattr(st, "fragment"):
+        try:
+            @st.fragment(run_every=f"{interval}s")
+            def _auto_model_status_fragment() -> None:
+                _render_panel_body()
+
+            _auto_model_status_fragment()
+            return
+        except Exception:
+            pass
+
+    _render_panel_body()
 
 
 
@@ -8815,7 +9001,8 @@ def render_admin_status() -> None:
         f"Status kesiapan nyata: {readiness_label}\n\n"
         f"Model route berikutnya: {readiness_next_model}\n\n"
         f"Model aktif terdeteksi: {active_count}\n\n"
-        f"Cek model terakhir: {checked_at}"
+        f"Cek model terakhir: {checked_at}\n\n"
+        f"Auto-refresh status terakhir: {st.session_state.get('model_status_auto_refresh_last_text') or '-'}"
     ).replace(",", ".")
     st.info(status_text)
 
@@ -8874,6 +9061,40 @@ def render_admin_status() -> None:
                 use_container_width=True,
                 key="frequent_question_cache_export",
             )
+
+    with st.expander("Auto-refresh status model"):
+        col_auto_a, col_auto_b, col_auto_c = st.columns(3)
+        col_auto_a.metric(
+            "Auto-refresh",
+            "ON" if model_status_auto_refresh_enabled else "OFF",
+        )
+        col_auto_b.metric(
+            "Interval",
+            f"{int(model_status_auto_refresh_interval_seconds or 90)} detik",
+        )
+        col_auto_c.metric(
+            "Terakhir",
+            st.session_state.get("model_status_auto_refresh_last_text") or "-",
+        )
+        st.caption(
+            "Auto-refresh hanya menjalankan quick health check berkala dan menyimpan hasilnya. "
+            "Tidak memaksa reload halaman, sehingga chat tetap aman."
+        )
+        if st.button(
+            "🔄 Jalankan auto-refresh status sekarang",
+            use_container_width=True,
+            key="manual_auto_refresh_model_status_now",
+        ):
+            result = maybe_auto_refresh_model_status(
+                reason="admin-manual-auto-refresh",
+            )
+            if result.get("ran"):
+                st.success(
+                    f"Auto-refresh selesai dalam {result.get('duration_ms', 0)} ms."
+                )
+            else:
+                st.info(f"Auto-refresh tidak dijalankan: {result.get('reason')}")
+            st.rerun()
 
     with st.expander("Kontrol status model"):
         col_ready_a, col_ready_b = st.columns(2)
@@ -10394,6 +10615,71 @@ st.markdown(
         box-shadow: 0 0 12px rgba(255,69,58,0.72);
     }
 
+    .model-auto-refresh-panel {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.46rem;
+        margin: 0.45rem 0 0.2rem 0;
+        padding: 0.48rem 0.62rem;
+        border-radius: 999px;
+        border: 1px solid rgba(120,120,128,0.22);
+        background: rgba(120,120,128,0.08);
+        color: var(--mac-text);
+        font-size: 0.76rem;
+        line-height: 1.2;
+    }
+
+    .model-auto-refresh-panel span {
+        color: inherit;
+    }
+
+    .model-auto-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #ffcc00;
+        box-shadow: 0 0 12px rgba(255,204,0,0.68);
+        animation: onlinePulse 1.65s ease-in-out infinite;
+    }
+
+    .model-auto-refresh-panel.status-ready,
+    .model-auto-refresh-panel.status-fallback {
+        border-color: rgba(52,199,89,0.30);
+        background: rgba(52,199,89,0.09);
+    }
+
+    .model-auto-refresh-panel.status-ready .model-auto-dot,
+    .model-auto-refresh-panel.status-fallback .model-auto-dot {
+        background: #34c759;
+        box-shadow: 0 0 12px rgba(52,199,89,0.72);
+    }
+
+    .model-auto-refresh-panel.status-checking {
+        border-color: rgba(255,204,0,0.35);
+        background: rgba(255,204,0,0.10);
+    }
+
+    .model-auto-refresh-panel.status-warning {
+        border-color: rgba(255,149,0,0.38);
+        background: rgba(255,149,0,0.11);
+    }
+
+    .model-auto-refresh-panel.status-warning .model-auto-dot {
+        background: #ff9500;
+        box-shadow: 0 0 12px rgba(255,149,0,0.72);
+    }
+
+    .model-auto-refresh-panel.status-offline {
+        border-color: rgba(255,69,58,0.38);
+        background: rgba(255,69,58,0.10);
+    }
+
+    .model-auto-refresh-panel.status-offline .model-auto-dot {
+        background: #ff453a;
+        box-shadow: 0 0 12px rgba(255,69,58,0.72);
+    }
+
     @keyframes adioranyeTextFlow {
         0%, 100% {
             background-position: 0% 50%;
@@ -10668,15 +10954,10 @@ def render_public_page() -> None:
     st.session_state.sound_enabled = True
     render_sound_unlock_script()
     hydrate_model_readiness_from_file()
-    if (
-        api_key
-        and not st.session_state.get("model_health_cache")
-        and parse_bool(get_secret("MODEL_READINESS_AUTO_QUICK_CHECK", True), default=True)
-    ):
-        try:
-            refresh_model_health_if_needed(force=False, scope="quick")
-        except Exception as exc:
-            st.session_state.last_model_health_error = str(exc)[:500]
+    if parse_bool(get_secret("MODEL_READINESS_AUTO_QUICK_CHECK", True), default=True):
+        maybe_auto_refresh_model_status(
+            reason="public-page-load",
+        )
 
     public_route_preview = build_model_routing_plan(user_text="halo")
     cheap_active = public_route_preview.get("active_cheap_models") or []
@@ -10732,6 +11013,8 @@ def render_public_page() -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    render_auto_model_status_refresh_panel()
 
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
