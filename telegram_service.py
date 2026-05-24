@@ -9,7 +9,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Dict, Any, List, Optional, Deque, Set
+from typing import Dict, Any, List, Optional, Deque, Set, Tuple
 
 import requests
 
@@ -34,6 +34,8 @@ DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
 DEFAULT_RUNTIME_STATE_FILE = ".telegram_runtime_state.json"
 LOCK_STALE_SECONDS = 180
 WIB_TZ = ZoneInfo("Asia/Jakarta")
+WITA_TZ = ZoneInfo("Asia/Makassar")
+WIT_TZ = ZoneInfo("Asia/Jayapura")
 
 
 
@@ -146,6 +148,7 @@ def telegram_get_retry_candidates(
     }
 
     candidates: List[str] = []
+    candidates.extend(kwargs.get("active_health_models") or [])
     candidates.extend(kwargs.get("fallback_models") or [])
     candidates.extend(kwargs.get("expensive_fallback_models") or [])
     candidates.extend(DEFAULT_CHEAP_FALLBACK_MODELS)
@@ -386,6 +389,455 @@ def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
 
 def _wib_now_text() -> str:
     return datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
+
+
+def _telegram_indonesia_part_of_day(
+    dt: datetime,
+) -> str:
+    hour = int(dt.hour)
+
+    if 4 <= hour <= 10:
+        return "pagi"
+
+    if 11 <= hour <= 14:
+        return "siang"
+
+    if 15 <= hour <= 17:
+        return "sore"
+
+    return "malam"
+
+
+def _telegram_normalize_short_greeting_text(
+    text: str,
+) -> str:
+    normalized = str(text or "").strip().lower()
+    normalized = re.sub(r"[!?.。,，:;]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def detect_telegram_indonesia_time_greeting(
+    user_text: str,
+) -> Dict[str, Any]:
+    """Deteksi sapaan waktu pendek di Telegram, bukan pertanyaan/tugas."""
+    normalized = _telegram_normalize_short_greeting_text(user_text)
+
+    if not normalized:
+        return {
+            "matched": False,
+            "said": "",
+        }
+
+    task_markers = {
+        "buat",
+        "buatkan",
+        "tulis",
+        "tuliskan",
+        "caption",
+        "template",
+        "contoh",
+        "arti",
+        "apa",
+        "kenapa",
+        "mengapa",
+        "jelaskan",
+        "translate",
+        "terjemahkan",
+    }
+
+    tokens = normalized.split()
+
+    if any(token in task_markers for token in tokens):
+        return {
+            "matched": False,
+            "said": "",
+        }
+
+    if len(tokens) > 5:
+        return {
+            "matched": False,
+            "said": "",
+        }
+
+    greeting_patterns = [
+        ("pagi", r"^(selamat\s+)?pagi(\s+(adioranye|admin|min|ai|bot))?$"),
+        ("siang", r"^(selamat\s+)?siang(\s+(adioranye|admin|min|ai|bot))?$"),
+        ("sore", r"^(selamat\s+)?sore(\s+(adioranye|admin|min|ai|bot))?$"),
+        ("malam", r"^(selamat\s+)?malam(\s+(adioranye|admin|min|ai|bot))?$"),
+    ]
+
+    for label, pattern in greeting_patterns:
+        if re.match(pattern, normalized, flags=re.I):
+            return {
+                "matched": True,
+                "said": label,
+            }
+
+    return {
+        "matched": False,
+        "said": "",
+    }
+
+
+def build_telegram_indonesia_time_greeting_reply(
+    user_text: str,
+) -> Tuple[str, Dict[str, Any]]:
+    detected = detect_telegram_indonesia_time_greeting(user_text)
+
+    if not detected.get("matched"):
+        return "", {}
+
+    now_wib = datetime.now(WIB_TZ)
+    now_wita = datetime.now(WITA_TZ)
+    now_wit = datetime.now(WIT_TZ)
+
+    default_part = _telegram_indonesia_part_of_day(now_wib)
+    user_said = str(detected.get("said") or "").strip()
+
+    lines = [
+        f"Selamat {default_part}.",
+        "",
+        (
+            f"Saat ini acuan default Indonesia adalah {now_wib.strftime('%H:%M')} WIB, "
+            f"jadi sapaan yang paling sesuai adalah selamat {default_part}."
+        ),
+    ]
+
+    if user_said and user_said != default_part:
+        lines.append(
+            f"Sapaan Anda tadi “selamat {user_said}”, saya sesuaikan dengan waktu Indonesia saat ini."
+        )
+
+    zone_summary = [
+        f"WIB {now_wib.strftime('%H:%M')} ({_telegram_indonesia_part_of_day(now_wib)})",
+        f"WITA {now_wita.strftime('%H:%M')} ({_telegram_indonesia_part_of_day(now_wita)})",
+        f"WIT {now_wit.strftime('%H:%M')} ({_telegram_indonesia_part_of_day(now_wit)})",
+    ]
+    lines.append("Ringkas zona Indonesia: " + "; ".join(zone_summary) + ".")
+
+    return "\n".join(lines), {
+        "telegram_local_time_greeting": True,
+        "greeting_detected": user_said,
+        "greeting_adjusted_to": default_part,
+        "timezone_default": "WIB",
+        "model_skipped": True,
+    }
+
+
+def telegram_indonesia_time_context_text() -> str:
+    now_wib = datetime.now(WIB_TZ)
+    now_wita = datetime.now(WITA_TZ)
+    now_wit = datetime.now(WIT_TZ)
+
+    return (
+        "KONTEKS WAKTU INDONESIA AKTIF:\n"
+        f"- WIB sekarang: {now_wib.strftime('%Y-%m-%d %H:%M:%S WIB')}.\n"
+        f"- WITA sekarang: {now_wita.strftime('%Y-%m-%d %H:%M:%S WITA')}.\n"
+        f"- WIT sekarang: {now_wit.strftime('%Y-%m-%d %H:%M:%S WIT')}.\n"
+        "- Untuk pertanyaan bahasa Indonesia tanpa zona/kota, gunakan WIB sebagai default.\n"
+        "- Jika wilayah/kota jelas masuk WITA atau WIT, gunakan zona tersebut."
+    )
+
+
+def telegram_frequent_cache_config(
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "enabled": telegram_parse_bool(
+            config.get("frequent_question_cache_enabled")
+            or os.getenv("FREQUENT_QUESTION_CACHE_ENABLED", "true"),
+            default=True,
+        ),
+        "file": str(
+            config.get("frequent_question_cache_file")
+            or os.getenv("FREQUENT_QUESTION_CACHE_FILE", ".adioranye_frequent_questions.json")
+        ).strip(),
+        "ttl_seconds": telegram_safe_int(
+            config.get("frequent_question_cache_ttl_seconds")
+            or os.getenv("FREQUENT_QUESTION_CACHE_TTL_SECONDS", "86400"),
+            86400,
+        ),
+        "max_entries": telegram_safe_int(
+            config.get("frequent_question_cache_max_entries")
+            or os.getenv("FREQUENT_QUESTION_CACHE_MAX_ENTRIES", "500"),
+            500,
+        ),
+        "min_chars": telegram_safe_int(
+            config.get("frequent_question_cache_min_chars")
+            or os.getenv("FREQUENT_QUESTION_CACHE_MIN_CHARS", "4"),
+            4,
+        ),
+    }
+
+
+def normalize_telegram_frequent_question_key(
+    user_text: str,
+) -> str:
+    value = str(user_text or "").strip().lower()
+    value = re.sub(r"https?://\S+", "", value)
+    value = re.sub(r"[^\w\s\-:/.,]", " ", value, flags=re.UNICODE)
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
+
+
+def telegram_frequent_question_cache_key(
+    user_text: str,
+) -> str:
+    normalized = normalize_telegram_frequent_question_key(user_text)
+
+    return hmac.new(
+        b"adioranye-telegram-frequent-question-cache",
+        normalized.encode("utf-8", "ignore"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+
+
+def load_telegram_frequent_question_cache(
+    config: Dict[str, Any],
+) -> Dict[str, Any]:
+    cache_cfg = telegram_frequent_cache_config(config)
+    path = cache_cfg["file"]
+
+    try:
+        if not path or not os.path.exists(path):
+            return {
+                "version": 1,
+                "items": {},
+            }
+
+        with open(path, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            return {
+                "version": 1,
+                "items": {},
+            }
+
+        if not isinstance(data.get("items"), dict):
+            data["items"] = {}
+
+        return data
+    except Exception:
+        return {
+            "version": 1,
+            "items": {},
+        }
+
+
+def save_telegram_frequent_question_cache(
+    config: Dict[str, Any],
+    cache_data: Dict[str, Any],
+) -> None:
+    cache_cfg = telegram_frequent_cache_config(config)
+    path = cache_cfg["file"]
+    max_entries = max(10, int(cache_cfg["max_entries"] or 500))
+
+    try:
+        items = cache_data.get("items") or {}
+
+        if len(items) > max_entries:
+            sorted_items = sorted(
+                items.items(),
+                key=lambda pair: (
+                    int(pair[1].get("hit_count", 0) or 0),
+                    float(pair[1].get("updated_at_ts", 0) or 0),
+                ),
+                reverse=True,
+            )
+            cache_data["items"] = dict(sorted_items[:max_entries])
+
+        cache_data["saved_at"] = _wib_now_text()
+
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(
+                cache_data,
+                file,
+                ensure_ascii=False,
+                indent=2,
+            )
+    except Exception:
+        pass
+
+
+def telegram_is_dynamic_question_for_cache(
+    user_text: str,
+) -> bool:
+    lowered = str(user_text or "").lower()
+
+    dynamic_markers = [
+        "hari ini",
+        "sekarang",
+        "terbaru",
+        "terkini",
+        "update",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "viral",
+        "tren",
+        "trend",
+        "live",
+        "real time",
+        "real-time",
+        "saat ini",
+        "barusan",
+        "minggu ini",
+        "bulan ini",
+    ]
+
+    return any(marker in lowered for marker in dynamic_markers)
+
+
+def should_use_telegram_frequent_question_cache(
+    user_text: str,
+    config: Dict[str, Any],
+) -> bool:
+    cache_cfg = telegram_frequent_cache_config(config)
+
+    if not cache_cfg["enabled"]:
+        return False
+
+    normalized = normalize_telegram_frequent_question_key(user_text)
+
+    if len(normalized) < int(cache_cfg["min_chars"] or 4):
+        return False
+
+    if normalized.startswith(("/", "!", "#")):
+        return False
+
+    if telegram_is_dynamic_question_for_cache(user_text):
+        return False
+
+    skip_markers = [
+        "upload",
+        "file ini",
+        "pdf ini",
+        "gambar ini",
+        "kode ini",
+        "error ini",
+        "log ini",
+        "kerjakan file",
+        "perbaiki file",
+        "buatkan desain",
+        "terjemahkan pdf",
+    ]
+
+    return not any(marker in normalized for marker in skip_markers)
+
+
+def get_telegram_frequent_question_cached_answer(
+    user_text: str,
+    config: Dict[str, Any],
+) -> Tuple[str, Dict[str, Any]]:
+    if not should_use_telegram_frequent_question_cache(user_text, config):
+        return "", {}
+
+    cache_data = load_telegram_frequent_question_cache(config)
+    items = cache_data.get("items") or {}
+    key = telegram_frequent_question_cache_key(user_text)
+    item = items.get(key)
+
+    if not isinstance(item, dict):
+        return "", {}
+
+    now_ts = time.time()
+    expires_at_ts = float(item.get("expires_at_ts", 0) or 0)
+
+    if expires_at_ts and expires_at_ts < now_ts:
+        try:
+            del items[key]
+            cache_data["items"] = items
+            save_telegram_frequent_question_cache(config, cache_data)
+        except Exception:
+            pass
+
+        return "", {}
+
+    answer = str(item.get("answer") or "").strip()
+
+    if not answer:
+        return "", {}
+
+    item["hit_count"] = int(item.get("hit_count", 0) or 0) + 1
+    item["last_hit_at"] = _wib_now_text()
+    item["last_hit_at_ts"] = now_ts
+    items[key] = item
+    cache_data["items"] = items
+    save_telegram_frequent_question_cache(config, cache_data)
+
+    return answer, {
+        "telegram_frequent_question_cache_hit": True,
+        "telegram_frequent_question_cache_key": key,
+        "telegram_frequent_question_cache_hit_count": item.get("hit_count", 0),
+        "model_skipped": True,
+        "cached_at": item.get("created_at", ""),
+        "expires_at": item.get("expires_at", ""),
+    }
+
+
+def save_telegram_frequent_question_cached_answer(
+    user_text: str,
+    answer: str,
+    meta: Dict[str, Any] | None,
+    config: Dict[str, Any],
+) -> bool:
+    if not should_use_telegram_frequent_question_cache(user_text, config):
+        return False
+
+    answer_text = str(answer or "").strip()
+
+    if not answer_text or len(answer_text) < 3:
+        return False
+
+    meta_data = meta or {}
+
+    if telegram_looks_like_model_error(answer_text, meta=meta_data):
+        return False
+
+    if meta_data.get("telegram_current_info_mode") or meta_data.get("telegram_auto_live_scraping_needed"):
+        return False
+
+    if meta_data.get("telegram_local_time_greeting"):
+        return False
+
+    cache_cfg = telegram_frequent_cache_config(config)
+    ttl_seconds = max(60, int(cache_cfg["ttl_seconds"] or 86400))
+    now_ts = time.time()
+    expires_at_ts = now_ts + ttl_seconds
+    key = telegram_frequent_question_cache_key(user_text)
+    normalized = normalize_telegram_frequent_question_key(user_text)
+
+    cache_data = load_telegram_frequent_question_cache(config)
+    items = cache_data.get("items") or {}
+    existing = items.get(key) if isinstance(items.get(key), dict) else {}
+
+    items[key] = {
+        "question": str(user_text or "").strip()[:500],
+        "normalized_question": normalized[:500],
+        "answer": answer_text,
+        "meta": {
+            "model": meta_data.get("telegram_active_model_final")
+            or meta_data.get("active_model_final")
+            or meta_data.get("model_requested")
+            or "",
+        },
+        "created_at": existing.get("created_at") or _wib_now_text(),
+        "created_at_ts": existing.get("created_at_ts") or now_ts,
+        "updated_at": _wib_now_text(),
+        "updated_at_ts": now_ts,
+        "expires_at": datetime.fromtimestamp(expires_at_ts, tz=WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB"),
+        "expires_at_ts": expires_at_ts,
+        "hit_count": int(existing.get("hit_count", 0) or 0),
+    }
+
+    cache_data["items"] = items
+    save_telegram_frequent_question_cache(config, cache_data)
+
+    return True
 
 
 def split_telegram_message(text: str, max_len: int = 3900) -> List[str]:
@@ -2836,7 +3288,27 @@ class TelegramBotService:
                             )
                             continue
 
-                        local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
+                        local_reply = ""
+                        local_meta: Dict[str, Any] = {}
+
+                        greeting_reply, greeting_meta = build_telegram_indonesia_time_greeting_reply(
+                            text
+                        )
+                        if greeting_reply:
+                            local_reply = greeting_reply
+                            local_meta = greeting_meta
+
+                        if not local_reply:
+                            cached_reply, cached_meta = get_telegram_frequent_question_cached_answer(
+                                text,
+                                config,
+                            )
+                            if cached_reply:
+                                local_reply = cached_reply
+                                local_meta = cached_meta
+
+                        if not local_reply:
+                            local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
                         if not local_reply and power_features_enabled:
                             local_reply = handle_power_command(
                                 text,
@@ -2845,12 +3317,21 @@ class TelegramBotService:
                                 is_admin=self._is_admin_chat(chat_id, config),
                             )
                         if local_reply:
+                            key = str(chat_id)
+                            history = self._histories.setdefault(key, [])
+                            history.append({"role": "user", "content": text})
+                            history.append({"role": "assistant", "content": local_reply})
+                            self._histories[key] = history[-8:]
                             self._send_message(token, chat_id, local_reply, parse_mode=telegram_parse_mode)
                             continue
 
                         key = str(chat_id)
                         history = self._histories.setdefault(key, [])
-                        memory_text = memory.as_prompt_text(limit=20)
+                        memory_text = (
+                            telegram_indonesia_time_context_text()
+                            + "\n\n"
+                            + memory.as_prompt_text(limit=20)
+                        )
 
                         if send_processing_message:
                             self._send_message(token, chat_id, "⏳ Sedang diproses...", parse_mode=telegram_parse_mode)
@@ -2873,6 +3354,33 @@ class TelegramBotService:
                             request_expensive_fallback_models = list(expensive_fallback_models or [])
                             request_allow_expensive = allow_expensive_fallback
                             request_return_to_primary = return_to_primary
+
+                            active_health_models = [
+                                model_name
+                                for model_name, item in (self._model_health_cache or {}).items()
+                                if isinstance(item, dict) and item.get("active")
+                            ]
+                            active_health_models = sorted(
+                                active_health_models,
+                                key=lambda model_name: float(
+                                    (self._model_health_cache.get(model_name, {}) or {}).get("latency_ms", 999999)
+                                    or 999999
+                                ),
+                            )
+                            if bool(config.get("auto_replace_inactive_primary_model", True)):
+                                current_health = (self._model_health_cache or {}).get(request_model, {})
+                                if active_health_models and not current_health.get("active"):
+                                    previous_runtime_model = request_model
+                                    request_model = active_health_models[0]
+                                    model = request_model
+                                    self._runtime_primary_model = request_model
+                                    self._last_model_update_source = "auto_healthy_primary"
+                                    persist_current_runtime_state("auto_healthy_primary")
+                                    request_fallback_models = [
+                                        item
+                                        for item in active_health_models
+                                        if item != request_model
+                                    ] + request_fallback_models
 
                             fast_normal_mode = False
 
@@ -3111,6 +3619,7 @@ class TelegramBotService:
                                     and live_scraping_needed
                                 ),
                                 live_web_fallback_topic=request_live_web_topic,
+                                active_health_models=active_health_models,
                                 auto_retry_on_model_error_enabled=bool(
                                     config.get("auto_retry_on_model_error_enabled", True)
                                 ),
@@ -3150,6 +3659,18 @@ class TelegramBotService:
                                 )
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
+                                meta["telegram_active_health_models"] = active_health_models
+                                meta["telegram_auto_replace_inactive_primary_model"] = bool(
+                                    config.get("auto_replace_inactive_primary_model", True)
+                                )
+
+                            if save_telegram_frequent_question_cached_answer(
+                                text,
+                                answer,
+                                meta if isinstance(meta, dict) else {},
+                                config,
+                            ) and isinstance(meta, dict):
+                                meta["telegram_frequent_question_cache_saved"] = True
 
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})
