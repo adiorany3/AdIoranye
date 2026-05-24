@@ -109,6 +109,43 @@ def telegram_unique_models(models: List[str]) -> List[str]:
     return result
 
 
+def telegram_model_tier_rank(model: str) -> int:
+    tier = model_cost_tier(model)
+    if tier == "cheap":
+        return 0
+    if tier in {"medium", "menengah"}:
+        return 1
+    return 2
+
+
+def telegram_sort_models_for_simple_chat(
+    models: List[str],
+    health_cache: Dict[str, Dict[str, Any]] | None = None,
+) -> List[str]:
+    """Murah dulu untuk percakapan sederhana, lalu sedang, lalu mahal."""
+    health_cache = health_cache or {}
+    unique = telegram_unique_models(models)
+
+    def sort_key(model: str) -> tuple[int, float, int, str]:
+        latency = 999999.0
+        try:
+            value = (health_cache.get(model, {}) or {}).get("latency_ms")
+            if value is not None:
+                latency = float(value)
+        except Exception:
+            latency = 999999.0
+
+        price = model_price(model)
+        return (
+            telegram_model_tier_rank(model),
+            latency,
+            int(price.get("output", 999999999)),
+            model,
+        )
+
+    return sorted(unique, key=sort_key)
+
+
 def telegram_looks_like_model_error(
     answer_text: Any,
     meta: Dict[str, Any] | None = None,
@@ -147,17 +184,30 @@ def telegram_get_retry_candidates(
         if str(model or "").strip()
     }
 
+    medium_candidates = [
+        model
+        for model in telegram_unique_models(
+            (ALL_CAPABLE_MODELS or [])
+            + (TOP_USAGE_MODEL_CANDIDATES or [])
+        )
+        if telegram_model_tier_rank(model) == 1
+    ]
+
     candidates: List[str] = []
     candidates.extend(kwargs.get("active_health_models") or [])
-    candidates.extend(kwargs.get("fallback_models") or [])
-    candidates.extend(kwargs.get("expensive_fallback_models") or [])
     candidates.extend(DEFAULT_CHEAP_FALLBACK_MODELS)
-    candidates.extend(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
-    candidates.extend(TOP_USAGE_MODEL_CANDIDATES)
     candidates.extend(ALL_CHEAP_MODELS or [])
+    candidates.extend(kwargs.get("fallback_models") or [])
+    candidates.extend(medium_candidates)
+    candidates.extend(kwargs.get("expensive_fallback_models") or [])
+    candidates.extend(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
     candidates.extend(ALL_CAPABLE_MODELS or [])
+    candidates.extend(TOP_USAGE_MODEL_CANDIDATES)
 
-    unique = telegram_unique_models(candidates)
+    unique = telegram_sort_models_for_simple_chat(
+        candidates,
+        kwargs.get("health_cache") or {},
+    )
 
     return [
         model
@@ -168,6 +218,7 @@ def telegram_get_retry_candidates(
 
 TELEGRAM_INTERNAL_POWER_KWARGS = {
     "active_health_models",
+    "health_cache",
     "auto_retry_on_model_error_enabled",
     "auto_retry_on_model_error_max_attempts",
     "auto_retry_on_model_error_timeout_seconds",
@@ -3671,22 +3722,36 @@ class TelegramBotService:
                         )
                         active_health_models: List[str] = []
 
+                        preview_manual_mode = str(forced_model_mode or "auto").lower()
+                        preview_thinking_mode = (
+                            preview_manual_mode == "auto"
+                            and bool(thinking_model_router)
+                            and is_thinking_telegram_question(
+                                text,
+                                history=history,
+                                min_chars=thinking_min_chars,
+                            )
+                        )
+
                         if send_processing_message:
-                            self._send_message(token, chat_id, "⏳ Sedang diproses...", parse_mode=telegram_parse_mode)
+                            if preview_thinking_mode:
+                                processing_text = (
+                                    "🧠 Adioranye sedang thinking dan mengetik jawaban..."
+                                )
+                            else:
+                                processing_text = "⏳ Adioranye sedang mengetik jawaban..."
+                            self._send_message(
+                                token,
+                                chat_id,
+                                processing_text,
+                                parse_mode=telegram_parse_mode,
+                            )
                         else:
                             self._send_typing(token, chat_id)
 
                         try:
-                            manual_mode = str(forced_model_mode or "auto").lower()
-                            thinking_mode = (
-                                manual_mode == "auto"
-                                and bool(thinking_model_router)
-                                and is_thinking_telegram_question(
-                                    text,
-                                    history=history,
-                                    min_chars=thinking_min_chars,
-                                )
-                            )
+                            manual_mode = preview_manual_mode
+                            thinking_mode = preview_thinking_mode
                             request_model = model
                             request_fallback_models = list(fallback_models or [])
                             request_expensive_fallback_models = list(expensive_fallback_models or [])
@@ -3710,9 +3775,9 @@ class TelegramBotService:
                                     except Exception:
                                         return 999999.0
 
-                                active_health_models = sorted(
+                                active_health_models = telegram_sort_models_for_simple_chat(
                                     active_health_models,
-                                    key=_telegram_latency_value,
+                                    self._model_health_cache or {},
                                 )
 
                                 if bool(config.get("auto_replace_inactive_primary_model", True)):
@@ -3989,6 +4054,7 @@ class TelegramBotService:
                                 ),
                                 live_web_fallback_topic=request_live_web_topic,
                                 active_health_models=(active_health_models if 'active_health_models' in locals() else []),
+                                health_cache=(self._model_health_cache or {}),
                                 auto_retry_on_model_error_enabled=bool(
                                     config.get("auto_retry_on_model_error_enabled", True)
                                 ),
@@ -4029,6 +4095,13 @@ class TelegramBotService:
                                 if self._model_health_checked_at:
                                     meta["telegram_speed_updated_at"] = self._model_health_checked_at
                                 meta["telegram_active_health_models"] = active_health_models
+                                meta["telegram_health_candidate_tiers"] = "cheap-medium-expensive"
+                                meta["telegram_loading_status_thinking"] = bool(thinking_mode)
+                                meta["telegram_loading_status_text"] = (
+                                    "Adioranye sedang thinking dan mengetik jawaban"
+                                    if thinking_mode
+                                    else "Adioranye sedang mengetik jawaban"
+                                )
                                 meta["telegram_auto_replace_inactive_primary_model"] = bool(
                                     config.get("auto_replace_inactive_primary_model", True)
                                 )

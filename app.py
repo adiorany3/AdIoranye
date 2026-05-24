@@ -385,13 +385,20 @@ def get_active_model_retry_candidates(
         or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
     )
     fallback_lists.extend(
+        st.session_state.get("active_medium_fallback_models")
+        or MEDIUM_MODEL_OPTIONS.copy()
+    )
+    fallback_lists.extend(
         st.session_state.get("active_expensive_fallback_models")
         or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
     )
     fallback_lists.extend(DEFAULT_FALLBACK_MODELS.copy())
     fallback_lists.extend(TOP_USAGE_MODEL_CANDIDATES)
 
-    candidates = _simple_unique_models(
+    candidates = sort_health_models_for_simple_chat(
+        active_from_health + fallback_lists,
+        health_cache,
+    ) or _simple_unique_models(
         active_from_health
         + fallback_lists
     )
@@ -1035,6 +1042,10 @@ def init_state() -> None:
         st.session_state.active_expensive_fallback_models = (
             DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
         )
+    if "active_medium_fallback_models" not in st.session_state:
+        st.session_state.active_medium_fallback_models = (
+            MEDIUM_MODEL_OPTIONS.copy()
+        )
     if "last_model_health_error" not in st.session_state:
         st.session_state.last_model_health_error = ""
     if "active_rotate_cheap_primary" not in st.session_state:
@@ -1157,6 +1168,16 @@ MODEL_OPTIONS = list(
         + EXPENSIVE_MODEL_OPTIONS
     )
 )
+MEDIUM_MODEL_OPTIONS = [
+    model
+    for model in MODEL_OPTIONS
+    if model_cost_tier(model) in {"medium", "menengah"}
+]
+HIGH_COST_MODEL_OPTIONS = [
+    model
+    for model in MODEL_OPTIONS
+    if model_cost_tier(model) not in {"cheap", "medium", "menengah"}
+]
 
 # Secrets
 api_key = str(get_secret("SLASHAI_API_KEY", ""))
@@ -2619,6 +2640,44 @@ def _tier_rank(model: str) -> int:
     return 2
 
 
+def filter_models_by_tier(
+    models: List[str],
+    tier_rank: int,
+) -> List[str]:
+    return [
+        model
+        for model in unique_models(models)
+        if _tier_rank(model) == int(tier_rank)
+    ]
+
+
+def sort_health_models_for_simple_chat(
+    models: List[str],
+    health_cache: Dict[str, Dict[str, Any]],
+) -> List[str]:
+    """Percakapan sederhana: murah dulu, lalu latency/harga."""
+    active_models = [
+        model
+        for model in unique_models(models)
+        if health_cache.get(model, {}).get("active")
+    ]
+
+    def sort_key(model: str) -> Tuple[int, float, int, float, str]:
+        price = model_price(model)
+        latency = get_model_effective_latency_ms(model, health_cache)
+        penalty = get_model_performance_penalty(model)
+        success_rate = get_model_success_rate(model)
+        return (
+            _tier_rank(model),
+            latency + penalty,
+            int(price.get("output", 999999999)),
+            -success_rate,
+            model,
+        )
+
+    return sorted(active_models, key=sort_key)
+
+
 def prioritize_active_models(
     models: List[str], health_cache: Dict[str, Dict[str, Any]]
 ) -> List[str]:
@@ -2944,6 +3003,8 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
         + TOP_USAGE_MODEL_CANDIDATES
         + MODEL_OPTIONS
         + CHEAP_MODEL_OPTIONS
+        + MEDIUM_MODEL_OPTIONS
+        + HIGH_COST_MODEL_OPTIONS
         + EXPENSIVE_MODEL_OPTIONS
         + DEFAULT_CHEAP_FALLBACK_MODELS
         + DEFAULT_EXPENSIVE_FALLBACK_MODELS
@@ -2954,9 +3015,12 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
     if scope_clean == "quick":
         quick_pool = unique_models(
             [st.session_state.get("active_model") or default_model, default_model]
+            + DEFAULT_CHEAP_FALLBACK_MODELS[:4]
+            + CHEAP_MODEL_OPTIONS[:6]
+            + MEDIUM_MODEL_OPTIONS[:4]
+            + DEFAULT_EXPENSIVE_FALLBACK_MODELS[:3]
+            + HIGH_COST_MODEL_OPTIONS[:4]
             + TOP_USAGE_MODEL_CANDIDATES
-            + DEFAULT_CHEAP_FALLBACK_MODELS
-            + DEFAULT_EXPENSIVE_FALLBACK_MODELS[:2]
         )
         limit = max(3, int(model_health_quick_limit or 8))
         models_to_check = quick_pool[:limit]
@@ -2994,12 +3058,23 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
                     "error": str(exc)[:500],
                 }
 
+    discovered_and_known_models = unique_models(
+        MODEL_OPTIONS
+        + api_discovered_models
+        + TOP_USAGE_MODEL_CANDIDATES
+        + DEFAULT_CHEAP_FALLBACK_MODELS
+        + DEFAULT_EXPENSIVE_FALLBACK_MODELS
+    )
     active_cheap = prioritize_active_models(
-        CHEAP_MODEL_OPTIONS + TOP_USAGE_MODEL_CANDIDATES + api_discovered_models,
+        filter_models_by_tier(discovered_and_known_models, 0),
+        fresh_cache,
+    )
+    active_medium = prioritize_active_models(
+        filter_models_by_tier(discovered_and_known_models, 1),
         fresh_cache,
     )
     active_expensive = prioritize_active_models(
-        EXPENSIVE_MODEL_OPTIONS + TOP_USAGE_MODEL_CANDIDATES + api_discovered_models,
+        filter_models_by_tier(discovered_and_known_models, 2),
         fresh_cache,
     )
 
@@ -3012,6 +3087,8 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
 
     if active_cheap:
         st.session_state.active_cheap_fallback_models = active_cheap
+    if active_medium:
+        st.session_state.active_medium_fallback_models = active_medium
     if active_expensive:
         st.session_state.active_expensive_fallback_models = active_expensive
 
@@ -3031,17 +3108,25 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
 
 
 def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
-    """Ambil fallback yang sudah dicek aktif dan diurutkan berdasarkan prioritas biaya/latency."""
+    """Ambil fallback aktif.
+
+    Return kedua tetap kompatibel, tetapi urutannya sekarang:
+    medium dulu, lalu mahal. Model murah tetap pada return pertama.
+    """
     refresh_model_health_if_needed(force=False)
     cheap = (
         st.session_state.get("active_cheap_fallback_models")
         or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
     )
+    medium = (
+        st.session_state.get("active_medium_fallback_models")
+        or MEDIUM_MODEL_OPTIONS.copy()
+    )
     expensive = (
         st.session_state.get("active_expensive_fallback_models")
         or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
     )
-    return unique_models(cheap), unique_models(expensive)
+    return unique_models(cheap), unique_models(medium + expensive)
 
 
 def get_rotating_cheap_primary(
@@ -4093,13 +4178,13 @@ def choose_healthy_primary_model(
         }
 
     cheap_candidates = filter_runtime_blocked_models(
-        prioritize_fastest_active_models(
+        sort_health_models_for_simple_chat(
             active_cheap_models,
             health_cache,
         )
     )
-    expensive_candidates = filter_runtime_blocked_models(
-        prioritize_fastest_active_models(
+    higher_candidates = filter_runtime_blocked_models(
+        prioritize_active_models(
             active_expensive_models,
             health_cache,
         )
@@ -4107,10 +4192,10 @@ def choose_healthy_primary_model(
 
     prefer_cheap = bool(auto_replace_primary_prefer_cheap)
 
-    if operation_mode == "Maksimal" and expensive_candidates and not prefer_cheap:
-        candidates = expensive_candidates + cheap_candidates
+    if operation_mode == "Maksimal" and higher_candidates and not prefer_cheap:
+        candidates = higher_candidates + cheap_candidates
     else:
-        candidates = cheap_candidates + expensive_candidates
+        candidates = cheap_candidates + higher_candidates
 
     candidates = unique_models(
         [
@@ -4159,6 +4244,15 @@ def apply_healthy_primary_model(
         health_cache = st.session_state.get("model_health_cache") or {}
 
     active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+    active_medium_models = (
+        st.session_state.get("active_medium_fallback_models")
+        or MEDIUM_MODEL_OPTIONS.copy()
+    )
+    active_high_cost_models = (
+        st.session_state.get("active_expensive_fallback_models")
+        or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+    )
+    active_higher_models = unique_models(active_medium_models + active_high_cost_models)
     operation_mode = _normalize_operation_mode(
         st.session_state.get(
             "active_operation_mode",
@@ -4397,8 +4491,16 @@ def build_model_routing_plan(
             selected_model=selected_model,
             active_cheap_models=st.session_state.get("active_cheap_fallback_models")
             or DEFAULT_CHEAP_FALLBACK_MODELS.copy(),
-            active_expensive_models=st.session_state.get("active_expensive_fallback_models")
-            or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy(),
+            active_expensive_models=unique_models(
+                (
+                    st.session_state.get("active_medium_fallback_models")
+                    or MEDIUM_MODEL_OPTIONS.copy()
+                )
+                + (
+                    st.session_state.get("active_expensive_fallback_models")
+                    or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+                )
+            ),
             health_cache=health_cache,
             operation_mode=_normalize_operation_mode(
                 st.session_state.get(
@@ -4430,8 +4532,9 @@ def build_model_routing_plan(
     fast_normal_enabled = bool(
         st.session_state.get("active_fast_normal_model_router", True)
     )
-    fastest_cheap_models = prioritize_fastest_active_models(
-        active_cheap_models, health_cache
+    fastest_cheap_models = sort_health_models_for_simple_chat(
+        active_cheap_models,
+        health_cache,
     )
     thinking_mode = is_thinking_question(user_text)
 
@@ -4439,7 +4542,7 @@ def build_model_routing_plan(
         capable_primary = ""
     else:
         capable_primary = get_capable_primary_model(
-            active_expensive_models, health_cache
+            active_higher_models, health_cache
         )
 
     direct_to_expensive = False
@@ -4582,6 +4685,9 @@ def build_model_routing_plan(
         "fast_cheap_models": unique_models(fastest_cheap_models),
         "active_cheap_models": active_cheap_models,
         "active_expensive_models": active_expensive_models,
+        "active_medium_models": active_medium_models,
+        "active_high_cost_models": active_high_cost_models,
+        "health_candidate_tiers": "cheap-medium-expensive",
         "rotate_cheap_primary": rotate_enabled,
         "fast_normal_model_router": fast_normal_enabled,
         "rotated_primary_model": rotated_primary,
@@ -11926,23 +12032,28 @@ def render_public_page() -> None:
                         )
                     )
                     if runtime_options.get("auto_live_scraping_needed"):
+                        loading_title = "Adioranye sedang mengecek info terkini"
                         loading_subtitle = (
                             "Mode info terkini aktif. Adioranye sedang mengecek sumber luar dan cache terbaru."
                         )
-                    elif route.get("thinking_direct_to_capable"):
+                    elif route.get("thinking_direct_to_capable") or route.get("thinking_mode"):
+                        loading_title = "Adioranye sedang thinking dan mengetik jawaban"
                         loading_subtitle = (
-                            "Mode analisis aktif. Robot kecilnya sedang membaca konteks lebih teliti."
+                            "Mode thinking aktif. Adioranye sedang menganalisis konteks lebih teliti sebelum menyusun jawaban."
                         )
                     elif route.get("normal_fast_mode"):
+                        loading_title = "Adioranye sedang mengetik jawaban cepat"
                         loading_subtitle = (
                             "Mode cepat aktif. Robot kecilnya sedang mengetik jawaban ringkas."
                         )
                     else:
+                        loading_title = "Adioranye sedang mengetik jawaban"
                         loading_subtitle = (
                             "Adioranye memilih jalur terbaik, lalu merapikan jawaban untuk Anda."
                         )
                     placeholder.markdown(
                         render_loading_animation_html(
+                            title=loading_title,
                             subtitle=loading_subtitle,
                         ),
                         unsafe_allow_html=True,
@@ -12185,6 +12296,11 @@ def render_public_page() -> None:
                         meta["token_saver_mode"] = _token_saver_mode()
                         meta["token_saver_max_completion_tokens"] = int(
                             runtime_options.get("max_completion_tokens", 0) or 0
+                        )
+                        meta["ui_loading_status_title"] = loading_title
+                        meta["ui_loading_status_thinking"] = bool(
+                            route.get("thinking_direct_to_capable")
+                            or route.get("thinking_mode")
                         )
                         meta["auto_live_scraping_needed"] = bool(
                             runtime_options.get("auto_live_scraping_needed")
