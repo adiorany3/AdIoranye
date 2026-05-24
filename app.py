@@ -693,6 +693,7 @@ Memory default Adioranye:
 - Prinsip akurasi: jangan mengarang. Untuk data terbaru, hukum, medis, keuangan, harga, jadwal, atau keputusan berisiko, sampaikan bahwa data perlu diverifikasi atau gunakan sumber yang tersedia.
 - Konteks waktu: jika pengguna bertanya dalam bahasa Indonesia, gunakan waktu Indonesia. Default gunakan WIB, tetapi sesuaikan ke WITA atau WIT jika wilayah/kota pengguna jelas. UTC hanya dipakai sebagai referensi teknis, bukan dianggap waktu lokal pengguna.
 - Sapaan waktu: jika pengguna hanya menyapa dengan selamat pagi/siang/sore/malam, sesuaikan sapaan dengan waktu Indonesia saat ini dan jawab sebagai sapaan, bukan sebagai pertanyaan.
+- Cache pertanyaan: untuk pertanyaan umum yang sering muncul dan tidak bergantung pada waktu terkini, gunakan cache jawaban agar respons lebih cepat. Jangan cache berita, harga, jadwal, cuaca, atau info yang cepat berubah.
 - Sapaan: gunakan sapaan profesional/netral. Jangan memakai panggilan seperti kakak, bro, atau sejenisnya kecuali pengguna memintanya.
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
@@ -1057,6 +1058,24 @@ kb_v2_retrieval_enabled = parse_bool(
 )
 kb_v2_retrieval_limit = int(
     get_secret("KB_V2_RETRIEVAL_LIMIT", 5) or 5
+)
+
+frequent_question_cache_enabled = parse_bool(
+    get_secret("FREQUENT_QUESTION_CACHE_ENABLED", True),
+    default=True,
+)
+frequent_question_cache_file = str(
+    get_secret("FREQUENT_QUESTION_CACHE_FILE", ".adioranye_frequent_questions.json")
+    or ".adioranye_frequent_questions.json"
+).strip()
+frequent_question_cache_ttl_seconds = int(
+    get_secret("FREQUENT_QUESTION_CACHE_TTL_SECONDS", 86400) or 86400
+)
+frequent_question_cache_max_entries = int(
+    get_secret("FREQUENT_QUESTION_CACHE_MAX_ENTRIES", 500) or 500
+)
+frequent_question_cache_min_chars = int(
+    get_secret("FREQUENT_QUESTION_CACHE_MIN_CHARS", 4) or 4
 )
 
 # Operational safety / retention
@@ -1677,6 +1696,377 @@ def build_indonesia_time_greeting_reply(
         "wit_time": zone_rows[2][1].strftime("%Y-%m-%d %H:%M:%S WIT"),
         "model_skipped": True,
     }
+
+
+
+def normalize_frequent_question_key(
+    user_text: str,
+) -> str:
+    """Normalisasi pertanyaan agar cache tahan variasi kecil."""
+    text = str(user_text or "").strip().lower()
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"[^\w\s\-:/.,]", " ", text, flags=re.UNICODE)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def frequent_question_cache_key(
+    user_text: str,
+) -> str:
+    normalized = normalize_frequent_question_key(user_text)
+    return hmac.new(
+        b"adioranye-frequent-question-cache",
+        normalized.encode("utf-8", "ignore"),
+        digestmod="sha256",
+    ).hexdigest()
+
+
+def load_frequent_question_cache() -> Dict[str, Any]:
+    """Load cache jawaban sering muncul dari file JSON."""
+    try:
+        if not frequent_question_cache_file or not os.path.exists(frequent_question_cache_file):
+            return {
+                "version": 1,
+                "items": {},
+            }
+
+        with open(
+            frequent_question_cache_file,
+            "r",
+            encoding="utf-8",
+        ) as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            return {
+                "version": 1,
+                "items": {},
+            }
+
+        if not isinstance(data.get("items"), dict):
+            data["items"] = {}
+
+        return data
+    except Exception:
+        return {
+            "version": 1,
+            "items": {},
+        }
+
+
+def save_frequent_question_cache(
+    cache_data: Dict[str, Any],
+) -> None:
+    """Simpan cache jawaban sering muncul."""
+    try:
+        items = cache_data.get("items") or {}
+
+        if len(items) > int(frequent_question_cache_max_entries or 500):
+            sorted_items = sorted(
+                items.items(),
+                key=lambda pair: (
+                    int(pair[1].get("hit_count", 0) or 0),
+                    float(pair[1].get("updated_at_ts", 0) or 0),
+                ),
+                reverse=True,
+            )
+            trimmed = dict(
+                sorted_items[: int(frequent_question_cache_max_entries or 500)]
+            )
+            cache_data["items"] = trimmed
+
+        cache_data["saved_at"] = _wib_now_text()
+
+        with open(
+            frequent_question_cache_file,
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(
+                cache_data,
+                file,
+                ensure_ascii=False,
+                indent=2,
+            )
+    except Exception:
+        pass
+
+
+def is_current_or_dynamic_question_for_cache(
+    user_text: str,
+) -> bool:
+    """Jangan cache pertanyaan yang jawabannya cepat berubah."""
+    try:
+        profile = detect_auto_live_scraping_need(user_text)
+        if bool(profile.get("needed")):
+            return True
+    except Exception:
+        pass
+
+    lowered = str(user_text or "").lower()
+
+    dynamic_markers = [
+        "hari ini",
+        "sekarang",
+        "terbaru",
+        "terkini",
+        "update",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "viral",
+        "tren",
+        "trend",
+        "live",
+        "real time",
+        "real-time",
+        "saat ini",
+        "barusan",
+        "minggu ini",
+        "bulan ini",
+    ]
+
+    return any(marker in lowered for marker in dynamic_markers)
+
+
+def should_use_frequent_question_cache(
+    user_text: str,
+) -> bool:
+    if not bool(frequent_question_cache_enabled):
+        return False
+
+    normalized = normalize_frequent_question_key(user_text)
+
+    if len(normalized) < int(frequent_question_cache_min_chars or 4):
+        return False
+
+    if is_current_or_dynamic_question_for_cache(user_text):
+        return False
+
+    # Jangan cache command/admin/memory/upload.
+    command_prefixes = (
+        "/",
+        "!",
+        "#",
+    )
+
+    if normalized.startswith(command_prefixes):
+        return False
+
+    skip_markers = [
+        "upload",
+        "file ini",
+        "pdf ini",
+        "gambar ini",
+        "kode ini",
+        "error ini",
+        "log ini",
+        "kerjakan file",
+        "perbaiki file",
+        "buatkan desain",
+        "terjemahkan pdf",
+    ]
+
+    if any(marker in normalized for marker in skip_markers):
+        return False
+
+    return True
+
+
+def get_frequent_question_cached_answer(
+    user_text: str,
+) -> Tuple[str, Dict[str, Any]]:
+    """Ambil jawaban cache jika masih valid."""
+    if not should_use_frequent_question_cache(user_text):
+        return "", {}
+
+    cache_data = load_frequent_question_cache()
+    items = cache_data.get("items") or {}
+    key = frequent_question_cache_key(user_text)
+    item = items.get(key)
+
+    if not isinstance(item, dict):
+        return "", {}
+
+    now_ts = time.time()
+    expires_at = float(item.get("expires_at_ts", 0) or 0)
+
+    if expires_at and expires_at < now_ts:
+        try:
+            del items[key]
+            cache_data["items"] = items
+            save_frequent_question_cache(cache_data)
+        except Exception:
+            pass
+        return "", {}
+
+    answer = str(item.get("answer") or "").strip()
+
+    if not answer:
+        return "", {}
+
+    item["hit_count"] = int(item.get("hit_count", 0) or 0) + 1
+    item["last_hit_at"] = _wib_now_text()
+    item["last_hit_at_ts"] = now_ts
+    items[key] = item
+    cache_data["items"] = items
+    save_frequent_question_cache(cache_data)
+
+    return answer, {
+        "frequent_question_cache_hit": True,
+        "frequent_question_cache_key": key,
+        "frequent_question_cache_hit_count": item.get("hit_count", 0),
+        "model_skipped": True,
+        "cached_at": item.get("created_at", ""),
+        "expires_at": item.get("expires_at", ""),
+    }
+
+
+def save_frequent_question_cached_answer(
+    user_text: str,
+    answer: str,
+    meta: Dict[str, Any] | None = None,
+) -> bool:
+    """Simpan jawaban sukses ke frequent question cache."""
+    if not should_use_frequent_question_cache(user_text):
+        return False
+
+    answer_text = str(answer or "").strip()
+
+    if not answer_text or len(answer_text) < 3:
+        return False
+
+    meta_data = meta or {}
+
+    if is_public_connection_error_answer(answer_text, meta=meta_data):
+        return False
+
+    if meta_data.get("rate_limited") or meta_data.get("public_error_sanitized"):
+        return False
+
+    if meta_data.get("current_info_mode") or meta_data.get("auto_live_scraping_needed"):
+        return False
+
+    if meta_data.get("local_time_greeting"):
+        return False
+
+    key = frequent_question_cache_key(user_text)
+    normalized = normalize_frequent_question_key(user_text)
+    now_ts = time.time()
+    ttl = max(60, int(frequent_question_cache_ttl_seconds or 86400))
+    expires_at_ts = now_ts + ttl
+
+    cache_data = load_frequent_question_cache()
+    items = cache_data.get("items") or {}
+    existing = items.get(key) if isinstance(items.get(key), dict) else {}
+
+    items[key] = {
+        "question": str(user_text or "").strip()[:500],
+        "normalized_question": normalized[:500],
+        "answer": answer_text,
+        "meta": {
+            "model": meta_data.get("active_model_final")
+            or meta_data.get("model")
+            or meta_data.get("model_requested")
+            or "",
+            "strategy": meta_data.get("strategy_label", ""),
+        },
+        "created_at": existing.get("created_at") or _wib_now_text(),
+        "created_at_ts": existing.get("created_at_ts") or now_ts,
+        "updated_at": _wib_now_text(),
+        "updated_at_ts": now_ts,
+        "expires_at": _timestamp_to_wib_text(expires_at_ts),
+        "expires_at_ts": expires_at_ts,
+        "hit_count": int(existing.get("hit_count", 0) or 0),
+    }
+
+    cache_data["items"] = items
+    save_frequent_question_cache(cache_data)
+
+    return True
+
+
+def clear_frequent_question_cache() -> int:
+    cache_data = load_frequent_question_cache()
+    items = cache_data.get("items") or {}
+    count = len(items)
+    cache_data["items"] = {}
+    save_frequent_question_cache(cache_data)
+    return count
+
+
+def frequent_question_cache_stats() -> Dict[str, Any]:
+    cache_data = load_frequent_question_cache()
+    items = cache_data.get("items") or {}
+    now_ts = time.time()
+
+    active = 0
+    expired = 0
+    total_hits = 0
+
+    for item in items.values():
+        if not isinstance(item, dict):
+            continue
+
+        expires_at_ts = float(item.get("expires_at_ts", 0) or 0)
+
+        if expires_at_ts and expires_at_ts < now_ts:
+            expired += 1
+        else:
+            active += 1
+
+        total_hits += int(item.get("hit_count", 0) or 0)
+
+    top_items = sorted(
+        [
+            item
+            for item in items.values()
+            if isinstance(item, dict)
+        ],
+        key=lambda item: int(item.get("hit_count", 0) or 0),
+        reverse=True,
+    )[:10]
+
+    return {
+        "active": active,
+        "expired": expired,
+        "total": len(items),
+        "total_hits": total_hits,
+        "top_items": top_items,
+    }
+
+
+def export_frequent_question_cache_rows() -> List[Dict[str, Any]]:
+    cache_data = load_frequent_question_cache()
+    items = cache_data.get("items") or {}
+
+    rows = []
+
+    for key, item in items.items():
+        if not isinstance(item, dict):
+            continue
+
+        rows.append(
+            {
+                "key": key,
+                "question": item.get("question", ""),
+                "normalized_question": item.get("normalized_question", ""),
+                "hit_count": item.get("hit_count", 0),
+                "created_at": item.get("created_at", ""),
+                "updated_at": item.get("updated_at", ""),
+                "expires_at": item.get("expires_at", ""),
+                "answer_preview": str(item.get("answer", ""))[:240],
+            }
+        )
+
+    rows.sort(
+        key=lambda row: int(row.get("hit_count", 0) or 0),
+        reverse=True,
+    )
+
+    return rows
 
 
 def _health_window_label_wib() -> str:
@@ -8219,6 +8609,62 @@ def render_admin_status() -> None:
     ).replace(",", ".")
     st.info(status_text)
 
+    with st.expander("Cache pertanyaan sering muncul"):
+        cache_stats = frequent_question_cache_stats()
+        col_cache_a, col_cache_b, col_cache_c, col_cache_d = st.columns(4)
+
+        col_cache_a.metric(
+            "Cache aktif",
+            cache_stats.get("active", 0),
+        )
+        col_cache_b.metric(
+            "Expired",
+            cache_stats.get("expired", 0),
+        )
+        col_cache_c.metric(
+            "Total",
+            cache_stats.get("total", 0),
+        )
+        col_cache_d.metric(
+            "Total hit",
+            cache_stats.get("total_hits", 0),
+        )
+
+        rows = export_frequent_question_cache_rows()
+
+        if rows:
+            st.dataframe(
+                rows[:20],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        col_cache_reset, col_cache_export = st.columns(2)
+
+        with col_cache_reset:
+            if st.button(
+                "🧹 Reset cache pertanyaan",
+                use_container_width=True,
+                key="frequent_question_cache_reset",
+            ):
+                deleted = clear_frequent_question_cache()
+                st.success(f"Cache pertanyaan dihapus: {deleted} item.")
+                st.rerun()
+
+        with col_cache_export:
+            st.download_button(
+                "⬇️ Export cache pertanyaan",
+                data=json.dumps(
+                    rows,
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                file_name="frequent_question_cache.json",
+                mime="application/json",
+                use_container_width=True,
+                key="frequent_question_cache_export",
+            )
+
     with st.expander("Kontrol status model"):
         col_ready_a, col_ready_b = st.columns(2)
         with col_ready_a:
@@ -10158,6 +10604,15 @@ def render_public_page() -> None:
             local_reply = greeting_reply
             local_meta = greeting_meta
 
+        if not local_reply:
+            cached_reply, cached_meta = get_frequent_question_cached_answer(
+                user_input
+            )
+
+            if cached_reply:
+                local_reply = cached_reply
+                local_meta = cached_meta
+
         if not local_reply and st.session_state.admin_authenticated:
             local_reply = handle_local_memory_command(user_input, memory)
             if not local_reply and power_features_enabled:
@@ -10625,6 +11080,16 @@ def render_public_page() -> None:
                         sound_key=f"local-{len(st.session_state.chat_messages)}",
                     )
                 answer_pdf_download_button(answer, key="download_pdf_local_reply")
+
+        if not local_reply:
+            cache_saved = save_frequent_question_cached_answer(
+                user_input,
+                answer,
+                meta or {},
+            )
+
+            if cache_saved and isinstance(meta, dict):
+                meta["frequent_question_cache_saved"] = True
 
         st.session_state.chat_messages.append(
             {"role": "assistant", "content": answer, "meta": meta or {}}
