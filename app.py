@@ -7917,7 +7917,9 @@ def render_admin_settings() -> None:
                         max_expensive_models=route["max_expensive_models"],
                         temperature=float(st.session_state.active_temperature),
                         max_completion_tokens=int(st.session_state.active_max_tokens),
-                        timeout=int(runtime_options["timeout"]),
+                        timeout=int(
+                            get_secret("AI_TEST_TIMEOUT_SECONDS", 60) or 60
+                        ),
                         smart_model_router=bool(st.session_state.active_smart_router),
                         return_to_primary=route["return_to_primary"],
                         max_smart_models=route["max_smart_models"],
