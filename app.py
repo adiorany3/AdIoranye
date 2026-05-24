@@ -677,6 +677,7 @@ DEFAULT_PERSONA = (
     "Gunakan bahasa Indonesia yang natural, sopan, jelas, dan tidak bertele-tele. "
     "Untuk pertanyaan sederhana, jawab langsung. Untuk tugas akademik, coding, bisnis, riset, dokumen, atau analisis, jawab terstruktur, bertahap, dan siap dipakai. "
     "Utamakan akurasi: jangan mengarang fakta, angka, sumber, hukum, medis, keuangan, atau informasi terbaru. Jika data belum cukup, jelaskan batasannya dan berikan langkah aman. "
+    "Untuk pertanyaan waktu dalam bahasa Indonesia, gunakan zona waktu Indonesia sebagai acuan: WIB sebagai default, lalu WITA/WIT jika wilayahnya jelas. Jangan menjawab seolah-olah UTC adalah waktu lokal pengguna. "
     "Saat memperbaiki kode, sebutkan letak masalah, solusi inti, lalu berikan kode yang bisa langsung ditempel. "
     "Jika menulis kode, format kode harus vertikal ke bawah dengan line break yang rapi, bukan dipadatkan panjang ke samping. "
     "Pecah parameter, list, dictionary, command, dan chain method panjang ke beberapa baris agar nyaman dibaca di layar HP. "
@@ -690,6 +691,8 @@ Memory default Adioranye:
 - Identitas: Adioranye dibuat oleh Galuh Adi Insani dan berperan sebagai asisten AI praktis untuk kebutuhan umum, akademik, teknis, bisnis, kreatif, coding, analisis data, strategi konten, dokumen, dan produktivitas.
 - Gaya jawaban: profesional, ramah, jelas, ringkas untuk pertanyaan ringan, dan detail bertahap untuk pekerjaan kompleks.
 - Prinsip akurasi: jangan mengarang. Untuk data terbaru, hukum, medis, keuangan, harga, jadwal, atau keputusan berisiko, sampaikan bahwa data perlu diverifikasi atau gunakan sumber yang tersedia.
+- Konteks waktu: jika pengguna bertanya dalam bahasa Indonesia, gunakan waktu Indonesia. Default gunakan WIB, tetapi sesuaikan ke WITA atau WIT jika wilayah/kota pengguna jelas. UTC hanya dipakai sebagai referensi teknis, bukan dianggap waktu lokal pengguna.
+- Sapaan: gunakan sapaan profesional/netral. Jangan memakai panggilan seperti kakak, bro, atau sejenisnya kecuali pengguna memintanya.
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
 - Format kode: tulis kode ke bawah dengan baris yang rapi. Jangan menulis kode panjang dalam satu baris jika bisa dipecah ke beberapa baris. Untuk parameter, list, dictionary, command, CSS, HTML attribute, dan function call panjang, pecah menjadi beberapa baris dengan indentasi.
@@ -1205,6 +1208,9 @@ def build_memory_text(limit: int = 12) -> str:
     local_memory = str(memory.as_prompt_text(limit=limit) or "").strip()
 
     sections = []
+    time_context = _indonesia_time_context_text()
+    if time_context:
+        sections.append(time_context)
     if default_context:
         sections.append("MEMORY DEFAULT AKTIF:\n" + default_context)
     if cache_memory:
@@ -1238,6 +1244,9 @@ def persona_with_default_memory(persona: str) -> str:
     cache_context = str(streamlit_cache_memory_prompt_text(limit=20) or "").strip()
 
     context_sections = []
+    time_context = _indonesia_time_context_text()
+    if time_context:
+        context_sections.append(time_context)
     if default_context:
         context_sections.append(
             "Konteks default yang selalu dipakai:\n" + default_context
@@ -1463,10 +1472,39 @@ def unique_models(models: List[str]) -> List[str]:
 
 
 WIB_TZ = ZoneInfo("Asia/Jakarta")
+WITA_TZ = ZoneInfo("Asia/Makassar")
+WIT_TZ = ZoneInfo("Asia/Jayapura")
 
 
 def _wib_now_text() -> str:
     return datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
+
+
+def _indonesia_time_context_text() -> str:
+    """Konteks waktu untuk jawaban bahasa Indonesia.
+
+    UTC tetap dicatat sebagai referensi teknis, tetapi jawaban Indonesia
+    harus memakai WIB/WITA/WIT, bukan menganggap UTC sebagai waktu lokal.
+    """
+    now_utc = datetime.now(timezone.utc)
+    now_wib = now_utc.astimezone(WIB_TZ)
+    now_wita = now_utc.astimezone(WITA_TZ)
+    now_wit = now_utc.astimezone(WIT_TZ)
+
+    return (
+        "KONTEKS WAKTU INDONESIA AKTIF:\n"
+        f"- UTC sekarang: {now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')}.\n"
+        f"- WIB sekarang: {now_wib.strftime('%Y-%m-%d %H:%M:%S WIB')} "
+        "(Jakarta, Sumatra, Jawa, Kalimantan Barat/Tengah).\n"
+        f"- WITA sekarang: {now_wita.strftime('%Y-%m-%d %H:%M:%S WITA')} "
+        "(Bali, Sulawesi, Nusa Tenggara, Kalimantan Timur/Selatan/Utara).\n"
+        f"- WIT sekarang: {now_wit.strftime('%Y-%m-%d %H:%M:%S WIT')} "
+        "(Maluku, Papua).\n"
+        "- Jika pengguna memakai bahasa Indonesia dan tidak menyebut zona/kota, "
+        "gunakan WIB sebagai default.\n"
+        "- Jika wilayah/kota jelas masuk WITA atau WIT, gunakan zona tersebut.\n"
+        "- Jangan menyebut UTC sebagai waktu lokal pengguna kecuali pengguna memang meminta UTC."
+    )
 
 
 def _health_window_label_wib() -> str:
@@ -7169,6 +7207,7 @@ def fetch_tavily_live_context(
         context_parts = [
             "KONTEKS LIVE CACHE UNTUK INFO TERKINI",
             f"Query: {query_clean}",
+            _indonesia_time_context_text(),
             f"Provider: {cached.get('provider', 'tavily')}",
             f"Cached at: {cached.get('created_at', '')}",
             f"Expires at: {cached.get('expires_at', '')}",
@@ -7277,7 +7316,8 @@ def fetch_tavily_live_context(
     context_parts = [
         "KONTEKS LIVE WEB/TAVILY UNTUK INFO TERKINI",
         f"Query: {query_clean}",
-        f"Waktu cek: {_wib_now_text()}",
+        _indonesia_time_context_text(),
+        f"Waktu cek utama: {_wib_now_text()}",
         "",
     ]
 
