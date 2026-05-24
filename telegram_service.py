@@ -252,8 +252,8 @@ def retry_telegram_power_answer_with_active_models(
         min(
             telegram_safe_int(
                 original_kwargs.get("auto_retry_on_model_error_max_attempts")
-                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "2"),
-                2,
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
             ),
             5,
         ),
@@ -408,6 +408,31 @@ def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
                 meta=meta,
             ):
                 return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
 
         raise
 

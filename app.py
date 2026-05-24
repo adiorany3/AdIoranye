@@ -216,6 +216,59 @@ def _simple_unique_models(
     return result
 
 
+
+def extract_explicit_failed_models_from_meta(
+    meta: Dict[str, Any] | None,
+    original_model: str = "",
+) -> List[str]:
+    """Ambil model yang benar-benar terindikasi gagal.
+
+    Jangan masukkan seluruh fallback list sebagai failed, karena pada thinking mode
+    fallback mungkin belum dicoba ulang di layer luar.
+    """
+    meta_data = meta or {}
+    failed: List[str] = []
+
+    if original_model:
+        failed.append(str(original_model).strip())
+
+    direct_keys = [
+        "failed_model",
+        "error_model",
+        "model_failed",
+        "model_requested",
+    ]
+
+    for key in direct_keys:
+        value = str(meta_data.get(key) or "").strip()
+        if value:
+            failed.append(value)
+
+    list_keys = [
+        "failed_models",
+        "blocked_models",
+        "runtime_failed_models",
+    ]
+
+    for key in list_keys:
+        value = meta_data.get(key)
+        if isinstance(value, (list, tuple, set)):
+            failed.extend(
+                str(item or "").strip()
+                for item in value
+                if str(item or "").strip()
+            )
+
+    return _simple_unique_models(
+        [
+            item
+            for item in failed
+            if item
+        ]
+    )
+
+
+
 def get_active_model_retry_candidates(
     failed_models: List[str] | None = None,
 ) -> List[str]:
@@ -305,7 +358,7 @@ def retry_power_answer_with_active_models(
     max_attempts = max(
         1,
         min(
-            int(get_secret("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", 2) or 2),
+            int(get_secret("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", 3) or 3),
             5,
         ),
     )
@@ -313,18 +366,17 @@ def retry_power_answer_with_active_models(
         get_secret("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", 35) or 35
     )
 
+    try:
+        maybe_auto_refresh_model_status(
+            reason="retry-after-thinking-or-model-error",
+        )
+    except Exception:
+        pass
+
     original_model = str(original_kwargs.get("model") or "").strip()
-    failed_models = [original_model]
-
-    fallback_models = original_kwargs.get("fallback_models") or []
-    expensive_fallback_models = original_kwargs.get("expensive_fallback_models") or []
-
-    failed_models.extend(
-        [
-            str(model or "").strip()
-            for model in fallback_models + expensive_fallback_models
-            if str(model or "").strip()
-        ]
+    failed_models = extract_explicit_failed_models_from_meta(
+        original_meta,
+        original_model=original_model,
     )
 
     candidates = get_active_model_retry_candidates(
@@ -352,6 +404,8 @@ def retry_power_answer_with_active_models(
             if model != candidate_model
         ][:max_attempts]
         retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["allow_expensive_fallback"] = True
+        retry_kwargs["return_to_primary"] = False
         retry_kwargs["timeout"] = min(
             int(retry_kwargs.get("timeout") or timeout_seconds),
             timeout_seconds,
@@ -483,6 +537,31 @@ def safe_generate_power_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
                 meta=retry_meta,
             ):
                 return retry_answer, retry_meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            retry_answer, retry_meta = retry_power_answer_with_active_models(
+                make_public_ai_error_message(),
+                {
+                    "public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_public_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not is_retryable_model_error_answer(
+                retry_answer,
+                meta=retry_meta,
+            ):
+                return retry_answer, retry_meta
+
+            if isinstance(retry_meta, dict):
+                retry_meta["public_error_sanitized"] = True
+                return make_public_ai_error_message(), retry_meta
 
         raise
 
@@ -12165,21 +12244,78 @@ def render_public_page() -> None:
                     )
                 except Exception:
                     pass
-                meta = {
-                    "public_error_sanitized": True,
-                    "error_class": exc.__class__.__name__,
-                    "hidden_public_error_detail": str(exc)[:5000],
-                }
-                answer = make_public_ai_error_message()
+
+                route_for_retry = locals().get("route", {}) or {}
+                runtime_for_retry = locals().get("runtime_options", {}) or {}
+                current_info_memory_for_retry = locals().get("current_info_memory_text", "")
+
+                retry_answer, retry_meta = retry_power_answer_with_active_models(
+                    make_public_ai_error_message(),
+                    {
+                        "public_error_sanitized": True,
+                        "error_class": exc.__class__.__name__,
+                        "hidden_public_error_detail": str(exc)[:5000],
+                        "retry_trigger": "outer_exception",
+                    },
+                    {
+                        "api_url": api_url,
+                        "api_key": api_key,
+                        "model": route_for_retry.get("primary_model") or cfg.get("model"),
+                        "system_prompt": cfg["persona"],
+                        "user_text": user_input,
+                        "base_memory_text": current_info_memory_for_retry,
+                        "recent_messages": compact_recent_messages_for_token_saver(
+                            st.session_state.chat_messages,
+                            limit=web_history_limit,
+                            recent_full=web_history_recent_full,
+                        ) if "compact_recent_messages_for_token_saver" in globals() else st.session_state.chat_messages[:-1][-4:],
+                        "fallback_models": route_for_retry.get("cheap_fallback_models", []),
+                        "expensive_fallback_models": route_for_retry.get("expensive_fallback_models", []),
+                        "allow_expensive_fallback": True,
+                        "max_expensive_models": route_for_retry.get("max_expensive_models", 1),
+                        "temperature": float(cfg.get("temperature", 0.3)),
+                        "max_completion_tokens": int(runtime_for_retry.get("max_completion_tokens") or cfg.get("max_completion_tokens", 1200)),
+                        "timeout": int(runtime_for_retry.get("timeout") or request_timeout_seconds or 45),
+                        "smart_model_router": bool(cfg.get("smart_model_router", True)),
+                        "return_to_primary": False,
+                        "max_smart_models": route_for_retry.get("max_smart_models", 2),
+                        "store": power_store,
+                        "user_id": "web-admin" if st.session_state.get("admin_authenticated", False) else "web-public",
+                        "channel": "web",
+                    },
+                    retry_depth=0,
+                )
+
+                if not is_retryable_model_error_answer(
+                    retry_answer,
+                    meta=retry_meta,
+                ):
+                    answer = retry_answer
+                    meta = retry_meta if isinstance(retry_meta, dict) else {}
+                    meta["outer_exception_retry_success"] = True
+                else:
+                    meta = retry_meta if isinstance(retry_meta, dict) else {
+                        "public_error_sanitized": True,
+                        "error_class": exc.__class__.__name__,
+                        "hidden_public_error_detail": str(exc)[:5000],
+                    }
+                    answer = make_public_ai_error_message()
+
                 st.session_state.last_answer_meta = meta
 
                 existing_placeholder = locals().get("placeholder")
 
                 if existing_placeholder is not None:
-                    existing_placeholder.warning(answer)
+                    if is_public_connection_error_answer(answer, meta=meta):
+                        existing_placeholder.warning(answer)
+                    else:
+                        existing_placeholder.markdown(answer)
                 else:
                     with st.chat_message("assistant"):
-                        st.warning(answer)
+                        if is_public_connection_error_answer(answer, meta=meta):
+                            st.warning(answer)
+                        else:
+                            st.markdown(answer)
 
         if local_reply:
             with st.chat_message("assistant"):
