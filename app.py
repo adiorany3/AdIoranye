@@ -284,14 +284,67 @@ def render_maintenance_realtime_status(
     return state
 
 
+def render_maintenance_locked_public_guard(
+    state: Dict[str, Any] | None = None,
+) -> None:
+    """Paksa sembunyikan chat UI ketika maintenance lock aktif.
+
+    Ini guard defensif agar tombol/elemen lama seperti `Chat baru` tidak tetap
+    terlihat dari render sebelumnya.
+    """
+    if not bool(maintenance_hide_chat_when_locked):
+        return
+
+    state = state or read_maintenance_lock_state()
+
+    if not state.get("locked"):
+        return
+
+    st.session_state.pending_prompt = ""
+
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stChatInput"],
+        section[data-testid="stChatInput"],
+        div.stChatInput,
+        .stChatInput {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+        }
+
+        div[data-testid="stButton"] {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+        }
+
+        .chat-input-safe-space {
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_maintenance_safe_meta_refresh(
     state: Dict[str, Any] | None = None,
     is_admin: bool = False,
 ) -> None:
     """Auto-refresh aman untuk sinkronisasi lock/unlock.
 
-    Tidak memakai JavaScript, st.fragment, components.html, atau st.rerun otomatis.
-    Hanya memakai meta refresh HTML.
+    Tidak memakai JavaScript, st.fragment, components.html, setTimeout,
+    atau st.rerun otomatis. Hanya memakai meta refresh HTML.
     """
     if is_admin:
         return
@@ -1470,6 +1523,10 @@ maintenance_auto_refresh_interval_seconds = int(
 )
 maintenance_auto_refresh_when_unlocked = parse_bool(
     get_secret("MAINTENANCE_AUTO_REFRESH_WHEN_UNLOCKED", True),
+    default=True,
+)
+maintenance_hide_chat_when_locked = parse_bool(
+    get_secret("MAINTENANCE_HIDE_CHAT_WHEN_LOCKED", True),
     default=True,
 )
 maintenance_fragment_enabled = parse_bool(
@@ -9727,6 +9784,7 @@ def get_runtime_config() -> Dict[str, Any]:
         "maintenance_auto_refresh_enabled": bool(maintenance_auto_refresh_enabled),
         "maintenance_auto_refresh_interval_seconds": maintenance_auto_refresh_interval_seconds,
         "maintenance_auto_refresh_when_unlocked": bool(maintenance_auto_refresh_when_unlocked),
+        "maintenance_hide_chat_when_locked": bool(maintenance_hide_chat_when_locked),
         "maintenance_fragment_enabled": bool(maintenance_fragment_enabled),
         "maintenance_browser_reload_enabled": bool(maintenance_browser_reload_enabled),
         "frontend_ultra_safe_mode": bool(frontend_ultra_safe_mode),
@@ -9868,6 +9926,7 @@ def render_admin_status() -> None:
             f"Frontend ultra-safe: {'ON' if frontend_ultra_safe_mode else 'OFF'}; "
             f"custom JS/components: {'ON' if custom_components_enabled else 'OFF'}; "
             f"auto-refresh lock: {'ON' if maintenance_auto_refresh_enabled else 'OFF'}; "
+            f"hide chat locked: {'ON' if maintenance_hide_chat_when_locked else 'OFF'}; "
             f"interval: {maintenance_auto_refresh_interval_seconds} detik."
         )
 
@@ -12359,6 +12418,11 @@ def render_public_page() -> None:
         render_public_status_summary()
 
     if maintenance_state.get("locked") and not st.session_state.get("admin_authenticated", False):
+        render_maintenance_locked_public_guard(maintenance_state)
+        st.markdown(
+            maintenance_public_message(),
+            unsafe_allow_html=False,
+        )
         st.markdown(
             '<div class="auto-scroll-anchor"></div>'
             '<div class="chat-input-safe-space"></div>',
