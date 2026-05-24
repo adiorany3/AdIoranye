@@ -12336,7 +12336,8 @@ def render_public_page() -> None:
     # Public Chat UI
     # =========================
     cfg = get_runtime_config()
-    st.session_state.sound_enabled = True
+    if bool(frontend_ultra_safe_mode):
+        st.session_state.sound_enabled = False
     render_sound_unlock_script()
     hydrate_model_readiness_from_file()
     if parse_bool(get_secret("MODEL_READINESS_AUTO_QUICK_CHECK", True), default=True):
@@ -12418,11 +12419,9 @@ def render_public_page() -> None:
         render_public_status_summary()
 
     if maintenance_state.get("locked") and not st.session_state.get("admin_authenticated", False):
+        # Banner maintenance sudah dirender oleh render_maintenance_realtime_status().
+        # Jangan render pesan maintenance tambahan agar status tidak dobel.
         render_maintenance_locked_public_guard(maintenance_state)
-        st.markdown(
-            maintenance_public_message(),
-            unsafe_allow_html=False,
-        )
         st.markdown(
             '<div class="auto-scroll-anchor"></div>'
             '<div class="chat-input-safe-space"></div>',
