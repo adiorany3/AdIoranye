@@ -4189,6 +4189,255 @@ def render_auto_model_status_refresh_panel() -> None:
     )
 
 
+
+def _normalize_operation_mode(value: Any) -> str:
+    """Normalisasi mode operasi AI agar routing tidak crash.
+
+    Nilai valid:
+    - Hemat
+    - Seimbang
+    - Maksimal
+
+    Mendukung alias Indonesia/Inggris agar aman dari session lama,
+    secrets lama, Telegram command, atau input admin.
+    """
+    raw = str(value or "").strip()
+    lowered = raw.lower()
+
+    if lowered in {
+        "hemat",
+        "cheap",
+        "murah",
+        "cepat",
+        "fast",
+        "low",
+        "low-cost",
+        "low_cost",
+        "ekonomis",
+        "irit",
+    }:
+        return "Hemat"
+
+    if lowered in {
+        "maksimal",
+        "maximum",
+        "max",
+        "mahal",
+        "expensive",
+        "pintar",
+        "smart",
+        "capable",
+        "high",
+        "premium",
+    }:
+        return "Maksimal"
+
+    if lowered in {
+        "seimbang",
+        "balanced",
+        "balance",
+        "normal",
+        "auto",
+        "otomatis",
+        "medium",
+        "default",
+        "",
+    }:
+        return "Seimbang"
+
+    if raw in {"Hemat", "Seimbang", "Maksimal"}:
+        return raw
+
+    return "Seimbang"
+
+
+
+def estimate_prompt_complexity(user_text: str) -> Dict[str, Any]:
+    """Estimasi kompleksitas prompt tanpa memanggil model/API."""
+    text = str(user_text or "").strip()
+    lowered = text.lower()
+    word_count = len(re.findall(r"\w+", lowered))
+
+    thinking_markers = {
+        "analisis",
+        "analyze",
+        "analisa",
+        "strategi",
+        "arsitektur",
+        "debug",
+        "perbaiki kode",
+        "reason",
+        "langkah",
+        "rumus",
+        "hitung",
+        "kompleks",
+        "skripsi",
+        "makalah",
+        "proposal",
+        "laporan",
+        "kode",
+        "python",
+        "javascript",
+        "sql",
+        "streamlit",
+        "telegram",
+        "deploy",
+    }
+    retrieval_markers = {
+        "terbaru",
+        "hari ini",
+        "sekarang",
+        "berita",
+        "update",
+        "harga",
+        "jadwal",
+        "cek",
+        "search",
+        "web",
+    }
+    code_markers = {
+        "traceback",
+        "error",
+        "nameerror",
+        "typeerror",
+        "syntaxerror",
+        "exception",
+        "function",
+        "def ",
+        "class ",
+        "import ",
+    }
+
+    thinking_hits = [marker for marker in thinking_markers if marker in lowered]
+    retrieval_hits = [marker for marker in retrieval_markers if marker in lowered]
+    code_hits = [marker for marker in code_markers if marker in lowered]
+
+    score = 0
+    score += min(3, word_count // 45)
+    score += min(3, len(thinking_hits))
+    score += min(2, len(retrieval_hits))
+    score += min(3, len(code_hits))
+
+    return {
+        "score": score,
+        "word_count": word_count,
+        "is_complex": score >= 3 or word_count >= 90,
+        "thinking_hits": thinking_hits,
+        "retrieval_hits": retrieval_hits,
+        "code_hits": code_hits,
+    }
+
+
+def is_thinking_question(user_text: str) -> bool:
+    """Deteksi ringan apakah prompt sebaiknya memakai model capable."""
+    complexity = estimate_prompt_complexity(user_text)
+    return bool(complexity.get("is_complex"))
+
+
+def get_capable_primary_model(
+    active_higher_models: List[str],
+    health_cache: Dict[str, Dict[str, Any]],
+) -> str:
+    """Pilih model capable aktif tanpa melakukan probe."""
+    candidates = unique_models(active_higher_models)
+
+    active_candidates = [
+        model
+        for model in candidates
+        if health_cache.get(model, {}).get("active")
+    ]
+
+    if active_candidates:
+        return sort_health_models_for_simple_chat(active_candidates, health_cache)[0]
+
+    # Jika belum ada health cache, gunakan kandidat pertama agar routing tidak crash.
+    return candidates[0] if candidates else ""
+
+
+def get_rotating_cheap_primary(
+    active_cheap_models: List[str],
+    advance: bool = False,
+) -> str:
+    """Rotasi model murah berbasis session_state tanpa health check."""
+    models = unique_models(active_cheap_models)
+
+    if not models:
+        return ""
+
+    current_index = int(st.session_state.get("cheap_rotation_index", 0) or 0)
+
+    if advance:
+        current_index = (current_index + 1) % len(models)
+        st.session_state.cheap_rotation_index = current_index
+    else:
+        current_index = current_index % len(models)
+
+    return models[current_index]
+
+
+def choose_healthy_primary_model(
+    selected_model: str,
+    active_cheap_models: List[str],
+    active_expensive_models: List[str],
+    health_cache: Dict[str, Dict[str, Any]],
+    operation_mode: str = "Seimbang",
+) -> Dict[str, Any]:
+    """Pilih primary sehat dari cache tanpa memanggil model/API."""
+    selected_model = str(selected_model or "").strip()
+    operation_mode = _normalize_operation_mode(operation_mode)
+
+    if selected_model and health_cache.get(selected_model, {}).get("active"):
+        return {
+            "changed": False,
+            "model": selected_model,
+            "from_model": selected_model,
+            "reason": "selected-primary-healthy",
+        }
+
+    cheap_models = unique_models(active_cheap_models)
+    expensive_models = unique_models(active_expensive_models)
+
+    if operation_mode == "Maksimal":
+        candidate_pool = expensive_models + cheap_models
+    elif operation_mode == "Hemat":
+        candidate_pool = cheap_models
+    else:
+        candidate_pool = cheap_models + expensive_models
+
+    active_candidates = [
+        model
+        for model in unique_models(candidate_pool)
+        if health_cache.get(model, {}).get("active")
+    ]
+
+    if active_candidates:
+        prioritized = sort_health_models_for_simple_chat(active_candidates, health_cache)
+        chosen = prioritized[0] if prioritized else active_candidates[0]
+        return {
+            "changed": bool(chosen and chosen != selected_model),
+            "model": chosen,
+            "from_model": selected_model,
+            "reason": "replace-inactive-primary-from-cache",
+        }
+
+    fallback_pool = unique_models(candidate_pool)
+    if fallback_pool:
+        chosen = fallback_pool[0]
+        return {
+            "changed": bool(chosen and chosen != selected_model),
+            "model": chosen,
+            "from_model": selected_model,
+            "reason": "replace-primary-no-health-cache",
+        }
+
+    return {
+        "changed": False,
+        "model": selected_model,
+        "from_model": selected_model,
+        "reason": "no-candidate",
+    }
+
+
 def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     """Ambil fallback model yang sudah diprioritaskan tanpa memicu health check.
 
