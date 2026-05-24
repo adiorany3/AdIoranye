@@ -318,33 +318,60 @@ def parse_maintenance_until_datetime(
     return 0, ""
 
 
+def render_maintenance_browser_reload_script(
+    interval_seconds: int | None = None,
+) -> None:
+    """Refresh browser secara ringan tanpa memicu Streamlit rerun loop."""
+    if not bool(maintenance_browser_reload_enabled):
+        return
+
+    interval = max(
+        5,
+        int(interval_seconds or maintenance_auto_check_interval_seconds or 5),
+    )
+    interval_ms = int(interval * 1000)
+
+    st.markdown(
+        f"""
+        <script>
+        (function() {{
+            const key = "adioranyeMaintenanceReloadTimer";
+            if (window[key]) {{
+                window.clearTimeout(window[key]);
+            }}
+            window[key] = window.setTimeout(function() {{
+                window.location.reload();
+            }}, {interval_ms});
+        }})();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_maintenance_realtime_status(
     initial_state: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Render status maintenance yang auto-check berkala.
+    """Render status maintenance yang aman untuk Streamlit/React.
 
-    Jika lock/unlock berubah, jalankan rerun penuh agar chat input ikut berubah.
+    Fragment hanya menampilkan status. Reload halaman dilakukan via browser
+    saat lock aktif supaya chat input ikut berubah setelah auto-unlock.
     """
     initial_state = initial_state or read_maintenance_lock_state()
-    interval = max(3, int(maintenance_auto_check_interval_seconds or 5))
+    interval = max(5, int(maintenance_auto_check_interval_seconds or 5))
 
     def _body() -> Dict[str, Any]:
         state = read_maintenance_lock_state()
         signature = maintenance_state_signature(state)
-        previous_signature = st.session_state.get("maintenance_lock_signature")
-
-        if previous_signature and previous_signature != signature:
-            st.session_state.maintenance_lock_signature = signature
-            st.rerun()
-
         st.session_state.maintenance_lock_signature = signature
 
         if state.get("locked"):
             render_maintenance_banner(state)
+            render_maintenance_browser_reload_script(interval)
 
         return state
 
-    if hasattr(st, "fragment"):
+    if bool(maintenance_fragment_enabled) and hasattr(st, "fragment"):
         try:
             @st.fragment(run_every=f"{interval}s")
             def _maintenance_realtime_fragment() -> None:
@@ -356,7 +383,6 @@ def render_maintenance_realtime_status(
             pass
 
     return _body()
-
 
 def maintenance_public_message() -> str:
     state = read_maintenance_lock_state()
@@ -1503,6 +1529,14 @@ maintenance_default_message = str(
 )
 maintenance_auto_check_interval_seconds = int(
     get_secret("MAINTENANCE_AUTO_CHECK_INTERVAL_SECONDS", 5) or 5
+)
+maintenance_fragment_enabled = parse_bool(
+    get_secret("MAINTENANCE_FRAGMENT_ENABLED", False),
+    default=False,
+)
+maintenance_browser_reload_enabled = parse_bool(
+    get_secret("MAINTENANCE_BROWSER_RELOAD_ENABLED", True),
+    default=True,
 )
 telegram_show_model_info = parse_bool(
     get_secret("TELEGRAM_SHOW_MODEL_INFO", True), default=True
@@ -10072,6 +10106,8 @@ def get_runtime_config() -> Dict[str, Any]:
         "maintenance_message": maintenance_default_message,
         "maintenance_locked": bool(is_maintenance_locked()),
         "maintenance_auto_check_interval_seconds": maintenance_auto_check_interval_seconds,
+        "maintenance_fragment_enabled": bool(maintenance_fragment_enabled),
+        "maintenance_browser_reload_enabled": bool(maintenance_browser_reload_enabled),
     }
 
 
@@ -10243,6 +10279,11 @@ def render_admin_status() -> None:
 
         st.caption(
             "Saat lock aktif, hanya admin web dan chat ID Telegram admin yang dapat menggunakan Adioranye."
+        )
+        st.caption(
+            f"Realtime check aman aktif. Browser reload: {'ON' if maintenance_browser_reload_enabled else 'OFF'}; "
+            f"fragment polling: {'ON' if maintenance_fragment_enabled else 'OFF'}; "
+            f"interval: {maintenance_auto_check_interval_seconds} detik."
         )
 
     with st.expander("Cache pertanyaan sering muncul"):
