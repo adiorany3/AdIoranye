@@ -4481,6 +4481,17 @@ def build_model_routing_plan(
     5) Setelah request selesai, state dikembalikan ke model hemat aktif bila memungkinkan.
     """
     active_cheap_models, active_expensive_models = get_prioritized_fallback_models()
+    active_medium_models = (
+        st.session_state.get("active_medium_fallback_models")
+        or MEDIUM_MODEL_OPTIONS.copy()
+    )
+    active_high_cost_models = (
+        st.session_state.get("active_expensive_fallback_models")
+        or DEFAULT_EXPENSIVE_FALLBACK_MODELS.copy()
+    )
+    active_higher_models = unique_models(
+        active_medium_models + active_high_cost_models
+    )
     operation_mode = _normalize_operation_mode(
         st.session_state.get("active_operation_mode", ai_operation_mode_default)
     )
@@ -4666,6 +4677,9 @@ def build_model_routing_plan(
     expensive_fallback_models = filter_runtime_blocked_models(expensive_fallback_models)
     active_cheap_models = filter_runtime_blocked_models(active_cheap_models)
     active_expensive_models = filter_runtime_blocked_models(active_expensive_models)
+    active_medium_models = filter_runtime_blocked_models(active_medium_models)
+    active_high_cost_models = filter_runtime_blocked_models(active_high_cost_models)
+    active_higher_models = filter_runtime_blocked_models(active_higher_models)
     fastest_cheap_models = filter_runtime_blocked_models(fastest_cheap_models)
 
     return {
