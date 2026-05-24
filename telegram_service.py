@@ -1671,7 +1671,9 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
             "Model & router:",
             "• /speed 4321 — cek model aktif dan pilih tercepat",
             "• /rotate — ganti ke model aktif terbaik saat ini",
-            "• /lock [catatan] — aktifkan Under maintenance",
+            "• /lock [catatan] — aktifkan Under maintenance manual",
+            "• /lock 23:00 [catatan] — lock sampai jam tertentu WIB",
+            "• /lockuntil 23:00 [catatan] — lock sampai jam tertentu WIB",
             "• /unlock [catatan] — buka akses kembali",
             "• /maintenance — lihat status maintenance",
             "• /ubah murah — pakai model murah/cepat",
@@ -1729,6 +1731,10 @@ def telegram_default_maintenance_state(message: str = "") -> Dict[str, Any]:
         "updated_at": "",
         "updated_by": "",
         "channel": "",
+        "locked_until_ts": 0,
+        "locked_until_text": "",
+        "auto_unlock": False,
+        "auto_unlocked_at": "",
     }
 
 
@@ -1750,10 +1756,28 @@ def telegram_read_maintenance_state(
         state.update(data)
         state["locked"] = bool(state.get("locked"))
         state["status"] = "locked" if state.get("locked") else "unlocked"
+
+        try:
+            locked_until_ts = float(state.get("locked_until_ts") or 0)
+        except Exception:
+            locked_until_ts = 0
+
+        if state.get("locked") and locked_until_ts and time.time() >= locked_until_ts:
+            state["locked"] = False
+            state["status"] = "unlocked"
+            state["auto_unlock"] = True
+            state["auto_unlocked_at"] = _wib_now_text()
+            state["updated_at"] = state["auto_unlocked_at"]
+            state["updated_by"] = "system-auto-unlock"
+            state["channel"] = "telegram-auto-check"
+            try:
+                telegram_write_maintenance_state(lock_file, state)
+            except Exception:
+                pass
+
         return state
     except Exception:
         return telegram_default_maintenance_state(message)
-
 
 def telegram_write_maintenance_state(
     lock_file: str,
@@ -1772,14 +1796,81 @@ def telegram_write_maintenance_state(
         pass
 
 
+def telegram_maintenance_until_text_from_ts(
+    locked_until_ts: float | int | str | None,
+) -> str:
+    try:
+        ts = float(locked_until_ts or 0)
+    except Exception:
+        ts = 0
+
+    if not ts:
+        return ""
+
+    try:
+        return datetime.fromtimestamp(ts, tz=WIB_TZ).strftime("%Y-%m-%d %H:%M WIB")
+    except Exception:
+        try:
+            return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            return ""
+
+
+def telegram_parse_lock_until_argument(
+    raw_text: str,
+) -> Tuple[float, str, str]:
+    """Parse `/lockuntil 23:00 catatan` atau `/lock 23:00 catatan`.
+
+    Jika jam sudah lewat hari ini, jadwalkan untuk besok.
+    """
+    value = str(raw_text or "").strip()
+
+    if not value:
+        return 0, "", ""
+
+    parts = value.split(maxsplit=1)
+    first = parts[0].strip()
+    remaining = parts[1].strip() if len(parts) > 1 else ""
+
+    match = re.match(r"^(\d{1,2})[:.](\d{2})$", first)
+
+    if not match:
+        return 0, "", value
+
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return 0, "", value
+
+    now = datetime.now(WIB_TZ)
+    target = now.replace(
+        hour=hour,
+        minute=minute,
+        second=0,
+        microsecond=0,
+    )
+
+    if target <= now:
+        target = target + timedelta(days=1)
+
+    return target.timestamp(), target.strftime("%Y-%m-%d %H:%M WIB"), remaining
+
+
+
 def telegram_set_maintenance_lock(
     lock_file: str,
     locked: bool,
     updated_by: str = "telegram-admin",
     reason: str = "",
     message: str = "",
+    locked_until_ts: float | int | None = None,
+    locked_until_text: str = "",
 ) -> Dict[str, Any]:
     state = telegram_read_maintenance_state(lock_file, message=message)
+    lock_until_value = float(locked_until_ts or 0) if locked else 0
+    lock_until_text_value = str(locked_until_text or "").strip() if locked else ""
+
     state.update(
         {
             "locked": bool(locked),
@@ -1789,6 +1880,10 @@ def telegram_set_maintenance_lock(
             "updated_at": _wib_now_text(),
             "updated_by": str(updated_by or "telegram-admin"),
             "channel": "telegram",
+            "locked_until_ts": lock_until_value,
+            "locked_until_text": lock_until_text_value,
+            "auto_unlock": False,
+            "auto_unlocked_at": "",
         }
     )
     telegram_write_maintenance_state(lock_file, state)
@@ -1806,6 +1901,8 @@ def telegram_is_maintenance_command(text: str) -> bool:
 
     return command in {
         "/lock",
+        "/lockuntil",
+        "/lock_until",
         "/unlock",
         "/maintenance",
         "/maint",
@@ -1815,8 +1912,14 @@ def telegram_is_maintenance_command(text: str) -> bool:
 def telegram_maintenance_reply(state: Dict[str, Any]) -> str:
     locked = bool(state.get("locked"))
     status = "Under maintenance" if locked else "Unlocked"
+    until_text = str(
+        state.get("locked_until_text")
+        or telegram_maintenance_until_text_from_ts(state.get("locked_until_ts"))
+        or ""
+    ).strip()
     lines = [
         f"🛠️ Maintenance status: {status}",
+        f"Sampai: {until_text or 'manual unlock'}",
         f"Update: {state.get('updated_at') or '-'}",
         f"Oleh: {state.get('updated_by') or '-'}",
     ]
@@ -1829,11 +1932,18 @@ def telegram_maintenance_reply(state: Dict[str, Any]) -> str:
 def telegram_under_maintenance_message(state: Dict[str, Any]) -> str:
     message = str(state.get("message") or "Adioranye sedang dalam mode Under maintenance.").strip()
     reason = str(state.get("reason") or "").strip()
+    until_text = str(
+        state.get("locked_until_text")
+        or telegram_maintenance_until_text_from_ts(state.get("locked_until_ts"))
+        or ""
+    ).strip()
     lines = [
         "🛠️ Under maintenance",
         "",
         message,
     ]
+    if until_text:
+        lines.extend(["", f"Dikunci sampai: {until_text}"])
     if reason:
         lines.extend(["", f"Catatan admin: {reason}"])
     return "\n".join(lines)
@@ -3574,13 +3684,36 @@ class TelegramBotService:
                                 command = command.split("@", 1)[0]
                             reason = raw_parts[1].strip() if len(raw_parts) > 1 else ""
 
-                            if command == "/lock":
+                            if command in {"/lock", "/lockuntil", "/lock_until"}:
+                                locked_until_ts = 0
+                                locked_until_text = ""
+                                lock_reason = reason
+
+                                if command in {"/lockuntil", "/lock_until"}:
+                                    locked_until_ts, locked_until_text, lock_reason = telegram_parse_lock_until_argument(reason)
+                                    if not locked_until_ts:
+                                        self._send_message(
+                                            token,
+                                            chat_id,
+                                            "Format salah. Gunakan: /lockuntil 23:00 catatan",
+                                            parse_mode=telegram_parse_mode,
+                                        )
+                                        continue
+                                else:
+                                    maybe_until_ts, maybe_until_text, maybe_reason = telegram_parse_lock_until_argument(reason)
+                                    if maybe_until_ts:
+                                        locked_until_ts = maybe_until_ts
+                                        locked_until_text = maybe_until_text
+                                        lock_reason = maybe_reason
+
                                 state = telegram_set_maintenance_lock(
                                     maintenance_lock_file,
                                     True,
                                     updated_by=f"telegram:{chat_id}",
-                                    reason=reason,
+                                    reason=lock_reason,
                                     message=maintenance_message,
+                                    locked_until_ts=locked_until_ts,
+                                    locked_until_text=locked_until_text,
                                 )
                                 self._send_message(
                                     token,
