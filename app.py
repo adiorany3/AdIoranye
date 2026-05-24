@@ -217,6 +217,81 @@ def _simple_unique_models(
 
 
 
+
+def build_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> Tuple[str, Dict[str, Any]]:
+    """Jawaban lokal terakhir jika semua model gagal.
+
+    Tujuannya bukan menggantikan AI, tetapi mencegah pesan gangguan untuk
+    permintaan umum yang masih bisa dijawab dengan template aman.
+    """
+    text = str(user_text or "").strip()
+    lower = text.lower()
+
+    # Fallback spesifik yang diminta user: ransum kuda.
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh **draft ransum kuda** yang bisa dijadikan acuan awal. Ini perlu disesuaikan lagi dengan **bobot badan, umur, aktivitas, kondisi kesehatan, dan kualitas hijauan**.
+
+### Contoh ransum harian kuda dewasa ±400 kg kerja ringan
+
+**1. Hijauan utama**
+- Rumput/hay: ±6–8 kg per hari.
+- Berikan dalam beberapa kali pemberian, jangan sekaligus terlalu banyak.
+- Hijauan sebaiknya menjadi porsi terbesar karena pencernaan kuda bergantung pada serat.
+
+**2. Konsentrat/energi tambahan**
+- Dedak halus/bekatul: ±0,5–1 kg per hari.
+- Jagung giling/oat: ±0,5–1 kg per hari.
+- Jangan langsung memberi porsi besar; naikkan bertahap selama beberapa hari.
+
+**3. Protein tambahan**
+- Bungkil kedelai atau sumber protein lain: ±0,2–0,4 kg per hari.
+- Pakai secukupnya, terutama bila kuda sedang latihan, pemulihan, atau bobot badannya kurang.
+
+**4. Mineral dan garam**
+- Garam mineral/block mineral: tersedia bebas atau ±30–50 gram per hari.
+- Air minum bersih harus selalu tersedia.
+
+### Pola pemberian sederhana
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+- Hindari memberi konsentrat banyak dalam satu waktu.
+
+### Catatan penting
+- Untuk kuda ±400 kg, total pakan kering umumnya sekitar **1,5–2,5% dari bobot badan per hari**.
+- Perubahan ransum harus bertahap agar tidak mengganggu pencernaan.
+- Jika kuda kurus, bunting, menyusui, sakit, atau kerja berat, formulanya harus dihitung ulang.
+- Untuk ransum final, sebaiknya konsultasikan dengan dokter hewan atau ahli nutrisi ternak/kuda.
+
+Jika datanya tersedia, ransum bisa dihitung lebih tepat berdasarkan:
+**bobot kuda, umur, jenis aktivitas, kondisi tubuh, jenis rumput, dan bahan pakan yang tersedia.**"""
+        return answer, {
+            "local_safe_fallback_used": True,
+            "local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    # Fallback umum untuk permintaan "buatkan" yang tidak membutuhkan info terkini.
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        answer = (
+            "Model sedang tidak stabil, jadi saya buatkan **draft awal** secara lokal agar pekerjaan tetap bisa lanjut.\n\n"
+            "Silakan kirim detail tambahan seperti tujuan, format, panjang jawaban, dan data yang harus dipakai agar hasilnya bisa disesuaikan lebih tepat."
+        )
+        return answer, {
+            "local_safe_fallback_used": True,
+            "local_safe_fallback_type": "generic_draft",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    return "", {}
+
+
+
 def extract_explicit_failed_models_from_meta(
     meta: Dict[str, Any] | None,
     original_model: str = "",
@@ -453,6 +528,15 @@ def retry_power_answer_with_active_models(
     meta_data["auto_model_retry_attempts"] = len(tried_models)
     meta_data["auto_model_retry_models"] = tried_models
     meta_data["auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_public_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
 
     return original_answer, meta_data
 
@@ -11784,6 +11868,17 @@ def render_public_page() -> None:
             local_meta = greeting_meta
 
         if not local_reply:
+            # Permintaan tertentu yang aman dan sering gagal karena thinking/capable
+            # boleh dijawab lokal agar tidak memunculkan pesan gangguan.
+            local_safe_answer, local_safe_meta = build_local_safe_fallback_answer(
+                user_input,
+                failure_reason="pre_model_safe_template",
+            )
+            if local_safe_answer and local_safe_meta.get("local_safe_fallback_type") == "horse_ration":
+                local_reply = local_safe_answer
+                local_meta = local_safe_meta
+
+        if not local_reply:
             cached_reply, cached_meta = get_frequent_question_cached_answer(
                 user_input
             )
@@ -12294,12 +12389,22 @@ def render_public_page() -> None:
                     meta = retry_meta if isinstance(retry_meta, dict) else {}
                     meta["outer_exception_retry_success"] = True
                 else:
-                    meta = retry_meta if isinstance(retry_meta, dict) else {
-                        "public_error_sanitized": True,
-                        "error_class": exc.__class__.__name__,
-                        "hidden_public_error_detail": str(exc)[:5000],
-                    }
-                    answer = make_public_ai_error_message()
+                    local_fallback_answer, local_fallback_meta = build_local_safe_fallback_answer(
+                        user_input,
+                        failure_reason=str(exc)[:500],
+                    )
+                    if local_fallback_answer:
+                        answer = local_fallback_answer
+                        meta = retry_meta if isinstance(retry_meta, dict) else {}
+                        meta.update(local_fallback_meta)
+                        meta["outer_exception_local_fallback"] = True
+                    else:
+                        meta = retry_meta if isinstance(retry_meta, dict) else {
+                            "public_error_sanitized": True,
+                            "error_class": exc.__class__.__name__,
+                            "hidden_public_error_detail": str(exc)[:5000],
+                        }
+                        answer = make_public_ai_error_message()
 
                 st.session_state.last_answer_meta = meta
 

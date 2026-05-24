@@ -222,6 +222,68 @@ def call_generate_power_answer_compat(
     return str(answer or ""), meta
 
 
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+
 def retry_telegram_power_answer_with_active_models(
     original_answer: str,
     original_meta: Dict[str, Any] | None,
@@ -342,6 +404,15 @@ def retry_telegram_power_answer_with_active_models(
     meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
     meta_data["telegram_auto_model_retry_models"] = tried_models
     meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
 
     return original_answer, meta_data
 
@@ -3547,6 +3618,18 @@ class TelegramBotService:
                                 local_meta = greeting_meta
                         except Exception as exc:
                             self._last_error = f"Telegram local greeting error: {exc}"
+
+                        if not local_reply:
+                            try:
+                                local_safe_answer, local_safe_meta = build_telegram_local_safe_fallback_answer(
+                                    text,
+                                    failure_reason="pre_model_safe_template",
+                                )
+                                if local_safe_answer and local_safe_meta.get("telegram_local_safe_fallback_type") == "horse_ration":
+                                    local_reply = local_safe_answer
+                                    local_meta = local_safe_meta
+                            except Exception as exc:
+                                self._last_error = f"Telegram local safe fallback error: {exc}"
 
                         if not local_reply:
                             try:
