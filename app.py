@@ -1497,6 +1497,12 @@ send_processing_message = parse_bool(
     get_secret("TELEGRAM_SEND_PROCESSING_MESSAGE", False), default=False
 )
 telegram_parse_mode = str(get_secret("TELEGRAM_PARSE_MODE", "") or "")
+telegram_status_test_cache_ttl_seconds = int(
+    get_secret("TELEGRAM_STATUS_TEST_CACHE_TTL_SECONDS", 60) or 60
+)
+telegram_status_test_timeout_seconds = int(
+    get_secret("TELEGRAM_STATUS_TEST_TIMEOUT_SECONDS", 12) or 12
+)
 telegram_lock_file = str(
     get_secret("TELEGRAM_LOCK_FILE", "/tmp/adioranye_telegram_bot_worker.lock")
 )
@@ -9697,6 +9703,8 @@ def build_telegram_config_payload(
 
     config_payload = {
         "telegram_token": telegram_token,
+        "telegram_status_test_cache_ttl_seconds": telegram_status_test_cache_ttl_seconds,
+        "telegram_status_test_timeout_seconds": telegram_status_test_timeout_seconds,
         "telegram_admin_chat_ids": telegram_admin_chat_ids,
         "admin_chat_ids": telegram_admin_chat_ids,
         "telegram_runtime_state_file": telegram_runtime_state_file,
@@ -9992,7 +10000,8 @@ def render_admin_status() -> None:
         or cfg["model"]
     )
     exp_used = "ya" if last_meta.get("expensive_fallback_used") else "tidak"
-    telegram_status = "ON" if service.status()["running"] else "OFF"
+    telegram_verified = get_telegram_verified_status(force=False)
+    telegram_status = telegram_verified_status_label(telegram_verified)
     health_cache = st.session_state.get("model_health_cache") or {}
     active_count = sum(1 for item in health_cache.values() if item.get("active"))
     admin_route_preview = build_model_routing_plan(user_text="halo")
@@ -10012,7 +10021,9 @@ def render_admin_status() -> None:
         f"Tier: {model_cost_tier(cfg['model'])} | Rp{price.get('input', 0):,}/Rp{price.get('output', 0):,}\n\n"
         f"Jawaban terakhir: {last_model}\n\n"
         f"Model mahal dipakai: {exp_used}\n\n"
-        f"Telegram: {telegram_status}\n\n"
+        f"Telegram: {telegram_status}\n"
+        f"Telegram tested: {telegram_verified.get('checked_at_text') or '-'}\n"
+        f"Telegram detail: {telegram_verified.get('caption') or '-'}\n\n"
         f"Rotasi murah: {'ON' if st.session_state.get('active_rotate_cheap_primary', True) else 'OFF'}\n\n"
         f"Thinking router: {'ON' if st.session_state.get('active_thinking_model_router', True) else 'OFF'}\n\n"
         f"Fast normal: {'ON' if st.session_state.get('active_fast_normal_model_router', True) else 'OFF'}\n\n"
@@ -10024,6 +10035,11 @@ def render_admin_status() -> None:
         f"Auto-refresh status terakhir: {st.session_state.get('model_status_auto_refresh_last_text') or '-'}"
     ).replace(",", ".")
     st.info(status_text)
+
+    with st.expander("💬 Status Telegram Terverifikasi", expanded=False):
+        render_telegram_verified_status_card(
+            force_button_key="telegram_verified_status_card_test_btn",
+        )
 
     with st.expander("🛠️ Maintenance Lock", expanded=bool(is_maintenance_locked())):
         maintenance_state = read_maintenance_lock_state()
@@ -10942,6 +10958,179 @@ def _admin_status_badge(value: Any) -> str:
     return _html_escape(str(value or "-"))
 
 
+
+def get_telegram_verified_status(
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Cek status Telegram dari API, bukan hanya status worker lokal.
+
+    Menggunakan service.diagnose() yang memanggil getMe + getWebhookInfo.
+    Hasil dicache singkat agar halaman admin tidak spam API setiap rerun.
+    """
+    now = time.time()
+    ttl = max(5, int(telegram_status_test_cache_ttl_seconds or 60))
+    cached = st.session_state.get("telegram_verified_status_cache") or {}
+
+    if (
+        not force
+        and isinstance(cached, dict)
+        and cached.get("checked_at_ts")
+        and now - float(cached.get("checked_at_ts") or 0) < ttl
+    ):
+        return cached
+
+    local_status = service.status()
+    result: Dict[str, Any] = {
+        "ok": False,
+        "api_ok": False,
+        "running": bool(local_status.get("running")),
+        "label": "TOKEN BELUM DIISI",
+        "caption": "TELEGRAM_BOT_TOKEN belum diisi.",
+        "bot_username": "",
+        "bot_id": "",
+        "webhook_url": "",
+        "pending_update_count": None,
+        "last_error": "",
+        "checked_at_ts": now,
+        "checked_at_text": _wib_now_text(),
+        "source": "diagnose",
+    }
+
+    if not str(telegram_token or "").strip():
+        st.session_state.telegram_verified_status_cache = result
+        return result
+
+    try:
+        diag_config = {
+            "telegram_token": telegram_token,
+            "telegram_status_test_timeout_seconds": int(
+                telegram_status_test_timeout_seconds or 12
+            ),
+        }
+        diag = service.diagnose(diag_config)
+
+        result.update(
+            {
+                "ok": bool(diag.get("ok")),
+                "api_ok": bool(diag.get("ok")),
+                "running": bool(service.status().get("running")),
+                "bot_username": str(diag.get("bot_username") or ""),
+                "bot_id": str(diag.get("bot_id") or ""),
+                "webhook_url": str(diag.get("webhook_url") or ""),
+                "pending_update_count": diag.get("pending_update_count"),
+                "last_error": str(diag.get("last_error") or ""),
+            }
+        )
+
+        if result["api_ok"] and result["running"]:
+            result["label"] = "API OK + WORKER ON"
+        elif result["api_ok"]:
+            result["label"] = "API OK / WORKER OFF"
+        else:
+            result["label"] = "API ERROR"
+
+        bot_label = (
+            f"@{result['bot_username']}"
+            if result.get("bot_username")
+            else "bot terdeteksi"
+            if result.get("api_ok")
+            else "bot belum terverifikasi"
+        )
+        worker_label = "worker berjalan" if result.get("running") else "worker mati"
+        pending_label = (
+            f"pending {result.get('pending_update_count')}"
+            if result.get("pending_update_count") is not None
+            else "pending -"
+        )
+
+        result["caption"] = (
+            f"{bot_label} • {worker_label} • {pending_label} • "
+            f"tes: {result['checked_at_text']}"
+        )
+
+        if result.get("webhook_url"):
+            result["caption"] += " • webhook aktif"
+
+        if not result["api_ok"] and result.get("last_error"):
+            result["caption"] = f"API gagal • {result['last_error'][:160]}"
+
+    except Exception as exc:
+        result["ok"] = False
+        result["api_ok"] = False
+        result["running"] = bool(service.status().get("running"))
+        result["label"] = "TEST ERROR"
+        result["last_error"] = str(exc)[:1200]
+        result["caption"] = f"Test Telegram gagal • {result['last_error'][:160]}"
+
+    st.session_state.telegram_verified_status_cache = result
+    return result
+
+
+def telegram_verified_status_label(
+    status: Dict[str, Any] | None = None,
+) -> str:
+    status = status or get_telegram_verified_status(force=False)
+    return str(status.get("label") or "UNKNOWN")
+
+
+def render_telegram_verified_status_card(
+    force_button_key: str = "telegram_verified_status_test_btn",
+) -> Dict[str, Any]:
+    """Render kartu test Telegram terverifikasi di admin."""
+    status = get_telegram_verified_status(force=False)
+    label = telegram_verified_status_label(status)
+    api_ok = bool(status.get("api_ok"))
+    running = bool(status.get("running"))
+
+    if api_ok and running:
+        st.success(f"Telegram terverifikasi: {label}")
+    elif api_ok:
+        st.warning(f"Telegram API OK, tetapi worker belum berjalan: {label}")
+    else:
+        st.error(f"Telegram belum terverifikasi: {label}")
+
+    st.caption(str(status.get("caption") or "-"))
+
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("API Telegram", "OK" if api_ok else "ERROR")
+    col_b.metric("Worker", "ON" if running else "OFF")
+    col_c.metric(
+        "Pending",
+        status.get("pending_update_count")
+        if status.get("pending_update_count") is not None
+        else "-",
+    )
+
+    if status.get("bot_username"):
+        st.caption(f"Bot: @{status.get('bot_username')} | ID: {status.get('bot_id') or '-'}")
+
+    if status.get("webhook_url"):
+        st.warning(
+            "Webhook masih aktif. Untuk mode polling, klik Reset koneksi Telegram agar webhook dihapus."
+        )
+        st.caption(f"Webhook: {status.get('webhook_url')}")
+
+    if status.get("last_error") and not api_ok:
+        with st.expander("Detail error test Telegram"):
+            st.code(str(status.get("last_error"))[:3000])
+
+    if st.button(
+        "🧪 Test ulang status Telegram",
+        use_container_width=True,
+        key=force_button_key,
+    ):
+        refreshed = get_telegram_verified_status(force=True)
+        if refreshed.get("api_ok"):
+            bot_user = refreshed.get("bot_username") or "tidak diketahui"
+            st.success(f"Test Telegram OK. Bot: @{bot_user}")
+        else:
+            st.error("Test Telegram gagal.")
+            st.code(str(refreshed.get("last_error") or "Tidak ada detail error.")[:3000])
+        st.rerun()
+
+    return status
+
+
 def render_admin_overview_cards() -> None:
     """Ringkasan cepat admin tanpa mengganggu logika kontrol."""
     try:
@@ -10953,7 +11142,12 @@ def render_admin_overview_cards() -> None:
 
     model_name = str(cfg.get("model") or st.session_state.get("active_model") or default_model)
     tier = model_cost_tier(model_name)
-    telegram_status = "ON" if service.status().get("running") else "OFF"
+    telegram_verified = get_telegram_verified_status(force=False)
+    telegram_status = telegram_verified_status_label(telegram_verified)
+    telegram_caption = str(
+        telegram_verified.get("caption")
+        or "Status Telegram dites dari API getMe/getWebhookInfo."
+    )
 
     try:
         health_cache = st.session_state.get("model_health_cache") or {}
@@ -10991,9 +11185,9 @@ def render_admin_overview_cards() -> None:
                 <div class="admin-overview-caption">Cek terakhir: {_html_escape(checked_at)}</div>
             </div>
             <div class="admin-overview-card">
-                <div class="admin-overview-label"><span>💬 Telegram</span><span>bot</span></div>
+                <div class="admin-overview-label"><span>💬 Telegram</span><span>tested</span></div>
                 <div class="admin-overview-value">{_html_escape(telegram_status)}</div>
-                <div class="admin-overview-caption">Status worker Telegram saat ini.</div>
+                <div class="admin-overview-caption">{_html_escape(telegram_caption)}</div>
             </div>
             <div class="admin-overview-card">
                 <div class="admin-overview-label"><span>⚡ Cache</span><span>FAQ</span></div>
@@ -11441,25 +11635,10 @@ def render_admin_settings() -> None:
                 f"Update model Telegram terakhir: {_to_wib_display_text(status.get('model_health_checked_at'))} | aktif: {status.get('model_health_active_count', 0)}"
             )
 
-        if st.button(
-            "🧪 Tes koneksi Telegram",
-            use_container_width=True,
-            key="telegram_diagnose_connection_btn",
-        ):
-            diag_config = {"telegram_token": telegram_token}
-            diag = service.diagnose(diag_config)
-            if diag.get("ok"):
-                bot_user = diag.get("bot_username") or "tidak diketahui"
-                st.success(f"Koneksi Telegram OK. Bot: @{bot_user}")
-                if diag.get("webhook_url"):
-                    st.warning(
-                        "Webhook masih aktif. Untuk mode polling, klik Reset koneksi Telegram agar webhook dihapus."
-                    )
-                    st.caption(f"Webhook: {diag.get('webhook_url')}")
-                st.caption(f"Pending update: {diag.get('pending_update_count')}")
-            else:
-                st.error("Koneksi Telegram gagal.")
-                st.code(str(diag.get("last_error") or "Tidak ada detail error."))
+        with st.expander("💬 Test status Telegram dari API", expanded=True):
+            render_telegram_verified_status_card(
+                force_button_key="telegram_diagnose_connection_btn",
+            )
 
         cfg = get_runtime_config()
         route = build_model_routing_plan()
@@ -11546,6 +11725,7 @@ def render_admin_settings() -> None:
                 started = service.start(bot_config)
                 restore_active_model_to_cheap(start_route.get("primary_model"))
                 if started:
+                    st.session_state.telegram_verified_status_cache = {}
                     st.success(
                         f"Bot Telegram dijalankan dengan primary: {start_route['primary_model']}"
                     )
@@ -11568,6 +11748,7 @@ def render_admin_settings() -> None:
         with col_stop:
             if st.button("⏹️ Stop Bot", use_container_width=True, key="auto_btn_2954"):
                 service.stop()
+                st.session_state.telegram_verified_status_cache = {}
                 st.warning("Bot Telegram dihentikan pada instance Streamlit ini.")
 
         if st.button(
@@ -11576,6 +11757,7 @@ def render_admin_settings() -> None:
             key="auto_btn_2958",
         ):
             result = service.reset_telegram_session(bot_config)
+            st.session_state.telegram_verified_status_cache = {}
             st.warning(result)
 
         if st.button(
@@ -11583,6 +11765,7 @@ def render_admin_settings() -> None:
             use_container_width=True,
             key="telegram_force_local_reset_btn",
         ):
+            st.session_state.telegram_verified_status_cache = {}
             st.warning(service.force_local_reset())
 
         st.caption(
