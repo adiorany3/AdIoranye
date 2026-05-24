@@ -318,36 +318,19 @@ def parse_maintenance_until_datetime(
     return 0, ""
 
 
+
 def render_maintenance_browser_reload_script(
     interval_seconds: int | None = None,
 ) -> None:
-    """Refresh browser secara ringan tanpa memicu Streamlit rerun loop."""
-    if not bool(maintenance_browser_reload_enabled):
+    """Browser reload otomatis dimatikan default untuk mencegah React #185."""
+    if (
+        bool(frontend_ultra_safe_mode)
+        or not bool(maintenance_browser_reload_enabled)
+        or not bool(custom_components_enabled)
+    ):
         return
 
-    interval = max(
-        5,
-        int(interval_seconds or maintenance_auto_check_interval_seconds or 5),
-    )
-    interval_ms = int(interval * 1000)
-
-    st.markdown(
-        f"""
-        <script>
-        (function() {{
-            const key = "adioranyeMaintenanceReloadTimer";
-            if (window[key]) {{
-                window.clearTimeout(window[key]);
-            }}
-            window[key] = window.setTimeout(function() {{
-                window.location.reload();
-            }}, {interval_ms});
-        }})();
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
+    return
 
 def render_maintenance_realtime_status(
     initial_state: Dict[str, Any] | None = None,
@@ -1400,7 +1383,7 @@ def init_state() -> None:
         )
 
     if "sound_enabled" not in st.session_state:
-        st.session_state.sound_enabled = True
+        st.session_state.sound_enabled = bool(answer_sound_enabled) and not bool(frontend_ultra_safe_mode)
     if "public_rate_events" not in st.session_state:
         st.session_state.public_rate_events = []
     if "model_runtime_blocks" not in st.session_state:
@@ -1415,9 +1398,12 @@ def init_state() -> None:
             "last_error_at": "",
         }
     if "answer_streaming_preview_enabled" not in st.session_state:
-        st.session_state.answer_streaming_preview_enabled = parse_bool(
-            get_secret("ANSWER_STREAMING_PREVIEW_ENABLED", True),
-            default=True,
+        st.session_state.answer_streaming_preview_enabled = (
+            parse_bool(
+                get_secret("ANSWER_STREAMING_PREVIEW_ENABLED", False),
+                default=False,
+            )
+            and not bool(frontend_ultra_safe_mode)
         )
     if "model_performance_stats" not in st.session_state:
         st.session_state.model_performance_stats = load_model_performance_stats_from_file()
@@ -1535,8 +1521,36 @@ maintenance_fragment_enabled = parse_bool(
     default=False,
 )
 maintenance_browser_reload_enabled = parse_bool(
-    get_secret("MAINTENANCE_BROWSER_RELOAD_ENABLED", True),
+    get_secret("MAINTENANCE_BROWSER_RELOAD_ENABLED", False),
+    default=False,
+)
+model_status_fragment_enabled = parse_bool(
+    get_secret("MODEL_STATUS_FRAGMENT_ENABLED", False),
+    default=False,
+)
+frontend_ultra_safe_mode = parse_bool(
+    get_secret("FRONTEND_ULTRA_SAFE_MODE", True),
     default=True,
+)
+custom_components_enabled = parse_bool(
+    get_secret("CUSTOM_COMPONENTS_ENABLED", False),
+    default=False,
+)
+auto_scroll_enabled = parse_bool(
+    get_secret("AUTO_SCROLL_ENABLED", False),
+    default=False,
+)
+answer_sound_enabled = parse_bool(
+    get_secret("ANSWER_SOUND_ENABLED", False),
+    default=False,
+)
+typewriter_enabled = parse_bool(
+    get_secret("TYPEWRITER_ENABLED", False),
+    default=False,
+)
+animated_loading_enabled = parse_bool(
+    get_secret("ANIMATED_LOADING_ENABLED", False),
+    default=False,
 )
 telegram_show_model_info = parse_bool(
     get_secret("TELEGRAM_SHOW_MODEL_INFO", True), default=True
@@ -1583,10 +1597,21 @@ max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
 model_health_check_interval = int(
     get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 90000) or 90000
 )
-model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
-model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 8) or 8)
-model_health_retries = int(get_secret("MODEL_HEALTH_RETRIES", 1) or 1)
-model_health_quick_limit = int(get_secret("MODEL_HEALTH_QUICK_LIMIT", 8) or 8)
+model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 8) or 8)
+model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 4) or 4)
+model_health_retries = int(get_secret("MODEL_HEALTH_RETRIES", 0) or 0)
+model_health_quick_limit = int(get_secret("MODEL_HEALTH_QUICK_LIMIT", 6) or 6)
+model_health_probe_max_tokens = int(get_secret("MODEL_HEALTH_PROBE_MAX_TOKENS", 2) or 2)
+model_health_probe_gpt5_max_tokens = int(
+    get_secret("MODEL_HEALTH_PROBE_GPT5_MAX_TOKENS", 8) or 8
+)
+model_health_probe_prompt = str(get_secret("MODEL_HEALTH_PROBE_PROMPT", "ping") or "ping")
+model_health_force_scope = str(get_secret("MODEL_HEALTH_FORCE_SCOPE", "quick") or "quick").strip().lower()
+model_health_full_limit = int(get_secret("MODEL_HEALTH_FULL_LIMIT", 24) or 24)
+model_health_preserve_cache = parse_bool(
+    get_secret("MODEL_HEALTH_PRESERVE_CACHE", True),
+    default=True,
+)
 model_performance_state_file = str(
     get_secret("MODEL_PERFORMANCE_STATE_FILE", ".adioranye_model_performance.json")
     or ".adioranye_model_performance.json"
@@ -3097,12 +3122,24 @@ def _extract_health_content(data: Any) -> str:
 
 
 def _build_model_health_payload(model: str) -> Dict[str, Any]:
-    max_tokens = 64 if _is_gpt5_health_model(model) else 16
+    """Payload health check ultra-hemat token.
+
+    Tujuan health check hanya membuktikan model bisa merespons, bukan meminta
+    jawaban panjang. Karena itu prompt dan completion budget dibuat minimal.
+    """
+    max_tokens = (
+        int(model_health_probe_gpt5_max_tokens or 8)
+        if _is_gpt5_health_model(model)
+        else int(model_health_probe_max_tokens or 2)
+    )
+    max_tokens = max(1, min(max_tokens, 12))
+    prompt = str(model_health_probe_prompt or "ping").strip()[:20] or "ping"
+
     payload: Dict[str, Any] = {
         "model": model,
         "messages": [
-            {"role": "system", "content": "Balas hanya satu kata: OK."},
-            {"role": "user", "content": "OK?"},
+            {"role": "system", "content": "OK"},
+            {"role": "user", "content": prompt},
         ],
         "temperature": 0,
         "max_completion_tokens": max_tokens,
@@ -3181,6 +3218,7 @@ def check_single_model_health(
             if choices and isinstance(choices[0], dict):
                 finish_reason = str(choices[0].get("finish_reason") or "")
 
+            usage = data.get("usage") if isinstance(data, dict) else {}
             if choices and content:
                 return {
                     "active": True,
@@ -3193,6 +3231,8 @@ def check_single_model_health(
                     "tier": model_cost_tier(model),
                     "finish_reason": finish_reason,
                     "sample": content[:80],
+                    "usage": usage if isinstance(usage, dict) else {},
+                    "health_probe_tokens": int(model_health_probe_gpt5_max_tokens if _is_gpt5_health_model(model) else model_health_probe_max_tokens),
                     "error": "",
                 }
 
@@ -3347,7 +3387,13 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
     )
     scope_clean = str(scope or st.session_state.get("active_health_check_scope") or "auto").lower()
     if scope_clean == "auto":
-        scope_clean = "quick" if not force else "full"
+        scope_clean = (
+            str(model_health_force_scope or "quick").lower()
+            if force
+            else "quick"
+        )
+    if scope_clean not in {"quick", "full"}:
+        scope_clean = "quick"
     if scope_clean == "quick":
         quick_pool = unique_models(
             [st.session_state.get("active_model") or default_model, default_model]
@@ -3361,11 +3407,23 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
         limit = max(3, int(model_health_quick_limit or 8))
         models_to_check = quick_pool[:limit]
     else:
-        models_to_check = all_models_to_check
+        full_limit = int(model_health_full_limit or 0)
+        models_to_check = (
+            all_models_to_check[:full_limit]
+            if full_limit > 0
+            else all_models_to_check
+        )
 
-    fresh_cache: Dict[str, Dict[str, Any]] = {}
-    max_workers = max(1, min(int(model_health_workers or 8), len(models_to_check), 12))
-    retries = max(0, min(int(model_health_retries or 1), 2))
+    fresh_cache: Dict[str, Dict[str, Any]] = (
+        dict(cache)
+        if bool(model_health_preserve_cache) and isinstance(cache, dict)
+        else {}
+    )
+    max_workers = max(1, min(int(model_health_workers or 4), len(models_to_check), 8))
+    retries = max(0, min(int(model_health_retries or 0), 1))
+
+    if not models_to_check:
+        return fresh_cache
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {
@@ -3420,6 +3478,15 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
         fresh_cache,
         now,
     )
+    st.session_state.model_health_last_checked_count = len(models_to_check)
+    st.session_state.model_health_last_scope = scope_clean
+    st.session_state.model_health_token_saver = {
+        "probe_max_tokens": int(model_health_probe_max_tokens or 2),
+        "probe_gpt5_max_tokens": int(model_health_probe_gpt5_max_tokens or 8),
+        "retries": retries,
+        "workers": max_workers,
+        "preserve_cache": bool(model_health_preserve_cache),
+    }
 
     if active_cheap:
         st.session_state.active_cheap_fallback_models = active_cheap
@@ -4694,7 +4761,7 @@ def maybe_auto_refresh_model_status(
             scope = "quick"
 
         refresh_model_health_if_needed(
-            force=True,
+            force=False,
             scope=scope,
         )
 
@@ -4764,46 +4831,26 @@ def build_live_model_status_html(
     """
 
 
+
 def render_auto_model_status_refresh_panel() -> None:
-    """Panel status model yang bisa refresh periodik tanpa reload penuh jika fragment tersedia."""
+    """Panel status model tanpa st.fragment dan tanpa polling frontend."""
     if not bool(model_status_auto_refresh_public_panel):
         return
 
-    def _render_panel_body() -> None:
-        refresh_meta = maybe_auto_refresh_model_status(
-            reason="public-status-panel",
-        )
-        route_preview = build_model_routing_plan(
-            user_text="halo",
-        )
-        readiness = get_model_readiness_state(route_preview)
-        st.markdown(
-            build_live_model_status_html(
-                readiness,
-                refresh_meta=refresh_meta,
-            ),
-            unsafe_allow_html=True,
-        )
-
-    interval = max(
-        30,
-        int(model_status_auto_refresh_interval_seconds or 90),
+    refresh_meta = maybe_auto_refresh_model_status(
+        reason="public-status-panel",
     )
-
-    if hasattr(st, "fragment"):
-        try:
-            @st.fragment(run_every=f"{interval}s")
-            def _auto_model_status_fragment() -> None:
-                _render_panel_body()
-
-            _auto_model_status_fragment()
-            return
-        except Exception:
-            pass
-
-    _render_panel_body()
-
-
+    route_preview = build_model_routing_plan(
+        user_text="halo",
+    )
+    readiness = get_model_readiness_state(route_preview)
+    st.markdown(
+        build_live_model_status_html(
+            readiness,
+            refresh_meta=refresh_meta,
+        ),
+        unsafe_allow_html=True,
+    )
 
 def build_model_routing_plan(
     advance_rotation: bool = False, user_text: str = ""
@@ -8335,25 +8382,23 @@ def render_loading_animation_html(
 ) -> str:
     safe_title = _html_escape(title)
     safe_subtitle = _html_escape(subtitle)
+
+    if bool(frontend_ultra_safe_mode) or not bool(animated_loading_enabled):
+        return f"""
+        <div class="ai-loading-card" role="status" aria-live="polite">
+            <div class="ai-loading-copy">
+                <div class="ai-loading-title">
+                    <span>⏳ {safe_title}</span>
+                </div>
+                <div class="ai-loading-subtitle">
+                    {safe_subtitle}
+                </div>
+            </div>
+        </div>
+        """
+
     return f"""
     <div class="ai-loading-card" role="status" aria-live="polite">
-        <div class="ai-loading-mascot" aria-hidden="true">
-            <div class="ai-robot-antenna"></div>
-            <div class="ai-robot-ear left"></div>
-            <div class="ai-robot-ear right"></div>
-            <div class="ai-robot-arm left"></div>
-            <div class="ai-robot-arm right"></div>
-            <div class="ai-robot-head">
-                <div class="ai-robot-eyes">
-                    <span class="ai-robot-eye"></span>
-                    <span class="ai-robot-eye"></span>
-                </div>
-                <span class="ai-robot-cheek left"></span>
-                <span class="ai-robot-cheek right"></span>
-                <span class="ai-robot-mouth"></span>
-            </div>
-            <div class="ai-robot-shadow"></div>
-        </div>
         <div class="ai-loading-copy">
             <div class="ai-loading-title">
                 <span>{safe_title}</span>
@@ -8366,106 +8411,50 @@ def render_loading_animation_html(
             <div class="ai-loading-subtitle">
                 {safe_subtitle}
             </div>
-            <div class="ai-loading-bar" aria-hidden="true"></div>
         </div>
     </div>
     """
-
 
 def render_auto_scroll_script(
     target: str = "latest",
     delay_ms: int = 120,
 ) -> None:
-    """Auto-scroll ke pesan terbaru, kartu loading, atau anchor bawah."""
-    safe_target = _html_escape(target)
+    """Auto-scroll dinonaktifkan default untuk mencegah React update loop."""
+    if (
+        bool(frontend_ultra_safe_mode)
+        or not bool(custom_components_enabled)
+        or not bool(auto_scroll_enabled)
+    ):
+        return
+
     safe_delay = max(0, int(delay_ms or 0))
     components.html(
         f"""
         <script>
         (function () {{
-            const targetMode = "{safe_target}";
-            const delay = {safe_delay};
-
-            function getParentDocument() {{
+            if (window.__adioranyeScrollBusy) {{
+                return;
+            }}
+            window.__adioranyeScrollBusy = true;
+            window.setTimeout(function () {{
                 try {{
-                    return window.parent.document;
-                }} catch (error) {{
-                    return document;
-                }}
-            }}
-
-            function getLastElement(items) {{
-                if (!items || items.length === 0) {{
-                    return null;
-                }}
-
-                return items[items.length - 1];
-            }}
-
-            function findTarget(doc) {{
-                if (targetMode === "loading") {{
-                    const loadingCard = doc.querySelector(".ai-loading-card");
-
-                    if (loadingCard) {{
-                        return loadingCard;
-                    }}
-                }}
-
-                if (targetMode === "bottom") {{
-                    const anchors = doc.querySelectorAll(".auto-scroll-anchor");
-                    const lastAnchor = getLastElement(anchors);
-
-                    if (lastAnchor) {{
-                        return lastAnchor;
-                    }}
-                }}
-
-                const chatMessages = doc.querySelectorAll(
-                    'div[data-testid="stChatMessage"]'
-                );
-                const lastMessage = getLastElement(chatMessages);
-
-                if (lastMessage) {{
-                    return lastMessage;
-                }}
-
-                const chatInput = doc.querySelector(
-                    'div[data-testid="stChatInput"]'
-                );
-
-                if (chatInput) {{
-                    return chatInput;
-                }}
-
-                return doc.body;
-            }}
-
-            function runScroll() {{
-                const doc = getParentDocument();
-                const targetElement = findTarget(doc);
-
-                if (!targetElement || !targetElement.scrollIntoView) {{
-                    return;
-                }}
-
-                targetElement.scrollIntoView({{
-                    behavior: "smooth",
-                    block: "end",
-                    inline: "nearest"
-                }});
-
-                if (targetMode === "loading") {{
-                    window.setTimeout(function () {{
+                    const doc = window.parent && window.parent.document
+                        ? window.parent.document
+                        : document;
+                    const items = doc.querySelectorAll('div[data-testid="stChatMessage"], .auto-scroll-anchor, .ai-loading-card');
+                    const targetElement = items && items.length
+                        ? items[items.length - 1]
+                        : doc.body;
+                    if (targetElement && targetElement.scrollIntoView) {{
                         targetElement.scrollIntoView({{
-                            behavior: "smooth",
-                            block: "center",
+                            behavior: "auto",
+                            block: "end",
                             inline: "nearest"
                         }});
-                    }}, 180);
-                }}
-            }}
-
-            window.setTimeout(runScroll, delay);
+                    }}
+                }} catch (error) {{}}
+                window.__adioranyeScrollBusy = false;
+            }}, {safe_delay});
         }})();
         </script>
         """,
@@ -8473,298 +8462,30 @@ def render_auto_scroll_script(
         scrolling=False,
     )
 
-
-
-
 def render_sound_unlock_script() -> None:
-    """Pasang bridge suara yang bisa retry.
+    """Suara dinonaktifkan default untuk stabilitas frontend."""
+    if (
+        bool(frontend_ultra_safe_mode)
+        or not bool(custom_components_enabled)
+        or not bool(answer_sound_enabled)
+    ):
+        return
 
-    Browser dapat memblokir suara jika belum ada interaksi user.
-    Script ini:
-    - memasang fungsi global di parent window,
-    - membuka audio context saat user klik/tap/ketik,
-    - menyimpan suara pending jika autoplay ditolak,
-    - mencoba memutar ulang setelah interaksi berikutnya.
-    """
-    components.html(
-        """
-        <script>
-        (function () {
-            function getParentWindow() {
-                try {
-                    return window.parent || window;
-                } catch (error) {
-                    return window;
-                }
-            }
-
-            function getParentDocument(parentWindow) {
-                try {
-                    return parentWindow.document || document;
-                } catch (error) {
-                    return document;
-                }
-            }
-
-            const parentWindow = getParentWindow();
-            const doc = getParentDocument(parentWindow);
-
-            if (!doc || !doc.body) {
-                return;
-            }
-
-            const AudioContextClass =
-                parentWindow.AudioContext ||
-                parentWindow.webkitAudioContext ||
-                window.AudioContext ||
-                window.webkitAudioContext;
-
-            parentWindow.__adioranyePlayedSoundKeys =
-                parentWindow.__adioranyePlayedSoundKeys || {};
-
-            parentWindow.__adioranyePendingSoundKeys =
-                parentWindow.__adioranyePendingSoundKeys || {};
-
-            function createContext() {
-                if (!AudioContextClass) {
-                    return null;
-                }
-
-                if (!parentWindow.__adioranyeAudioContext) {
-                    parentWindow.__adioranyeAudioContext =
-                        new AudioContextClass();
-                }
-
-                return parentWindow.__adioranyeAudioContext;
-            }
-
-            function playTone(
-                audioContext,
-                frequency,
-                startTime,
-                duration,
-                volume
-            ) {
-                const oscillator = audioContext.createOscillator();
-                const gain = audioContext.createGain();
-
-                oscillator.type = "sine";
-
-                oscillator.frequency.setValueAtTime(
-                    frequency,
-                    startTime
-                );
-
-                gain.gain.setValueAtTime(
-                    0.0001,
-                    startTime
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    volume,
-                    startTime + 0.018
-                );
-
-                gain.gain.exponentialRampToValueAtTime(
-                    0.0001,
-                    startTime + duration
-                );
-
-                oscillator.connect(gain);
-                gain.connect(audioContext.destination);
-
-                oscillator.start(startTime);
-                oscillator.stop(startTime + duration + 0.04);
-            }
-
-            function playChimeNow(soundKey) {
-                const key = String(soundKey || "latest");
-
-                if (parentWindow.__adioranyePlayedSoundKeys[key]) {
-                    return true;
-                }
-
-                const audioContext = createContext();
-
-                if (!audioContext) {
-                    return false;
-                }
-
-                if (audioContext.state === "suspended") {
-                    parentWindow.__adioranyePendingSoundKeys[key] = true;
-
-                    audioContext
-                        .resume()
-                        .then(function () {
-                            parentWindow.__adioranyePlayAnswerSound(key);
-                        })
-                        .catch(function () {});
-
-                    return false;
-                }
-
-                const now = audioContext.currentTime;
-
-                playTone(
-                    audioContext,
-                    659.25,
-                    now,
-                    0.11,
-                    0.085
-                );
-
-                playTone(
-                    audioContext,
-                    880.00,
-                    now + 0.105,
-                    0.14,
-                    0.070
-                );
-
-                playTone(
-                    audioContext,
-                    1174.66,
-                    now + 0.225,
-                    0.18,
-                    0.055
-                );
-
-                parentWindow.__adioranyePlayedSoundKeys[key] = true;
-                delete parentWindow.__adioranyePendingSoundKeys[key];
-
-                return true;
-            }
-
-            parentWindow.__adioranyePlayAnswerSound = function (soundKey) {
-                try {
-                    return playChimeNow(soundKey);
-                } catch (error) {
-                    const key = String(soundKey || "latest");
-                    parentWindow.__adioranyePendingSoundKeys[key] = true;
-                    return false;
-                }
-            };
-
-            function unlockSound() {
-                try {
-                    const audioContext = createContext();
-
-                    if (!audioContext) {
-                        return;
-                    }
-
-                    audioContext
-                        .resume()
-                        .then(function () {
-                            parentWindow.__adioranyeSoundReady = true;
-
-                            const pendingKeys = Object.keys(
-                                parentWindow.__adioranyePendingSoundKeys || {}
-                            );
-
-                            pendingKeys.forEach(function (key) {
-                                window.setTimeout(function () {
-                                    parentWindow.__adioranyePlayAnswerSound(key);
-                                }, 80);
-                            });
-                        })
-                        .catch(function () {});
-                } catch (error) {}
-            }
-
-            const events = [
-                "pointerdown",
-                "mousedown",
-                "touchstart",
-                "keydown",
-                "click"
-            ];
-
-            if (parentWindow.__adioranyeSoundEventsBound !== true) {
-                parentWindow.__adioranyeSoundEventsBound = true;
-
-                events.forEach(function (eventName) {
-                    doc.addEventListener(
-                        eventName,
-                        unlockSound,
-                        {
-                            passive: true,
-                            capture: true
-                        }
-                    );
-
-                    try {
-                        parentWindow.addEventListener(
-                            eventName,
-                            unlockSound,
-                            {
-                                passive: true,
-                                capture: true
-                            }
-                        );
-                    } catch (error) {}
-                });
-            }
-
-            window.setTimeout(unlockSound, 80);
-        })();
-        </script>
-        """,
-        height=1,
-        scrolling=False,
-    )
-
+    return
 
 def render_answer_ready_sound_script(
     sound_key: str = "latest",
 ) -> None:
-    """Mainkan suara kecil saat jawaban final sudah siap.
+    """Suara jawaban dinonaktifkan default untuk mencegah loop frontend."""
+    if (
+        bool(frontend_ultra_safe_mode)
+        or not bool(custom_components_enabled)
+        or not bool(answer_sound_enabled)
+        or not bool(st.session_state.get("sound_enabled", False))
+    ):
+        return
 
-    Berbeda dari versi lama, script ini tidak menandai suara sebagai
-    "sudah diputar" sebelum audio benar-benar berhasil diputar.
-    """
-    safe_key = _html_escape(sound_key)
-    components.html(
-        f"""
-        <script>
-        (function () {{
-            const soundKey = "adioranye-answer-ready-{safe_key}";
-
-            function getParentWindow() {{
-                try {{
-                    return window.parent || window;
-                }} catch (error) {{
-                    return window;
-                }}
-            }}
-
-            const parentWindow = getParentWindow();
-
-            try {{
-                parentWindow.__adioranyePendingSoundKeys =
-                    parentWindow.__adioranyePendingSoundKeys || {{}};
-
-                if (typeof parentWindow.__adioranyePlayAnswerSound === "function") {{
-                    const played = parentWindow.__adioranyePlayAnswerSound(soundKey);
-
-                    if (!played) {{
-                        parentWindow.__adioranyePendingSoundKeys[soundKey] = true;
-                    }}
-
-                    return;
-                }}
-
-                parentWindow.__adioranyePendingSoundKeys[soundKey] = true;
-            }} catch (error) {{
-                // Suara notifikasi tidak boleh mengganggu UI.
-            }}
-        }})();
-        </script>
-        """,
-        height=1,
-        scrolling=False,
-    )
-
+    return
 
 def _get_public_stats() -> Dict[str, Any]:
     stats = st.session_state.get("public_usage_stats") or {}
@@ -9726,21 +9447,25 @@ def render_answer_typewriter_display(
     delay_seconds: float = 0.012,
     is_error: bool = False,
 ) -> None:
-    """Tampilkan jawaban bertahap secara aman tanpa memaksa API streaming.
+    """Tampilkan jawaban dengan mode aman.
 
-    Jika jawaban adalah error publik, animasi langsung dihentikan.
+    Default: tanpa typewriter/time.sleep agar frontend tidak menerima banyak update
+    beruntun yang dapat memicu React error #185.
     """
     answer = str(answer_text or "")
-
-    if not answer.strip():
-        placeholder.markdown(answer)
-        return
 
     if is_error:
         placeholder.warning(answer)
         return
 
-    # Untuk jawaban sangat panjang, jangan terlalu lambat.
+    if bool(frontend_ultra_safe_mode) or not bool(typewriter_enabled):
+        placeholder.markdown(answer)
+        return
+
+    if not answer.strip():
+        placeholder.markdown(answer)
+        return
+
     if len(answer) > 3500:
         chunk_size = 56
         delay_seconds = 0.003
@@ -9755,21 +9480,13 @@ def render_answer_typewriter_display(
         len(answer),
         max(1, int(chunk_size or 22)),
     ):
-        shown_parts.append(
-            answer[index:index + chunk_size]
-        )
-
-        placeholder.markdown(
-            "".join(shown_parts) + "▌",
-        )
+        shown_parts.append(answer[index:index + chunk_size])
+        placeholder.markdown("".join(shown_parts) + "▌")
 
         if delay_seconds > 0:
-            time.sleep(
-                max(0.0, float(delay_seconds)),
-            )
+            time.sleep(max(0.0, float(delay_seconds)))
 
     placeholder.markdown(answer)
-
 
 def render_realtime_stream_answer(
     placeholder: Any,
@@ -10108,6 +9825,13 @@ def get_runtime_config() -> Dict[str, Any]:
         "maintenance_auto_check_interval_seconds": maintenance_auto_check_interval_seconds,
         "maintenance_fragment_enabled": bool(maintenance_fragment_enabled),
         "maintenance_browser_reload_enabled": bool(maintenance_browser_reload_enabled),
+        "frontend_ultra_safe_mode": bool(frontend_ultra_safe_mode),
+        "custom_components_enabled": bool(custom_components_enabled),
+        "auto_scroll_enabled": bool(auto_scroll_enabled),
+        "answer_sound_enabled": bool(answer_sound_enabled),
+        "typewriter_enabled": bool(typewriter_enabled),
+        "animated_loading_enabled": bool(animated_loading_enabled),
+        "model_status_fragment_enabled": bool(model_status_fragment_enabled),
     }
 
 
@@ -10281,9 +10005,10 @@ def render_admin_status() -> None:
             "Saat lock aktif, hanya admin web dan chat ID Telegram admin yang dapat menggunakan Adioranye."
         )
         st.caption(
-            f"Realtime check aman aktif. Browser reload: {'ON' if maintenance_browser_reload_enabled else 'OFF'}; "
-            f"fragment polling: {'ON' if maintenance_fragment_enabled else 'OFF'}; "
-            f"interval: {maintenance_auto_check_interval_seconds} detik."
+            f"Frontend ultra-safe: {'ON' if frontend_ultra_safe_mode else 'OFF'}; "
+            f"custom JS/components: {'ON' if custom_components_enabled else 'OFF'}; "
+            f"auto-scroll: {'ON' if auto_scroll_enabled else 'OFF'}; "
+            f"sound: {'ON' if answer_sound_enabled else 'OFF'}."
         )
 
     with st.expander("Cache pertanyaan sering muncul"):
@@ -10401,6 +10126,15 @@ def render_admin_status() -> None:
             st.rerun()
 
     with st.expander("Kontrol status model"):
+        st.caption(
+            "Health check hemat token aktif: prompt pendek, output kecil, retry default 0, dan cache dipertahankan."
+        )
+        col_health_saver_a, col_health_saver_b, col_health_saver_c, col_health_saver_d = st.columns(4)
+        col_health_saver_a.metric("Probe token", int(model_health_probe_max_tokens or 2))
+        col_health_saver_b.metric("GPT probe token", int(model_health_probe_gpt5_max_tokens or 8))
+        col_health_saver_c.metric("Quick limit", int(model_health_quick_limit or 6))
+        col_health_saver_d.metric("Retry", int(model_health_retries or 0))
+
         col_ready_a, col_ready_b = st.columns(2)
         with col_ready_a:
             if st.button(
@@ -13275,7 +13009,7 @@ def render_public_page() -> None:
                     )
 
                     if (
-                        bool(st.session_state.get("sound_enabled", True))
+                        bool(st.session_state.get("sound_enabled", False))
                         and not is_public_error_answer
                     ):
                         render_answer_ready_sound_script(
@@ -13292,7 +13026,7 @@ def render_public_page() -> None:
                         delay_ms=120,
                     )
                     if (
-                        bool(st.session_state.get("sound_enabled", True))
+                        bool(st.session_state.get("sound_enabled", False))
                         and not is_public_error_answer
                     ):
                         render_answer_ready_sound_script(
@@ -13459,7 +13193,7 @@ def render_public_page() -> None:
                 st.markdown(answer)
                 render_sound_unlock_script()
                 if (
-                    bool(st.session_state.get("sound_enabled", True))
+                    bool(st.session_state.get("sound_enabled", False))
                     and not is_public_connection_error_answer(answer, meta=meta)
                 ):
                     render_answer_ready_sound_script(

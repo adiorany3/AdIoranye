@@ -2168,21 +2168,24 @@ def _extract_health_content(data: Any) -> str:
 
 
 def _build_health_payload(model: str) -> Dict[str, Any]:
-    """Use a tiny safe prompt that proves the model can return assistant content."""
-    max_tokens = 64 if _is_gpt5_health_model(model) else 16
+    """Use an ultra-cheap health prompt to avoid wasting tokens."""
+    gpt5_budget = int(os.getenv("MODEL_HEALTH_PROBE_GPT5_MAX_TOKENS", "8") or 8)
+    normal_budget = int(os.getenv("MODEL_HEALTH_PROBE_MAX_TOKENS", "2") or 2)
+    max_tokens = gpt5_budget if _is_gpt5_health_model(model) else normal_budget
+    max_tokens = max(1, min(int(max_tokens or 2), 12))
+    prompt = str(os.getenv("MODEL_HEALTH_PROBE_PROMPT", "ping") or "ping")[:20]
+
     payload: Dict[str, Any] = {
         "model": model,
         "messages": [
-            {"role": "system", "content": "Balas hanya satu kata: OK."},
-            {"role": "user", "content": "OK?"},
+            {"role": "system", "content": "OK"},
+            {"role": "user", "content": prompt},
         ],
         "temperature": 0,
         "max_completion_tokens": max_tokens,
         "stream": False,
     }
     if _is_gpt5_health_model(model):
-        # GPT-5-family models can spend completion budget on reasoning. Minimal reasoning
-        # avoids false negatives where HTTP 200 returns choices but no visible content.
         payload["reasoning_effort"] = "minimal"
     return payload
 
@@ -2694,6 +2697,7 @@ def check_telegram_single_model_health(api_url: str, api_key: str, model: str, t
             if choices and isinstance(choices[0], dict):
                 finish_reason = str(choices[0].get("finish_reason") or "")
 
+            usage = data.get("usage") if isinstance(data, dict) else {}
             if choices and content:
                 return {
                     "active": True,
@@ -2706,6 +2710,7 @@ def check_telegram_single_model_health(api_url: str, api_key: str, model: str, t
                     "tier": _candidate_tier(model),
                     "finish_reason": finish_reason,
                     "sample": content[:80],
+                    "usage": usage if isinstance(usage, dict) else {},
                     "error": "",
                 }
 
@@ -2829,10 +2834,14 @@ def refresh_telegram_runtime_models(
     if not candidates:
         candidates = _as_string_list([current_model] + TOP_USAGE_MODEL_CANDIDATES + ALL_SLASHAI_MODELS + DEFAULT_CHEAP_FALLBACK_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS)
 
-    max_workers = int(config.get("model_health_workers", 6) or 6)
-    max_workers = max(1, min(max_workers, len(candidates), 10))
-    retries = int(config.get("model_health_retries", 1) or 1)
-    retries = max(0, min(retries, 2))
+    health_limit = int(config.get("model_health_quick_limit", os.getenv("MODEL_HEALTH_QUICK_LIMIT", 6)) or 6)
+    if health_limit > 0:
+        candidates = candidates[:health_limit]
+
+    max_workers = int(config.get("model_health_workers", os.getenv("MODEL_HEALTH_WORKERS", 4)) or 4)
+    max_workers = max(1, min(max_workers, len(candidates), 8))
+    retries = int(config.get("model_health_retries", os.getenv("MODEL_HEALTH_RETRIES", 0)) or 0)
+    retries = max(0, min(retries, 1))
 
     health_cache: Dict[str, Dict[str, Any]] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
