@@ -3499,32 +3499,80 @@ def filter_models_by_tier(
     ]
 
 
-def sort_health_models_for_simple_chat(
-    models: List[str],
-    health_cache: Dict[str, Dict[str, Any]],
-) -> List[str]:
-    """Percakapan sederhana: murah dulu, lalu latency/harga."""
-    active_models = [
-        model
-        for model in unique_models(models)
-        if health_cache.get(model, {}).get("active")
-    ]
 
-    def sort_key(model: str) -> Tuple[int, float, int, float, str]:
+def model_is_free_for_routing(model: str) -> bool:
+    model_name = str(model or "").strip()
+    lower_name = model_name.lower()
+
+    if "free" in lower_name:
+        return True
+
+    explicit_price = MODEL_PRICE_IDR.get(model_name) or MODEL_PRICE_IDR.get(lower_name)
+    if not isinstance(explicit_price, dict):
+        return False
+
+    return int(explicit_price.get("input", 0) or 0) == 0 and int(explicit_price.get("output", 0) or 0) == 0
+
+
+def model_is_nano_for_routing(model: str) -> bool:
+    return "nano" in str(model or "").lower()
+
+
+def free_nano_priority_rank_for_routing(model: str) -> int:
+    if model_is_free_for_routing(model):
+        return 0
+    if model_is_nano_for_routing(model):
+        return 1
+    if _tier_rank(model) == 0:
+        return 2
+    if _tier_rank(model) == 1:
+        return 3
+    if _tier_rank(model) == 2:
+        return 4
+    return 5
+
+
+def prioritize_free_nano_for_simple_questions(
+    models: List[str],
+    health_cache: Dict[str, Dict[str, Any]] | None = None,
+    require_active: bool = False,
+) -> List[str]:
+    health_cache = health_cache or {}
+    unique = unique_models(models)
+
+    if require_active:
+        unique = [
+            model
+            for model in unique
+            if health_cache.get(model, {}).get("active")
+        ]
+
+    def sort_key(model: str) -> Tuple[int, float, int, int, str]:
         price = model_price(model)
         latency = get_model_effective_latency_ms(model, health_cache)
         penalty = get_model_performance_penalty(model)
         success_rate = get_model_success_rate(model)
         return (
-            _tier_rank(model),
+            free_nano_priority_rank_for_routing(model),
             latency + penalty,
-            int(price.get("output", 999999999)),
-            -success_rate,
-            model,
+            int(price.get("output", 999999999) or 0),
+            -int(success_rate * 1000),
+            str(model or ""),
         )
 
-    return sorted(active_models, key=sort_key)
+    return sorted(unique, key=sort_key)
 
+
+def sort_health_models_for_simple_chat(
+    models: List[str],
+    health_cache: Dict[str, Dict[str, Any]],
+) -> List[str]:
+    """Percakapan sederhana: free -> nano -> cheap, lalu latency/harga."""
+    return prioritize_free_nano_for_simple_questions(
+        models,
+        health_cache,
+        require_active=True,
+    )
 
 def prioritize_active_models(
     models: List[str], health_cache: Dict[str, Dict[str, Any]]
@@ -4634,13 +4682,23 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     """
     health_cache = st.session_state.get("model_health_cache") or {}
 
-    cheap_candidates = unique_models(
-        (
+    free_nano_first_pool = [
+        "slashai/deepseek-v4-flash-free",
+        "slashai/claude-sonnet-4.5-free",
+        "slashai/nemotron-3-super-free",
+        "slashai/gpt-5-nano",
+        "slashai/gpt-5.4-nano",
+    ]
+    cheap_candidates = prioritize_free_nano_for_simple_questions(
+        free_nano_first_pool
+        + (
             st.session_state.get("active_cheap_fallback_models")
             or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
         )
         + CHEAP_MODEL_OPTIONS
-        + TOP_USAGE_MODEL_CANDIDATES
+        + TOP_USAGE_MODEL_CANDIDATES,
+        health_cache,
+        require_active=False,
     )
 
     medium_candidates = (
@@ -4670,12 +4728,14 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     # Jika belum ada health cache, jangan kosongkan routing. Pakai daftar fallback lokal
     # agar halaman admin tetap hidup dan chat masih bisa mencoba model default/fallback.
     if not active_cheap:
-        active_cheap = unique_models(
+        active_cheap = prioritize_free_nano_for_simple_questions(
             [
                 model
                 for model in cheap_candidates
                 if _tier_rank(model) == 0
-            ]
+            ],
+            health_cache,
+            require_active=False,
         )
 
     if not active_higher:
@@ -4793,11 +4853,22 @@ def build_model_routing_plan(
     fast_normal_enabled = bool(
         st.session_state.get("active_fast_normal_model_router", True)
     )
+    thinking_mode = is_thinking_question(user_text)
     fastest_cheap_models = sort_health_models_for_simple_chat(
         active_cheap_models,
         health_cache,
     )
-    thinking_mode = is_thinking_question(user_text)
+    if not thinking_mode:
+        active_cheap_models = prioritize_free_nano_for_simple_questions(
+            active_cheap_models,
+            health_cache,
+            require_active=bool(health_cache),
+        )
+        fastest_cheap_models = prioritize_free_nano_for_simple_questions(
+            fastest_cheap_models or active_cheap_models,
+            health_cache,
+            require_active=False,
+        )
 
     if operation_mode == "Hemat":
         capable_primary = ""
@@ -4826,7 +4897,7 @@ def build_model_routing_plan(
         if fast_normal_enabled and fastest_cheap_models:
             primary_model = fastest_cheap_models[0]
             normal_fast_mode = True
-            routing_reason = "prompt-ringan-model-hemat-tercepat"
+            routing_reason = "prompt-ringan-prioritas-free-nano"
         elif rotate_enabled:
             primary_model = get_rotating_cheap_primary(
                 active_cheap_models, advance=advance_rotation

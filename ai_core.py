@@ -195,21 +195,31 @@ ALL_CAPABLE_MODELS = _unique_ordered(ALL_MEDIUM_MODELS + ALL_EXPENSIVE_MODELS)
 
 # Jalur murah: banyak opsi agar /rotate dan health-check bisa memilih yang hidup/tercepat.
 DEFAULT_CHEAP_FALLBACK_MODELS = _unique_ordered([
+    # Free first untuk pertanyaan ringan/non-thinking.
+    "slashai/deepseek-v4-flash-free",
+    "slashai/claude-sonnet-4.5-free",
+    "slashai/nemotron-3-super-free",
+
+    # Nano second: hemat dan cepat untuk chat ringan.
+    "slashai/gpt-5-nano",
+    "slashai/gpt-5.4-nano",
+
+    # Cheap/fast setelah free dan nano.
+    "slashai/minimax-m2.5:fast",
+    "slashai/deepseek-v4-flash:medium",
+    "slashai/step-3.5-flash",
+    "slashai/qwen3-coder-next:fast",
+    "slashai/minimax-m2.7:medium",
+    "slashai/deepseek-3.2:fast",
     "slashai/deepseek-v4-flash",
     "slashai/claude-haiku-4.5",
     "bai/deepseek-v4-flash",
     "slashai/gemini-3-flash",
-    "slashai/gpt-5-nano",
     "slashai/gpt-5-mini",
     "slashai/gpt-5.5-instant",
     "slashai/gpt-5.4-mini",
-    "slashai/gpt-5.4-nano",
     "slashai/gemini-3.1-pro",
-    "slashai/deepseek-v4-flash:medium",
     "slashai/claude-haiku-4.5:fast",
-    "slashai/minimax-m2.5:fast",
-    "slashai/minimax-m2.7:medium",
-    "slashai/step-3.5-flash",
     "slashai/gpt-5-codex-mini",
     "slashai/gpt-5.1-codex-mini",
     "slashai/gpt-5.3-codex-spark",
@@ -277,6 +287,59 @@ def model_price(model: str) -> Dict[str, int]:
 def model_cost_tier(model: str) -> str:
     price = model_price(model)
     return _tier_from_price(int(price.get("input", 0) or 0), int(price.get("output", 0) or 0))
+
+
+
+def model_is_free(model: str) -> bool:
+    model_name = str(model or "").strip()
+    lower_name = model_name.lower()
+
+    if "free" in lower_name:
+        return True
+
+    # Jangan anggap model unknown sebagai free hanya karena fallback price Rp0/Rp0.
+    explicit_price = MODEL_PRICE_IDR.get(model_name)
+    if explicit_price is None:
+        explicit_price = MODEL_PRICE_IDR.get(lower_name)
+
+    if not isinstance(explicit_price, dict):
+        return False
+
+    return int(explicit_price.get("input", 0) or 0) == 0 and int(explicit_price.get("output", 0) or 0) == 0
+
+
+def model_is_nano(model: str) -> bool:
+    return "nano" in str(model or "").lower()
+
+
+def free_nano_priority_rank(model: str) -> int:
+    """Urutan hemat untuk prompt ringan: free -> nano -> cheap -> lainnya."""
+    if model_is_free(model):
+        return 0
+    if model_is_nano(model):
+        return 1
+    if model_cost_tier(model) == "cheap":
+        return 2
+    if model_cost_tier(model) == "medium":
+        return 3
+    if model_cost_tier(model) == "expensive":
+        return 4
+    return 5
+
+
+def prioritize_free_nano_models(models: List[str]) -> List[str]:
+    unique = _unique_ordered(models)
+
+    def sort_key(model: str) -> tuple[int, int, int, str]:
+        price = model_price(model)
+        return (
+            free_nano_priority_rank(model),
+            int(price.get("output", 999999999) or 0),
+            int(price.get("input", 999999999) or 0),
+            str(model or ""),
+        )
+
+    return sorted(unique, key=sort_key)
 
 
 def _unique_strings(items: List[Any]) -> List[str]:
@@ -921,11 +984,28 @@ def rank_fallback_models(primary_model: str, fallback_models: Optional[List[str]
             raw.append(m)
 
     task = classify_task(user_text)
+    non_thinking = not (
+        task["coding"]
+        or task["academic"]
+        or task["needs_precision"]
+        or task["long_input"]
+    )
 
     def score_model(m: str) -> float:
         p = MODEL_PROFILES.get(m, {"speed": 0.72, "quality": 0.70, "cost": 4.0})
         score = p["speed"] * 0.45 + p["quality"] * 0.45 - min(p["cost"], 30.0) * 0.006
-        # Untuk tugas coding/akurasi, gpt-5-mini biasanya lebih kuat dari nano.
+
+        # Untuk prompt ringan/non-thinking, free/nano harus dominan.
+        if non_thinking:
+            if model_is_free(m):
+                score += 1.20
+            elif model_is_nano(m):
+                score += 0.90
+            elif model_cost_tier(m) == "cheap":
+                score += 0.35
+
+        # Untuk tugas coding/akurasi, gpt-5-mini biasanya lebih kuat dari nano,
+        # tetapi tetap tidak langsung memaksa model mahal.
         if task["coding"] or task["needs_precision"] or task["academic"]:
             if "gpt-5-mini" in m:
                 score += 0.08
@@ -934,12 +1014,21 @@ def rank_fallback_models(primary_model: str, fallback_models: Optional[List[str]
         else:
             if "gemini-3-flash" in m or "mimo-v2-flash" in m:
                 score += 0.04
+
         return score
 
+    if non_thinking:
+        return sorted(
+            raw,
+            key=lambda model: (
+                free_nano_priority_rank(model),
+                -score_model(model),
+                int(model_price(model).get("output", 999999999) or 0),
+                model,
+            ),
+        )
+
     return sorted(raw, key=score_model, reverse=True)
-
-
-
 
 def filter_models_by_tier(models: List[str], tiers: Optional[set] = None, exclude: Optional[set] = None) -> List[str]:
     """Return models that match desired cost tiers and are not excluded."""

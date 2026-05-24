@@ -22,6 +22,7 @@ from ai_core import (
     discover_available_models_from_api,
     DEFAULT_CHEAP_FALLBACK_MODELS,
     DEFAULT_EXPENSIVE_FALLBACK_MODELS,
+    MODEL_PRICE_IDR,
     generate_answer,
     model_cost_tier,
     model_price,
@@ -119,15 +120,48 @@ def telegram_model_tier_rank(model: str) -> int:
     return 2
 
 
+
+def telegram_model_is_free(model: str) -> bool:
+    model_name = str(model or "").strip()
+    lower_name = model_name.lower()
+
+    if "free" in lower_name:
+        return True
+
+    explicit_price = MODEL_PRICE_IDR.get(model_name) or MODEL_PRICE_IDR.get(lower_name)
+    if not isinstance(explicit_price, dict):
+        return False
+
+    return int(explicit_price.get("input", 0) or 0) == 0 and int(explicit_price.get("output", 0) or 0) == 0
+
+
+def telegram_model_is_nano(model: str) -> bool:
+    return "nano" in str(model or "").lower()
+
+
+def telegram_free_nano_priority_rank(model: str) -> int:
+    if telegram_model_is_free(model):
+        return 0
+    if telegram_model_is_nano(model):
+        return 1
+    if telegram_model_tier_rank(model) == 0:
+        return 2
+    if telegram_model_tier_rank(model) == 1:
+        return 3
+    if telegram_model_tier_rank(model) == 2:
+        return 4
+    return 5
+
+
 def telegram_sort_models_for_simple_chat(
     models: List[str],
     health_cache: Dict[str, Dict[str, Any]] | None = None,
 ) -> List[str]:
-    """Murah dulu untuk percakapan sederhana, lalu sedang, lalu mahal."""
+    """Percakapan sederhana: free -> nano -> cheap, lalu latency/harga."""
     health_cache = health_cache or {}
     unique = telegram_unique_models(models)
 
-    def sort_key(model: str) -> tuple[int, float, int, str]:
+    def sort_key(model: str) -> tuple[int, float, int, int, str]:
         latency = 999999.0
         try:
             value = (health_cache.get(model, {}) or {}).get("latency_ms")
@@ -138,14 +172,14 @@ def telegram_sort_models_for_simple_chat(
 
         price = model_price(model)
         return (
-            telegram_model_tier_rank(model),
+            telegram_free_nano_priority_rank(model),
             latency,
-            int(price.get("output", 999999999)),
+            int(price.get("output", 999999999) or 0),
+            int(price.get("input", 999999999) or 0),
             model,
         )
 
     return sorted(unique, key=sort_key)
-
 
 def telegram_looks_like_model_error(
     answer_text: Any,
@@ -2643,30 +2677,24 @@ def _prioritize_active_telegram_models(models: List[str], health_cache: Dict[str
     return sorted(
         active,
         key=lambda item: (
-            _model_tier_rank(item),
+            telegram_free_nano_priority_rank(item),
             _model_output_price(item),
             float(health_cache.get(item, {}).get("latency_ms") or 999999),
             item,
         ),
     )
-
 
 def _prioritize_fastest_telegram_models(models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> List[str]:
     active = [model for model in _as_string_list(models) if health_cache.get(model, {}).get("active")]
     return sorted(
         active,
         key=lambda item: (
+            telegram_free_nano_priority_rank(item),
             float(health_cache.get(item, {}).get("latency_ms") or 999999),
             _model_output_price(item),
             item,
         ),
     )
-
-
-
-
-TRANSIENT_HEALTH_HTTP_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
-
 
 def _is_gpt5_health_model(model: str) -> bool:
     return "gpt-5" in str(model or "").lower()
@@ -2737,7 +2765,17 @@ def _candidate_tier(model: str) -> str:
 
 def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
     """Build robust model pools from defaults, config, and dynamically classified candidates."""
-    default_cheap = _as_string_list(ALL_CHEAP_MODELS) or _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS)
+    free_nano_first = [
+        "slashai/deepseek-v4-flash-free",
+        "slashai/claude-sonnet-4.5-free",
+        "slashai/nemotron-3-super-free",
+        "slashai/gpt-5-nano",
+        "slashai/gpt-5.4-nano",
+    ]
+    default_cheap = telegram_sort_models_for_simple_chat(
+        free_nano_first
+        + (_as_string_list(ALL_CHEAP_MODELS) or _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS))
+    )
     default_expensive = _as_string_list(ALL_CAPABLE_MODELS) or _as_string_list(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
 
     declared_cheap = []
@@ -2758,7 +2796,7 @@ def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dic
     extra = _as_string_list(config.get("all_model_candidates"))
     extra.extend(_as_string_list(TOP_USAGE_MODEL_CANDIDATES))
     extra.extend(_as_string_list(ALL_SLASHAI_MODELS))
-    all_candidates = _as_string_list([current_model] + declared_cheap + declared_capable + extra)
+    all_candidates = _as_string_list(free_nano_first + [current_model] + declared_cheap + declared_capable + extra)
 
     dynamic_cheap: List[str] = []
     dynamic_capable: List[str] = []
@@ -2772,13 +2810,18 @@ def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dic
         else:
             dynamic_unknown.append(candidate)
 
-    return {
-        "cheap": _as_string_list(declared_cheap + dynamic_cheap),
-        "capable": _as_string_list(declared_capable + dynamic_capable),
-        "unknown": _as_string_list(dynamic_unknown),
-        "all": all_candidates,
-    }
+    cheap = telegram_sort_models_for_simple_chat(
+        free_nano_first + declared_cheap + dynamic_cheap
+    )
+    capable = _as_string_list(declared_capable + dynamic_capable)
+    unknown = _as_string_list(dynamic_unknown)
 
+    return {
+        "cheap": cheap,
+        "capable": capable,
+        "unknown": unknown,
+        "all": _as_string_list(cheap + capable + unknown),
+    }
 
 def _select_primary_by_mode(
     preferred_mode: str,
@@ -3586,10 +3629,10 @@ class TelegramBotService:
             if isinstance(item, dict) and item.get("active")
         ]
 
-        cheap_models = [
+        cheap_models = telegram_sort_models_for_simple_chat([
             model for model in active_models
             if _candidate_tier(model) in {"cheap", "free"}
-        ]
+        ], cache)
         expensive_models = [
             model for model in active_models
             if model not in cheap_models
