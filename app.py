@@ -142,6 +142,143 @@ def make_public_ai_error_message() -> str:
     return PUBLIC_AI_ERROR_MESSAGE
 
 
+def _maintenance_now_text() -> str:
+    try:
+        return _wib_now_text()
+    except Exception:
+        try:
+            return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return ""
+
+
+def default_maintenance_state() -> Dict[str, Any]:
+    return {
+        "locked": False,
+        "status": "unlocked",
+        "message": maintenance_default_message,
+        "reason": "",
+        "updated_at": "",
+        "updated_by": "",
+        "channel": "",
+    }
+
+
+def read_maintenance_lock_state() -> Dict[str, Any]:
+    try:
+        if not maintenance_lock_file or not os.path.exists(maintenance_lock_file):
+            return default_maintenance_state()
+
+        with open(maintenance_lock_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            return default_maintenance_state()
+
+        state = default_maintenance_state()
+        state.update(data)
+        state["locked"] = bool(state.get("locked"))
+        state["status"] = "locked" if state.get("locked") else "unlocked"
+        return state
+    except Exception:
+        return default_maintenance_state()
+
+
+def write_maintenance_lock_state(state: Dict[str, Any]) -> None:
+    try:
+        payload = default_maintenance_state()
+        payload.update(state or {})
+        payload["locked"] = bool(payload.get("locked"))
+        payload["status"] = "locked" if payload.get("locked") else "unlocked"
+        payload["updated_at"] = payload.get("updated_at") or _maintenance_now_text()
+
+        with open(maintenance_lock_file, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def set_maintenance_lock(
+    locked: bool,
+    updated_by: str = "admin",
+    channel: str = "web-admin",
+    reason: str = "",
+) -> Dict[str, Any]:
+    state = read_maintenance_lock_state()
+    state.update(
+        {
+            "locked": bool(locked),
+            "status": "locked" if locked else "unlocked",
+            "message": maintenance_default_message,
+            "reason": str(reason or "").strip(),
+            "updated_at": _maintenance_now_text(),
+            "updated_by": str(updated_by or "admin"),
+            "channel": str(channel or "web-admin"),
+        }
+    )
+    write_maintenance_lock_state(state)
+    return state
+
+
+def is_maintenance_locked() -> bool:
+    return bool(read_maintenance_lock_state().get("locked"))
+
+
+def maintenance_public_message() -> str:
+    state = read_maintenance_lock_state()
+    message = str(state.get("message") or maintenance_default_message).strip()
+    reason = str(state.get("reason") or "").strip()
+    updated_at = str(state.get("updated_at") or "").strip()
+
+    lines = [
+        "🛠️ **Under maintenance**",
+        "",
+        message,
+    ]
+
+    if reason:
+        lines.append("")
+        lines.append(f"Catatan admin: {reason}")
+
+    if updated_at:
+        lines.append("")
+        lines.append(f"Status diperbarui: {updated_at}")
+
+    return "\n".join(lines)
+
+
+def render_maintenance_banner(state: Dict[str, Any] | None = None) -> None:
+    state = state or read_maintenance_lock_state()
+    if not state.get("locked"):
+        return
+
+    reason = str(state.get("reason") or "").strip()
+    updated_at = str(state.get("updated_at") or "").strip()
+    updated_by = str(state.get("updated_by") or "admin").strip()
+
+    st.markdown(
+        f"""
+        <div class="maintenance-lock-banner">
+            <div class="maintenance-lock-icon">🛠️</div>
+            <div>
+                <div class="maintenance-lock-title">Under maintenance</div>
+                <div class="maintenance-lock-text">
+                    Chat publik sedang dikunci. Hanya admin yang dapat menggunakan Adioranye sampai status dibuka kembali.
+                </div>
+                <div class="maintenance-lock-meta">
+                    {_html_escape(reason or "Tidak ada catatan khusus.")}
+                    {" • " if updated_at else ""}
+                    {_html_escape(updated_at)}
+                    {" • " if updated_by else ""}
+                    {_html_escape(updated_by)}
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def looks_like_technical_error(text: Any) -> bool:
     lowered = str(text or "").lower()
     if not lowered.strip():
@@ -1201,6 +1338,17 @@ send_processing_message = parse_bool(
 telegram_parse_mode = str(get_secret("TELEGRAM_PARSE_MODE", "") or "")
 telegram_lock_file = str(
     get_secret("TELEGRAM_LOCK_FILE", "/tmp/adioranye_telegram_bot_worker.lock")
+)
+maintenance_lock_file = str(
+    get_secret("MAINTENANCE_LOCK_FILE", ".adioranye_maintenance_lock.json")
+    or ".adioranye_maintenance_lock.json"
+)
+maintenance_default_message = str(
+    get_secret(
+        "MAINTENANCE_MESSAGE",
+        "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses.",
+    )
+    or "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses."
 )
 telegram_show_model_info = parse_bool(
     get_secret("TELEGRAM_SHOW_MODEL_INFO", True), default=True
@@ -9766,6 +9914,9 @@ def get_runtime_config() -> Dict[str, Any]:
             st.session_state.get("active_operation_mode", ai_operation_mode_default)
             or "Seimbang"
         ),
+        "maintenance_lock_file": maintenance_lock_file,
+        "maintenance_message": maintenance_default_message,
+        "maintenance_locked": bool(is_maintenance_locked()),
     }
 
 
@@ -9827,6 +9978,74 @@ def render_admin_status() -> None:
         f"Auto-refresh status terakhir: {st.session_state.get('model_status_auto_refresh_last_text') or '-'}"
     ).replace(",", ".")
     st.info(status_text)
+
+    with st.expander("🛠️ Maintenance Lock", expanded=bool(is_maintenance_locked())):
+        maintenance_state = read_maintenance_lock_state()
+        locked_now = bool(maintenance_state.get("locked"))
+        status_label = "Under maintenance" if locked_now else "Unlocked"
+        st.markdown(
+            f"""
+            <div class="maintenance-admin-card">
+                <div class="maintenance-lock-icon">{"🛠️" if locked_now else "✅"}</div>
+                <div>
+                    <div class="maintenance-lock-title">{_html_escape(status_label)}</div>
+                    <div class="maintenance-lock-text">
+                        {"Chat publik dan Telegram non-admin sedang dikunci. Admin tetap dapat menggunakan Adioranye." if locked_now else "Chat publik dan Telegram dapat digunakan normal."}
+                    </div>
+                    <div class="maintenance-lock-meta">
+                        Update: {_html_escape(maintenance_state.get("updated_at") or "-")} •
+                        Oleh: {_html_escape(maintenance_state.get("updated_by") or "-")} •
+                        Channel: {_html_escape(maintenance_state.get("channel") or "-")}
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        reason_value = st.text_input(
+            "Catatan maintenance",
+            value=str(maintenance_state.get("reason") or ""),
+            placeholder="Contoh: update model, maintenance database, deploy fitur baru",
+            key="maintenance_lock_reason",
+        )
+
+        col_lock, col_unlock = st.columns(2)
+        with col_lock:
+            if st.button(
+                "🔒 Lock / Under maintenance",
+                use_container_width=True,
+                disabled=locked_now,
+                key="maintenance_lock_button",
+            ):
+                set_maintenance_lock(
+                    True,
+                    updated_by=admin_username,
+                    channel="web-admin",
+                    reason=reason_value,
+                )
+                st.success("Maintenance lock aktif. Publik dan Telegram non-admin dikunci.")
+                st.rerun()
+
+        with col_unlock:
+            if st.button(
+                "🔓 Unlock / Buka akses",
+                use_container_width=True,
+                disabled=not locked_now,
+                key="maintenance_unlock_button",
+            ):
+                set_maintenance_lock(
+                    False,
+                    updated_by=admin_username,
+                    channel="web-admin",
+                    reason=reason_value,
+                )
+                st.success("Maintenance lock dibuka. Publik dan Telegram dapat digunakan lagi.")
+                st.rerun()
+
+        st.caption(
+            "Saat lock aktif, hanya admin web dan chat ID Telegram admin yang dapat menggunakan Adioranye."
+        )
 
     with st.expander("Cache pertanyaan sering muncul"):
         cache_stats = frequent_question_cache_stats()
@@ -10540,6 +10759,54 @@ def render_admin_custom_css() -> None:
             height: 1px;
             margin: 0.85rem 0;
             background: linear-gradient(90deg, transparent, var(--ui-border, rgba(120,120,128,0.28)), transparent);
+        }
+
+        .maintenance-lock-banner,
+        .maintenance-admin-card {
+            display: flex;
+            gap: 0.72rem;
+            align-items: flex-start;
+            padding: 0.92rem 1rem;
+            margin: 0.72rem 0 0.9rem;
+            border-radius: 22px;
+            border: 1px solid rgba(255,149,0,0.28);
+            background:
+                radial-gradient(circle at 12% 20%, rgba(255,204,0,0.22), transparent 28%),
+                linear-gradient(135deg, rgba(255,149,0,0.14), rgba(120,120,128,0.08));
+            color: var(--ui-text, inherit);
+            box-shadow: 0 14px 34px rgba(255,149,0,0.08);
+        }
+
+        .maintenance-lock-icon {
+            width: 42px;
+            height: 42px;
+            min-width: 42px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            background: rgba(255,149,0,0.18);
+            font-size: 1.15rem;
+        }
+
+        .maintenance-lock-title {
+            color: var(--ui-text-strong, inherit);
+            font-size: 1rem;
+            font-weight: 940;
+            margin-bottom: 0.2rem;
+        }
+
+        .maintenance-lock-text,
+        .maintenance-lock-meta {
+            color: var(--ui-muted, rgba(100,116,139,0.92));
+            font-size: 0.82rem;
+            line-height: 1.45;
+        }
+
+        .maintenance-lock-meta {
+            margin-top: 0.36rem;
+            font-size: 0.74rem;
+            font-weight: 760;
         }
 
         @media (max-width: 980px) {
@@ -12223,8 +12490,20 @@ def render_public_page() -> None:
 
     render_auto_model_status_refresh_panel()
 
+    maintenance_state = read_maintenance_lock_state()
+    if maintenance_state.get("locked"):
+        render_maintenance_banner(maintenance_state)
+
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
+
+    if maintenance_state.get("locked") and not st.session_state.get("admin_authenticated", False):
+        st.markdown(
+            '<div class="auto-scroll-anchor"></div>'
+            '<div class="chat-input-safe-space"></div>',
+            unsafe_allow_html=True,
+        )
+        return
 
     if not api_key:
         st.warning(
@@ -12302,6 +12581,25 @@ def render_public_page() -> None:
         )
 
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
+
+        if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
+            answer = maintenance_public_message()
+            meta = {
+                "maintenance_locked": True,
+                "public_safe_message": True,
+            }
+
+            with st.chat_message("assistant"):
+                st.markdown(answer)
+
+            st.session_state.chat_messages.append(
+                {
+                    "role": "assistant",
+                    "content": answer,
+                    "meta": meta,
+                }
+            )
+            return
 
         allowed_request, rate_limit_message = check_public_rate_limit(user_input)
 

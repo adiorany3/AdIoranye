@@ -1671,6 +1671,9 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
             "Model & router:",
             "• /speed 4321 — cek model aktif dan pilih tercepat",
             "• /rotate — ganti ke model aktif terbaik saat ini",
+            "• /lock [catatan] — aktifkan Under maintenance",
+            "• /unlock [catatan] — buka akses kembali",
+            "• /maintenance — lihat status maintenance",
             "• /ubah murah — pakai model murah/cepat",
             "• /ubah mahal — pakai model medium/mahal",
             "• /model skor — lihat skor model adaptif",
@@ -1712,6 +1715,128 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
         ])
     return "\n".join(lines)
 
+
+
+
+
+def telegram_default_maintenance_state(message: str = "") -> Dict[str, Any]:
+    return {
+        "locked": False,
+        "status": "unlocked",
+        "message": message
+        or "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses.",
+        "reason": "",
+        "updated_at": "",
+        "updated_by": "",
+        "channel": "",
+    }
+
+
+def telegram_read_maintenance_state(
+    lock_file: str,
+    message: str = "",
+) -> Dict[str, Any]:
+    try:
+        if not lock_file or not os.path.exists(lock_file):
+            return telegram_default_maintenance_state(message)
+
+        with open(lock_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            return telegram_default_maintenance_state(message)
+
+        state = telegram_default_maintenance_state(message)
+        state.update(data)
+        state["locked"] = bool(state.get("locked"))
+        state["status"] = "locked" if state.get("locked") else "unlocked"
+        return state
+    except Exception:
+        return telegram_default_maintenance_state(message)
+
+
+def telegram_write_maintenance_state(
+    lock_file: str,
+    state: Dict[str, Any],
+) -> None:
+    try:
+        payload = telegram_default_maintenance_state()
+        payload.update(state or {})
+        payload["locked"] = bool(payload.get("locked"))
+        payload["status"] = "locked" if payload.get("locked") else "unlocked"
+        payload["updated_at"] = payload.get("updated_at") or _wib_now_text()
+
+        with open(lock_file, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def telegram_set_maintenance_lock(
+    lock_file: str,
+    locked: bool,
+    updated_by: str = "telegram-admin",
+    reason: str = "",
+    message: str = "",
+) -> Dict[str, Any]:
+    state = telegram_read_maintenance_state(lock_file, message=message)
+    state.update(
+        {
+            "locked": bool(locked),
+            "status": "locked" if locked else "unlocked",
+            "message": message or state.get("message") or telegram_default_maintenance_state().get("message"),
+            "reason": str(reason or "").strip(),
+            "updated_at": _wib_now_text(),
+            "updated_by": str(updated_by or "telegram-admin"),
+            "channel": "telegram",
+        }
+    )
+    telegram_write_maintenance_state(lock_file, state)
+    return state
+
+
+def telegram_is_maintenance_command(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+
+    command = raw.split()[0].lower()
+    if "@" in command:
+        command = command.split("@", 1)[0]
+
+    return command in {
+        "/lock",
+        "/unlock",
+        "/maintenance",
+        "/maint",
+    }
+
+
+def telegram_maintenance_reply(state: Dict[str, Any]) -> str:
+    locked = bool(state.get("locked"))
+    status = "Under maintenance" if locked else "Unlocked"
+    lines = [
+        f"🛠️ Maintenance status: {status}",
+        f"Update: {state.get('updated_at') or '-'}",
+        f"Oleh: {state.get('updated_by') or '-'}",
+    ]
+    reason = str(state.get("reason") or "").strip()
+    if reason:
+        lines.append(f"Catatan: {reason}")
+    return "\n".join(lines)
+
+
+def telegram_under_maintenance_message(state: Dict[str, Any]) -> str:
+    message = str(state.get("message") or "Adioranye sedang dalam mode Under maintenance.").strip()
+    reason = str(state.get("reason") or "").strip()
+    lines = [
+        "🛠️ Under maintenance",
+        "",
+        message,
+    ]
+    if reason:
+        lines.extend(["", f"Catatan admin: {reason}"])
+    return "\n".join(lines)
 
 
 def is_tavily_test_command(text: str) -> bool:
@@ -3155,6 +3280,17 @@ class TelegramBotService:
         model = config.get("slashai_model", "slashai/gpt-5-nano")
         persona = config.get("persona", "")
         memory_file = config.get("memory_file", "assistant_memory.json")
+        maintenance_lock_file = str(
+            config.get("maintenance_lock_file")
+            or os.getenv("MAINTENANCE_LOCK_FILE", ".adioranye_maintenance_lock.json")
+        ).strip()
+        maintenance_message = str(
+            config.get("maintenance_message")
+            or os.getenv(
+                "MAINTENANCE_MESSAGE",
+                "Adioranye sedang dalam mode Under maintenance. Silakan coba lagi setelah admin membuka akses.",
+            )
+        ).strip()
         fallback_models = config.get("fallback_models") or []
         expensive_fallback_models = config.get("expensive_fallback_models") or []
         allow_expensive_fallback = bool(config.get("allow_expensive_fallback", True))
@@ -3425,6 +3561,76 @@ class TelegramBotService:
                         self._processed += 1
 
                         text_lower = text.lower()
+                        is_admin_chat = self._is_admin_chat(chat_id, config)
+
+                        if telegram_is_maintenance_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            raw_parts = text.split(maxsplit=1)
+                            command = raw_parts[0].lower()
+                            if "@" in command:
+                                command = command.split("@", 1)[0]
+                            reason = raw_parts[1].strip() if len(raw_parts) > 1 else ""
+
+                            if command == "/lock":
+                                state = telegram_set_maintenance_lock(
+                                    maintenance_lock_file,
+                                    True,
+                                    updated_by=f"telegram:{chat_id}",
+                                    reason=reason,
+                                    message=maintenance_message,
+                                )
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    telegram_maintenance_reply(state),
+                                    parse_mode=telegram_parse_mode,
+                                )
+                                continue
+
+                            if command == "/unlock":
+                                state = telegram_set_maintenance_lock(
+                                    maintenance_lock_file,
+                                    False,
+                                    updated_by=f"telegram:{chat_id}",
+                                    reason=reason,
+                                    message=maintenance_message,
+                                )
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    telegram_maintenance_reply(state),
+                                    parse_mode=telegram_parse_mode,
+                                )
+                                continue
+
+                            state = telegram_read_maintenance_state(
+                                maintenance_lock_file,
+                                message=maintenance_message,
+                            )
+                            self._send_message(
+                                token,
+                                chat_id,
+                                telegram_maintenance_reply(state),
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        maintenance_state = telegram_read_maintenance_state(
+                            maintenance_lock_file,
+                            message=maintenance_message,
+                        )
+                        if maintenance_state.get("locked") and not is_admin_chat:
+                            self._send_message(
+                                token,
+                                chat_id,
+                                telegram_under_maintenance_message(maintenance_state),
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
                         if text_lower in {"/start", "start"}:
                             self._send_message(
                                 token,
