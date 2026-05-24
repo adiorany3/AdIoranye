@@ -752,10 +752,10 @@ model_health_check_interval = int(
 model_health_timeout = int(get_secret("MODEL_HEALTH_TIMEOUT_SECONDS", 12) or 12)
 model_health_workers = int(get_secret("MODEL_HEALTH_WORKERS", 8) or 8)
 model_health_retries = int(get_secret("MODEL_HEALTH_RETRIES", 1) or 1)
-# Health check model hanya boleh berjalan pada jendela tengah malam WIB.
-# Default: 00:00-00:59 WIB. Di luar jam ini sistem memakai cache/daftar fallback terakhir.
+# Health check model aktif kapan saja.
+# Default baru: tidak perlu menunggu jendela waktu tertentu.
 model_health_midnight_only = parse_bool(
-    get_secret("MODEL_HEALTH_MIDNIGHT_ONLY", True), default=True
+    get_secret("MODEL_HEALTH_MIDNIGHT_ONLY", False), default=False
 )
 model_health_hour_wib = int(get_secret("MODEL_HEALTH_HOUR_WIB", 0) or 0)
 model_health_window_minutes = int(get_secret("MODEL_HEALTH_WINDOW_MINUTES", 60) or 60)
@@ -1208,14 +1208,8 @@ def _health_window_label_wib() -> str:
 
 
 def is_model_health_check_allowed_now() -> bool:
-    """Batasi test health check model agar hanya berjalan pada tengah malam WIB."""
-    if not bool(model_health_midnight_only):
-        return True
-
-    now_wib = datetime.now(WIB_TZ)
-    hour = max(0, min(23, int(model_health_hour_wib or 0)))
-    window = max(1, min(60, int(model_health_window_minutes or 60)))
-    return now_wib.hour == hour and now_wib.minute < window
+    """Health check model aktif kapan saja."""
+    return True
 
 
 def _timestamp_to_wib_text(timestamp_value: Any) -> str:
@@ -1575,12 +1569,6 @@ def refresh_model_health_if_needed(force: bool = False) -> Dict[str, Dict[str, A
     cache = st.session_state.get("model_health_cache") or {}
     interval = max(60, int(model_health_check_interval or 900))
 
-    if not force and not is_model_health_check_allowed_now():
-        st.session_state.last_model_health_error = (
-            f"Health check otomatis hanya dijalankan pukul {_health_window_label_wib()}. "
-            f"Di luar jam itu sistem memakai cache/daftar model aktif terakhir."
-        )
-        return cache
 
     if not force and cache and now - last_checked < interval:
         return cache
@@ -7463,7 +7451,7 @@ def render_ai_health_center() -> None:
         if st.button(
             "🔁 Cek model sekarang",
             use_container_width=True,
-            disabled=not is_model_health_check_allowed_now(),
+            disabled=False,
             key="auto_btn_2532",
         ):
             refresh_model_health_if_needed(force=True)
@@ -7872,10 +7860,10 @@ def render_admin_settings() -> None:
                 )
 
         st.markdown("#### Cek Berkala Model")
-        health_window_open = is_model_health_check_allowed_now()
+        health_window_open = True
         st.caption(
-            f"Health check model hanya berjalan pukul {_health_window_label_wib()}. "
-            "Di luar jam itu sistem tidak melakukan ping/test model dan tetap memakai cache/daftar model aktif terakhir. "
+            "Health check model aktif kapan saja. "
+            "Klik tombol cek model untuk ping/test model langsung tanpa menunggu jam tertentu. "
             "Urutan default: thinking → model capable aktif; non-thinking → model hemat aktif tercepat → backup hemat aktif lain → model menengah/mahal jika semua hemat gagal/kurang cukup → kembali ke model hemat aktif."
         )
         col_health_check, col_health_info = st.columns([1, 2])
@@ -7883,13 +7871,12 @@ def render_admin_settings() -> None:
             if st.button(
                 "🔁 Cek model sekarang",
                 use_container_width=True,
-                disabled=not health_window_open,
+                disabled=False,
                 key="auto_btn_2782",
             ):
                 refresh_model_health_if_needed(force=True)
                 st.success("Cek model selesai.")
-            if not health_window_open:
-                st.caption(f"Tombol aktif hanya pukul {_health_window_label_wib()}.")
+            st.caption("Tombol aktif kapan saja.")
         with col_health_info:
             cheap_active, expensive_active = get_prioritized_fallback_models()
             st.info(
@@ -7992,7 +7979,7 @@ def render_admin_settings() -> None:
             "Telegram dikirim sebagai plain text secara default agar kode/XML seperti <uses-permission> tidak dianggap tag HTML."
         )
         st.caption(
-            f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model hanya pada pukul {_health_window_label_wib()} dan memakai hanya model yang hidup."
+            f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model kapan saja dan memakai hanya model yang hidup."
         )
 
         status = service.status()
@@ -8366,7 +8353,7 @@ ALLOW_EXPENSIVE_FALLBACK = true
 MAX_EXPENSIVE_MODELS = 1
 MODEL_HEALTH_CHECK_INTERVAL_SECONDS = 90000
 MODEL_HEALTH_TIMEOUT_SECONDS = 12
-MODEL_HEALTH_MIDNIGHT_ONLY = true
+MODEL_HEALTH_MIDNIGHT_ONLY = false
 MODEL_HEALTH_HOUR_WIB = 0
 MODEL_HEALTH_WINDOW_MINUTES = 60
 
