@@ -1668,9 +1668,16 @@ def build_telegram_help_text(is_admin: bool = False) -> str:
     if is_admin:
         lines.extend([
             "",
+            "Pusat kontrol:",
+            "• /admin — semua kontrol via Telegram",
+            "• /status — status sistem, Telegram, model, maintenance",
+            "• /telegramtest — test API Telegram",
+            "",
             "Model & router:",
+            "• /health — cek model aktif tanpa kode",
             "• /speed 4321 — cek model aktif dan pilih tercepat",
             "• /rotate — ganti ke model aktif terbaik saat ini",
+            "• /router auto|murah|mahal — ganti mode routing",
             "• /lock [catatan] — aktifkan Under maintenance",
             "• /unlock [catatan] — buka akses kembali",
             "• /maintenance — lihat status maintenance",
@@ -1823,6 +1830,233 @@ def telegram_set_maintenance_lock(
 
     telegram_write_maintenance_state(lock_file, state)
     return state
+
+
+def telegram_command_name(text: str) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+
+    command = raw.split(maxsplit=1)[0].lower()
+
+    if "@" in command:
+        command = command.split("@", 1)[0]
+
+    return command
+
+
+def telegram_command_arg(text: str) -> str:
+    raw = str(text or "").strip()
+    parts = raw.split(maxsplit=1)
+    return parts[1].strip() if len(parts) > 1 else ""
+
+
+def is_telegram_admin_panel_command(text: str) -> bool:
+    return telegram_command_name(text) in {
+        "/admin",
+        "/panel",
+        "/kontrol",
+        "/control",
+        "/controls",
+    }
+
+
+def is_telegram_admin_status_command(text: str) -> bool:
+    return telegram_command_name(text) in {
+        "/status",
+        "/system",
+        "/sistem",
+    }
+
+
+def is_telegram_api_test_command(text: str) -> bool:
+    return telegram_command_name(text) in {
+        "/telegramtest",
+        "/telegram_test",
+        "/testtelegram",
+        "/test_telegram",
+        "/bot_test",
+    }
+
+
+def is_telegram_health_command(text: str) -> bool:
+    return telegram_command_name(text) in {
+        "/health",
+        "/cekmodel",
+        "/cek_model",
+        "/modelcheck",
+        "/checkmodel",
+    }
+
+
+def parse_telegram_router_mode_command(text: str) -> str:
+    command = telegram_command_name(text)
+
+    if command not in {
+        "/router",
+        "/routing",
+        "/modebot",
+        "/mode_bot",
+        "/modelmode",
+        "/mode_model",
+    }:
+        return ""
+
+    arg = telegram_command_arg(text).strip().lower()
+
+    if arg in {"auto", "otomatis"}:
+        return "auto"
+
+    if arg in {"cheap", "murah", "cepat", "hemat", "normal"}:
+        return "cheap"
+
+    if arg in {"expensive", "mahal", "medium", "menengah", "capable", "pintar"}:
+        return "expensive"
+
+    return ""
+
+
+def is_telegram_router_mode_command(text: str) -> bool:
+    return telegram_command_name(text) in {
+        "/router",
+        "/routing",
+        "/modebot",
+        "/mode_bot",
+        "/modelmode",
+        "/mode_model",
+    }
+
+
+def is_telegram_runtime_reset_command(text: str) -> bool:
+    return telegram_command_name(text) in {
+        "/reset_runtime",
+        "/resetruntime",
+        "/runtime_reset",
+    }
+
+
+def is_telegram_connection_reset_command(text: str) -> bool:
+    return telegram_command_name(text) in {
+        "/resettelegram",
+        "/reset_telegram",
+        "/telegramreset",
+        "/telegram_reset",
+    }
+
+
+def build_telegram_admin_control_help() -> str:
+    lines = [
+        "🔐 Pusat Kontrol Admin Telegram",
+        "",
+        "Status & diagnosa:",
+        "• /status — ringkasan sistem, model, maintenance, Telegram",
+        "• /telegramtest — test API Telegram getMe + webhook",
+        "• /maintenance — status maintenance",
+        "",
+        "Maintenance:",
+        "• /lock [catatan] — kunci chat publik dan Telegram non-admin",
+        "• /unlock [catatan] — buka kembali akses publik",
+        "",
+        "Model & routing:",
+        "• /health — quick health check model dan pilih model sehat",
+        "• /speed 4321 — health check terlindungi kode",
+        "• /rotate — rotasi ke model aktif terbaik",
+        "• /router auto — mode otomatis",
+        "• /router murah — prioritas model murah/cepat",
+        "• /router mahal — prioritas model medium/mahal",
+        "• /ubah murah — alias mode murah",
+        "• /ubah mahal — alias mode mahal",
+        "",
+        "Knowledge Base & live web:",
+        "• /update — jalankan update KB via GitHub Actions",
+        "• /tavilytest <query> — test live web provider",
+        "• /kb bantuan — kontrol Knowledge Base",
+        "",
+        "Reset:",
+        "• /reset_runtime — reset runtime model Telegram tersimpan",
+        "• /reset_telegram — hapus webhook/pending update Telegram",
+        "",
+        "Catatan:",
+        "• Semua command kontrol hanya untuk admin Telegram.",
+        "• Bot tidak dapat menyalakan dirinya sendiri jika worker sudah benar-benar mati. Start tetap dilakukan dari admin web/deploy.",
+    ]
+    return "\n".join(lines)
+
+
+def build_telegram_admin_status_text(
+    *,
+    local_status: Dict[str, Any],
+    diag: Dict[str, Any],
+    maintenance_state: Dict[str, Any],
+    current_model: str,
+    forced_model_mode: str,
+    fallback_models: List[str],
+    expensive_fallback_models: List[str],
+    active_cheap_models: List[str],
+    fast_cheap_models: List[str],
+    thinking_capable_models: List[str],
+    config: Dict[str, Any],
+) -> str:
+    api_ok = bool(diag.get("ok"))
+    running = bool(local_status.get("running"))
+    locked = bool(maintenance_state.get("locked"))
+
+    if api_ok and running:
+        telegram_label = "API OK + WORKER ON"
+    elif api_ok:
+        telegram_label = "API OK / WORKER OFF"
+    elif str(config.get("telegram_token") or "").strip():
+        telegram_label = "API ERROR"
+    else:
+        telegram_label = "TOKEN BELUM DIISI"
+
+    mode_label = {
+        "auto": "otomatis",
+        "cheap": "murah/cepat",
+        "expensive": "medium/mahal",
+    }.get(str(forced_model_mode or "auto"), str(forced_model_mode or "auto"))
+
+    lines = [
+        "📊 Status Sistem Adioranye",
+        "",
+        f"Telegram: {telegram_label}",
+        f"Bot: @{diag.get('bot_username') or '-'}",
+        f"Worker: {'ON' if running else 'OFF'}",
+        f"Pending update: {diag.get('pending_update_count') if diag.get('pending_update_count') is not None else '-'}",
+        f"Webhook: {'aktif' if diag.get('webhook_url') else 'kosong'}",
+        "",
+        f"Maintenance: {'LOCKED / Under maintenance' if locked else 'UNLOCKED'}",
+    ]
+
+    if maintenance_state.get("reason"):
+        lines.append(f"Catatan maintenance: {maintenance_state.get('reason')}")
+
+    lines.extend(
+        [
+            "",
+            f"Model sekarang: {current_model}",
+            f"Mode router: {mode_label}",
+            f"Fallback murah: {len(fallback_models or [])}",
+            f"Fallback medium/mahal: {len(expensive_fallback_models or [])}",
+            f"Murah aktif: {len(active_cheap_models or [])}",
+            f"Murah tercepat tersimpan: {len(fast_cheap_models or [])}",
+            f"Thinking/capable aktif: {len(thinking_capable_models or [])}",
+            "",
+            f"Health check terakhir: {local_status.get('model_health_checked_at') or '-'}",
+            f"Model sehat terdeteksi: {local_status.get('model_health_active_count', 0)}",
+            f"Pesan diproses: {local_status.get('processed', 0)}",
+            f"Duplikat dicegah: {local_status.get('duplicates_skipped', 0)}",
+        ]
+    )
+
+    if diag.get("last_error"):
+        lines.extend(["", "Error Telegram:", str(diag.get("last_error"))[:700]])
+
+    if local_status.get("last_error"):
+        lines.extend(["", "Error worker terakhir:", str(local_status.get("last_error"))[:700]])
+
+    return "\n".join(lines)
+
 
 def telegram_is_maintenance_command(text: str) -> bool:
     raw = str(text or "").strip()
@@ -3684,6 +3918,263 @@ class TelegramBotService:
                                 build_telegram_help_text(is_admin=self._is_admin_chat(chat_id, config)),
                                 parse_mode=telegram_parse_mode,
                             )
+                            continue
+
+                        if is_telegram_admin_panel_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            self._send_message(
+                                token,
+                                chat_id,
+                                build_telegram_admin_control_help(),
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if is_telegram_admin_status_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            try:
+                                diag = self.diagnose(config)
+                            except Exception as exc:
+                                diag = {
+                                    "ok": False,
+                                    "last_error": str(exc)[:1200],
+                                }
+
+                            status_text = build_telegram_admin_status_text(
+                                local_status=self.status(),
+                                diag=diag,
+                                maintenance_state=telegram_read_maintenance_state(
+                                    maintenance_lock_file,
+                                    message=maintenance_message,
+                                ),
+                                current_model=model,
+                                forced_model_mode=forced_model_mode,
+                                fallback_models=fallback_models,
+                                expensive_fallback_models=expensive_fallback_models,
+                                active_cheap_models=_as_string_list(config.get("active_cheap_models")),
+                                fast_cheap_models=fast_cheap_models_runtime,
+                                thinking_capable_models=thinking_capable_models_runtime,
+                                config=config,
+                            )
+                            self._send_message(
+                                token,
+                                chat_id,
+                                status_text,
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if is_telegram_api_test_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            try:
+                                diag = self.diagnose(config)
+                                if diag.get("ok"):
+                                    lines = [
+                                        "✅ Test Telegram API OK.",
+                                        f"Bot: @{diag.get('bot_username') or '-'}",
+                                        f"ID: {diag.get('bot_id') or '-'}",
+                                        f"Worker: {'ON' if self.status().get('running') else 'OFF'}",
+                                        f"Pending update: {diag.get('pending_update_count') if diag.get('pending_update_count') is not None else '-'}",
+                                        f"Webhook: {diag.get('webhook_url') or 'kosong'}",
+                                    ]
+                                    self._send_message(
+                                        token,
+                                        chat_id,
+                                        "\n".join(lines),
+                                        parse_mode=telegram_parse_mode,
+                                    )
+                                else:
+                                    self._send_message(
+                                        token,
+                                        chat_id,
+                                        "❌ Test Telegram API gagal.\n\nDetail: " + str(diag.get("last_error") or "-")[:1200],
+                                        parse_mode=telegram_parse_mode,
+                                    )
+                            except Exception as exc:
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "❌ Test Telegram API error.\n\nDetail: " + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            continue
+
+                        if is_telegram_health_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            arg = telegram_command_arg(text).strip().lower()
+                            preferred = forced_model_mode
+                            if arg in {"auto", "otomatis"}:
+                                preferred = "auto"
+                            elif arg in {"cheap", "murah", "cepat", "hemat"}:
+                                preferred = "cheap"
+                            elif arg in {"expensive", "mahal", "medium", "menengah", "pintar"}:
+                                preferred = "expensive"
+
+                            self._send_message(
+                                token,
+                                chat_id,
+                                f"⏳ Health check model berjalan. Mode: {preferred}.",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            try:
+                                health_result = refresh_telegram_runtime_models(
+                                    api_url=api_url,
+                                    api_key=api_key,
+                                    current_model=model,
+                                    config=config,
+                                    timeout=model_health_timeout,
+                                    preferred_mode=preferred,
+                                )
+                                rotation = select_rotated_runtime_model(
+                                    result=health_result,
+                                    current_mode=preferred,
+                                    current_model=model,
+                                )
+                                rotation["requested_mode"] = preferred
+                                apply_rotation_result(health_result, rotation, "health")
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    build_speed_update_summary(health_result),
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            except Exception as exc:
+                                self._last_error = str(exc)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "❌ Health check gagal.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            continue
+
+                        router_mode = parse_telegram_router_mode_command(text)
+                        if router_mode:
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            self._send_message(
+                                token,
+                                chat_id,
+                                f"⏳ Mengubah router Telegram ke mode: {router_mode}...",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            try:
+                                previous_model = model
+                                switch_result = refresh_telegram_runtime_models(
+                                    api_url=api_url,
+                                    api_key=api_key,
+                                    current_model=model,
+                                    config=config,
+                                    timeout=model_health_timeout,
+                                    preferred_mode=router_mode,
+                                )
+                                rotation = select_rotated_runtime_model(
+                                    result=switch_result,
+                                    current_mode=router_mode,
+                                    current_model=model,
+                                )
+                                rotation["requested_mode"] = router_mode
+                                apply_rotation_result(switch_result, rotation, "router")
+
+                                cheap_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or _as_string_list(config.get("fallback_models"))
+                                capable_pool = thinking_capable_models_runtime or _as_string_list(config.get("thinking_capable_models")) or _as_string_list(config.get("expensive_fallback_models"))
+                                message = build_model_switch_summary(router_mode if router_mode != "auto" else "cheap", model, cheap_pool, capable_pool)
+                                if router_mode == "auto":
+                                    message = "✅ Mode router diubah ke: OTOMATIS."
+                                message += "\n\n" + build_rotate_summary(switch_result, rotation, previous_model)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    message,
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            except Exception as exc:
+                                self._last_error = str(exc)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "❌ Gagal mengubah router Telegram.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            continue
+
+                        if is_telegram_router_mode_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            self._send_message(
+                                token,
+                                chat_id,
+                                "Format router salah. Gunakan: /router auto, /router murah, atau /router mahal",
+                                parse_mode=telegram_parse_mode,
+                            )
+                            continue
+
+                        if is_telegram_runtime_reset_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            try:
+                                runtime_path = self._runtime_state_path(config)
+                                if os.path.exists(runtime_path):
+                                    os.remove(runtime_path)
+                                self._runtime_primary_model = model
+                                self._last_model_update_source = "runtime-reset"
+                                self._model_health_cache = {}
+                                self._model_health_checked_at = ""
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "✅ Runtime Telegram direset. Model akan mengikuti konfigurasi awal pada proses berikutnya.",
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            except Exception as exc:
+                                self._last_error = str(exc)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "❌ Reset runtime gagal.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            continue
+
+                        if is_telegram_connection_reset_command(text):
+                            if not is_admin_chat:
+                                self._send_admin_required(token, chat_id, config)
+                                continue
+
+                            try:
+                                result = self.reset_telegram_session(config)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    str(result),
+                                    parse_mode=telegram_parse_mode,
+                                )
+                            except Exception as exc:
+                                self._last_error = str(exc)
+                                self._send_message(
+                                    token,
+                                    chat_id,
+                                    "❌ Reset koneksi Telegram gagal.\n\nDetail ringkas:\n" + str(exc)[:1200],
+                                    parse_mode=telegram_parse_mode,
+                                )
                             continue
 
                         if is_speed_update_command(text, expected_code=speed_update_code):

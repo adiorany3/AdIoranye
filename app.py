@@ -11617,6 +11617,9 @@ def render_admin_settings() -> None:
         st.caption(
             f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model kapan saja dan memakai hanya model yang hidup."
         )
+        st.info(
+            "Kontrol admin juga tersedia dari Telegram: /admin, /status, /telegramtest, /health, /router auto|murah|mahal, /lock, /unlock, /update, /reset_runtime, /reset_telegram."
+        )
 
         status = service.status()
         st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
