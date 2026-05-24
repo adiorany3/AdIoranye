@@ -4509,6 +4509,32 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     return active_cheap, active_higher
 
 
+
+def sync_rotation_index_to_selected_model(
+    cheap_models: List[str] | None = None,
+) -> None:
+    """Sinkronkan indeks rotasi murah ke model aktif saat ini.
+
+    Tidak melakukan health check dan hanya mengubah session_state.
+    """
+    models = unique_models(
+        cheap_models
+        or st.session_state.get("active_cheap_fallback_models")
+        or DEFAULT_CHEAP_FALLBACK_MODELS.copy()
+    )
+
+    if not models:
+        st.session_state.cheap_rotation_index = 0
+        return
+
+    selected = str(st.session_state.get("active_model") or default_model or "").strip()
+
+    try:
+        st.session_state.cheap_rotation_index = models.index(selected)
+    except ValueError:
+        st.session_state.cheap_rotation_index = 0
+
+
 def build_model_routing_plan(
     advance_rotation: bool = False, user_text: str = ""
 ) -> Dict[str, Any]:
@@ -5188,6 +5214,63 @@ def build_kb_v2_context_for_prompt(
             "kb_v2_error": str(exc)[:700],
         }
 
+
+
+
+def apply_healthy_primary_model(
+    selected_model: str = "",
+    reason: str = "manual",
+) -> Dict[str, Any]:
+    """Promosikan model sehat dari cache tanpa memanggil API/model.
+
+    Fungsi ini dipakai oleh readiness/admin status. Ia hanya membaca health cache
+    terakhir dan daftar fallback aktif, sehingga aman untuk Standby Health Saver.
+    """
+    health_cache = st.session_state.get("model_health_cache") or {}
+    selected_model = str(
+        selected_model
+        or st.session_state.get("active_model")
+        or default_model
+        or ""
+    ).strip()
+
+    active_cheap_models, active_higher_models = get_prioritized_fallback_models()
+    operation_mode = _normalize_operation_mode(
+        st.session_state.get("active_operation_mode", ai_operation_mode_default)
+    )
+
+    replacement = choose_healthy_primary_model(
+        selected_model=selected_model,
+        active_cheap_models=active_cheap_models,
+        active_expensive_models=active_higher_models,
+        health_cache=health_cache,
+        operation_mode=operation_mode,
+    )
+
+    chosen = str(replacement.get("model") or "").strip()
+    changed = bool(replacement.get("changed")) and bool(chosen)
+
+    if (
+        changed
+        and bool(auto_replace_inactive_primary_model)
+        and chosen != selected_model
+    ):
+        st.session_state.active_model = chosen
+        st.session_state.last_auto_primary_replacement = {
+            "from": selected_model,
+            "to": chosen,
+            "reason": reason,
+            "routing_reason": replacement.get("reason", ""),
+            "at": _wib_now_text(),
+        }
+
+    return {
+        "changed": bool(changed and bool(auto_replace_inactive_primary_model)),
+        "model": chosen or selected_model,
+        "from_model": selected_model,
+        "reason": replacement.get("reason", reason),
+        "operation_mode": operation_mode,
+    }
 
 
 def get_model_readiness_state(
