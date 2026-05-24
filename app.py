@@ -3238,26 +3238,142 @@ def render_feedback_controls(
         )
 
 
-def build_public_model_status_html(
-    route: Dict[str, Any], last_meta: Dict[str, Any] | None = None
-) -> str:
-    # Panel ringkas agar pengguna/admin langsung tahu status route model tanpa membuka debug.
+
+def get_model_readiness_state(
+    route: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Status kesiapan model berdasarkan health check nyata.
+
+    Ini mengganti status statis seperti "aktif dan siap membantu".
+    """
     route = route or {}
-    last_model = get_answer_model_name(last_meta, fallback="")
+    health_cache = st.session_state.get("model_health_cache") or {}
+    checked_at_ts = float(st.session_state.get("model_health_checked_at") or 0)
+    checked_at = (
+        _timestamp_to_wib_text(checked_at_ts)
+        if checked_at_ts
+        else "belum pernah dicek"
+    )
+
     next_model = str(
         route.get("primary_model")
         or st.session_state.get("active_model")
         or default_model
         or ""
     ).strip()
+
+    primary_health = health_cache.get(next_model) or {}
+    primary_active = bool(primary_health.get("active"))
+
+    active_models = [
+        model_name
+        for model_name, item in health_cache.items()
+        if isinstance(item, dict) and item.get("active")
+    ]
+
+    transient_models = [
+        model_name
+        for model_name, item in health_cache.items()
+        if isinstance(item, dict) and item.get("health_status") == "transient"
+    ]
+
+    cheap_count = len(route.get("active_cheap_models") or [])
+    expensive_count = len(route.get("active_expensive_models") or [])
+    active_total = len(active_models) or cheap_count + expensive_count
+
+    if not api_key:
+        return {
+            "class": "offline",
+            "label": "API belum siap",
+            "kicker": "API key belum diisi",
+            "subtitle": "Chat belum bisa digunakan karena SLASHAI_API_KEY belum tersedia.",
+            "next_model": next_model,
+            "checked_at": checked_at,
+            "active_total": active_total,
+            "primary_active": False,
+        }
+
+    if not checked_at_ts or not health_cache:
+        return {
+            "class": "checking",
+            "label": "Perlu cek model",
+            "kicker": "status model belum dicek",
+            "subtitle": "Klik Cek model di admin agar status kesiapan model benar-benar terverifikasi.",
+            "next_model": next_model,
+            "checked_at": checked_at,
+            "active_total": active_total,
+            "primary_active": False,
+        }
+
+    if primary_active:
+        latency = primary_health.get("latency_ms")
+        latency_text = f" • {int(latency)} ms" if isinstance(latency, (int, float)) else ""
+        return {
+            "class": "ready",
+            "label": "Model siap",
+            "kicker": f"model aktif terverifikasi{latency_text}",
+            "subtitle": f"Model utama {next_model} lolos health check terakhir dan siap menjawab.",
+            "next_model": next_model,
+            "checked_at": checked_at,
+            "active_total": active_total,
+            "primary_active": True,
+        }
+
+    if active_total > 0:
+        fallback_model = active_models[0] if active_models else (
+            (route.get("active_cheap_models") or route.get("active_expensive_models") or [""])[0]
+        )
+        return {
+            "class": "fallback",
+            "label": "Fallback siap",
+            "kicker": "model utama tidak aktif, fallback tersedia",
+            "subtitle": f"Model utama belum lolos health check, tetapi fallback aktif tersedia: {fallback_model}.",
+            "next_model": next_model,
+            "checked_at": checked_at,
+            "active_total": active_total,
+            "primary_active": False,
+        }
+
+    if transient_models:
+        return {
+            "class": "warning",
+            "label": "Gangguan sementara",
+            "kicker": "model sedang tidak stabil",
+            "subtitle": "Belum ada model aktif; sebagian model mengalami error sementara/transient. Coba cek ulang beberapa saat lagi.",
+            "next_model": next_model,
+            "checked_at": checked_at,
+            "active_total": 0,
+            "primary_active": False,
+        }
+
+    return {
+        "class": "offline",
+        "label": "Model belum siap",
+        "kicker": "tidak ada model aktif",
+        "subtitle": "Health check terakhir tidak menemukan model yang siap. Periksa API key, saldo, quota, atau daftar model.",
+        "next_model": next_model,
+        "checked_at": checked_at,
+        "active_total": 0,
+        "primary_active": False,
+    }
+
+
+
+def build_public_model_status_html(
+    route: Dict[str, Any], last_meta: Dict[str, Any] | None = None
+) -> str:
+    # Panel ringkas agar pengguna/admin langsung tahu status route model tanpa membuka debug.
+    route = route or {}
+    readiness = get_model_readiness_state(route)
+    last_model = get_answer_model_name(last_meta, fallback="")
+    next_model = str(readiness.get("next_model") or "").strip()
     fast_model = str(route.get("fastest_cheap_primary_model") or "").strip()
     capable_model = str(route.get("capable_primary_model") or "").strip()
     cheap_count = len(route.get("active_cheap_models") or [])
     expensive_count = len(route.get("active_expensive_models") or [])
-
-    checked_at = "belum pernah"
-    if st.session_state.get("model_health_checked_at"):
-        checked_at = _timestamp_to_wib_text(st.session_state.model_health_checked_at)
+    checked_at = str(readiness.get("checked_at") or "belum pernah dicek")
+    status_class = str(readiness.get("class") or "checking")
+    status_label = str(readiness.get("label") or "Perlu cek model")
 
     last_model_html = (
         f'<div class="model-status-pill">Jawaban terakhir: <strong>{_html_escape(last_model)}</strong></div>'
@@ -3276,9 +3392,10 @@ def build_public_model_status_html(
     )
 
     return f"""
-    <div class="model-status-panel easy-status-panel">
-        <div class="model-status-title">Status AI saat ini</div>
+    <div class="model-status-panel easy-status-panel status-{_html_escape(status_class)}">
+        <div class="model-status-title">Status AI saat ini: {_html_escape(status_label)}</div>
         <div class="model-status-grid">
+            <div class="model-status-pill">Kesiapan: <strong>{_html_escape(status_label)}</strong></div>
             <div class="model-status-pill">Model berikutnya: <strong>{_html_escape(next_model)}</strong></div>
             {last_model_html}
             {fast_model_html}
@@ -7606,6 +7723,10 @@ def render_admin_status() -> None:
     telegram_status = "ON" if service.status()["running"] else "OFF"
     health_cache = st.session_state.get("model_health_cache") or {}
     active_count = sum(1 for item in health_cache.values() if item.get("active"))
+    admin_route_preview = build_model_routing_plan(user_text="halo")
+    readiness = get_model_readiness_state(admin_route_preview)
+    readiness_label = str(readiness.get("label") or "Perlu cek model")
+    readiness_next_model = str(readiness.get("next_model") or cfg["model"])
     checked_at = "belum pernah"
     if st.session_state.get("model_health_checked_at"):
         checked_at = _timestamp_to_wib_text(st.session_state.model_health_checked_at)
@@ -7622,6 +7743,8 @@ def render_admin_status() -> None:
         f"Thinking router: {'ON' if st.session_state.get('active_thinking_model_router', True) else 'OFF'}\n\n"
         f"Fast normal: {'ON' if st.session_state.get('active_fast_normal_model_router', True) else 'OFF'}\n\n"
         f"Mode operasi: {st.session_state.get('active_operation_mode', ai_operation_mode_default)}\n\n"
+        f"Status kesiapan nyata: {readiness_label}\n\n"
+        f"Model route berikutnya: {readiness_next_model}\n\n"
         f"Model aktif terdeteksi: {active_count}\n\n"
         f"Cek model terakhir: {checked_at}"
     ).replace(",", ".")
@@ -9024,6 +9147,60 @@ st.markdown(
         animation: onlinePulse 1.65s ease-in-out infinite;
     }
 
+    .online-status.status-ready,
+    .adioranye-hero-kicker.status-ready {
+        border-color: rgba(52,199,89,0.34);
+        background: rgba(52,199,89,0.10);
+    }
+
+    .online-status.status-fallback,
+    .adioranye-hero-kicker.status-fallback {
+        border-color: rgba(10,132,255,0.34);
+        background: rgba(10,132,255,0.10);
+    }
+
+    .online-status.status-checking,
+    .adioranye-hero-kicker.status-checking {
+        border-color: rgba(255,204,0,0.38);
+        background: rgba(255,204,0,0.12);
+    }
+
+    .online-status.status-warning,
+    .adioranye-hero-kicker.status-warning {
+        border-color: rgba(255,149,0,0.42);
+        background: rgba(255,149,0,0.12);
+    }
+
+    .online-status.status-offline,
+    .adioranye-hero-kicker.status-offline {
+        border-color: rgba(255,69,58,0.42);
+        background: rgba(255,69,58,0.12);
+    }
+
+    .online-status.status-fallback .online-dot,
+    .adioranye-hero-kicker.status-fallback::before {
+        background: #0a84ff;
+        box-shadow: 0 0 12px rgba(10,132,255,0.72);
+    }
+
+    .online-status.status-checking .online-dot,
+    .adioranye-hero-kicker.status-checking::before {
+        background: #ffcc00;
+        box-shadow: 0 0 12px rgba(255,204,0,0.72);
+    }
+
+    .online-status.status-warning .online-dot,
+    .adioranye-hero-kicker.status-warning::before {
+        background: #ff9500;
+        box-shadow: 0 0 12px rgba(255,149,0,0.72);
+    }
+
+    .online-status.status-offline .online-dot,
+    .adioranye-hero-kicker.status-offline::before {
+        background: #ff453a;
+        box-shadow: 0 0 12px rgba(255,69,58,0.72);
+    }
+
     @keyframes adioranyeTextFlow {
         0%, 100% {
             background-position: 0% 50%;
@@ -9297,9 +9474,24 @@ def render_public_page() -> None:
     cfg = get_runtime_config()
     st.session_state.sound_enabled = True
     render_sound_unlock_script()
+    if (
+        api_key
+        and not st.session_state.get("model_health_cache")
+        and parse_bool(get_secret("MODEL_READINESS_AUTO_QUICK_CHECK", True), default=True)
+    ):
+        try:
+            refresh_model_health_if_needed(force=False, scope="quick")
+        except Exception as exc:
+            st.session_state.last_model_health_error = str(exc)[:500]
+
     public_route_preview = build_model_routing_plan(user_text="halo")
     cheap_active = public_route_preview.get("active_cheap_models") or []
     expensive_active = public_route_preview.get("active_expensive_models") or []
+    public_readiness = get_model_readiness_state(public_route_preview)
+    public_status_class = str(public_readiness.get("class") or "checking")
+    public_status_label = str(public_readiness.get("label") or "Perlu cek model")
+    public_status_kicker = str(public_readiness.get("kicker") or "status model belum dicek")
+    public_status_subtitle = str(public_readiness.get("subtitle") or "")
     st.markdown(
         f"""
         <div class="mac-windowbar">
@@ -9315,9 +9507,9 @@ def render_public_page() -> None:
                     <span class="adioranye-brand-ai">AI</span>
                 </span>
             </div>
-            <div class="mac-window-actions online-status" aria-label="Status AI online">
+            <div class="mac-window-actions online-status status-{_html_escape(public_status_class)}" aria-label="Status AI model">
                 <span class="online-dot" aria-hidden="true"></span>
-                <span class="online-text">Online</span>
+                <span class="online-text">{_html_escape(public_status_label)}</span>
                 <span class="online-wave" aria-hidden="true">
                     <span></span>
                     <span></span>
@@ -9334,12 +9526,12 @@ def render_public_page() -> None:
                 </div>
             </div>
             <div class="adioranye-hero-content">
-                <div class="adioranye-hero-kicker">aktif dan siap membantu</div>
+                <div class="adioranye-hero-kicker status-{_html_escape(public_status_class)}">{_html_escape(public_status_kicker)}</div>
                 <h3 class="app-title adioranye-hero-title">
                     <span class="adioranye-hero-word">Adioranye</span>
                     <span class="adioranye-ai-chip-large">AI</span>
                 </h3>
-                <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dibaca di mode terang maupun gelap. Router otomatis memilih {len(cheap_active)} model utama dan {len(expensive_active)} model kuat sesuai tingkat kesulitan pertanyaan.</p>
+                <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dibaca di mode terang maupun gelap. Status model: {_html_escape(public_status_subtitle)} Router otomatis memilih {len(cheap_active)} model utama dan {len(expensive_active)} model kuat sesuai tingkat kesulitan pertanyaan.</p>
             </div>
         </div>
         <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
