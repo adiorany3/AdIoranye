@@ -5984,6 +5984,14 @@
       "title": "OpenAlex Livestock Technology Indonesia — Sustainable flavor engineering in fermented foods: biochemical routes and technological applications of lactic acid bacteria",
       "url": "https://doi.org/10.3389/finmi.2026.1834783"
     },
+    "62913da202053afedd258e51680c57f220561dfb1a80d8a3514feb45863b90fc": {
+      "chunks": 6,
+      "created_at": "2026-05-25T18:49:08+00:00",
+      "doc_id": 2151,
+      "source": "OpenAI News",
+      "title": "OpenAI News — OpenAI, Grupo Folha, and Grupo UOL announce strategic content partnership | OpenAI",
+      "url": "https://openai.com/index/grupo-folha-grupo-uol-partnership"
+    },
     "629d4a5698108cd4a901022f2614ece8df245f210f85278b4e2d7ef5509b0d8a": {
       "chunks": 1,
       "created_at": "2026-05-22T02:40:51+00:00",
@@ -15175,6 +15183,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-05-24T22:33:24+00:00"
+    },
+    {
+      "added_chunks": 6,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-05-25T18:49:11+00:00"
     }
   ],
   "version": 1
