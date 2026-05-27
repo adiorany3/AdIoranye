@@ -7984,6 +7984,14 @@
       "title": "arXiv cs.CR Cryptography and Security — Artificial Pancreas Implantables -- How Healthcare Professionals May Deal With DIY Bio Cases",
       "url": "https://arxiv.org/abs/2605.20208"
     },
+    "853286114d5f9edca0782e8fe07a2f9df838bb48253ca08d4e38733c16a61389": {
+      "chunks": 11,
+      "created_at": "2026-05-27T19:31:28+00:00",
+      "doc_id": 2153,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Election information and safeguards in 2026 | OpenAI",
+      "url": "https://openai.com/index/election-safeguards-2026"
+    },
     "858f55e6a22e0c1465d41e7bd8e3ace0e67bb8a8a91b120a921ceba28754fbe8": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:22+00:00",
@@ -11936,6 +11944,14 @@
       "title": "ANTARA News - Rilis Pers — Toshiba Mulai Kirimkan Sampel Uji MOSFET SiC Trench-Gate 1200V yang Akan Tingkatkan Efisiensi di Pusat Data AI Generasi Berikutnya",
       "url": "https://www.antaranews.com/berita/5577728/toshiba-mulai-kirimkan-sampel-uji-mosfet-sic-trench-gate-1200v-yang-akan-tingkatkan-efisiensi-di-pusat-data-ai-generasi-berikutnya"
     },
+    "c7adcef048ec8c2197d216f0e112eda0e53c8c1aa85edac3c5265af74edb1d68": {
+      "chunks": 18,
+      "created_at": "2026-05-27T19:31:28+00:00",
+      "doc_id": 2152,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Building self-improving tax agents with Codex | OpenAI",
+      "url": "https://openai.com/index/building-self-improving-tax-agents-with-codex"
+    },
     "c7eab1a0047cbf760e97c6c431916894a562f7e3e599b7decf36c4eb2395c9cd": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:19+00:00",
@@ -15204,6 +15220,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-05-27T12:54:48+00:00"
+    },
+    {
+      "added_chunks": 29,
+      "added_documents": 2,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-05-27T19:31:31+00:00"
     }
   ],
   "version": 1
