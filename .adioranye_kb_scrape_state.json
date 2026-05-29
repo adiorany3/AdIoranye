@@ -2504,6 +2504,14 @@
       "title": "Google News Indonesia - Sains & Riset — Dukung Kemenko Infrawil, BRIN Dorong Hilirisasi Hasil Riset dan Inovasi untuk Pembangunan Infrastruktur - BRIN - Badan Riset dan Inovasi Nasional",
       "url": "https://news.google.com/rss/articles/CBMi1AFBVV95cUxPWWFWR19xOWM5dGY4QWxyUHJMZUx2bkZhMWtSUzBJVF8ybDZyTGNEWnhNTENHNWZmaG10NlFmMk9wZTZPNU5sMkY4Q3FJVTZEYTZmOTBYTmhuTlZJRjlqVnhnZjg3cWo1aHVWeWxqb1E1clIycUxYVUtlYnNJR1FIcWlRLV9TTGp5RHFxMjBKU0dTMlp4R3dsZDYyMHpZLWtUZG5wcDRGSmgydWdRVEFySjVfUHE0UEJMbXV4dDY0Z0l3TDV1VC16bHEtem9XMXRkU2FIZw?oc=5"
     },
+    "28517ca70f3a096e1ea75dad765d921e606bc648fa939e632f0b2dcf0ebd716d": {
+      "chunks": 13,
+      "created_at": "2026-05-29T19:37:52+00:00",
+      "doc_id": 2158,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Strengthening societal resilience with Rosalind Biodefense | OpenAI",
+      "url": "https://openai.com/index/strengthening-societal-resilience-with-rosalind-biodefense"
+    },
     "288d1ff0d524f3483f8e3e85c64c7db4fb2a8d5c548e4ae01386545dde117390": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:28+00:00",
@@ -3695,6 +3703,14 @@
       "source": "The Verge - Technology Latest",
       "title": "The Verge - Technology Latest — In desperate times, graduates find hope in humiliating tech CEOs",
       "url": "https://www.theverge.com/ai-artificial-intelligence/935602/graduates-boo-ai-ceos"
+    },
+    "3f2ea0eb3bc1e3ccdedd5fa517ee2c52a444abb549419021f351928a557fb223": {
+      "chunks": 9,
+      "created_at": "2026-05-29T19:37:52+00:00",
+      "doc_id": 2156,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Boston Children’s uses AI to unlock new diagnoses | OpenAI",
+      "url": "https://openai.com/index/boston-childrens-hospital"
     },
     "3f411d544a65f9a91000a3651c5ba4571eb3760eca06d983b1af1839455d724c": {
       "chunks": 1,
@@ -11608,6 +11624,14 @@
       "title": "Google News Global Tech - AI Model Releases Global — Introducing the IBM Granite 4.1 family of models - IBM Research",
       "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE4yRlAxQk5KX0s5eDRjci00ZU9CZXMyZ1k3UDRHeWdVQzhOOFQ5TzQxYWVGeGpLOFBuVHV5akg1MjZ4bDlIZXFzcjl1ejhROXZzdDlxYUxXLUE4cHdvbko1M01Ea0ZNLWV3MzN5ekFiSQ?oc=5"
     },
+    "c0ba9c8a47289f5a9ff1b96560ac9bac4d3603d548fb4b6ee8dd3013187f6e11": {
+      "chunks": 5,
+      "created_at": "2026-05-29T19:37:52+00:00",
+      "doc_id": 2157,
+      "source": "OpenAI News",
+      "title": "OpenAI News — How Braintrust turns customer requests into code with Codex | OpenAI",
+      "url": "https://openai.com/index/braintrust"
+    },
     "c0c0ea188aafa41ffa50b33cd1e5b36c4a34b87b081aacf03cfaeba27ddd6e32": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:23+00:00",
@@ -15250,6 +15274,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-05-28T19:41:45+00:00"
+    },
+    {
+      "added_chunks": 27,
+      "added_documents": 3,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-05-29T19:37:56+00:00"
     }
   ],
   "version": 1
