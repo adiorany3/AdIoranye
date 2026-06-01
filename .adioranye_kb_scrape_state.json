@@ -928,6 +928,14 @@
       "title": "Google News Indonesia - Kalimantan & IKN Regional — Hadiri Ekspos Pembangunan Hijau Kaltim, Ardiansyah: Siap Dukung Smart Forest City IKN - Pemerintah Kabupaten Kutai Timur",
       "url": "https://news.google.com/rss/articles/CBMiwwFBVV95cUxNNVJNWkdYN2lGS3EybFNRV0J5RzdlQThiM0l0M29CVnBubGZ5U1lTV1pNQnoyb1VSaFo1UDZEcVdxME9CNFBqeHdDQVdFWkFpeFlYM2N5NWdrRXJEQ0h4N0tGMC1URlZQZjZkTnAtdzZFbTJYbmtzWXd1QzNVQURiT2k4aHVkQVJ2UUJHamxPeUNUcXZHZEJLa1hNNFlIYlRQdGhJa2NWN3ZtS0dwT0FzQnFxcFFyaXNraV9GSG5VMG9hODA?oc=5"
     },
+    "0d782b3e44f0e659233aee9c5e35105b17d7a0bd6377198916d4346429a1e393": {
+      "chunks": 9,
+      "created_at": "2026-06-01T21:01:26+00:00",
+      "doc_id": 2159,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Building the infrastructure for the Intelligence Age in Michigan | OpenAI",
+      "url": "https://openai.com/index/stargate-michigan-data-center"
+    },
     "0d95065e2800146638e91c118762d37060e38f4fdce5fc2a6a8159ce684e7bf2": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:13+00:00",
@@ -15309,6 +15317,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-05-31T18:11:15+00:00"
+    },
+    {
+      "added_chunks": 9,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-01T21:01:30+00:00"
     }
   ],
   "version": 1
