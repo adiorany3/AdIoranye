@@ -1,51 +1,20 @@
 {
-  "created_at": "2026-06-02 02:39:24 UTC",
-  "purpose": "Require at least two active primary models for Adioranye routing.",
+  "name": "adioranye_session_memory_patch",
+  "created_for": "Adioranye app.py session memory",
+  "base_file": "/mnt/data/adioranye_min2_primary_patch/app.py",
   "files": [
-    {
-      "path": "README_PATCH.md",
-      "bytes": 2116,
-      "sha256": "fcc7e6236d029038"
-    },
-    {
-      "path": "app.py",
-      "bytes": 548122,
-      "sha256": "24afa31d4c374dfe"
-    },
-    {
-      "path": "app_min2_primary.diff",
-      "bytes": 7543,
-      "sha256": "c6e0d1668acbf186"
-    },
-    {
-      "path": "config/slashai_model_catalog_current.json",
-      "bytes": 4056,
-      "sha256": "6cd422fa580c8e1f"
-    },
-    {
-      "path": "config/streamlit_model_env.example",
-      "bytes": 1698,
-      "sha256": "029e5b83cc20add5"
-    },
-    {
-      "path": "docs/minimum_two_primary_models.md",
-      "bytes": 1044,
-      "sha256": "28bdabff1db756b0"
-    },
-    {
-      "path": "docs/model_routing_policy.md",
-      "bytes": 1098,
-      "sha256": "5b27132794dc8d8a"
-    },
-    {
-      "path": "manifest.json",
-      "bytes": 1180,
-      "sha256": "342ba827eee696a1"
-    },
-    {
-      "path": "scripts/apply_slashai_model_catalog.py",
-      "bytes": 11364,
-      "sha256": "f2e57f0dbb4cc10e"
-    }
+    "app.py",
+    "app_session_memory.diff",
+    "config/session_memory_env.example",
+    "docs/session_memory_usage.md",
+    "scripts/verify_session_memory_patch.py",
+    "README_PATCH.md"
+  ],
+  "features": [
+    "st.session_state session memory",
+    "public-safe session commands",
+    "session memory injection into build_memory_text",
+    "session memory metadata for debug",
+    "current-info mode keeps session memory context"
   ]
 }

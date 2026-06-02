@@ -1,0 +1,10 @@
+# Session memory / memory hanya untuk sesi browser aktif
+SESSION_MEMORY_ENABLED = true
+SESSION_MEMORY_COMMAND_ENABLED = true
+SESSION_MEMORY_LIMIT = 40
+SESSION_MEMORY_CONTEXT_MAX_CHARS = 1800
+
+# Tetap pertahankan setting model/routing dari patch sebelumnya
+MIN_PRIMARY_ACTIVE_MODELS = 2
+MAX_SMART_MODELS = 2
+REQUIRED_PRIMARY_MODELS = "slashai/deepseek-v4-flash-free,slashai/claude-sonnet-4.5-free"

@@ -1662,6 +1662,10 @@ def answer_pdf_download_button(
 def init_state() -> None:
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
+    if "session_memory" not in st.session_state:
+        st.session_state.session_memory = []
+    if "session_memory_updated_at" not in st.session_state:
+        st.session_state.session_memory_updated_at = ""
     if "admin_authenticated" not in st.session_state:
         st.session_state.admin_authenticated = False
     if "active_model" not in st.session_state:
@@ -2145,6 +2149,20 @@ use_streamlit_cache_memory_default = parse_bool(
 streamlit_cache_memory_limit = int(
     get_secret("STREAMLIT_CACHE_MEMORY_LIMIT", 200) or 200
 )
+session_memory_enabled = parse_bool(
+    get_secret("SESSION_MEMORY_ENABLED", True),
+    default=True,
+)
+session_memory_command_enabled = parse_bool(
+    get_secret("SESSION_MEMORY_COMMAND_ENABLED", True),
+    default=True,
+)
+session_memory_limit = int(
+    get_secret("SESSION_MEMORY_LIMIT", 40) or 40
+)
+session_memory_context_max_chars = int(
+    get_secret("SESSION_MEMORY_CONTEXT_MAX_CHARS", 1800) or 1800
+)
 thinking_model_router_default = parse_bool(
     get_secret("THINKING_MODEL_ROUTER", True), default=True
 )
@@ -2591,6 +2609,235 @@ def reset_streamlit_cache_memory() -> int:
     return count
 
 
+def _session_memory_items() -> List[Dict[str, Any]]:
+    """Memory khusus sesi Streamlit/browser aktif.
+
+    Memory ini tidak ditulis ke file/global store. Cocok untuk preferensi dan
+    konteks sementara selama percakapan berlangsung.
+    """
+    items = st.session_state.setdefault("session_memory", [])
+
+    if not isinstance(items, list):
+        st.session_state.session_memory = []
+        items = st.session_state.session_memory
+
+    return items
+
+
+def add_session_memory(
+    text: str,
+    source: str = "web-session",
+) -> bool:
+    if not bool(session_memory_enabled):
+        return False
+
+    clean_text = str(text or "").strip()
+
+    if not clean_text:
+        return False
+
+    items = _session_memory_items()
+
+    normalized_existing = {
+        str(item.get("text") or "").strip().lower()
+        for item in items
+        if isinstance(item, dict)
+    }
+
+    if clean_text.lower() in normalized_existing:
+        return False
+
+    items.append(
+        {
+            "text": clean_text,
+            "source": str(source or "web-session"),
+            "created_at": _wib_now_text(),
+        }
+    )
+
+    limit = max(
+        1,
+        int(session_memory_limit or 40),
+    )
+
+    if len(items) > limit:
+        del items[:-limit]
+
+    st.session_state.session_memory_updated_at = _wib_now_text()
+
+    return True
+
+
+def session_memory_prompt_text(
+    limit: int = 20,
+) -> str:
+    if not bool(session_memory_enabled):
+        return ""
+
+    items = _session_memory_items()
+
+    if not items:
+        return ""
+
+    selected_items = items[-max(1, int(limit or 20)):]
+
+    lines: List[str] = []
+
+    for item in selected_items:
+        if not isinstance(item, dict):
+            continue
+
+        text = str(item.get("text") or "").strip()
+
+        if text:
+            lines.append(f"- {text}")
+
+    result = "\n".join(lines).strip()
+
+    max_chars = max(
+        300,
+        int(session_memory_context_max_chars or 1800),
+    )
+
+    return result[:max_chars]
+
+
+def session_memory_list_text(
+    limit: int = 80,
+) -> str:
+    items = _session_memory_items()
+
+    if not items:
+        return ""
+
+    selected_items = items[-max(1, int(limit or 80)):]
+    start_number = max(1, len(items) - len(selected_items) + 1)
+    lines: List[str] = []
+
+    for idx, item in enumerate(selected_items, start=start_number):
+        if not isinstance(item, dict):
+            continue
+
+        created_at = str(item.get("created_at") or "").strip()
+        source = str(item.get("source") or "session").strip()
+        body = str(item.get("text") or "").strip()
+
+        if body:
+            meta = f" [{created_at} | {source}]" if created_at or source else ""
+            lines.append(f"{idx}.{meta} {body}")
+
+    return "\n".join(lines)
+
+
+def forget_session_memory_contains(
+    keyword: str,
+) -> int:
+    keyword_clean = str(keyword or "").strip().lower()
+
+    if not keyword_clean:
+        return 0
+
+    items = _session_memory_items()
+    before = len(items)
+
+    items[:] = [
+        item
+        for item in items
+        if keyword_clean not in str(item.get("text", "")).lower()
+    ]
+
+    if before != len(items):
+        st.session_state.session_memory_updated_at = _wib_now_text()
+
+    return before - len(items)
+
+
+def reset_session_memory() -> int:
+    items = _session_memory_items()
+    count = len(items)
+    items.clear()
+
+    st.session_state.session_memory_updated_at = _wib_now_text()
+
+    return count
+
+
+def handle_session_memory_command(
+    user_text: str,
+) -> str:
+    if not bool(session_memory_command_enabled):
+        return ""
+
+    text = str(user_text or "").strip()
+
+    if not text:
+        return ""
+
+    lowered = text.lower()
+
+    remember_prefixes = [
+        "/ingat ",
+        "/remember ",
+        "ingat sesi: ",
+        "memory sesi: ",
+        "session memory: ",
+    ]
+
+    for prefix in remember_prefixes:
+        if lowered.startswith(prefix):
+            memory_text = text[len(prefix):].strip()
+
+            if not memory_text:
+                return "Isi memory sesi masih kosong."
+
+            saved = add_session_memory(
+                memory_text,
+                source="user-session-command",
+            )
+
+            if saved:
+                return "Baik, memory sesi sudah disimpan untuk percakapan ini."
+
+            return "Memory sesi tersebut sudah ada atau tidak bisa disimpan."
+
+    if lowered in {
+        "/memory",
+        "/memory_sesi",
+        "/session_memory",
+        "lihat memory sesi",
+        "lihat memori sesi",
+    }:
+        current_memory = session_memory_list_text(limit=80)
+
+        if not current_memory:
+            return "Belum ada memory sesi aktif."
+
+        return "Memory sesi aktif:\n\n" + current_memory
+
+    forget_prefixes = [
+        "/lupa_sesi ",
+        "/forget_session ",
+    ]
+
+    for prefix in forget_prefixes:
+        if lowered.startswith(prefix):
+            keyword = text[len(prefix):].strip()
+            count = forget_session_memory_contains(keyword)
+
+            return f"{count} memory sesi dihapus."
+
+    if lowered in {
+        "/reset_memory_sesi",
+        "/hapus_memory_sesi",
+        "/clear_session_memory",
+    }:
+        count = reset_session_memory()
+
+        return f"{count} memory sesi dihapus."
+
+    return ""
+
+
 def build_memory_text(limit: int = 12) -> str:
     """Gabungkan memory default, cache online, dan memory lokal admin."""
     default_context = str(
@@ -2598,6 +2845,7 @@ def build_memory_text(limit: int = 12) -> str:
         or default_memory_context_from_secret
         or DEFAULT_MEMORY_CONTEXT
     ).strip()
+    session_memory = str(session_memory_prompt_text(limit=limit) or "").strip()
     cache_memory = str(streamlit_cache_memory_prompt_text(limit=limit) or "").strip()
     local_memory = str(memory.as_prompt_text(limit=limit) or "").strip()
 
@@ -2607,6 +2855,8 @@ def build_memory_text(limit: int = 12) -> str:
         sections.append(time_context)
     if default_context:
         sections.append("MEMORY DEFAULT AKTIF:\n" + default_context)
+    if session_memory:
+        sections.append("MEMORY SESI CHAT AKTIF:\n" + session_memory)
     if cache_memory:
         sections.append("MEMORY CACHE STREAMLIT AKTIF:\n" + cache_memory)
     if local_memory:
@@ -10049,28 +10299,56 @@ def build_current_info_memory_context(
             **kb_v2_meta,
         }
 
+    base_memory = build_memory_text(limit=8)
     tavily_result = fetch_tavily_live_context(
         user_query,
         max_results=int(live_web_fallback_max_results or 4),
     )
 
     if tavily_result.get("ok"):
-        return str(tavily_result.get("context") or ""), {
+        live_context = str(tavily_result.get("context") or "").strip()
+        merged_context = "\n\n".join(
+            section
+            for section in [
+                base_memory,
+                live_context,
+            ]
+            if str(section or "").strip()
+        )
+
+        return merged_context, {
             "live_context_used": True,
             "live_context_error": "",
             "live_sources": tavily_result.get("sources") or [],
             "live_answer_preview": tavily_result.get("answer_preview", ""),
             "live_cache_hit": bool(tavily_result.get("cache_hit")),
+            "session_memory_included_for_current_info": bool(
+                session_memory_prompt_text(limit=8)
+            ),
         }
 
+    fallback_context = "\n\n".join(
+        section
+        for section in [
+            base_memory,
+            (
+                "MODE INFO TERKINI AKTIF, tetapi Tavily/live web belum berhasil mengambil sumber terbaru.\n"
+                f"Error: {tavily_result.get('error', 'Tidak diketahui')}\n"
+                "Jika menjawab, jelaskan bahwa informasi terkini belum bisa diverifikasi."
+            ),
+        ]
+        if str(section or "").strip()
+    )
+
     return (
-        "MODE INFO TERKINI AKTIF, tetapi Tavily/live web belum berhasil mengambil sumber terbaru.\n"
-        f"Error: {tavily_result.get('error', 'Tidak diketahui')}\n"
-        "Jika menjawab, jelaskan bahwa informasi terkini belum bisa diverifikasi.",
+        fallback_context,
         {
             "live_context_used": False,
             "live_context_error": str(tavily_result.get("error") or ""),
             "live_sources": [],
+            "session_memory_included_for_current_info": bool(
+                session_memory_prompt_text(limit=8)
+            ),
         },
     )
 
@@ -13737,6 +14015,17 @@ def render_public_page() -> None:
                 local_reply = cached_reply
                 local_meta = cached_meta
 
+        if not local_reply:
+            session_memory_reply = handle_session_memory_command(user_input)
+
+            if session_memory_reply:
+                local_reply = session_memory_reply
+                local_meta = {
+                    "session_memory_command": True,
+                    "public_safe_message": True,
+                    "session_memory_count": len(_session_memory_items()),
+                }
+
         if not local_reply and st.session_state.admin_authenticated:
             local_reply = handle_local_memory_command(user_input, memory)
             if not local_reply and power_features_enabled:
@@ -14047,6 +14336,11 @@ def render_public_page() -> None:
                         )
                         meta["token_saver_max_completion_tokens"] = int(
                             runtime_options.get("max_completion_tokens", 0) or 0
+                        )
+                        meta["session_memory_enabled"] = bool(session_memory_enabled)
+                        meta["session_memory_count"] = len(_session_memory_items())
+                        meta["session_memory_in_prompt"] = bool(
+                            session_memory_prompt_text(limit=8)
                         )
                         meta["ui_loading_status_title"] = loading_title
                         meta["ui_loading_status_thinking"] = bool(
