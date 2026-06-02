@@ -2,10 +2,21 @@ name: ping-streamlit
 
 on:
   workflow_dispatch:
+    inputs:
+      force_browser:
+        description: "Paksa wake-up dengan browser walaupun fast ping berhasil"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
   schedule:
-    # GitHub Actions minimum schedule adalah sekitar 5 menit.
-    # Pakai 10 menit agar lebih ringan dan tidak terlalu sering ping.
-    - cron: "*/10 * * * *"
+    # Streamlit Community Cloud tidur setelah 12 jam tanpa traffic.
+    # Ping setiap 4 jam cukup memberi margin, tanpa boros GitHub Actions.
+    # Menit 17 dipilih agar tidak menumpuk di awal jam.
+    - cron: "17 */4 * * *"
 
 permissions:
   contents: read
@@ -17,48 +28,46 @@ concurrency:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
 
     env:
-      # Isi di GitHub:
-      # Settings → Secrets and variables → Actions → Secrets
-      # STREAMLIT_APP_URL = https://nama-app.streamlit.app
       STREAMLIT_APP_URL: ${{ secrets.STREAMLIT_APP_URL }}
+      STRICT_FAILURE: "true"
 
     steps:
-      - name: Check app URL
+      - name: Normalize target URL
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -z "${STREAMLIT_APP_URL:-}" ]; then
+          URL="${STREAMLIT_APP_URL:-}"
+
+          if [ -z "$URL" ]; then
             echo "::error::STREAMLIT_APP_URL belum diisi di GitHub Secrets."
-            echo "Isi contoh: https://adioranye.streamlit.app"
+            echo "Isi di: Settings → Secrets and variables → Actions → Secrets"
+            echo "Contoh: https://adioranye.streamlit.app"
             exit 1
           fi
 
-          echo "Target: ${STREAMLIT_APP_URL}"
-
-      - name: Ping Streamlit safely
-        shell: bash
-        run: |
-          set +e
-
-          URL="${STREAMLIT_APP_URL}"
-
-          # Pastikan URL pakai https://
           case "$URL" in
             http://*|https://*) ;;
             *) URL="https://${URL}" ;;
           esac
 
-          # Hilangkan slash akhir agar tidak memicu redirect bolak-balik di sebagian URL.
           URL="${URL%/}"
 
-          echo "Pinging: $URL"
+          echo "NORMALIZED_URL=$URL" >> "$GITHUB_ENV"
 
-          CURL_OUTPUT="$(mktemp)"
-          CURL_BODY="$(mktemp)"
+          echo "Target: $URL"
+
+      - name: Fast HTTP ping
+        id: fast_ping
+        shell: bash
+        run: |
+          set +e
+
+          BODY_FILE="$(mktemp)"
+          STDERR_FILE="$(mktemp)"
 
           HTTP_CODE="$(
             curl \
@@ -67,58 +76,263 @@ jobs:
               --location \
               --max-redirs 5 \
               --connect-timeout 10 \
-              --max-time 35 \
-              --user-agent "Adioranye-GitHub-Ping/1.0" \
-              --output "$CURL_BODY" \
+              --max-time 45 \
+              --retry 2 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              --compressed \
+              --user-agent "Adioranye-GitHub-Streamlit-Ping/2.0" \
+              --output "$BODY_FILE" \
               --write-out "%{http_code}" \
-              "$URL" \
-              2>"$CURL_OUTPUT"
+              "$NORMALIZED_URL" \
+              2>"$STDERR_FILE"
           )"
+
           CURL_EXIT=$?
 
           echo "curl exit: $CURL_EXIT"
           echo "http code: $HTTP_CODE"
 
-          if [ "$CURL_EXIT" -eq 47 ]; then
-            echo "::warning::curl exit 47 = too many redirects. Mencoba ping tanpa mengikuti redirect."
-
-            HTTP_CODE="$(
-              curl \
-                --silent \
-                --show-error \
-                --connect-timeout 10 \
-                --max-time 25 \
-                --user-agent "Adioranye-GitHub-Ping/1.0" \
-                --output "$CURL_BODY" \
-                --write-out "%{http_code}" \
-                "$URL" \
-                2>"$CURL_OUTPUT"
-            )"
-            CURL_EXIT=$?
-
-            echo "fallback curl exit: $CURL_EXIT"
-            echo "fallback http code: $HTTP_CODE"
-          fi
-
-          if [ -s "$CURL_OUTPUT" ]; then
+          if [ -s "$STDERR_FILE" ]; then
             echo "curl stderr:"
-            cat "$CURL_OUTPUT"
+            cat "$STDERR_FILE"
           fi
 
-          # 2xx = OK, 3xx = redirect tetapi app merespons.
-          # Untuk ping/keepalive, 3xx tetap dianggap berhasil agar workflow tidak error 47 terus.
-          if [[ "$HTTP_CODE" =~ ^2|^3 ]]; then
-            echo "Ping berhasil atau app merespons redirect: HTTP $HTTP_CODE"
+          SLEEP_MARKER="false"
+
+          if grep -Eiq "has gone to sleep|get this app back up|zzzz|app state: zzzz" "$BODY_FILE"; then
+            SLEEP_MARKER="true"
+          fi
+
+          if [ "$CURL_EXIT" -eq 0 ] && [[ "$HTTP_CODE" =~ ^(2|3)[0-9][0-9]$ ]] && [ "$SLEEP_MARKER" = "false" ]; then
+            echo "needs_browser=false" >> "$GITHUB_OUTPUT"
+            echo "Fast ping berhasil. App tampaknya sudah aktif."
+
+            {
+              echo "### Streamlit ping result"
+              echo "- Target: $NORMALIZED_URL"
+              echo "- curl exit: $CURL_EXIT"
+              echo "- HTTP code: $HTTP_CODE"
+              echo "- Sleeping page detected: $SLEEP_MARKER"
+              echo "- Browser wake-up needed: false"
+            } >> "$GITHUB_STEP_SUMMARY"
+
             exit 0
           fi
 
-          # Jika curl sukses tapi HTTP bukan 2xx/3xx, tampilkan warning namun jangan langsung gagal
-          # untuk mencegah workflow merah terus saat Streamlit sedang waking up.
-          if [ "$CURL_EXIT" -eq 0 ]; then
-            echo "::warning::App merespons HTTP $HTTP_CODE. Mungkin sedang waking up atau route butuh waktu."
-            exit 0
-          fi
+          echo "needs_browser=true" >> "$GITHUB_OUTPUT"
+          echo "::warning::Fast ping belum cukup. Akan mencoba wake-up memakai browser."
 
-          # Timeout/network tetap diberi warning, bukan gagal permanen.
-          echo "::warning::Ping belum berhasil. curl exit=$CURL_EXIT, HTTP=$HTTP_CODE"
+          {
+            echo "### Streamlit ping result"
+            echo "- Target: $NORMALIZED_URL"
+            echo "- curl exit: $CURL_EXIT"
+            echo "- HTTP code: $HTTP_CODE"
+            echo "- Sleeping page detected: $SLEEP_MARKER"
+            echo "- Browser wake-up needed: true"
+          } >> "$GITHUB_STEP_SUMMARY"
+
           exit 0
+
+      - name: Wake sleeping app with real browser
+        if: ${{ steps.fast_ping.outputs.needs_browser == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_browser == 'true') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 -m pip install --upgrade pip
+          python3 -m pip install playwright
+          python3 -m playwright install --with-deps chromium
+
+          cat > wake_streamlit.py <<'PY'
+          import os
+          import re
+          import sys
+          import time
+          from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+          url = os.environ.get("NORMALIZED_URL", "").strip()
+          strict_failure = os.environ.get("STRICT_FAILURE", "true").lower() == "true"
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          if not url:
+              print("::error::NORMALIZED_URL kosong.")
+              sys.exit(1)
+
+          if not re.match(r"^https?://", url, re.IGNORECASE):
+              print(f"::error::URL tidak valid: {url}")
+              sys.exit(1)
+
+          sleep_markers = [
+              "has gone to sleep",
+              "get this app back up",
+              "app state: zzzz",
+              "zzzz",
+          ]
+
+          wake_selectors = [
+              'button:has-text("Yes, get this app back up!")',
+              'text="Yes, get this app back up!"',
+              'button:has-text("Get this app back up")',
+              'button:has-text("Wake")',
+          ]
+
+          lines = []
+          final_status = 0
+          clicked = False
+          healthy = False
+          last_error = None
+          last_title = ""
+          last_text_sample = ""
+
+          def log(message):
+              print(message)
+              lines.append(message)
+
+          def page_looks_sleeping(page):
+              global last_title
+              global last_text_sample
+
+              try:
+                  last_title = page.title() or ""
+              except Exception:
+                  last_title = ""
+
+              try:
+                  body_text = page.locator("body").inner_text(timeout=10000) or ""
+              except Exception:
+                  body_text = ""
+
+              last_text_sample = body_text[:1000]
+
+              combined = f"{last_title}\n{body_text}".lower()
+
+              return any(marker in combined for marker in sleep_markers)
+
+          log(f"Target: {url}")
+
+          try:
+              with sync_playwright() as p:
+                  browser = p.chromium.launch(
+                      headless=True,
+                      args=["--no-sandbox"],
+                  )
+
+                  context = browser.new_context(
+                      user_agent="Adioranye-GitHub-Streamlit-Wake/2.0",
+                      viewport={
+                          "width": 1365,
+                          "height": 900,
+                      },
+                      locale="en-US",
+                  )
+
+                  page = context.new_page()
+
+                  response = page.goto(
+                      url,
+                      wait_until="domcontentloaded",
+                      timeout=90000,
+                  )
+
+                  final_status = response.status if response else 0
+                  log(f"Initial browser HTTP status: {final_status}")
+
+                  page.wait_for_timeout(5000)
+
+                  for selector in wake_selectors:
+                      try:
+                          locator = page.locator(selector).first
+
+                          if locator.count() > 0 and locator.is_visible(timeout=3000):
+                              locator.click(timeout=15000)
+                              clicked = True
+                              log(f"Clicked wake-up control using selector: {selector}")
+                              break
+
+                      except Exception:
+                          continue
+
+                  if clicked:
+                      try:
+                          page.wait_for_load_state(
+                              "networkidle",
+                              timeout=120000,
+                          )
+                      except PlaywrightTimeoutError:
+                          log("Network idle timeout after wake click. Continuing verification.")
+
+                      page.wait_for_timeout(20000)
+                  else:
+                      log("No wake-up button detected. Continuing verification.")
+
+                  deadline = time.time() + 180
+
+                  while time.time() < deadline:
+                      try:
+                          response = page.goto(
+                              url,
+                              wait_until="domcontentloaded",
+                              timeout=120000,
+                          )
+
+                          final_status = response.status if response else final_status
+
+                          page.wait_for_timeout(10000)
+
+                          sleeping = page_looks_sleeping(page)
+
+                          log(f"Verification HTTP status: {final_status}")
+                          log(f"Sleeping page still detected: {sleeping}")
+
+                          if 200 <= int(final_status) < 400 and not sleeping:
+                              healthy = True
+                              break
+
+                      except Exception as exc:
+                          last_error = repr(exc)
+                          log(f"Verification attempt error: {last_error}")
+
+                      page.wait_for_timeout(10000)
+
+                  context.close()
+                  browser.close()
+
+          except Exception as exc:
+              last_error = repr(exc)
+              log(f"::error::Browser wake-up failed: {last_error}")
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write("\n### Browser wake-up result\n")
+                  f.write(f"- Target: {url}\n")
+                  f.write(f"- Wake button clicked: {clicked}\n")
+                  f.write(f"- Final HTTP status: {final_status}\n")
+                  f.write(f"- Healthy after verification: {healthy}\n")
+
+                  if last_title:
+                      f.write(f"- Final page title: {last_title}\n")
+
+                  if last_error:
+                      f.write(f"- Last error: `{last_error}`\n")
+
+          if healthy:
+              log("Streamlit app berhasil diakses dan tidak terdeteksi sebagai sleeping page.")
+              sys.exit(0)
+
+          warning_message = (
+              f"Wake-up belum terverifikasi. "
+              f"clicked={clicked}, "
+              f"final_status={final_status}, "
+              f"last_error={last_error}"
+          )
+
+          print(f"::warning::{warning_message}")
+
+          if strict_failure:
+              sys.exit(1)
+
+          sys.exit(0)
+          PY
+
+          python3 wake_streamlit.py
