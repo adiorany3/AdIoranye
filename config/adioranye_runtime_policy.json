@@ -1,0 +1,58 @@
+{
+  "answer_profiles": {
+    "balanced": {
+      "description": "Pertanyaan normal: RAG ringan dan sumber terbaik.",
+      "max_tokens": 1100,
+      "power_rag_top_k": 5,
+      "prefer_fast_cheap_model": true
+    },
+    "current": {
+      "description": "Pertanyaan terbaru/current: freshness guard dan live-web fallback wajib.",
+      "force_live_web": true,
+      "max_tokens": 1300,
+      "power_rag_top_k": 5,
+      "require_source_date": true
+    },
+    "deep": {
+      "description": "Pertanyaan teknis/riset: RAG lebih banyak, reranking, self-check.",
+      "max_tokens": 2200,
+      "power_rag_top_k": 8,
+      "prefer_capable_model": true
+    },
+    "fast": {
+      "description": "Pertanyaan ringan/santai: respons cepat, tanpa RAG berat.",
+      "max_tokens": 450,
+      "power_rag_top_k": 0,
+      "prefer_fast_cheap_model": true
+    }
+  },
+  "created_at": "2026-06-02T01:47:15+00:00",
+  "created_at_wib": "2026-06-02 08:47:15 WIB",
+  "recommended_streamlit_config": {
+    "GITHUB_UPDATE_MAX_ITEMS": "1",
+    "GITHUB_UPDATE_SOURCE_LIMIT": "8",
+    "LIVE_WEB_FALLBACK_ENABLED": "true",
+    "LIVE_WEB_FALLBACK_FORCE_FOR_CURRENT": "true",
+    "MAX_TOKENS_CASUAL": "450",
+    "MAX_TOKENS_NORMAL": "1100",
+    "MAX_TOKENS_TECHNICAL": "2000",
+    "POWER_CIRCUIT_BREAKER_ENABLED": "true",
+    "POWER_LATENCY_BUDGET_ENABLED": "true",
+    "POWER_PERFORMANCE_OPTIMIZER_ENABLED": "true",
+    "POWER_QUERY_REWRITER_ENABLED": "true",
+    "POWER_RERANKER_ENABLED": "true",
+    "POWER_RESPONSE_CACHE_ENABLED": "true",
+    "POWER_SEMANTIC_CACHE_ENABLED": "true",
+    "QUESTION_QUICK_CHECK_COOLDOWN_SECONDS": "600",
+    "TELEGRAM_HISTORY_LIMIT": "6",
+    "TELEGRAM_LIVE_CONTEXT_MAX_CHARS": "3800",
+    "TELEGRAM_MEMORY_CONTEXT_MAX_CHARS": "2200"
+  },
+  "source_update_strategy": {
+    "cold": "static/reference docs; small slice or manual profile=cold",
+    "cooldown": "after repeated source errors: 4h, 12h, then 24h",
+    "hot": "news/trends/current topics; every scheduled run",
+    "warm": "journals/gov/regulations; often, especially low-traffic hours"
+  },
+  "version": 1
+}

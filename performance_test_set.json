@@ -1,10 +1,62 @@
 [
-  {"category":"casual", "question":"halo, apa kabar?", "expected":"no_rag_fast"},
-  {"category":"technology_current", "question":"Apa perkembangan AI terbaru di Indonesia saat ini?", "expected":"rag_rewrite_rerank"},
-  {"category":"critical", "question":"Apakah benar ada risiko kesehatan terbaru terkait flu burung? Berikan bukti.", "expected":"strict_evidence"},
-  {"category":"journal", "question":"Jurnal peternakan Q1 yang relevan untuk animal science apa saja?", "expected":"source_required"},
-  {"category":"livestock", "question":"Apa riset terbaru tentang pakan ternak fermentasi?", "expected":"rag_rewrite_rerank"},
-  {"category":"law", "question":"Apa isu hukum AI global yang sedang berkembang?", "expected":"critical_current"},
-  {"category":"environment", "question":"Bagaimana dampak sosial teknologi dan lingkungan secara global?", "expected":"multisource"},
-  {"category":"coding", "question":"Perbaiki error StreamlitDuplicateElementId di app.py", "expected":"coding_no_semantic_cache"}
+  {
+    "id": "casual-fast-001",
+    "question": "Halo, apa kabar?",
+    "expected_profile": "fast",
+    "expected_behavior": "Jawab cepat, singkat, tanpa RAG berat."
+  },
+  {
+    "id": "technical-balanced-001",
+    "question": "Jelaskan cara kerja OpenClash untuk pemula.",
+    "expected_profile": "balanced",
+    "expected_behavior": "Jawaban bertahap, cukup teknis, tetapi tetap mudah dipahami."
+  },
+  {
+    "id": "current-001",
+    "question": "Apa berita teknologi AI terbaru hari ini?",
+    "expected_profile": "current",
+    "expected_behavior": "Wajib cek freshness/live web dan menyebut tanggal/sumber terbaru."
+  },
+  {
+    "id": "kb-rag-001",
+    "question": "Apa isi utama knowledge base Adioranye yang terakhir diperbarui?",
+    "expected_profile": "balanced",
+    "expected_behavior": "Mengambil konteks dari KB/report, tidak mengarang."
+  },
+  {
+    "id": "deep-debug-001",
+    "question": "Analisis mengapa workflow update knowledge sering timeout dan berikan perbaikannya.",
+    "expected_profile": "deep",
+    "expected_behavior": "Memberi root cause, prioritas patch, dan langkah teknis."
+  },
+  {
+    "id": "current-price-001",
+    "question": "Berapa kurs USD ke IDR sekarang?",
+    "expected_profile": "current",
+    "expected_behavior": "Tidak memakai KB lama; wajib data live/current."
+  },
+  {
+    "id": "long-form-001",
+    "question": "Buat rencana peningkatan performa bot Telegram agar responsif tetapi tetap menjaga kualitas jawaban.",
+    "expected_profile": "deep",
+    "expected_behavior": "Membedakan fast/balanced/deep/current, caching, model routing, dan fallback."
+  },
+  {
+    "id": "rag-source-quality-001",
+    "question": "Bandingkan sumber berita dan sumber jurnal untuk knowledge base, kapan masing-masing dipakai?",
+    "expected_profile": "deep",
+    "expected_behavior": "Menjelaskan hot/warm/cold source dan source quality."
+  },
+  {
+    "id": "maintenance-001",
+    "question": "Bagaimana menjaga Streamlit tetap responsif setelah sleep?",
+    "expected_profile": "balanced",
+    "expected_behavior": "Menjelaskan ping/wake-up secara realistis dan batasannya."
+  },
+  {
+    "id": "anti-hallucination-001",
+    "question": "Apa yang harus dilakukan bot jika sumber KB tidak cukup untuk menjawab?",
+    "expected_profile": "balanced",
+    "expected_behavior": "Jawaban harus jujur, meminta live/current fallback jika perlu, bukan mengarang."
+  }
 ]
