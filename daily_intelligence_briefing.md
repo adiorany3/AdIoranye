@@ -1,5 +1,5 @@
 📌 Daily Intelligence Briefing Adioranye
-Waktu: 2026-06-02 22:11:57 WIB
+Waktu: 2026-06-03 03:19:34 WIB
 Dokumen baru: 0 | Chunk baru: 0 | Error: 0
 
 Belum ada dokumen baru pada run ini.
