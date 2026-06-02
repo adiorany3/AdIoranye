@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-06-02 02:32:44 UTC",
+  "files": [
+    {
+      "path": "MANUAL_SNIPPET_model_is_free.py",
+      "bytes": 925,
+      "sha256": "3091a1030e210fcd"
+    },
+    {
+      "path": "README_PATCH.md",
+      "bytes": 2362,
+      "sha256": "1ae6037261dccd5b"
+    },
+    {
+      "path": "config/slashai_model_catalog_current.json",
+      "bytes": 4056,
+      "sha256": "6cd422fa580c8e1f"
+    },
+    {
+      "path": "config/streamlit_model_env.example",
+      "bytes": 1274,
+      "sha256": "2dd7ad23a4e8bd4a"
+    },
+    {
+      "path": "docs/model_routing_policy.md",
+      "bytes": 1098,
+      "sha256": "5b27132794dc8d8a"
+    },
+    {
+      "path": "scripts/apply_slashai_model_catalog.py",
+      "bytes": 11364,
+      "sha256": "f2e57f0dbb4cc10e"
+    }
+  ]
+}
