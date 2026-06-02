@@ -1,0 +1,101 @@
+name: Knowledge Base Quality Evaluation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mingguan, Senin 02:37 WIB. Hindari menit 00 agar tidak padat di GitHub Actions.
+    - cron: "37 19 * * 0"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: kb-quality-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    env:
+      BRANCH_NAME: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout repository without JavaScript actions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BRANCH_NAME:-}" ]; then
+            BRANCH_NAME="main"
+            echo "BRANCH_NAME=main" >> "$GITHUB_ENV"
+          fi
+
+          git init .
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config user.name "adioranye-quality-bot"
+          git config user.email "actions@github.com"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${BRANCH_NAME}"
+          git checkout -B "${BRANCH_NAME}" FETCH_HEAD
+
+      - name: Run quality evaluation
+        continue-on-error: true
+        id: eval
+        run: |
+          set +e
+          python3 adioranye_quality_eval.py \
+            --db .adioranye_power.db \
+            --kb-report daily_kb_update_report.json \
+            --health .adioranye_kb_source_health.json \
+            --policy config/adioranye_runtime_policy.json \
+            --test-set performance_test_set.json \
+            --json-output adioranye_quality_eval_report.json \
+            --markdown-output adioranye_quality_eval_report.md \
+            --fail-under 55
+          EXIT_CODE=$?
+          echo "$EXIT_CODE" > .quality_eval_exit_code
+          exit "$EXIT_CODE"
+
+      - name: Append summary
+        if: always()
+        run: |
+          set +e
+          if [ -f adioranye_quality_eval_report.md ]; then
+            cat adioranye_quality_eval_report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Commit evaluation report
+        if: always()
+        run: |
+          set -euo pipefail
+          git add adioranye_quality_eval_report.json adioranye_quality_eval_report.md 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No evaluation report changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: update knowledge quality evaluation"
+          git fetch --depth=1 origin "${BRANCH_NAME}"
+          git rebase FETCH_HEAD || {
+            git rebase --abort || true
+            echo "::warning::Rebase failed. Trying normal push anyway."
+          }
+          git push origin "HEAD:${BRANCH_NAME}"
+
+      - name: Fail if quality score is below threshold
+        run: |
+          set -euo pipefail
+          EXIT_CODE="0"
+          if [ -f .quality_eval_exit_code ]; then
+            EXIT_CODE="$(cat .quality_eval_exit_code 2>/dev/null || echo 1)"
+          fi
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::Quality evaluation is below threshold. Check adioranye_quality_eval_report.md."
+            exit "$EXIT_CODE"
+          fi
