@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-02T09:18:19+00:00",
-  "started_at_wib": "2026-06-02 16:18:19 WIB",
+  "started_at": "2026-06-02T15:11:53+00:00",
+  "started_at_wib": "2026-06-02 22:11:53 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,24 +13,18 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 1,
-  "added_chunks": 1,
-  "skipped_existing": 5,
+  "added_documents": 0,
+  "added_chunks": 0,
+  "skipped_existing": 6,
   "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "added",
-      "title": "OpenAI News — Codex is becoming a productivity tool for everyone",
-      "url": "https://openai.com/index/codex-for-knowledge-work",
-      "doc_id": 2161,
-      "chunks": 1,
-      "chars": 1081,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 68,
-      "claims": 2
+      "status": "skipped_short",
+      "title": "Travelers deploys AI-powered claims countrywide with OpenAI",
+      "url": "https://openai.com/index/travelers",
+      "chars": 285
     },
     {
       "source": "Meta AI Blog",
@@ -51,20 +45,20 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4938
+      "chars": 5117
+    },
+    {
+      "source": "Vercel Changelog",
+      "status": "skipped_existing",
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 11142
     },
     {
       "source": "arXiv cs.CL Recent",
       "status": "skipped_short",
       "title": "Computation and Language",
       "url": "https://arxiv.org/list/cs.CL/recent",
-      "chars": 197
-    },
-    {
-      "source": "arXiv cs.AI Recent",
-      "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
       "chars": 197
     },
     {
@@ -84,7 +78,7 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 2,
+  "critical_claims_added": 0,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -99,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260602_161819_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260602_221153_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260602_085715_pre-update.db"
+          ".db_backups/adioranye_power.db_20260602_091104_pre-update.db"
         ]
       }
     },
@@ -139,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260602_161824_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260602_221157_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260602_085720_post-update.db"
+          ".db_backups/adioranye_power.db_20260602_091110_post-update.db"
         ]
       }
     }
@@ -744,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-02T09:18:24+00:00",
-  "finished_at_wib": "2026-06-02 16:18:24 WIB",
-  "elapsed_seconds": 5.34,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-02 16:18:24 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Codex is becoming a productivity tool for everyone\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-02T15:11:57+00:00",
+  "finished_at_wib": "2026-06-02 22:11:57 WIB",
+  "elapsed_seconds": 4.85,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-02 22:11:57 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }

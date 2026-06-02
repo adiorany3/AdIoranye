@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-06-02T09:18:18+00:00",
-  "created_at_wib": "2026-06-02 16:18:18 WIB",
+  "created_at": "2026-06-02T15:11:52+00:00",
+  "created_at_wib": "2026-06-02 22:11:52 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,56 +14,56 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 86.929,
+      "score": 86.775,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.626,
+      "score": 52.472,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.355,
+      "score": 52.201,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.087,
+      "score": 51.933,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
+      "name": "Vercel Changelog",
+      "quality": 55.0,
+      "score": 42.696,
+      "tier": "warm",
+      "url": "https://vercel.com/changelog"
+    },
+    {
       "name": "arXiv cs.CL Recent",
       "quality": 55.0,
-      "score": 42.809,
+      "score": 42.655,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.CL/recent"
     },
     {
-      "name": "arXiv cs.AI Recent",
-      "quality": 55.0,
-      "score": 42.257,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.AI/recent"
-    },
-    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.744,
+      "score": 32.59,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.232,
+      "score": 42.078,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     }

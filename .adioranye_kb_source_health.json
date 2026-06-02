@@ -62,6 +62,27 @@
       "touched_sources": 8,
       "type": "update-health",
       "workflow_failed": false
+    },
+    {
+      "at": "2026-06-02T15:11:52+00:00",
+      "at_wib": "2026-06-02 22:11:52 WIB",
+      "max_items": 1,
+      "profile": "auto",
+      "selected_sources": 8,
+      "source_limit": 8,
+      "type": "prepare"
+    },
+    {
+      "at": "2026-06-02T15:11:58+00:00",
+      "at_wib": "2026-06-02 22:11:58 WIB",
+      "failures": 0,
+      "scraper_added_documents": 0,
+      "scraper_errors": 0,
+      "selected_sources": 8,
+      "successes": 8,
+      "touched_sources": 8,
+      "type": "update-health",
+      "workflow_failed": false
     }
   ],
   "sources": {
@@ -74,11 +95,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-06-02T09:18:25+00:00",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "Meta AI Blog",
       "tier": "hot",
       "total_failures": 0,
-      "total_success": 3,
+      "total_success": 4,
       "url": "https://ai.meta.com/blog/"
     },
     "2ca8641a0a149df1": {
@@ -90,11 +111,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-06-02T09:18:25+00:00",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "Google DeepMind News",
       "tier": "warm",
       "total_failures": 0,
-      "total_success": 3,
+      "total_success": 4,
       "url": "https://deepmind.google/blog/"
     },
     "44d00e28db3683be": {
@@ -106,11 +127,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-06-02T09:18:25+00:00",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "Hugging Face Blog",
       "tier": "hot",
       "total_failures": 0,
-      "total_success": 3,
+      "total_success": 4,
       "url": "https://huggingface.co/blog"
     },
     "5b77a0c26f2e234d": {
@@ -121,12 +142,12 @@
       "key": "5b77a0c26f2e234d",
       "last_error_at": "",
       "last_message": "",
-      "last_status": "added",
-      "last_success_at": "2026-06-02T09:18:25+00:00",
+      "last_status": "skipped_short",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "OpenAI News",
       "tier": "hot",
       "total_failures": 0,
-      "total_success": 3,
+      "total_success": 4,
       "url": "https://openai.com/news/rss.xml"
     },
     "6e574cba2a0c5091": {
@@ -138,11 +159,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-06-02T09:18:25+00:00",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "Google AI",
       "tier": "hot",
       "total_failures": 0,
-      "total_success": 3,
+      "total_success": 4,
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     "9b66e7cf30deeda5": {
@@ -170,11 +191,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-06-02T02:11:10+00:00",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "Vercel Changelog",
       "tier": "warm",
       "total_failures": 0,
-      "total_success": 1,
+      "total_success": 2,
       "url": "https://vercel.com/changelog"
     },
     "ea4d098631154815": {
@@ -186,11 +207,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-06-02T09:18:25+00:00",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "Streamlit Release Notes",
       "tier": "cold",
       "total_failures": 0,
-      "total_success": 3,
+      "total_success": 4,
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     "ed9c8726b4e73838": {
@@ -202,14 +223,14 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_short",
-      "last_success_at": "2026-06-02T09:18:25+00:00",
+      "last_success_at": "2026-06-02T15:11:58+00:00",
       "name": "arXiv cs.CL Recent",
       "tier": "warm",
       "total_failures": 0,
-      "total_success": 3,
+      "total_success": 4,
       "url": "https://arxiv.org/list/cs.CL/recent"
     }
   },
-  "updated_at": "2026-06-02T09:18:25+00:00",
+  "updated_at": "2026-06-02T15:11:58+00:00",
   "version": 2
 }
