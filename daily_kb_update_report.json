@@ -1,0 +1,747 @@
+{
+  "started_at": "2026-06-02T01:57:15+00:00",
+  "started_at_wib": "2026-06-02 08:57:15 WIB",
+  "db_path": ".adioranye_power.db",
+  "sources_path": "kb_sources_effective.json",
+  "dry_run": false,
+  "force": false,
+  "sources_total": 8,
+  "sources_enabled": 8,
+  "sources_selected": 8,
+  "source_limit": 8,
+  "source_offset": 0,
+  "source_cursor_next": 0,
+  "time_budget_seconds": 480,
+  "stopped_by_time_budget": false,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 5,
+  "skipped_short": 2,
+  "errors": 0,
+  "items": [
+    {
+      "source": "OpenAI News",
+      "status": "added",
+      "title": "OpenAI News — Our views on AI policy and political advocacy",
+      "url": "https://openai.com/index/our-views-on-ai-policy-and-political-advocacy",
+      "doc_id": 2160,
+      "chunks": 1,
+      "chars": 1163,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 2
+    },
+    {
+      "source": "Meta AI Blog",
+      "status": "skipped_existing",
+      "title": "AI at Meta Blog",
+      "url": "https://ai.meta.com/blog/",
+      "chars": 1022
+    },
+    {
+      "source": "Google AI",
+      "status": "skipped_existing",
+      "title": "Official Google AI news and updates | Google Blog",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/",
+      "chars": 2120
+    },
+    {
+      "source": "Hugging Face Blog",
+      "status": "skipped_existing",
+      "title": "Hugging Face – Blog",
+      "url": "https://huggingface.co/blog",
+      "chars": 5168
+    },
+    {
+      "source": "arXiv cs.CL Recent",
+      "status": "skipped_short",
+      "title": "Computation and Language",
+      "url": "https://arxiv.org/list/cs.CL/recent",
+      "chars": 197
+    },
+    {
+      "source": "Google DeepMind News",
+      "status": "skipped_existing",
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 5508
+    },
+    {
+      "source": "Streamlit Release Notes",
+      "status": "skipped_existing",
+      "title": "Release notes - Streamlit Docs",
+      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
+      "chars": 9701
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 197
+    }
+  ],
+  "watchlist_path": "critical_watchlist.json",
+  "briefing_file": "daily_intelligence_briefing.md",
+  "critical_claims_added": 2,
+  "db_guard": {
+    "enabled": true,
+    "precheck": {
+      "ok": true,
+      "action": "healthy",
+      "db_path": ".adioranye_power.db",
+      "backup_path": "",
+      "message": "Database sehat.",
+      "details": {}
+    },
+    "pre_update_backup": {
+      "ok": true,
+      "action": "backup_created",
+      "db_path": ".adioranye_power.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260602_085715_pre-update.db",
+      "message": "Backup database berhasil dibuat.",
+      "details": {
+        "removed": []
+      }
+    },
+    "checkpoint_after_update": {
+      "ok": true,
+      "action": "checkpoint",
+      "db_path": ".adioranye_power.db",
+      "backup_path": "",
+      "message": "WAL checkpoint selesai.",
+      "details": {
+        "rows": [
+          [
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    "final_integrity_check": {
+      "ok": true,
+      "action": "quick_check",
+      "db_path": ".adioranye_power.db",
+      "backup_path": "",
+      "message": "ok",
+      "details": {
+        "rows": [
+          "ok"
+        ]
+      }
+    },
+    "post_update_backup": {
+      "ok": true,
+      "action": "backup_created",
+      "db_path": ".adioranye_power.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260602_085720_post-update.db",
+      "message": "Backup database berhasil dibuat.",
+      "details": {
+        "removed": []
+      }
+    }
+  },
+  "watchlist": [
+    {
+      "topic": "AI model terbaru dan benchmark model",
+      "category": "teknologi",
+      "priority": 2
+    },
+    {
+      "topic": "kesehatan masyarakat Indonesia wabah penyakit",
+      "category": "kesehatan",
+      "priority": 1
+    },
+    {
+      "topic": "PMK ternak penyakit mulut dan kuku",
+      "category": "peternakan",
+      "priority": 1
+    },
+    {
+      "topic": "flu burung unggas Indonesia",
+      "category": "peternakan",
+      "priority": 1
+    },
+    {
+      "topic": "jurnal peternakan Q1 Q2 Scopus SINTA",
+      "category": "akademik",
+      "priority": 2
+    },
+    {
+      "topic": "regulasi digital Indonesia AI data pribadi",
+      "category": "isu-terkini",
+      "priority": 2
+    },
+    {
+      "topic": "harga pangan Indonesia beras daging telur",
+      "category": "ekonomi",
+      "priority": 2
+    },
+    {
+      "topic": "teknologi pendidikan e-learning",
+      "category": "pendidikan",
+      "priority": 3
+    },
+    {
+      "topic": "berita terbaru Indonesia",
+      "category": "berita",
+      "priority": 1
+    },
+    {
+      "topic": "isu politik Indonesia",
+      "category": "politik",
+      "priority": 1
+    },
+    {
+      "topic": "ekonomi Indonesia terkini",
+      "category": "ekonomi",
+      "priority": 1
+    },
+    {
+      "topic": "rupiah dan inflasi Indonesia",
+      "category": "ekonomi",
+      "priority": 1
+    },
+    {
+      "topic": "AI dan teknologi Indonesia",
+      "category": "teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "keamanan siber Indonesia",
+      "category": "teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "kesehatan publik Indonesia",
+      "category": "kesehatan",
+      "priority": 1
+    },
+    {
+      "topic": "bencana Indonesia BMKG BNPB",
+      "category": "bencana",
+      "priority": 1
+    },
+    {
+      "topic": "pangan dan harga beras Indonesia",
+      "category": "ekonomi",
+      "priority": 1
+    },
+    {
+      "topic": "peternakan dan penyakit hewan Indonesia",
+      "category": "peternakan",
+      "priority": 1
+    },
+    {
+      "topic": "IKN Nusantara",
+      "category": "infrastruktur",
+      "priority": 2
+    },
+    {
+      "topic": "ASEAN terbaru",
+      "category": "asia",
+      "priority": 1
+    },
+    {
+      "topic": "Laut China Selatan",
+      "category": "geopolitik",
+      "priority": 1
+    },
+    {
+      "topic": "Asia-Pacific geopolitik",
+      "category": "geopolitik",
+      "priority": 1
+    },
+    {
+      "topic": "China ekonomi teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "Jepang ekonomi teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "Korea Selatan teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "India ekonomi teknologi",
+      "category": "asia",
+      "priority": 2
+    },
+    {
+      "topic": "Myanmar krisis ASEAN",
+      "category": "asia",
+      "priority": 1
+    },
+    {
+      "topic": "Taiwan dan semikonduktor",
+      "category": "teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "Asia climate disaster",
+      "category": "bencana",
+      "priority": 1
+    },
+    {
+      "topic": "Asia health outbreak",
+      "category": "kesehatan",
+      "priority": 1
+    },
+    {
+      "topic": "US-China Asia",
+      "category": "geopolitik",
+      "priority": 1
+    },
+    {
+      "topic": "peluncuran model AI global dan benchmark terbaru",
+      "category": "teknologi-global",
+      "priority": 1
+    },
+    {
+      "topic": "AI agents dan automation platform global",
+      "category": "teknologi-global",
+      "priority": 1
+    },
+    {
+      "topic": "semikonduktor AI GPU NPU data center global",
+      "category": "teknologi-global",
+      "priority": 1
+    },
+    {
+      "topic": "komputasi kuantum global terbaru",
+      "category": "teknologi-global",
+      "priority": 2
+    },
+    {
+      "topic": "robot humanoid dan otomasi industri global",
+      "category": "teknologi-global",
+      "priority": 2
+    },
+    {
+      "topic": "cybersecurity zero-day ransomware global dan Indonesia",
+      "category": "keamanan-siber",
+      "priority": 1
+    },
+    {
+      "topic": "regulasi AI global dan Indonesia",
+      "category": "regulasi-teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "perkembangan cloud dan data center AI Indonesia",
+      "category": "teknologi-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "satelit internet dan infrastruktur digital Indonesia",
+      "category": "teknologi-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "IKN smart city teknologi dan digital twin",
+      "category": "teknologi-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "startup AI fintech edtech healthtech Indonesia",
+      "category": "startup-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "kendaraan listrik baterai nikel dan teknologi energi Indonesia",
+      "category": "energi-teknologi",
+      "priority": 1
+    },
+    {
+      "topic": "riset BRIN AI pangan peternakan energi nuklir satelit",
+      "category": "riset-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "kolaborasi riset Kemdiktisaintek universitas industri AI",
+      "category": "riset-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "publikasi arXiv terbaru AI machine learning cybersecurity robotics",
+      "category": "riset-global",
+      "priority": 1
+    },
+    {
+      "topic": "OpenAlex publikasi riset Indonesia teknologi AI terbaru",
+      "category": "riset-indonesia",
+      "priority": 1
+    },
+    {
+      "topic": "riset natural language processing bahasa Indonesia",
+      "category": "riset-indonesia",
+      "priority": 2
+    },
+    {
+      "topic": "riset smart farming agritech dan peternakan presisi Indonesia",
+      "category": "riset-indonesia",
+      "priority": 2
+    },
+    {
+      "topic": "teknologi kesehatan digital dan AI medis Indonesia",
+      "category": "healthtech",
+      "priority": 2
+    },
+    {
+      "topic": "AI pendidikan Indonesia dan penggunaan generative AI di sekolah kampus",
+      "category": "edtech",
+      "priority": 1
+    },
+    {
+      "topic": "open source developer tools dan coding AI terbaru",
+      "category": "developer-tools",
+      "priority": 2
+    },
+    {
+      "topic": "climate tech carbon removal battery hydrogen global Indonesia",
+      "category": "climate-tech",
+      "priority": 2
+    },
+    {
+      "id": 1,
+      "topic": "ketahanan pangan global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 2,
+      "topic": "krisis pangan dan harga komoditas dunia",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 3,
+      "topic": "smart farming dan pertanian presisi",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 4,
+      "topic": "climate-smart agriculture",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 5,
+      "topic": "regenerative agriculture dan soil health",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 6,
+      "topic": "irigasi presisi dan manajemen air pertanian",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 7,
+      "topic": "hama penyakit tanaman global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 8,
+      "topic": "teknologi benih dan crop biotechnology",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 9,
+      "topic": "peternakan global dan penyakit hewan",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 10,
+      "topic": "avian influenza global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 11,
+      "topic": "foot and mouth disease PMK global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 12,
+      "topic": "African swine fever",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 13,
+      "topic": "pakan ternak alternatif dan methane reduction",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 14,
+      "topic": "One Health dan antimicrobial resistance pada ternak",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 15,
+      "topic": "animal welfare dan sustainable livestock",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 16,
+      "topic": "teknik pertanian dan biosistem",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 17,
+      "topic": "postharvest technology dan cold chain pertanian",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 18,
+      "topic": "sensor IoT drone remote sensing pertanian",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 19,
+      "topic": "greenhouse automation vertical farming",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 20,
+      "topic": "biomass bioenergy agricultural waste",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 21,
+      "topic": "climate change biodiversity pollution",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 22,
+      "topic": "plastic pollution treaty",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 23,
+      "topic": "carbon market climate finance",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 24,
+      "topic": "deforestation forest restoration",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 25,
+      "topic": "water security global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 26,
+      "topic": "disaster risk climate adaptation early warning",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 27,
+      "topic": "aquaculture blue economy",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 28,
+      "topic": "shrimp farming seaweed aquaculture aquafeed",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 29,
+      "topic": "fish disease aquaculture biosecurity",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 30,
+      "topic": "marine heatwave fisheries overfishing",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 31,
+      "topic": "international law human rights rule of law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 32,
+      "topic": "climate litigation environmental law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 33,
+      "topic": "AI regulation digital law cyber law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 34,
+      "topic": "data protection and privacy law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 35,
+      "topic": "intellectual property technology law",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 36,
+      "topic": "UNESCO heritage intangible culture",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 37,
+      "topic": "digital culture creative economy",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 38,
+      "topic": "language preservation indigenous culture",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 39,
+      "topic": "museum technology cultural heritage digitization",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 40,
+      "topic": "frontier AI robotics quantum computing",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 41,
+      "topic": "biotech synthetic biology gene editing",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 42,
+      "topic": "semiconductor data center cybersecurity",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 43,
+      "topic": "battery EV clean energy climate tech",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 44,
+      "topic": "AI social impact labor automation inequality",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 45,
+      "topic": "digital divide global",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 46,
+      "topic": "migration humanitarian conflict displacement",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    },
+    {
+      "id": 47,
+      "topic": "misinformation civic trust social media harms",
+      "enabled": true,
+      "priority": "high",
+      "tags": "critical-current,global,agro,environment,law,culture,social-impact"
+    }
+  ],
+  "finished_at": "2026-06-02T01:57:20+00:00",
+  "finished_at_wib": "2026-06-02 08:57:20 WIB",
+  "elapsed_seconds": 5.45,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-02 08:57:20 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Our views on AI policy and political advocacy\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+}

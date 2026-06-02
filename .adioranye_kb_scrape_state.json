@@ -2936,6 +2936,14 @@
       "title": "Google News Top Headlines - Mongolia — Trump's towering arch clears another federal hurdle, despite public pushback - NPR",
       "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1odUJkSWdzNWc5dnY1bFdaRGN1UVUtQWswQXVzYnJNYzYxR01sR2FVRFhhLW9PZV9aSUxCeG94dlhWMVRRWWJyNDFKc3V0dFhEX09EZ3otUXJJQjM5d3pVNnpFQnc3MnMwT2FZeHlaOUEzN21teFhxUlRmcTZ0MWM?oc=5"
     },
+    "3172cd1b748a4b63f7d0b9a5a0fdb3f2ee67968316e7b9a54011a4b12d5a968c": {
+      "chunks": 1,
+      "created_at": "2026-06-02T01:57:16+00:00",
+      "doc_id": 2160,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Our views on AI policy and political advocacy",
+      "url": "https://openai.com/index/our-views-on-ai-policy-and-political-advocacy"
+    },
     "31982590698ec8bb46b9484e7b7842cd257d839da43b180adfb72cf7bb33b55c": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:49+00:00",
@@ -15324,6 +15332,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-01T21:01:30+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-02T01:57:20+00:00"
     }
   ],
   "version": 1
