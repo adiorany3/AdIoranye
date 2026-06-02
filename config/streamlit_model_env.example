@@ -1,19 +1,27 @@
-# Rekomendasi secrets Streamlit untuk model list terbaru.
+# Secrets Streamlit rekomendasi untuk routing minimal 2 model utama aktif.
 # Tempel ke Streamlit Community Cloud → App → Settings → Secrets.
 
+# Model default tetap murah/gratis.
 SLASHAI_MODEL = "slashai/deepseek-v4-flash-free"
+
+# WAJIB: minimal 2 model utama disiapkan dalam routing.
+# App akan memaksa max_smart_models >= MIN_PRIMARY_ACTIVE_MODELS.
+MIN_PRIMARY_ACTIVE_MODELS = 2
+MAX_SMART_MODELS = 2
+REQUIRED_PRIMARY_MODELS = "slashai/deepseek-v4-flash-free,slashai/claude-sonnet-4.5-free"
+
+# Router responsif dan hemat.
 SMART_MODEL_ROUTER = true
 FAST_NORMAL_MODEL_ROUTER = true
 THINKING_MODEL_ROUTER = true
-ALLOW_EXPENSIVE_FALLBACK = true
-MAX_SMART_MODELS = 2
-MAX_EXPENSIVE_MODELS = 1
 RETURN_TO_PRIMARY_MODEL = true
 ROTATE_CHEAP_PRIMARY = true
+ALLOW_EXPENSIVE_FALLBACK = true
+MAX_EXPENSIVE_MODELS = 1
 
-# Health check hemat token.
+# Health check harus mengecek minimal dua model utama + cadangan murah.
 MODEL_STATUS_AUTO_REFRESH_ENABLED = true
-MODEL_HEALTH_QUICK_LIMIT = 4
+MODEL_HEALTH_QUICK_LIMIT = 6
 MODEL_HEALTH_FULL_LIMIT = 18
 MODEL_HEALTH_WORKERS = 2
 MODEL_HEALTH_RETRIES = 0
@@ -22,12 +30,12 @@ MODEL_HEALTH_PRESERVE_CACHE = true
 MODEL_HEALTH_PROBE_MAX_TOKENS = 2
 MODEL_HEALTH_PROBE_GPT5_MAX_TOKENS = 8
 
-# Standby/wake-up saver.
+# Standby/wake-up saver tetap hemat tetapi tidak turun di bawah 2 model.
 STANDBY_HEALTH_SAVER_ENABLED = true
 STANDBY_DISABLE_MODEL_DISCOVERY = true
 STANDBY_HEALTH_QUICK_LIMIT = 2
 
-# Retry kalau model awal error.
+# Retry kalau primary pertama gagal.
 AUTO_RETRY_ON_MODEL_ERROR_ENABLED = true
 AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS = 3
 AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS = 35

@@ -1691,8 +1691,10 @@ def init_state() -> None:
             get_secret("RETURN_TO_PRIMARY_MODEL", True), default=True
         )
     if "active_max_smart_models" not in st.session_state:
-        st.session_state.active_max_smart_models = int(
-            get_secret("MAX_SMART_MODELS", 2) or 2
+        st.session_state.active_max_smart_models = max(
+            2,
+            int(get_secret("MAX_SMART_MODELS", 2) or 2),
+            int(globals().get("min_primary_active_models", 2) or 2),
         )
     if "allow_expensive_fallback" not in st.session_state:
         st.session_state.allow_expensive_fallback = parse_bool(
@@ -2049,7 +2051,26 @@ smart_model_router_default = parse_bool(
 return_to_primary_default = parse_bool(
     get_secret("RETURN_TO_PRIMARY_MODEL", True), default=True
 )
-max_smart_models_default = int(get_secret("MAX_SMART_MODELS", 2) or 2)
+max_smart_models_default = max(
+    2,
+    int(get_secret("MAX_SMART_MODELS", 2) or 2),
+)
+min_primary_active_models = max(
+    2,
+    int(get_secret("MIN_PRIMARY_ACTIVE_MODELS", 2) or 2),
+)
+required_primary_models_raw = str(
+    get_secret(
+        "REQUIRED_PRIMARY_MODELS",
+        "slashai/deepseek-v4-flash-free,slashai/claude-sonnet-4.5-free",
+    )
+    or "slashai/deepseek-v4-flash-free,slashai/claude-sonnet-4.5-free"
+)
+required_primary_models = [
+    item.strip()
+    for item in re.split(r"[,\n;]+", required_primary_models_raw)
+    if item.strip()
+]
 model_health_check_interval = int(
     get_secret("MODEL_HEALTH_CHECK_INTERVAL_SECONDS", 90000) or 90000
 )
@@ -4689,13 +4710,21 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     """
     health_cache = st.session_state.get("model_health_cache") or {}
 
-    free_nano_first_pool = [
-        "slashai/deepseek-v4-flash-free",
-        "slashai/claude-sonnet-4.5-free",
-        "slashai/nemotron-3-super-free",
-        "slashai/gpt-5-nano",
-        "slashai/gpt-5.4-nano",
-    ]
+    free_nano_first_pool = unique_models(
+        list(globals().get("required_primary_models", []) or [])
+        + [
+            "slashai/deepseek-v4-flash-free",
+            "slashai/claude-sonnet-4.5-free",
+            "slashai/mimo-v2.5-free",
+            "slashai/nemotron-3-super-free",
+            "slashai/minimax-m2.5:fast",
+            "slashai/gpt-oss-120b-medium",
+            "slashai/qwen3-coder-next:fast",
+            "slashai/deepseek-3.2:fast",
+            "slashai/gpt-5-nano",
+            "slashai/gpt-5.4-nano",
+        ]
+    )
     cheap_candidates = prioritize_free_nano_for_simple_questions(
         free_nano_first_pool
         + (
@@ -4784,6 +4813,92 @@ def sync_rotation_index_to_selected_model(
         st.session_state.cheap_rotation_index = models.index(selected)
     except ValueError:
         st.session_state.cheap_rotation_index = 0
+
+
+
+
+def ensure_minimum_primary_model_pool(
+    primary_model: str,
+    cheap_fallback_models: List[str],
+    active_cheap_models: List[str],
+    active_expensive_models: List[str],
+    health_cache: Dict[str, Dict[str, Any]],
+) -> Tuple[str, List[str], Dict[str, Any]]:
+    """Pastikan routing selalu membawa minimal 2 model utama.
+
+    Model utama di sini berarti model yang akan dicoba dalam jalur cepat:
+    primary + fallback langsung. Jika health cache sudah tersedia, kandidat
+    yang ditambahkan harus berstatus active=True. Jika cache belum ada saat
+    cold start, kandidat tetap disiapkan agar health check/generate_answer
+    bisa menguji minimal dua model.
+    """
+    minimum = max(2, int(globals().get("min_primary_active_models", 2) or 2))
+    required_models = unique_models(
+        list(globals().get("required_primary_models", []) or [])
+    )
+    primary_model = str(primary_model or "").strip()
+    fallback = unique_models(cheap_fallback_models or [])
+
+    candidate_pool = unique_models(
+        required_models
+        + [primary_model]
+        + fallback
+        + (active_cheap_models or [])
+        + TOP_USAGE_MODEL_CANDIDATES
+        + DEFAULT_CHEAP_FALLBACK_MODELS
+        + (active_expensive_models or [])
+    )
+
+    def candidate_is_usable(model_name: str) -> bool:
+        model_name = str(model_name or "").strip()
+        if not model_name:
+            return False
+        if is_model_runtime_blocked(model_name):
+            return False
+        if not health_cache:
+            return True
+        return bool((health_cache.get(model_name) or {}).get("active"))
+
+    if not primary_model or not candidate_is_usable(primary_model):
+        for candidate in candidate_pool:
+            if candidate_is_usable(candidate):
+                primary_model = candidate
+                break
+
+    current_pool = unique_models(
+        [primary_model]
+        + [model for model in fallback if candidate_is_usable(model)]
+    )
+
+    added_models: List[str] = []
+    for candidate in candidate_pool:
+        if len(current_pool) >= minimum:
+            break
+        if not candidate_is_usable(candidate):
+            continue
+        if candidate in current_pool:
+            continue
+        fallback.append(candidate)
+        current_pool.append(candidate)
+        added_models.append(candidate)
+
+    fallback = [
+        model
+        for model in unique_models(fallback)
+        if model != primary_model and candidate_is_usable(model)
+    ]
+
+    main_pool = unique_models([primary_model] + fallback)
+    meta = {
+        "min_primary_active_models": minimum,
+        "required_primary_models": required_models,
+        "primary_model_pool": main_pool,
+        "primary_model_pool_count": len(main_pool),
+        "min_primary_models_ok": len(main_pool) >= minimum,
+        "min_primary_models_added": added_models,
+        "min_primary_health_cache_available": bool(health_cache),
+    }
+    return primary_model, fallback, meta
 
 
 def build_model_routing_plan(
@@ -5010,10 +5125,29 @@ def build_model_routing_plan(
     active_higher_models = filter_runtime_blocked_models(active_higher_models)
     fastest_cheap_models = filter_runtime_blocked_models(fastest_cheap_models)
 
+    primary_model, cheap_fallback_models, min_primary_meta = ensure_minimum_primary_model_pool(
+        primary_model=primary_model,
+        cheap_fallback_models=cheap_fallback_models,
+        active_cheap_models=active_cheap_models,
+        active_expensive_models=active_expensive_models,
+        health_cache=health_cache,
+    )
+    max_smart_models = max(
+        int(max_smart_models or 1),
+        int(min_primary_meta.get("min_primary_active_models") or 2),
+        len(unique_models([primary_model] + cheap_fallback_models)),
+    )
+
     return {
         "primary_model": primary_model,
         "cheap_fallback_models": unique_models(cheap_fallback_models),
         "expensive_fallback_models": unique_models(expensive_fallback_models),
+        "primary_model_pool": min_primary_meta.get("primary_model_pool", []),
+        "primary_model_pool_count": min_primary_meta.get("primary_model_pool_count", 0),
+        "min_primary_active_models": min_primary_meta.get("min_primary_active_models", 2),
+        "min_primary_models_ok": min_primary_meta.get("min_primary_models_ok", False),
+        "min_primary_models_added": min_primary_meta.get("min_primary_models_added", []),
+        "required_primary_models": min_primary_meta.get("required_primary_models", []),
         "allow_expensive_fallback": allow_expensive,
         "max_expensive_models": max_expensive,
         "max_smart_models": max_smart_models,

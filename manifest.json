@@ -1,15 +1,21 @@
 {
-  "created_at": "2026-06-02 02:32:44 UTC",
+  "created_at": "2026-06-02 02:39:24 UTC",
+  "purpose": "Require at least two active primary models for Adioranye routing.",
   "files": [
     {
-      "path": "MANUAL_SNIPPET_model_is_free.py",
-      "bytes": 925,
-      "sha256": "3091a1030e210fcd"
+      "path": "README_PATCH.md",
+      "bytes": 2116,
+      "sha256": "fcc7e6236d029038"
     },
     {
-      "path": "README_PATCH.md",
-      "bytes": 2362,
-      "sha256": "1ae6037261dccd5b"
+      "path": "app.py",
+      "bytes": 548122,
+      "sha256": "24afa31d4c374dfe"
+    },
+    {
+      "path": "app_min2_primary.diff",
+      "bytes": 7543,
+      "sha256": "c6e0d1668acbf186"
     },
     {
       "path": "config/slashai_model_catalog_current.json",
@@ -18,13 +24,23 @@
     },
     {
       "path": "config/streamlit_model_env.example",
-      "bytes": 1274,
-      "sha256": "2dd7ad23a4e8bd4a"
+      "bytes": 1698,
+      "sha256": "029e5b83cc20add5"
+    },
+    {
+      "path": "docs/minimum_two_primary_models.md",
+      "bytes": 1044,
+      "sha256": "28bdabff1db756b0"
     },
     {
       "path": "docs/model_routing_policy.md",
       "bytes": 1098,
       "sha256": "5b27132794dc8d8a"
+    },
+    {
+      "path": "manifest.json",
+      "bytes": 1180,
+      "sha256": "342ba827eee696a1"
     },
     {
       "path": "scripts/apply_slashai_model_catalog.py",
