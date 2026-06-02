@@ -4550,6 +4550,12 @@ def estimate_prompt_complexity(user_text: str) -> Dict[str, Any]:
     score += min(2, len(retrieval_hits))
     score += min(3, len(code_hits))
 
+    signals = (
+        [f"thinking:{item}" for item in thinking_hits[:3]]
+        + [f"retrieval:{item}" for item in retrieval_hits[:3]]
+        + [f"code:{item}" for item in code_hits[:3]]
+    )
+
     return {
         "score": score,
         "word_count": word_count,
@@ -4557,6 +4563,7 @@ def estimate_prompt_complexity(user_text: str) -> Dict[str, Any]:
         "thinking_hits": thinking_hits,
         "retrieval_hits": retrieval_hits,
         "code_hits": code_hits,
+        "signals": signals,
     }
 
 
@@ -5045,6 +5052,549 @@ def build_model_routing_plan(
             "retrieval": complexity.get("retrieval_hits", []),
         },
     }
+
+
+# =========================
+# Runtime answer profile / token saver / current info guard
+# =========================
+
+
+def _token_saver_mode() -> str:
+    """Return mode token saver yang aman untuk metadata dan routing."""
+    mode = str(
+        st.session_state.get(
+            "token_saver_mode",
+            token_saver_default_mode,
+        )
+        or token_saver_default_mode
+        or "balanced"
+    ).strip().lower()
+
+    if mode in {
+        "off",
+        "false",
+        "disabled",
+        "mati",
+        "nonaktif",
+    }:
+        return "off"
+
+    if mode in {
+        "aggressive",
+        "agresif",
+        "hemat",
+        "fast",
+        "cepat",
+    }:
+        return "aggressive"
+
+    if mode in {
+        "deep",
+        "lengkap",
+        "maksimal",
+        "long",
+    }:
+        return "deep"
+
+    return "balanced"
+
+
+def _clamp_int(value: Any, minimum: int, maximum: int, default: int) -> int:
+    try:
+        number = int(value)
+    except Exception:
+        number = int(default)
+
+    return max(
+        int(minimum),
+        min(
+            int(maximum),
+            number,
+        ),
+    )
+
+
+def _compact_text_for_context(value: Any, max_chars: int = 900) -> str:
+    text = str(value or "").strip()
+
+    if len(text) <= max_chars:
+        return text
+
+    head = max_chars // 2
+    tail = max_chars - head - 20
+
+    return (
+        text[:head].rstrip()
+        + "\n...[dipotong agar respons tetap cepat]...\n"
+        + text[-tail:].lstrip()
+    )
+
+
+def compact_recent_messages_for_token_saver(
+    messages: List[Dict[str, Any]] | None,
+    limit: int = 6,
+    recent_full: int = 4,
+    max_chars_per_old_message: int = 700,
+) -> List[Dict[str, Any]]:
+    """Ringkas riwayat chat lama agar latency dan token tidak membengkak.
+
+    Pesan terbaru tetap lengkap, pesan lama dipotong. Ini menjaga konteks
+    tanpa membuat request model terlalu berat di Streamlit/Telegram.
+    """
+    if not isinstance(messages, list):
+        return []
+
+    limit_value = _clamp_int(
+        limit,
+        minimum=1,
+        maximum=12,
+        default=6,
+    )
+    recent_full_value = _clamp_int(
+        recent_full,
+        minimum=1,
+        maximum=limit_value,
+        default=min(4, limit_value),
+    )
+
+    selected = messages[-limit_value:]
+    split_at = max(
+        0,
+        len(selected) - recent_full_value,
+    )
+
+    compacted: List[Dict[str, Any]] = []
+
+    for index, item in enumerate(selected):
+        if not isinstance(item, dict):
+            continue
+
+        role = str(item.get("role") or "").strip() or "user"
+        content = str(item.get("content") or "")
+
+        if index < split_at:
+            content = _compact_text_for_context(
+                content,
+                max_chars=max_chars_per_old_message,
+            )
+
+        compacted.append(
+            {
+                "role": role,
+                "content": content,
+            }
+        )
+
+    return compacted
+
+
+def detect_auto_live_scraping_need(
+    user_text: str,
+) -> Dict[str, Any]:
+    """Deteksi pertanyaan yang butuh konteks terbaru/live web.
+
+    Fungsi ini sengaja deterministik dan ringan agar bisa dipakai juga oleh
+    cache guard. Jika return needed=True, RAG/cache lama tidak boleh menjadi
+    sumber utama.
+    """
+    raw = str(user_text or "").strip()
+    lowered = raw.lower()
+    word_count = len(re.findall(r"\w+", lowered))
+
+    current_markers = [
+        "hari ini",
+        "saat ini",
+        "sekarang",
+        "terbaru",
+        "terkini",
+        "update terbaru",
+        "baru-baru ini",
+        "minggu ini",
+        "bulan ini",
+        "tahun ini",
+        "2026",
+        "latest",
+        "today",
+        "current",
+        "currently",
+        "recent",
+        "now",
+        "news",
+        "breaking",
+    ]
+
+    volatile_domains = [
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "rilis",
+        "release",
+        "ranking",
+        "klasemen",
+        "score",
+        "skor",
+        "presiden",
+        "menteri",
+        "ceo",
+        "aturan",
+        "regulasi",
+        "undang-undang",
+        "lowongan",
+        "produk",
+        "spesifikasi",
+        "model ai",
+        "openai",
+        "github",
+        "streamlit",
+        "telegram",
+        "api",
+        "library",
+        "package",
+        "versi",
+    ]
+
+    command_markers = [
+        "cek",
+        "cari",
+        "search",
+        "browse",
+        "lihat web",
+        "verifikasi",
+        "validasi",
+        "bandingkan sumber",
+    ]
+
+    current_hits = [
+        marker
+        for marker in current_markers
+        if marker in lowered
+    ]
+    volatile_hits = [
+        marker
+        for marker in volatile_domains
+        if marker in lowered
+    ]
+    command_hits = [
+        marker
+        for marker in command_markers
+        if marker in lowered
+    ]
+
+    needed = bool(current_hits and (volatile_hits or command_hits))
+    needed = needed or bool(command_hits and volatile_hits)
+    needed = needed or bool(
+        auto_live_scraping_enabled
+        and word_count >= int(auto_live_scraping_min_query_chars or 8)
+        and current_hits
+    )
+
+    topic = "auto"
+
+    if volatile_hits:
+        topic = str(volatile_hits[0])
+    elif current_hits:
+        topic = str(current_hits[0])
+
+    reason_parts = []
+
+    if current_hits:
+        reason_parts.append("current-marker:" + ",".join(current_hits[:3]))
+
+    if volatile_hits:
+        reason_parts.append("volatile-domain:" + ",".join(volatile_hits[:3]))
+
+    if command_hits:
+        reason_parts.append("explicit-check:" + ",".join(command_hits[:3]))
+
+    return {
+        "needed": bool(needed),
+        "reason": "; ".join(reason_parts) or "stable-question",
+        "topic": topic,
+        "current_hits": current_hits,
+        "volatile_hits": volatile_hits,
+        "command_hits": command_hits,
+        "word_count": word_count,
+    }
+
+
+def _question_profile_from_text(
+    user_text: str,
+    route: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Profil pertanyaan: fast, balanced, deep, atau current."""
+    route = route or {}
+    text = str(user_text or "").strip()
+    lowered = text.lower()
+    words = re.findall(r"\w+", lowered)
+    word_count = len(words)
+    live_profile = detect_auto_live_scraping_need(text)
+
+    deep_markers = [
+        "analisis mendalam",
+        "riset",
+        "audit",
+        "review kode",
+        "debug",
+        "arsitektur",
+        "proposal",
+        "skripsi",
+        "laporan",
+        "strategi",
+        "bandingkan",
+        "evaluasi",
+        "refactor",
+        "perbaiki app.py",
+        "buat zip",
+        "workflow",
+    ]
+
+    code_markers = [
+        "traceback",
+        "exception",
+        "syntaxerror",
+        "typeerror",
+        "nameerror",
+        "import ",
+        "def ",
+        "class ",
+        "streamlit",
+        "python",
+        "yaml",
+        "github actions",
+    ]
+
+    casual_markers = [
+        "halo",
+        "hai",
+        "pagi",
+        "siang",
+        "sore",
+        "malam",
+        "terima kasih",
+        "makasih",
+    ]
+
+    deep_hits = [
+        marker
+        for marker in deep_markers
+        if marker in lowered
+    ]
+    code_hits = [
+        marker
+        for marker in code_markers
+        if marker in lowered
+    ]
+    casual_hits = [
+        marker
+        for marker in casual_markers
+        if marker in lowered
+    ]
+
+    if live_profile.get("needed"):
+        profile = "current"
+    elif (
+        route.get("thinking_direct_to_capable")
+        or route.get("thinking_mode")
+        or word_count >= 120
+        or deep_hits
+        or len(code_hits) >= 2
+    ):
+        profile = "deep"
+    elif word_count <= 18 and casual_hits and not code_hits:
+        profile = "fast"
+    elif word_count <= 35 and not deep_hits and not code_hits:
+        profile = "fast"
+    else:
+        profile = "balanced"
+
+    return {
+        "profile": profile,
+        "word_count": word_count,
+        "live": live_profile,
+        "deep_hits": deep_hits,
+        "code_hits": code_hits,
+        "casual_hits": casual_hits,
+    }
+
+
+def choose_dynamic_runtime_options(
+    user_text: str,
+    route: Dict[str, Any],
+    cfg: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Pilih runtime options per pertanyaan.
+
+    Tujuan:
+    - fast: respons ringan, cache aktif, RAG ringan/nonaktif untuk casual.
+    - balanced: RAG dan reranker normal.
+    - deep: token dan timeout lebih besar, self-verification bila aktif.
+    - current: live web/Tavily utama, cache/RAG lama dimatikan.
+    """
+    profile_data = _question_profile_from_text(
+        user_text,
+        route=route,
+    )
+    profile = str(profile_data.get("profile") or "balanced")
+    live_profile = profile_data.get("live") or {}
+    token_mode = _token_saver_mode()
+
+    base_tokens = int(
+        cfg.get("max_tokens")
+        or cfg.get("max_completion_tokens")
+        or st.session_state.get("active_max_tokens")
+        or max_tokens_normal
+    )
+
+    if profile == "fast":
+        max_completion_tokens = min(
+            base_tokens,
+            int(max_tokens_casual),
+        )
+        timeout = min(
+            int(request_timeout_seconds or 45),
+            28,
+        )
+        rag_top_k = 2
+        enable_rag = bool(
+            power_rag_enabled
+            and not bool(power_disable_rag_for_casual)
+        )
+        enable_self_verification = False
+        quality_verifier_enabled = False
+        query_rewriter_enabled = False
+        reranker_enabled = False
+        semantic_cache_enabled = True
+        response_cache_ttl_seconds = max(
+            600,
+            min(
+                int(power_response_cache_ttl_seconds or 1800),
+                3600,
+            ),
+        )
+        strategy_label = "fast"
+
+    elif profile == "deep":
+        max_completion_tokens = min(
+            max(
+                int(max_tokens_technical),
+                base_tokens,
+            ),
+            int(max_tokens_long),
+        )
+        timeout = max(
+            int(request_timeout_seconds or 45),
+            60,
+        )
+        rag_top_k = max(
+            int(power_rag_top_k or 5),
+            6,
+        )
+        enable_rag = bool(power_rag_enabled)
+        enable_self_verification = bool(power_self_verification_enabled)
+        quality_verifier_enabled = bool(power_quality_verifier_enabled)
+        query_rewriter_enabled = bool(power_query_rewriter_enabled)
+        reranker_enabled = bool(power_reranker_enabled)
+        semantic_cache_enabled = bool(power_semantic_cache_enabled)
+        response_cache_ttl_seconds = int(power_response_cache_ttl_seconds or 1800)
+        strategy_label = "deep"
+
+    elif profile == "current":
+        max_completion_tokens = min(
+            max(
+                int(max_tokens_normal),
+                base_tokens,
+            ),
+            int(max_tokens_technical),
+        )
+        timeout = max(
+            int(request_timeout_seconds or 45),
+            int(live_web_fallback_timeout_seconds or 10) + 45,
+        )
+        rag_top_k = 0
+        enable_rag = False
+        enable_self_verification = bool(power_self_verification_enabled)
+        quality_verifier_enabled = bool(power_quality_verifier_enabled)
+        query_rewriter_enabled = bool(power_query_rewriter_enabled)
+        reranker_enabled = False
+        semantic_cache_enabled = False
+        response_cache_ttl_seconds = 0
+        strategy_label = "current-live"
+
+    else:
+        max_completion_tokens = min(
+            max(
+                int(max_tokens_normal),
+                base_tokens,
+            ),
+            int(max_tokens_technical),
+        )
+        timeout = int(request_timeout_seconds or 45)
+        rag_top_k = int(power_rag_top_k or 5)
+        enable_rag = bool(power_rag_enabled)
+        enable_self_verification = bool(power_self_verification_enabled)
+        quality_verifier_enabled = bool(power_quality_verifier_enabled)
+        query_rewriter_enabled = bool(power_query_rewriter_enabled)
+        reranker_enabled = bool(power_reranker_enabled)
+        semantic_cache_enabled = bool(power_semantic_cache_enabled)
+        response_cache_ttl_seconds = int(power_response_cache_ttl_seconds or 1800)
+        strategy_label = "balanced"
+
+    if token_mode == "aggressive" and profile not in {"deep", "current"}:
+        max_completion_tokens = min(
+            max_completion_tokens,
+            int(max_tokens_normal),
+        )
+        rag_top_k = min(
+            rag_top_k,
+            int(kb_max_chunks_token_saver or 3),
+        )
+        timeout = min(
+            timeout,
+            35,
+        )
+
+    if token_mode == "deep" and profile != "fast":
+        max_completion_tokens = max(
+            max_completion_tokens,
+            int(max_tokens_technical),
+        )
+        rag_top_k = max(
+            rag_top_k,
+            int(power_rag_top_k or 5),
+        )
+
+    current_info_mode = bool(
+        live_profile.get("needed")
+        and live_web_fallback_enabled
+        and auto_live_scraping_enabled
+    )
+
+    return {
+        "profile": profile,
+        "strategy_label": strategy_label,
+        "max_completion_tokens": int(max_completion_tokens),
+        "timeout": int(timeout),
+        "enable_rag": bool(enable_rag),
+        "rag_top_k": int(max(0, rag_top_k)),
+        "enable_self_verification": bool(enable_self_verification),
+        "quality_control_enabled": bool(power_quality_control_enabled),
+        "quality_verifier_enabled": bool(quality_verifier_enabled),
+        "query_rewriter_enabled": bool(query_rewriter_enabled),
+        "reranker_enabled": bool(reranker_enabled),
+        "semantic_cache_enabled": bool(semantic_cache_enabled),
+        "response_cache_ttl_seconds": int(response_cache_ttl_seconds),
+        "streaming_preview_enabled": False,
+        "current_info_mode": bool(current_info_mode),
+        "auto_live_scraping_needed": bool(current_info_mode),
+        "auto_live_scraping_reason": str(live_profile.get("reason") or ""),
+        "auto_live_scraping_topic": str(live_profile.get("topic") or "auto"),
+        "token_saver_mode": token_mode,
+        "question_profile": profile_data,
+        "latency_budget_enabled": bool(power_latency_budget_enabled),
+    }
+
 
 
 def restore_active_model_to_cheap(preferred_model: str = "") -> None:
@@ -13161,7 +13711,11 @@ def render_public_page() -> None:
                             )
                         ),
                         base_memory_text=current_info_memory_text,
-                        recent_messages=st.session_state.chat_messages[:-1][-6:],
+                        recent_messages=compact_recent_messages_for_token_saver(
+                            st.session_state.chat_messages[:-1],
+                            limit=web_history_limit,
+                            recent_full=web_history_recent_full,
+                        ),
                         fallback_models=route["cheap_fallback_models"],
                         expensive_fallback_models=route["expensive_fallback_models"],
                         allow_expensive_fallback=route["allow_expensive_fallback"],
@@ -13349,6 +13903,14 @@ def render_public_page() -> None:
                         )
                         meta["token_saver_enabled"] = bool(token_saver_enabled)
                         meta["token_saver_mode"] = _token_saver_mode()
+                        meta["runtime_profile"] = runtime_options.get(
+                            "profile",
+                            "",
+                        )
+                        meta["question_profile"] = runtime_options.get(
+                            "question_profile",
+                            {},
+                        )
                         meta["token_saver_max_completion_tokens"] = int(
                             runtime_options.get("max_completion_tokens", 0) or 0
                         )
