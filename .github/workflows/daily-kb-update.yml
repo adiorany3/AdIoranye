@@ -1,9 +1,6 @@
-name: Daily Knowledge Base Update
+name: Daily Knowledge Base Sequential Update
 
 on:
-  schedule:
-    # 17:05 UTC = 00:05 WIB next day
-    - cron: "5 17 * * *"
   workflow_dispatch:
     inputs:
       source:
@@ -21,53 +18,253 @@ on:
         required: false
         default: ""
         type: string
+      source_limit:
+        description: "Jumlah sumber yang diproses pada run ini"
+        required: false
+        default: "8"
+        type: string
+      max_items:
+        description: "Maksimal item per sumber"
+        required: false
+        default: "1"
+        type: string
+      force:
+        description: "Abaikan state URL dan coba ingest ulang"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+  schedule:
+    # 00:17, 06:17, 12:17, 18:17 WIB.
+    # Menit 17 dipilih agar tidak menumpuk di awal jam GitHub Actions.
+    - cron: "17 17,23,5,11 * * *"
 
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: daily-kb-update-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   update-kb:
+    name: Update Knowledge Base
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 18
+
+    env:
+      BRANCH_NAME: ${{ github.ref_name }}
+      POWER_DB_PATH: .adioranye_power.db
+      KB_SCRAPER_SOURCES_FILE: kb_sources.json
+      KB_SCRAPER_STATE_FILE: .adioranye_kb_scrape_state.json
+      KB_SCRAPER_REPORT_FILE: daily_kb_update_report.json
+      DAILY_INTELLIGENCE_BRIEFING_FILE: daily_intelligence_briefing.md
+      KB_SCRAPER_TIMEOUT: "8"
+      KB_UPDATE_TIME_BUDGET_SECONDS: "480"
+      DB_BACKUP_DIR: .db_backups
+      DB_BACKUP_MAX_COUNT: "4"
+      INPUT_SOURCE: ${{ github.event.inputs.source || github.event_name }}
+      INPUT_CHAT_ID: ${{ github.event.inputs.chat_id || '' }}
+      INPUT_REQUESTED_AT: ${{ github.event.inputs.requested_at || '' }}
+      INPUT_SOURCE_LIMIT: ${{ github.event.inputs.source_limit || vars.KB_UPDATE_SOURCE_LIMIT || '8' }}
+      INPUT_MAX_ITEMS: ${{ github.event.inputs.max_items || vars.KB_UPDATE_MAX_ITEMS || '1' }}
+      INPUT_FORCE: ${{ github.event.inputs.force || 'false' }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-kb-auto.txt
-
-      - name: Run daily KB scraper
+      - name: Checkout repository without JavaScript actions
         env:
-          POWER_DB_PATH: .adioranye_power.db
-          KB_SCRAPER_SOURCES_FILE: kb_sources.json
-          KB_SCRAPER_STATE_FILE: .adioranye_kb_scrape_state.json
-          KB_SCRAPER_MAX_ITEMS_PER_SOURCE: "0"  # 0 = pakai max_items masing-masing sumber
-          KB_SCRAPER_TIMEOUT: "20"
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python daily_kb_scraper.py             --db "$POWER_DB_PATH"             --sources "$KB_SCRAPER_SOURCES_FILE"             --state "$KB_SCRAPER_STATE_FILE"             --max-items "$KB_SCRAPER_MAX_ITEMS_PER_SOURCE"
+          set -euo pipefail
 
-      - name: Commit updated KB database and state
-        run: |
+          git init .
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.name "adioranye-kb-bot"
           git config user.email "actions@github.com"
-          git add .adioranye_power.db .adioranye_kb_scrape_state.json || true
-          if git diff --staged --quiet; then
-            echo "No KB changes to commit."
+
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${BRANCH_NAME}"
+          git checkout -B "${BRANCH_NAME}" FETCH_HEAD
+
+      - name: Validate update limits
+        run: |
+          set -euo pipefail
+
+          SOURCE_LIMIT="${INPUT_SOURCE_LIMIT:-8}"
+          MAX_ITEMS="${INPUT_MAX_ITEMS:-1}"
+
+          case "$SOURCE_LIMIT" in
+            ''|*[!0-9]*) SOURCE_LIMIT="8" ;;
+          esac
+
+          case "$MAX_ITEMS" in
+            ''|*[!0-9]*) MAX_ITEMS="1" ;;
+          esac
+
+          # Hard cap agar Telegram /update tidak membuat workflow timeout.
+          if [ "$SOURCE_LIMIT" -lt 1 ]; then SOURCE_LIMIT="8"; fi
+          if [ "$SOURCE_LIMIT" -gt 12 ]; then SOURCE_LIMIT="12"; fi
+          if [ "$MAX_ITEMS" -lt 1 ]; then MAX_ITEMS="1"; fi
+          if [ "$MAX_ITEMS" -gt 2 ]; then MAX_ITEMS="2"; fi
+
+          echo "KB_SCRAPER_SOURCE_LIMIT=$SOURCE_LIMIT" >> "$GITHUB_ENV"
+          echo "KB_SCRAPER_MAX_ITEMS_PER_SOURCE=$MAX_ITEMS" >> "$GITHUB_ENV"
+
+          echo "### Update KB configuration" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Trigger: ${INPUT_SOURCE}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: ${BRANCH_NAME}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source limit: ${SOURCE_LIMIT}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Max items/source: ${MAX_ITEMS}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Time budget: ${KB_UPDATE_TIME_BUDGET_SECONDS}s" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prepare Python environment
+        run: |
+          set -euo pipefail
+
+          python3 --version
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+
+          if [ -f requirements-kb-auto.txt ]; then
+            pip install -r requirements-kb-auto.txt
           else
-            git commit -m "chore: update daily knowledge base"
-            git push
+            pip install "requests>=2.31"
           fi
+
+      - name: Run sequential KB scraper
+        run: |
+          set -euo pipefail
+          . .venv/bin/activate
+
+          FORCE_FLAG=""
+          if [ "${INPUT_FORCE}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+
+          python daily_kb_scraper.py \
+            --db "$POWER_DB_PATH" \
+            --sources "$KB_SCRAPER_SOURCES_FILE" \
+            --state "$KB_SCRAPER_STATE_FILE" \
+            --max-items "$KB_SCRAPER_MAX_ITEMS_PER_SOURCE" \
+            --timeout "$KB_SCRAPER_TIMEOUT" \
+            --time-budget-seconds "$KB_UPDATE_TIME_BUDGET_SECONDS" \
+            --source-limit "$KB_SCRAPER_SOURCE_LIMIT" \
+            --report-file "$KB_SCRAPER_REPORT_FILE" \
+            --briefing-file "$DAILY_INTELLIGENCE_BRIEFING_FILE" \
+            --backup-dir "$DB_BACKUP_DIR" \
+            --max-backups "$DB_BACKUP_MAX_COUNT" \
+            --quiet \
+            $FORCE_FLAG
+
+      - name: Summarize KB report
+        if: always()
+        run: |
+          set +e
+
+          if [ ! -f "$KB_SCRAPER_REPORT_FILE" ]; then
+            echo "KB report file not found."
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path(os.environ.get("KB_SCRAPER_REPORT_FILE", "daily_kb_update_report.json"))
+          summary_path = Path(os.environ.get("GITHUB_STEP_SUMMARY", ""))
+
+          try:
+              report = json.loads(report_path.read_text(encoding="utf-8"))
+          except Exception as exc:
+              print(f"Failed to read report: {exc}")
+              raise SystemExit(0)
+
+          items = report.get("items") or []
+          added = [item for item in items if item.get("status") == "added"]
+          errors = [item for item in items if str(item.get("status", "")).startswith("error")]
+
+          lines = [
+              "",
+              "### Knowledge Base update result",
+              f"- Started: {report.get('started_at_wib', '-')}",
+              f"- Finished: {report.get('finished_at_wib', '-')}",
+              f"- Elapsed: {report.get('elapsed_seconds', '-') } seconds",
+              f"- Sources selected: {report.get('sources_selected', '-')}/{report.get('sources_enabled', '-')}",
+              f"- Added documents: {report.get('added_documents', 0)}",
+              f"- Added chunks: {report.get('added_chunks', 0)}",
+              f"- Skipped existing: {report.get('skipped_existing', 0)}",
+              f"- Skipped short: {report.get('skipped_short', 0)}",
+              f"- Errors: {report.get('errors', 0)}",
+              f"- Stopped by time budget: {report.get('stopped_by_time_budget', False)}",
+              f"- Next source cursor: {report.get('source_cursor_next', '-')}",
+          ]
+
+          if added:
+              lines.append("")
+              lines.append("#### Added items")
+              for item in added[:10]:
+                  title = str(item.get("title") or "-")[:160]
+                  source = str(item.get("source") or "-")[:80]
+                  lines.append(f"- {source}: {title}")
+
+          if errors:
+              lines.append("")
+              lines.append("#### Errors")
+              for item in errors[:10]:
+                  source = str(item.get("source") or "-")[:80]
+                  msg = str(item.get("message") or item.get("title") or "-")[:220]
+                  lines.append(f"- {source}: {msg}")
+
+          text = "\n".join(lines) + "\n"
+          print(text)
+
+          if summary_path:
+              with summary_path.open("a", encoding="utf-8") as f:
+                  f.write(text)
+          PY
+
+      - name: Commit updated KB database, state, and briefing
+        id: commit_changes
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          git add \
+            "$POWER_DB_PATH" \
+            "$KB_SCRAPER_STATE_FILE" \
+            "$DAILY_INTELLIGENCE_BRIEFING_FILE" \
+            "$KB_SCRAPER_REPORT_FILE" \
+            "$DB_BACKUP_DIR" \
+            2>/dev/null || true
+
+          if git diff --staged --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No KB changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: update knowledge base sequentially"
+
+          # Rebase ringan untuk mengurangi risiko push conflict.
+          git fetch --depth=1 origin "${BRANCH_NAME}"
+          git rebase FETCH_HEAD || {
+            git rebase --abort || true
+            echo "::warning::Rebase failed. Trying normal push anyway."
+          }
+
+          git push origin "HEAD:${BRANCH_NAME}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Notify Telegram success
         if: success()
@@ -75,23 +272,44 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_ADMIN_CHAT_ID" ]; then
-            echo "Telegram notification skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_CHAT_ID not configured."
+          set +e
+
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_ADMIN_CHAT_ID:-}" ]; then
+            echo "Telegram notification skipped: missing TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_CHAT_ID."
             exit 0
+          fi
+
+          ADDED="0"
+          CHUNKS="0"
+          ERRORS="0"
+          CURSOR="-"
+
+          if [ -f "$KB_SCRAPER_REPORT_FILE" ]; then
+            ADDED="$(python3 -c 'import json,os; d=json.load(open(os.environ["KB_SCRAPER_REPORT_FILE"],encoding="utf-8")); print(d.get("added_documents",0))' 2>/dev/null || echo 0)"
+            CHUNKS="$(python3 -c 'import json,os; d=json.load(open(os.environ["KB_SCRAPER_REPORT_FILE"],encoding="utf-8")); print(d.get("added_chunks",0))' 2>/dev/null || echo 0)"
+            ERRORS="$(python3 -c 'import json,os; d=json.load(open(os.environ["KB_SCRAPER_REPORT_FILE"],encoding="utf-8")); print(d.get("errors",0))' 2>/dev/null || echo 0)"
+            CURSOR="$(python3 -c 'import json,os; d=json.load(open(os.environ["KB_SCRAPER_REPORT_FILE"],encoding="utf-8")); print(d.get("source_cursor_next","-"))' 2>/dev/null || echo '-')"
           fi
 
           MESSAGE="✅ Update Knowledge Base selesai.
 
-          Repo: $GITHUB_REPOSITORY
-          Branch: ${GITHUB_REF_NAME}
-          Trigger: ${{ github.event.inputs.source || github.event_name }}
-          Chat ID: ${{ github.event.inputs.chat_id || '-' }}
-          Request: ${{ github.event.inputs.requested_at || '-' }}
-          Waktu selesai: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
+Repo: ${GITHUB_REPOSITORY}
+Branch: ${BRANCH_NAME}
+Trigger: ${INPUT_SOURCE}
+Chat ID: ${INPUT_CHAT_ID:-'-'}
+Request: ${INPUT_REQUESTED_AT:-'-'}
+Sumber diproses: ${KB_SCRAPER_SOURCE_LIMIT}
+Item/sumber: ${KB_SCRAPER_MAX_ITEMS_PER_SOURCE}
+Dokumen baru: ${ADDED}
+Chunk baru: ${CHUNKS}
+Error: ${ERRORS}
+Cursor berikutnya: ${CURSOR}
+Waktu selesai: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')"
 
-          Status: sukses"
-
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"             -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}"             --data-urlencode "text=${MESSAGE}"
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}" \
+            >/dev/null
 
       - name: Notify Telegram failure
         if: failure()
@@ -99,20 +317,24 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
         run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_ADMIN_CHAT_ID" ]; then
-            echo "Telegram failure notification skipped: TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_CHAT_ID not configured."
+          set +e
+
+          if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_ADMIN_CHAT_ID:-}" ]; then
+            echo "Telegram failure notification skipped: missing TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_CHAT_ID."
             exit 0
           fi
 
           MESSAGE="❌ Update Knowledge Base gagal.
 
-          Repo: $GITHUB_REPOSITORY
-          Branch: ${GITHUB_REF_NAME}
-          Trigger: ${{ github.event.inputs.source || github.event_name }}
-          Chat ID: ${{ github.event.inputs.chat_id || '-' }}
-          Request: ${{ github.event.inputs.requested_at || '-' }}
-          Waktu gagal: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
+Repo: ${GITHUB_REPOSITORY}
+Branch: ${BRANCH_NAME}
+Trigger: ${INPUT_SOURCE}
+Chat ID: ${INPUT_CHAT_ID:-'-'}
+Request: ${INPUT_REQUESTED_AT:-'-'}
+Waktu gagal: $(TZ='Asia/Jakarta' date '+%Y-%m-%d %H:%M:%S WIB')
+Silakan cek log di GitHub Actions."
 
-          Silakan cek log di GitHub Actions."
-
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"             -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}"             --data-urlencode "text=${MESSAGE}"
+          curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_ADMIN_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}" \
+            >/dev/null
