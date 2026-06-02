@@ -1,20 +1,20 @@
 {
-  "name": "adioranye_session_memory_patch",
-  "created_for": "Adioranye app.py session memory",
-  "base_file": "/mnt/data/adioranye_min2_primary_patch/app.py",
+  "patch": "adioranye_math_rendering_patch",
+  "base": "adioranye_session_memory_patch/app.py",
+  "created_for": "Streamlit math/LaTeX rendering",
   "files": [
     "app.py",
-    "app_session_memory.diff",
-    "config/session_memory_env.example",
-    "docs/session_memory_usage.md",
-    "scripts/verify_session_memory_patch.py",
+    "app_math_rendering.diff",
+    "config/math_rendering_env.example",
+    "docs/math_rendering_usage.md",
+    "scripts/verify_math_rendering_patch.py",
     "README_PATCH.md"
   ],
   "features": [
-    "st.session_state session memory",
-    "public-safe session commands",
-    "session memory injection into build_memory_text",
-    "session memory metadata for debug",
-    "current-info mode keeps session memory context"
+    "Normalize \\( ... \\) to $ ... $ outside code fences",
+    "Normalize \\[ ... \\] to $$ ... $$ outside code fences",
+    "Render chat history, user input, local replies, model replies, and placeholders through math-aware markdown",
+    "Optional admin/debug math test panel",
+    "Persona/memory instruction for LaTeX dollar delimiters"
   ]
 }

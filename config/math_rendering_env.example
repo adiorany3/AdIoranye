@@ -1,0 +1,7 @@
+# Streamlit Secrets - Math Rendering
+MATH_RENDERING_ENABLED = true
+MATH_NORMALIZE_DELIMITERS_ENABLED = true
+
+# Opsional, hanya untuk admin/debug.
+# Jika true, app menampilkan expander test rumus di halaman chat.
+MATH_RENDER_DEBUG_ENABLED = false

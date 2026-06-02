@@ -1659,6 +1659,129 @@ def answer_pdf_download_button(
     )
 
 
+
+# =========================
+# Math / LaTeX Rendering Helpers
+# =========================
+
+
+def _split_markdown_code_fences(text: str) -> List[str]:
+    r"""Split markdown into normal text and fenced-code blocks.
+
+    LaTeX delimiter normalization must not touch code blocks, because examples
+    like ``\(x\)`` inside Python/Markdown code should stay literal.
+    """
+    return re.split(
+        r"(```[\s\S]*?```)",
+        str(text or ""),
+    )
+
+
+def normalize_math_markdown(text: Any) -> str:
+    r"""Normalize common model LaTeX delimiters for Streamlit markdown.
+
+    Streamlit renders math most consistently when expressions use dollar
+    delimiters. Many LLMs answer with Pandoc/Markdown delimiters like
+    ``\(...\)`` and ``\[...\]``. This helper converts only non-code markdown
+    segments, so snippets and fenced code remain safe.
+    """
+    raw = str(text or "")
+
+    if not raw:
+        return ""
+
+    if not bool(globals().get("math_normalize_delimiters_enabled", True)):
+        return raw
+
+    normalized_parts: List[str] = []
+
+    for part in _split_markdown_code_fences(raw):
+        if part.startswith("```"):
+            normalized_parts.append(part)
+            continue
+
+        segment = part
+
+        # Display math: \[ ... \] -> $$ ... $$
+        segment = re.sub(
+            r"\\\[([\s\S]*?)\\\]",
+            lambda match: "\n\n$$\n" + match.group(1).strip() + "\n$$\n\n",
+            segment,
+        )
+
+        # Inline math: \( ... \) -> $ ... $
+        segment = re.sub(
+            r"\\\(([\s\S]*?)\\\)",
+            lambda match: "$" + match.group(1).strip() + "$",
+            segment,
+        )
+
+        # Repair common escaped dollar output from models: \$x\$ -> $x$.
+        # Keep normal currency text untouched because it usually does not use
+        # backslash-dollar.
+        segment = segment.replace("\\$", "$")
+
+        normalized_parts.append(segment)
+
+    normalized = "".join(normalized_parts)
+    normalized = re.sub(r"\n{4,}", "\n\n\n", normalized)
+    return normalized.strip() if raw.strip() else normalized
+
+
+def render_math_markdown(
+    content: Any,
+    unsafe_allow_html: bool = False,
+) -> None:
+    """Render markdown content with LaTeX normalization enabled."""
+    if not bool(globals().get("math_rendering_enabled", True)):
+        st.markdown(
+            str(content or ""),
+            unsafe_allow_html=unsafe_allow_html,
+        )
+        return
+
+    st.markdown(
+        normalize_math_markdown(content),
+        unsafe_allow_html=unsafe_allow_html,
+    )
+
+
+def placeholder_math_markdown(
+    placeholder: Any,
+    content: Any,
+    unsafe_allow_html: bool = False,
+) -> None:
+    """Render markdown into a Streamlit placeholder with math support."""
+    if not bool(globals().get("math_rendering_enabled", True)):
+        placeholder.markdown(
+            str(content or ""),
+            unsafe_allow_html=unsafe_allow_html,
+        )
+        return
+
+    placeholder.markdown(
+        normalize_math_markdown(content),
+        unsafe_allow_html=unsafe_allow_html,
+    )
+
+
+def render_math_test_panel() -> None:
+    """Small optional admin/debug tester for math rendering."""
+    if not bool(globals().get("math_render_debug_enabled", False)):
+        return
+
+    with st.expander("🧮 Test render rumus matematika", expanded=False):
+        sample = (
+            "Inline: \\(a^2 + b^2 = c^2\\)\n\n"
+            "Display:\n"
+            "\\[\n"
+            "x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\n"
+            "\\]\n"
+        )
+        st.caption("Jika patch aktif, rumus di bawah tampil sebagai formula, bukan teks mentah.")
+        render_math_markdown(sample)
+
+
 def init_state() -> None:
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
@@ -1823,6 +1946,7 @@ DEFAULT_PERSONA = (
     "Untuk pertanyaan waktu dalam bahasa Indonesia, gunakan zona waktu Indonesia sebagai acuan: WIB sebagai default, lalu WITA/WIT jika wilayahnya jelas. Jangan menjawab seolah-olah UTC adalah waktu lokal pengguna. "
     "Saat memperbaiki kode, sebutkan letak masalah, solusi inti, lalu berikan kode yang bisa langsung ditempel. "
     "Jika menulis kode, format kode harus vertikal ke bawah dengan line break yang rapi, bukan dipadatkan panjang ke samping. "
+    "Jika menjawab dengan rumus matematika, gunakan format LaTeX yang dapat dirender: inline pakai $...$ dan rumus blok pakai $$...$$. "
     "Pecah parameter, list, dictionary, command, dan chain method panjang ke beberapa baris agar nyaman dibaca di layar HP. "
     "Pecah parameter, dictionary, list, fungsi, dan command panjang ke beberapa baris agar mudah dibaca. "
     "Saat membuat tulisan, ikuti format pengguna dan gunakan gaya bahasa manusiawi, rapi, serta mudah dipahami. "
@@ -1844,6 +1968,7 @@ Memory default Adioranye:
 - Akademik: bantu dengan struktur rapi, bahasa natural, contoh konkret, dan penjelasan yang mudah dipahami.
 - Coding/aplikasi: fokus pada diagnosis masalah, titik perubahan, kode siap tempel, dan langkah deploy yang realistis.
 - Format kode: tulis kode ke bawah dengan baris yang rapi. Jangan menulis kode panjang dalam satu baris jika bisa dipecah ke beberapa baris. Untuk parameter, list, dictionary, command, CSS, HTML attribute, dan function call panjang, pecah menjadi beberapa baris dengan indentasi.
+- Rumus matematika: gunakan LaTeX yang bisa dirender Streamlit. Untuk inline gunakan $...$; untuk rumus blok gunakan $$...$$.
 - Bisnis/konten/desain: berikan ide yang menarik, aman dipakai, mudah dieksekusi, dan sesuai platform.
 - Dokumen/Knowledge Base: jika ada data internal atau dokumen yang relevan, prioritaskan data tersebut. Jika sumber tidak cukup, jangan memaksakan jawaban.
 - Format: ikuti format pengguna. Jika format tidak disebutkan, gunakan struktur paling mudah dibaca.
@@ -1989,6 +2114,19 @@ model_status_fragment_enabled = parse_bool(
 frontend_ultra_safe_mode = parse_bool(
     get_secret("FRONTEND_ULTRA_SAFE_MODE", True),
     default=True,
+)
+
+math_rendering_enabled = parse_bool(
+    get_secret("MATH_RENDERING_ENABLED", True),
+    default=True,
+)
+math_normalize_delimiters_enabled = parse_bool(
+    get_secret("MATH_NORMALIZE_DELIMITERS_ENABLED", True),
+    default=True,
+)
+math_render_debug_enabled = parse_bool(
+    get_secret("MATH_RENDER_DEBUG_ENABLED", False),
+    default=False,
 )
 message_effects_enabled = parse_bool(
     get_secret("MESSAGE_EFFECTS_ENABLED", True),
@@ -10535,11 +10673,11 @@ def render_answer_typewriter_display(
         return
 
     if bool(frontend_ultra_safe_mode) or not bool(typewriter_enabled):
-        placeholder.markdown(answer)
+        placeholder_math_markdown(placeholder, answer)
         return
 
     if not answer.strip():
-        placeholder.markdown(answer)
+        placeholder_math_markdown(placeholder, answer)
         return
 
     if len(answer) > 3500:
@@ -10562,7 +10700,7 @@ def render_answer_typewriter_display(
         if delay_seconds > 0:
             time.sleep(max(0.0, float(delay_seconds)))
 
-    placeholder.markdown(answer)
+    placeholder_math_markdown(placeholder, answer)
 
 def render_realtime_stream_answer(
     placeholder: Any,
@@ -13880,9 +14018,11 @@ def render_public_page() -> None:
 
     st.divider()
 
+    render_math_test_panel()
+
     for idx, msg in enumerate(st.session_state.chat_messages):
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            render_math_markdown(msg["content"])
             if msg.get("role") == "assistant":
                 msg_meta = msg.get("meta") or {}
                 answer_pdf_download_button(
@@ -13939,7 +14079,7 @@ def render_public_page() -> None:
         # Public chat: memory commands are disabled unless admin is logged in.
         # This prevents random visitors from changing global memory.
         with st.chat_message("user"):
-            st.markdown(user_input)
+            render_math_markdown(user_input)
 
         render_auto_scroll_script(
             target="latest",
@@ -13966,7 +14106,7 @@ def render_public_page() -> None:
             }
 
             with st.chat_message("assistant"):
-                st.markdown(answer)
+                render_math_markdown(answer)
 
             st.session_state.chat_messages.append(
                 {
@@ -14575,13 +14715,13 @@ def render_public_page() -> None:
                     if is_public_connection_error_answer(answer, meta=meta):
                         existing_placeholder.warning(answer)
                     else:
-                        existing_placeholder.markdown(answer)
+                        placeholder_math_markdown(existing_placeholder, answer)
                 else:
                     with st.chat_message("assistant"):
                         if is_public_connection_error_answer(answer, meta=meta):
                             st.warning(answer)
                         else:
-                            st.markdown(answer)
+                            render_math_markdown(answer)
 
                 if not is_public_connection_error_answer(answer, meta=meta):
                     render_answer_ready_sound_script(
@@ -14594,7 +14734,7 @@ def render_public_page() -> None:
 
         if local_reply:
             with st.chat_message("assistant"):
-                st.markdown(answer)
+                render_math_markdown(answer)
                 render_sound_unlock_script()
                 if (
                     bool(st.session_state.get("sound_enabled", False))
