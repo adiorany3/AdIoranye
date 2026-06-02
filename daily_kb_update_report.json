@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-02T01:57:15+00:00",
-  "started_at_wib": "2026-06-02 08:57:15 WIB",
+  "started_at": "2026-06-02T02:11:05+00:00",
+  "started_at_wib": "2026-06-02 09:11:05 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,24 +13,18 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 1,
-  "added_chunks": 1,
-  "skipped_existing": 5,
-  "skipped_short": 2,
+  "added_documents": 0,
+  "added_chunks": 0,
+  "skipped_existing": 7,
+  "skipped_short": 1,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "added",
-      "title": "OpenAI News — Our views on AI policy and political advocacy",
+      "status": "skipped_existing",
+      "title": "Our views on AI policy and political advocacy",
       "url": "https://openai.com/index/our-views-on-ai-policy-and-political-advocacy",
-      "doc_id": 2160,
-      "chunks": 1,
-      "chars": 1163,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 68,
-      "claims": 2
+      "chars": 339
     },
     {
       "source": "Meta AI Blog",
@@ -54,18 +48,18 @@
       "chars": 5168
     },
     {
+      "source": "Vercel Changelog",
+      "status": "skipped_existing",
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 11174
+    },
+    {
       "source": "arXiv cs.CL Recent",
       "status": "skipped_short",
       "title": "Computation and Language",
       "url": "https://arxiv.org/list/cs.CL/recent",
       "chars": 197
-    },
-    {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 5508
     },
     {
       "source": "Streamlit Release Notes",
@@ -75,16 +69,16 @@
       "chars": 9701
     },
     {
-      "source": "arXiv cs.AI Recent",
-      "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
-      "chars": 197
+      "source": "Google DeepMind News",
+      "status": "skipped_existing",
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 5508
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 2,
+  "critical_claims_added": 0,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -99,7 +93,7 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260602_085715_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260602_091104_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": []
@@ -137,7 +131,7 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260602_085720_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260602_091110_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": []
@@ -740,8 +734,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-02T01:57:20+00:00",
-  "finished_at_wib": "2026-06-02 08:57:20 WIB",
-  "elapsed_seconds": 5.45,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-02 08:57:20 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Our views on AI policy and political advocacy\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-02T02:11:09+00:00",
+  "finished_at_wib": "2026-06-02 09:11:09 WIB",
+  "elapsed_seconds": 5.25,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-02 09:11:09 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
