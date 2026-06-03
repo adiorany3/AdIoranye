@@ -8392,6 +8392,14 @@
       "title": "Google News Top Headlines - Vietnam — Senate GOP, frustrated with Trump’s $1.8B payout fund, delays vote on ICE money - The Washington Post",
       "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxOZ3dZT0ppTUFmUUVyYmh1UVVBbm0zc2p3dUpHeEVLd0dtWjFqVEJYX041RWZXeHUtYWpQaEVyajlkWjR4RklCMXZGUjBGVG8tRWZVM2VXVExVT0ZaaElMNVdTaG9hV2xNbmt6VWRiZFZrTW5tRWRiZzJUR0xnRzl6SXpzQlRtNm9vNWFWNEZ3SGdwYkx4RGc?oc=5"
     },
+    "8b64fe73748eacdadc6489c6f1fffa40b9b11b12753472da6804faaa03985afc": {
+      "chunks": 1,
+      "created_at": "2026-06-03T20:27:58+00:00",
+      "doc_id": 2162,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Introducing new capabilities to GPT-Rosalind",
+      "url": "https://openai.com/index/introducing-new-capabilities-to-gpt-rosalind"
+    },
     "8b782c840579c9a587b69cba705bb98cbcccb7057ee7337c3a1d1c167bca5324": {
       "chunks": 1,
       "created_at": "2026-05-22T02:01:22+00:00",
@@ -15396,6 +15404,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-03T15:54:31+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-03T20:28:01+00:00"
     }
   ],
   "version": 1
