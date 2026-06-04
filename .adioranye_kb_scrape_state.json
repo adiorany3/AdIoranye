@@ -248,6 +248,14 @@
       "title": "Google News Top Headlines - Pakistan — Aga Khan reaffirms commitment to supporting development in week-long Pakistan visit - The Express Tribune",
       "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxQTS1uYUQ4VEpiMVktcmQ3ZXI2WGFwUWt3Q2xMNm9qMHdRbWk5ZXZMcGQtV0Q0RDJZQXl0QkxfQnN6eFZVcnNjNkpZOHdrYnZwMlVGWDhvRnJIRlB0dlRqLUlJNjRxNnljV1d6Y2tmTDNRTW0xalYtbjR4d3hlMG5FNGVTLUFMNGVwV3NPU2xRWjlqZlZITnhhTWRFUkp2dDdXc2fSAaoBQVVfeXFMTUxGOFN0MjZkbWZ6NUJzdS11cDIxYlV4bWxBbUROcDFyVGt5SFNNZUhUcUNMV3p5RVZSVXA1dzZwREhnZ3FZLWxVUFp0YlR5Nzd6TGlTM1h1R0J3c2NQNVhxRF8tY2QzaEZEYTUzaUJQZ3RJMUJPS1ZBRDJHS1BBT0dqOXhYRWhaQ0x2QnlVU0dmQkQyb3d1ODVyOTRHY280dU9ILWdqallvOHc?oc=5"
     },
+    "036ec93237a55e9eaf867578880070fc6a5362374d43cffc952c35a9d2a6bb86": {
+      "chunks": 1,
+      "created_at": "2026-06-04T09:00:18+00:00",
+      "doc_id": 2163,
+      "source": "OpenAI News",
+      "title": "OpenAI News — How Endava is redesigning software delivery around AI agents",
+      "url": "https://openai.com/index/endava-frontiers"
+    },
     "03743d3aab6c86f7d0c6cf2537194cdac85b5c58ea8362231e7e26320c368975": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:21+00:00",
@@ -15418,6 +15426,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-04T01:48:17+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-04T09:00:22+00:00"
     }
   ],
   "version": 1
