@@ -74,23 +74,22 @@
     "url": "https://huggingface.co/blog"
   },
   {
-    "collection": "AI Research Updates",
+    "collection": "Adioranye Tech Stack",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "google_deepmind",
+    "id": "vercel_changelog",
     "max_items": 1,
-    "name": "Google DeepMind News",
-    "source_type": "official",
+    "name": "Vercel Changelog",
+    "source_type": "official-docs",
     "tags": [
-      "deepmind",
-      "ai",
-      "research",
-      "official"
+      "vercel",
+      "deployment",
+      "changelog"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://deepmind.google/blog/"
+    "url": "https://vercel.com/changelog"
   },
   {
     "collection": "AI Research Papers",
