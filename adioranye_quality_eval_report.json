@@ -1,25 +1,25 @@
 {
-  "created_at": "2026-06-02T01:56:37+00:00",
-  "created_at_wib": "2026-06-02 08:56:37 WIB",
+  "created_at": "2026-06-07T20:48:33+00:00",
+  "created_at_wib": "2026-06-08 03:48:33 WIB",
   "db": {
     "exists": true,
     "ok": true,
     "path": ".adioranye_power.db",
     "quick_check": "ok",
-    "size_bytes": 29773824,
+    "size_bytes": 29814784,
     "tables": {
       "answer_quality_reports": 0,
       "answer_templates": 0,
       "benchmarks": 0,
-      "chunks": 4456,
-      "chunks_fts": 4456,
+      "chunks": 4460,
+      "chunks_fts": 4460,
       "chunks_fts_config": 1,
-      "chunks_fts_data": 668,
-      "chunks_fts_docsize": 4456,
-      "chunks_fts_idx": 629,
+      "chunks_fts_data": 672,
+      "chunks_fts_docsize": 4460,
+      "chunks_fts_idx": 633,
       "circuit_breakers": 0,
-      "current_claims": 3849,
-      "documents": 2159,
+      "current_claims": 3857,
+      "documents": 2163,
       "exported_snapshots": 0,
       "interactions": 0,
       "issue_events": 0,
@@ -40,22 +40,20 @@
     }
   },
   "kb_report_summary": {
-    "added_chunks": null,
-    "added_documents": null,
-    "errors": null,
-    "finished_at": null,
-    "sources_selected": null
+    "added_chunks": 0,
+    "added_documents": 0,
+    "errors": 0,
+    "finished_at": "2026-06-07T18:19:58+00:00",
+    "sources_selected": 8
   },
   "recommendations": [],
-  "score": 97,
+  "score": 100,
   "source_health_summary": {
     "cooldown_sources": 0,
-    "sources_tracked": 0,
+    "sources_tracked": 9,
     "sources_with_repeated_failures": 0
   },
   "status": "good",
   "test_set_items": 10,
-  "warnings": [
-    "daily_kb_update_report.json belum tersedia atau belum punya finished_at."
-  ]
+  "warnings": []
 }

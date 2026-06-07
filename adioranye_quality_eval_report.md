@@ -1,11 +1,11 @@
 # AdIoranye Quality Evaluation Report
 
-Generated: 2026-06-02 08:56:37 WIB
-Score: **97 / 100**
+Generated: 2026-06-08 03:48:33 WIB
+Score: **100 / 100**
 Status: **good**
 
 ## Warnings
-- daily_kb_update_report.json belum tersedia atau belum punya finished_at.
+- Tidak ada warning utama.
 
 ## Recommendations
 - Konfigurasi saat ini sudah memadai untuk baseline.
@@ -13,18 +13,18 @@ Status: **good**
 ## KB Report Summary
 ```json
 {
-  "finished_at": null,
-  "added_documents": null,
-  "added_chunks": null,
-  "errors": null,
-  "sources_selected": null
+  "finished_at": "2026-06-07T18:19:58+00:00",
+  "added_documents": 0,
+  "added_chunks": 0,
+  "errors": 0,
+  "sources_selected": 8
 }
 ```
 
 ## Source Health Summary
 ```json
 {
-  "sources_tracked": 0,
+  "sources_tracked": 9,
   "cooldown_sources": 0,
   "sources_with_repeated_failures": 0
 }
@@ -36,20 +36,20 @@ Status: **good**
   "exists": true,
   "ok": true,
   "path": ".adioranye_power.db",
-  "size_bytes": 29773824,
+  "size_bytes": 29814784,
   "tables": {
     "answer_quality_reports": 0,
     "answer_templates": 0,
     "benchmarks": 0,
-    "chunks": 4456,
-    "chunks_fts": 4456,
+    "chunks": 4460,
+    "chunks_fts": 4460,
     "chunks_fts_config": 1,
-    "chunks_fts_data": 668,
-    "chunks_fts_docsize": 4456,
-    "chunks_fts_idx": 629,
+    "chunks_fts_data": 672,
+    "chunks_fts_docsize": 4460,
+    "chunks_fts_idx": 633,
     "circuit_breakers": 0,
-    "current_claims": 3849,
-    "documents": 2159,
+    "current_claims": 3857,
+    "documents": 2163,
     "exported_snapshots": 0,
     "interactions": 0,
     "issue_events": 0,
