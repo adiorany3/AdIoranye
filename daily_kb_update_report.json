@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-08T14:53:17+00:00",
-  "started_at_wib": "2026-06-08 21:53:17 WIB",
+  "started_at": "2026-06-08T19:35:45+00:00",
+  "started_at_wib": "2026-06-09 02:35:45 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,32 +13,31 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 7,
-  "skipped_short": 1,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 5,
+  "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "skipped_existing",
-      "title": "How Endava is redesigning software delivery around AI agents",
-      "url": "https://openai.com/index/endava-frontiers",
-      "chars": 303
+      "status": "added",
+      "title": "OpenAI News — Introducing the OpenAI Economic Research Exchange",
+      "url": "https://openai.com/index/economic-research-exchange",
+      "doc_id": 2164,
+      "chunks": 1,
+      "chars": 1068,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 3
     },
     {
       "source": "Hugging Face Blog",
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4987
-    },
-    {
-      "source": "Google AI",
-      "status": "skipped_existing",
-      "title": "Official Google AI news and updates | Google Blog",
-      "url": "https://blog.google/innovation-and-ai/technology/ai/",
-      "chars": 2178
+      "chars": 4800
     },
     {
       "source": "Meta AI Blog",
@@ -48,6 +47,20 @@
       "chars": 1022
     },
     {
+      "source": "Google AI",
+      "status": "skipped_existing",
+      "title": "Official Google AI news and updates | Google Blog",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/",
+      "chars": 2178
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 197
+    },
+    {
       "source": "Vercel Changelog",
       "status": "skipped_existing",
       "title": "Changelog - Vercel",
@@ -55,11 +68,11 @@
       "chars": 14015
     },
     {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 5054
+      "source": "arXiv cs.CL Recent",
+      "status": "skipped_short",
+      "title": "Computation and Language",
+      "url": "https://arxiv.org/list/cs.CL/recent",
+      "chars": 197
     },
     {
       "source": "Streamlit Release Notes",
@@ -67,18 +80,11 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 9701
-    },
-    {
-      "source": "arXiv cs.CL Recent",
-      "status": "skipped_short",
-      "title": "Computation and Language",
-      "url": "https://arxiv.org/list/cs.CL/recent",
-      "chars": 197
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 3,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260608_215316_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260609_023545_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260608_083420_pre-update.db"
+          ".db_backups/adioranye_power.db_20260608_165542_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260608_215323_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260609_023549_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260608_083425_post-update.db"
+          ".db_backups/adioranye_power.db_20260608_165551_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-08T14:53:23+00:00",
-  "finished_at_wib": "2026-06-08 21:53:23 WIB",
-  "elapsed_seconds": 6.25,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-08 21:53:23 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-08T19:35:49+00:00",
+  "finished_at_wib": "2026-06-09 02:35:49 WIB",
+  "elapsed_seconds": 4.65,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-09 02:35:49 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Introducing the OpenAI Economic Research Exchange\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
