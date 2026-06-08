@@ -1,71 +1,71 @@
 {
-  "created_at": "2026-06-07T18:19:52+00:00",
-  "created_at_wib": "2026-06-08 01:19:52 WIB",
+  "created_at": "2026-06-08T01:34:19+00:00",
+  "created_at_wib": "2026-06-08 08:34:19 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
   "profile": "auto",
   "quota": {
     "cold": 1,
-    "hot": 4,
-    "warm": 3
+    "hot": 5,
+    "warm": 2
   },
   "selected": [
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.124,
+      "score": 87.738,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.065,
+      "score": 52.679,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 51.341,
+      "score": 51.955,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 51.301,
+      "score": 51.915,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
-      "name": "arXiv cs.CL Recent",
-      "quality": 55.0,
-      "score": 42.537,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
-    },
-    {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.239,
+      "score": 42.853,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     },
     {
-      "name": "arXiv cs.AI Recent",
+      "name": "arXiv cs.CL Recent",
       "quality": 55.0,
-      "score": 41.606,
+      "score": 42.756,
       "tier": "warm",
-      "url": "https://arxiv.org/list/cs.AI/recent"
+      "url": "https://arxiv.org/list/cs.CL/recent"
     },
     {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 31.461,
+      "score": 32.075,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
+    },
+    {
+      "name": "Vercel Changelog",
+      "quality": 55.0,
+      "score": 42.299,
+      "tier": "warm",
+      "url": "https://vercel.com/changelog"
     }
   ],
   "selected_sources": 8,
