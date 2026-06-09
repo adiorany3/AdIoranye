@@ -20,22 +20,22 @@
     "url": "https://openai.com/news/rss.xml"
   },
   {
-    "collection": "Open Source AI",
-    "confidence": "medium",
+    "collection": "AI Official Updates",
+    "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "huggingface_blog",
+    "id": "google_ai",
     "max_items": 1,
-    "name": "Hugging Face Blog",
-    "source_type": "community-platform",
+    "name": "Google AI",
+    "source_type": "official",
     "tags": [
-      "huggingface",
-      "open-source",
-      "ai"
+      "google",
+      "ai",
+      "official"
     ],
     "type": "html",
     "update_profile": "hot",
-    "url": "https://huggingface.co/blog"
+    "url": "https://blog.google/innovation-and-ai/technology/ai/"
   },
   {
     "collection": "AI Official Updates",
@@ -56,41 +56,41 @@
     "url": "https://ai.meta.com/blog/"
   },
   {
-    "collection": "AI Official Updates",
-    "confidence": "high",
+    "collection": "Open Source AI",
+    "confidence": "medium",
     "enabled": true,
     "freshness": "current",
-    "id": "google_ai",
+    "id": "huggingface_blog",
     "max_items": 1,
-    "name": "Google AI",
-    "source_type": "official",
+    "name": "Hugging Face Blog",
+    "source_type": "community-platform",
     "tags": [
-      "google",
-      "ai",
-      "official"
+      "huggingface",
+      "open-source",
+      "ai"
     ],
     "type": "html",
     "update_profile": "hot",
-    "url": "https://blog.google/innovation-and-ai/technology/ai/"
+    "url": "https://huggingface.co/blog"
   },
   {
-    "collection": "AI Research Updates",
-    "confidence": "high",
+    "collection": "NLP Research Papers",
+    "confidence": "medium",
     "enabled": true,
     "freshness": "current",
-    "id": "google_deepmind",
+    "id": "arxiv_cs_cl",
     "max_items": 1,
-    "name": "Google DeepMind News",
-    "source_type": "official",
+    "name": "arXiv cs.CL Recent",
+    "source_type": "research",
     "tags": [
-      "deepmind",
-      "ai",
+      "arxiv",
       "research",
-      "official"
+      "nlp",
+      "llm"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://deepmind.google/blog/"
+    "url": "https://arxiv.org/list/cs.CL/recent"
   },
   {
     "collection": "Adioranye Tech Stack",
@@ -111,24 +111,6 @@
     "url": "https://vercel.com/changelog"
   },
   {
-    "collection": "Adioranye Tech Stack",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "streamlit_release_notes",
-    "max_items": 1,
-    "name": "Streamlit Release Notes",
-    "source_type": "official-docs",
-    "tags": [
-      "streamlit",
-      "release-notes",
-      "python"
-    ],
-    "type": "html",
-    "update_profile": "cold",
-    "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
-  },
-  {
     "collection": "AI Research Papers",
     "confidence": "medium",
     "enabled": true,
@@ -146,5 +128,23 @@
     "type": "html",
     "update_profile": "warm",
     "url": "https://arxiv.org/list/cs.AI/recent"
+  },
+  {
+    "collection": "Adioranye Tech Stack",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "streamlit_release_notes",
+    "max_items": 1,
+    "name": "Streamlit Release Notes",
+    "source_type": "official-docs",
+    "tags": [
+      "streamlit",
+      "release-notes",
+      "python"
+    ],
+    "type": "html",
+    "update_profile": "cold",
+    "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
   }
 ]
