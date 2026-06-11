@@ -5112,6 +5112,14 @@
       "title": "Ars Technica - Technology News — JWST maps the weather on a hot gas giant 700 light-years away",
       "url": "https://arstechnica.com/science/2026/05/jwst-maps-the-weather-on-a-hot-gas-giant-700-light-years-away/"
     },
+    "535045d164386fb070a939da9f9ffade110fc578b3cf105b0e24e02b07df4e47": {
+      "chunks": 1,
+      "created_at": "2026-06-11T14:54:54+00:00",
+      "doc_id": 2166,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Supporting Europe’s work in ensuring a trustworthy AI ecosystem",
+      "url": "https://openai.com/index/supporting-eu-trustworthy-ai-ecosystem"
+    },
     "5366833aab12a7a72373c69724e188f50bccbed0caed26ad922ab0be3f0fd71d": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:10+00:00",
@@ -15171,13 +15179,6 @@
   },
   "runs": [
     {
-      "added_chunks": 21,
-      "added_documents": 16,
-      "dry_run": false,
-      "errors": 11,
-      "finished_at": "2026-05-22T15:28:29+00:00"
-    },
-    {
       "added_chunks": 36,
       "added_documents": 18,
       "dry_run": false,
@@ -15589,6 +15590,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-11T09:21:36+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-11T14:54:57+00:00"
     }
   ],
   "version": 1

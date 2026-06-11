@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-11T09:21:31+00:00",
-  "started_at_wib": "2026-06-11 16:21:31 WIB",
+  "started_at": "2026-06-11T14:54:53+00:00",
+  "started_at_wib": "2026-06-11 21:54:53 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,25 +13,31 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 6,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 5,
   "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "skipped_existing",
-      "title": "How an astrophysicist uses Codex to help simulate black holes",
-      "url": "https://openai.com/index/using-codex-to-simulate-black-holes",
-      "chars": 325
+      "status": "added",
+      "title": "OpenAI News — Supporting Europe’s work in ensuring a trustworthy AI ecosystem",
+      "url": "https://openai.com/index/supporting-eu-trustworthy-ai-ecosystem",
+      "doc_id": 2166,
+      "chunks": 1,
+      "chars": 1088,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 2
     },
     {
       "source": "Hugging Face Blog",
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4741
+      "chars": 4715
     },
     {
       "source": "Meta AI Blog",
@@ -48,11 +54,11 @@
       "chars": 2147
     },
     {
-      "source": "Vercel Changelog",
+      "source": "Google DeepMind News",
       "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 15227
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 4971
     },
     {
       "source": "arXiv cs.CL Recent",
@@ -78,7 +84,7 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 2,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260611_162131_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260611_215452_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260611_024436_pre-update.db"
+          ".db_backups/adioranye_power.db_20260611_083936_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260611_162136_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260611_215457_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260611_024441_post-update.db"
+          ".db_backups/adioranye_power.db_20260611_083941_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-11T09:21:36+00:00",
-  "finished_at_wib": "2026-06-11 16:21:36 WIB",
-  "elapsed_seconds": 4.71,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-11 16:21:36 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-11T14:54:57+00:00",
+  "finished_at_wib": "2026-06-11 21:54:57 WIB",
+  "elapsed_seconds": 4.95,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-11 21:54:57 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Supporting Europe’s work in ensuring a trustworthy AI ecosystem\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
