@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-10T19:44:36+00:00",
-  "started_at_wib": "2026-06-11 02:44:36 WIB",
+  "started_at": "2026-06-11T01:39:36+00:00",
+  "started_at_wib": "2026-06-11 08:39:36 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,25 +13,31 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
+  "added_documents": 1,
+  "added_chunks": 1,
   "skipped_existing": 5,
-  "skipped_short": 3,
+  "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "skipped_short",
-      "title": "From data to decisions: how LSEG is scaling trusted AI",
-      "url": "https://openai.com/index/lseg",
-      "chars": 271
+      "status": "added",
+      "title": "OpenAI News — How an astrophysicist uses Codex to help simulate black holes",
+      "url": "https://openai.com/index/using-codex-to-simulate-black-holes",
+      "doc_id": 2165,
+      "chunks": 1,
+      "chars": 1137,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 2
     },
     {
       "source": "Hugging Face Blog",
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4873
+      "chars": 4736
     },
     {
       "source": "Meta AI Blog",
@@ -55,30 +61,30 @@
       "chars": 197
     },
     {
-      "source": "arXiv cs.AI Recent",
-      "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
-      "chars": 197
-    },
-    {
-      "source": "Vercel Changelog",
+      "source": "Google DeepMind News",
       "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 15227
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 5471
     },
     {
       "source": "Streamlit Release Notes",
       "status": "skipped_existing",
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
-      "chars": 9701
+      "chars": 4242
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 197
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 2,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260611_024436_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260611_083936_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260610_160103_pre-update.db"
+          ".db_backups/adioranye_power.db_20260610_212925_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260611_024441_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260611_083941_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260610_160109_post-update.db"
+          ".db_backups/adioranye_power.db_20260610_212930_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-10T19:44:41+00:00",
-  "finished_at_wib": "2026-06-11 02:44:41 WIB",
-  "elapsed_seconds": 4.86,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-11 02:44:41 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-11T01:39:40+00:00",
+  "finished_at_wib": "2026-06-11 08:39:40 WIB",
+  "elapsed_seconds": 4.87,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-11 08:39:40 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — How an astrophysicist uses Codex to help simulate black holes\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }

@@ -240,6 +240,14 @@
       "title": "Google News Indonesia - Teknologi & AI — Princeton Digital Siapkan Dana Rp7,79 Triliun, Kembangkan Pusat Data di Indonesia - Bisnis Tekno",
       "url": "https://news.google.com/rss/articles/CBMizwFBVV95cUxNSXVQZ3I4cW12YWVKZG13OTV0UmZhU09BYUUyQTkyUjRxMHBwN2NtNlJMUDBsT0lhcXVTSjllbWNYdjZRTTduWDIzT1pxRU44V2cyalNnT015eXkwRWx2N20yMWpWX0tnUW9LOUhOZm90b2hLX3lqT2FiNXNNbEpETjdvQXhJT3FJM1dIQU4xbENHVElWT0Y2QnQ3d3lFY2hwck9HQmxWWmN3NmRJanpQWm9Zcmt0d0xiRWhzVjVibnRnVGFTZllQbGhsT0Y1UzA?oc=5"
     },
+    "033fc625c8060100e7a3a29de8f1141ec118ed85fdff6997ab82d4c8e3b83649": {
+      "chunks": 1,
+      "created_at": "2026-06-11T01:39:37+00:00",
+      "doc_id": 2165,
+      "source": "OpenAI News",
+      "title": "OpenAI News — How an astrophysicist uses Codex to help simulate black holes",
+      "url": "https://openai.com/index/using-codex-to-simulate-black-holes"
+    },
     "03437c2c9fa4c79d4038de739470c1c9e5564616b58c4a483175505e87201092": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:54+00:00",
@@ -15163,13 +15171,6 @@
   },
   "runs": [
     {
-      "added_chunks": 3,
-      "added_documents": 3,
-      "dry_run": false,
-      "errors": 12,
-      "finished_at": "2026-05-22T06:07:53+00:00"
-    },
-    {
       "added_chunks": 39,
       "added_documents": 10,
       "dry_run": false,
@@ -15581,6 +15582,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-10T19:44:41+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-11T01:39:40+00:00"
     }
   ],
   "version": 1
