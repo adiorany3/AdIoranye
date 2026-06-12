@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-06-12T01:39:44+00:00",
-  "created_at_wib": "2026-06-12 08:39:44 WIB",
+  "created_at": "2026-06-12T09:12:03+00:00",
+  "created_at_wib": "2026-06-12 16:12:03 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,56 +14,56 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.31,
+      "score": 87.513,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.084,
+      "score": 52.287,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 51.901,
+      "score": 52.104,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 51.812,
+      "score": 52.015,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
-      "name": "arXiv cs.CL Recent",
-      "quality": 55.0,
-      "score": 42.954,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
-    },
-    {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.678,
+      "score": 42.881,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     },
     {
+      "name": "Vercel Changelog",
+      "quality": 55.0,
+      "score": 42.827,
+      "tier": "warm",
+      "url": "https://vercel.com/changelog"
+    },
+    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.545,
+      "score": 32.748,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
       "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 42.565,
+      "score": 42.768,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.AI/recent"
     }
