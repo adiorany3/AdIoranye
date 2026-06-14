@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-06-14T00:20:29+00:00",
-  "created_at_wib": "2026-06-14 07:20:29 WIB",
+  "created_at": "2026-06-14T08:49:42+00:00",
+  "created_at_wib": "2026-06-14 15:49:42 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,56 +14,56 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.563,
+      "score": 87.923,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.695,
+      "score": 53.055,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.621,
+      "score": 52.981,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.619,
+      "score": 52.979,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
-      "name": "Vercel Changelog",
-      "quality": 55.0,
-      "score": 43.0,
-      "tier": "warm",
-      "url": "https://vercel.com/changelog"
-    },
-    {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.651,
+      "score": 43.011,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     },
     {
+      "name": "arXiv cs.CL Recent",
+      "quality": 55.0,
+      "score": 42.939,
+      "tier": "warm",
+      "url": "https://arxiv.org/list/cs.CL/recent"
+    },
+    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 31.996,
+      "score": 32.356,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
       "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 42.56,
+      "score": 42.92,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.AI/recent"
     }
