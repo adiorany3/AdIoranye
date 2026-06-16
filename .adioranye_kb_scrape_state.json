@@ -5104,6 +5104,14 @@
       "title": "ANTARA News - Bisnis — Jumat pagi ini harga tiga jenama emas di Pegadaian serempak naik",
       "url": "https://www.antaranews.com/berita/5577569/jumat-pagi-ini-harga-tiga-jenama-emas-di-pegadaian-serempak-naik"
     },
+    "527543ba52ebcf148deb2aacd0fd0ef1747da440d434729a9b9dacec3acd924c": {
+      "chunks": 1,
+      "created_at": "2026-06-16T20:18:59+00:00",
+      "doc_id": 2167,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Predicting model behavior before release by simulating deployment",
+      "url": "https://openai.com/index/deployment-simulation"
+    },
     "528545e13f75578c391259de1144ddbb9fa38411b6192872d7cdceb472e291cd": {
       "chunks": 1,
       "created_at": "2026-05-22T02:40:39+00:00",
@@ -15179,13 +15187,6 @@
   },
   "runs": [
     {
-      "added_chunks": 1,
-      "added_documents": 1,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-06-02T01:57:20+00:00"
-    },
-    {
       "added_chunks": 0,
       "added_documents": 0,
       "dry_run": false,
@@ -15597,6 +15598,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-16T16:03:07+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-16T20:19:02+00:00"
     }
   ],
   "version": 1
