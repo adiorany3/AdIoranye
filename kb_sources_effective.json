@@ -92,42 +92,23 @@
     "url": "https://vercel.com/changelog"
   },
   {
-    "collection": "AI Research Updates",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "google_deepmind",
-    "max_items": 1,
-    "name": "Google DeepMind News",
-    "source_type": "official",
-    "tags": [
-      "deepmind",
-      "ai",
-      "research",
-      "official"
-    ],
-    "type": "html",
-    "update_profile": "warm",
-    "url": "https://deepmind.google/blog/"
-  },
-  {
-    "collection": "NLP Research Papers",
+    "collection": "AI Research Papers",
     "confidence": "medium",
     "enabled": true,
     "freshness": "current",
-    "id": "arxiv_cs_cl",
+    "id": "arxiv_cs_ai",
     "max_items": 1,
-    "name": "arXiv cs.CL Recent",
+    "name": "arXiv cs.AI Recent",
     "source_type": "research",
     "tags": [
       "arxiv",
       "research",
-      "nlp",
-      "llm"
+      "ai",
+      "papers"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.CL/recent"
+    "url": "https://arxiv.org/list/cs.AI/recent"
   },
   {
     "collection": "Adioranye Tech Stack",
@@ -146,5 +127,24 @@
     "type": "html",
     "update_profile": "cold",
     "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
+  },
+  {
+    "collection": "AI Research Updates",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "google_deepmind",
+    "max_items": 1,
+    "name": "Google DeepMind News",
+    "source_type": "official",
+    "tags": [
+      "deepmind",
+      "ai",
+      "research",
+      "official"
+    ],
+    "type": "html",
+    "update_profile": "warm",
+    "url": "https://deepmind.google/blog/"
   }
 ]

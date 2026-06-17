@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-16T20:18:58+00:00",
-  "started_at_wib": "2026-06-17 03:18:58 WIB",
+  "started_at": "2026-06-17T01:41:19+00:00",
+  "started_at_wib": "2026-06-17 08:41:19 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,31 +13,25 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 1,
-  "added_chunks": 1,
-  "skipped_existing": 6,
+  "added_documents": 0,
+  "added_chunks": 0,
+  "skipped_existing": 7,
   "skipped_short": 1,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "added",
-      "title": "OpenAI News — Predicting model behavior before release by simulating deployment",
+      "status": "skipped_existing",
+      "title": "Predicting model behavior before release by simulating deployment",
       "url": "https://openai.com/index/deployment-simulation",
-      "doc_id": 2167,
-      "chunks": 1,
-      "chars": 1075,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 68,
-      "claims": 2
+      "chars": 303
     },
     {
       "source": "Hugging Face Blog",
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4927
+      "chars": 4660
     },
     {
       "source": "Meta AI Blog",
@@ -61,17 +55,10 @@
       "chars": 10671
     },
     {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4971
-    },
-    {
-      "source": "arXiv cs.CL Recent",
+      "source": "arXiv cs.AI Recent",
       "status": "skipped_short",
-      "title": "Computation and Language",
-      "url": "https://arxiv.org/list/cs.CL/recent",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
       "chars": 197
     },
     {
@@ -80,11 +67,18 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 4242
+    },
+    {
+      "source": "Google DeepMind News",
+      "status": "skipped_existing",
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 4951
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 2,
+  "critical_claims_added": 0,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -99,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260617_031858_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260617_084119_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260616_172053_pre-update.db"
+          ".db_backups/adioranye_power.db_20260616_230302_pre-update.db"
         ]
       }
     },
@@ -139,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260617_031902_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260617_084124_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260616_172058_post-update.db"
+          ".db_backups/adioranye_power.db_20260616_230307_post-update.db"
         ]
       }
     }
@@ -744,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-16T20:19:02+00:00",
-  "finished_at_wib": "2026-06-17 03:19:02 WIB",
-  "elapsed_seconds": 4.84,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-17 03:19:02 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Predicting model behavior before release by simulating deployment\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-17T01:41:24+00:00",
+  "finished_at_wib": "2026-06-17 08:41:24 WIB",
+  "elapsed_seconds": 5.02,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-17 08:41:24 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
