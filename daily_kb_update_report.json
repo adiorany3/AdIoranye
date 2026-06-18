@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-18T09:45:20+00:00",
-  "started_at_wib": "2026-06-18 16:45:20 WIB",
+  "started_at": "2026-06-18T14:22:08+00:00",
+  "started_at_wib": "2026-06-18 21:22:08 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -15,8 +15,8 @@
   "stopped_by_time_budget": false,
   "added_documents": 0,
   "added_chunks": 0,
-  "skipped_existing": 5,
-  "skipped_short": 3,
+  "skipped_existing": 6,
+  "skipped_short": 2,
   "errors": 0,
   "items": [
     {
@@ -38,7 +38,7 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4573
+      "chars": 4610
     },
     {
       "source": "Meta AI Blog",
@@ -48,11 +48,11 @@
       "chars": 1022
     },
     {
-      "source": "arXiv cs.AI Recent",
-      "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
-      "chars": 197
+      "source": "Google DeepMind News",
+      "status": "skipped_existing",
+      "title": "News — Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 4891
     },
     {
       "source": "Vercel Changelog",
@@ -93,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260618_164520_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260618_212208_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260618_022952_pre-update.db"
+          ".db_backups/adioranye_power.db_20260618_084201_pre-update.db"
         ]
       }
     },
@@ -133,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260618_164524_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260618_212213_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260618_022958_post-update.db"
+          ".db_backups/adioranye_power.db_20260618_084213_post-update.db"
         ]
       }
     }
@@ -738,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-18T09:45:24+00:00",
-  "finished_at_wib": "2026-06-18 16:45:24 WIB",
-  "elapsed_seconds": 4.28,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-18 16:45:24 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-18T14:22:13+00:00",
+  "finished_at_wib": "2026-06-18 21:22:13 WIB",
+  "elapsed_seconds": 5.52,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-18 21:22:13 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
