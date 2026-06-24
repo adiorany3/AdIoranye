@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-24T13:28:02+00:00",
-  "started_at_wib": "2026-06-24 20:28:02 WIB",
+  "started_at": "2026-06-24T19:00:45+00:00",
+  "started_at_wib": "2026-06-25 02:00:45 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -15,8 +15,8 @@
   "stopped_by_time_budget": false,
   "added_documents": 0,
   "added_chunks": 0,
-  "skipped_existing": 6,
-  "skipped_short": 2,
+  "skipped_existing": 5,
+  "skipped_short": 3,
   "errors": 0,
   "items": [
     {
@@ -25,13 +25,6 @@
       "title": "OpenAI and Broadcom unveil LLM-optimized inference chip",
       "url": "https://openai.com/index/openai-broadcom-jalapeno-inference-chip",
       "chars": 298
-    },
-    {
-      "source": "Hugging Face Blog",
-      "status": "skipped_existing",
-      "title": "Hugging Face – Blog",
-      "url": "https://huggingface.co/blog",
-      "chars": 4910
     },
     {
       "source": "Google AI",
@@ -48,6 +41,20 @@
       "chars": 1022
     },
     {
+      "source": "Hugging Face Blog",
+      "status": "skipped_existing",
+      "title": "Hugging Face – Blog",
+      "url": "https://huggingface.co/blog",
+      "chars": 4911
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 197
+    },
+    {
       "source": "arXiv cs.CL Recent",
       "status": "skipped_short",
       "title": "Computation and Language",
@@ -55,11 +62,11 @@
       "chars": 197
     },
     {
-      "source": "Google DeepMind News",
+      "source": "Vercel Changelog",
       "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4899
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 1884
     },
     {
       "source": "Streamlit Release Notes",
@@ -67,13 +74,6 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 4242
-    },
-    {
-      "source": "Vercel Changelog",
-      "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 1815
     }
   ],
   "watchlist_path": "critical_watchlist.json",
@@ -93,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260624_202802_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260625_020045_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260624_071137_pre-update.db"
+          ".db_backups/adioranye_power.db_20260624_153325_pre-update.db"
         ]
       }
     },
@@ -133,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260624_202807_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260625_020052_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260624_071143_post-update.db"
+          ".db_backups/adioranye_power.db_20260624_153330_post-update.db"
         ]
       }
     }
@@ -738,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-24T13:28:07+00:00",
-  "finished_at_wib": "2026-06-24 20:28:07 WIB",
-  "elapsed_seconds": 5.55,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-24 20:28:07 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-24T19:00:51+00:00",
+  "finished_at_wib": "2026-06-25 02:00:51 WIB",
+  "elapsed_seconds": 6.49,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-25 02:00:51 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
