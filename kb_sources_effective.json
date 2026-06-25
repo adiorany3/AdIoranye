@@ -20,6 +20,24 @@
     "url": "https://openai.com/news/rss.xml"
   },
   {
+    "collection": "Open Source AI",
+    "confidence": "medium",
+    "enabled": true,
+    "freshness": "current",
+    "id": "huggingface_blog",
+    "max_items": 1,
+    "name": "Hugging Face Blog",
+    "source_type": "community-platform",
+    "tags": [
+      "huggingface",
+      "open-source",
+      "ai"
+    ],
+    "type": "html",
+    "update_profile": "hot",
+    "url": "https://huggingface.co/blog"
+  },
+  {
     "collection": "AI Official Updates",
     "confidence": "high",
     "enabled": true,
@@ -56,22 +74,22 @@
     "url": "https://ai.meta.com/blog/"
   },
   {
-    "collection": "Open Source AI",
-    "confidence": "medium",
+    "collection": "Adioranye Tech Stack",
+    "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "huggingface_blog",
+    "id": "vercel_changelog",
     "max_items": 1,
-    "name": "Hugging Face Blog",
-    "source_type": "community-platform",
+    "name": "Vercel Changelog",
+    "source_type": "official-docs",
     "tags": [
-      "huggingface",
-      "open-source",
-      "ai"
+      "vercel",
+      "deployment",
+      "changelog"
     ],
     "type": "html",
-    "update_profile": "hot",
-    "url": "https://huggingface.co/blog"
+    "update_profile": "warm",
+    "url": "https://vercel.com/changelog"
   },
   {
     "collection": "AI Research Updates",
@@ -128,24 +146,5 @@
     "type": "html",
     "update_profile": "cold",
     "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
-  },
-  {
-    "collection": "NLP Research Papers",
-    "confidence": "medium",
-    "enabled": true,
-    "freshness": "current",
-    "id": "arxiv_cs_cl",
-    "max_items": 1,
-    "name": "arXiv cs.CL Recent",
-    "source_type": "research",
-    "tags": [
-      "arxiv",
-      "research",
-      "nlp",
-      "llm"
-    ],
-    "type": "html",
-    "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.CL/recent"
   }
 ]
