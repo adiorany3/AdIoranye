@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-25T19:16:29+00:00",
-  "started_at_wib": "2026-06-26 02:16:29 WIB",
+  "started_at": "2026-06-26T01:29:43+00:00",
+  "started_at_wib": "2026-06-26 08:29:43 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -31,7 +31,7 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4808
+      "chars": 4566
     },
     {
       "source": "Google AI",
@@ -48,13 +48,6 @@
       "chars": 1022
     },
     {
-      "source": "Vercel Changelog",
-      "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 2056
-    },
-    {
       "source": "Google DeepMind News",
       "status": "skipped_existing",
       "title": "News â Google DeepMind",
@@ -62,10 +55,10 @@
       "chars": 4880
     },
     {
-      "source": "arXiv cs.AI Recent",
+      "source": "arXiv cs.CL Recent",
       "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
+      "title": "Computation and Language",
+      "url": "https://arxiv.org/list/cs.CL/recent",
       "chars": 197
     },
     {
@@ -74,6 +67,13 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 4242
+    },
+    {
+      "source": "Vercel Changelog",
+      "status": "skipped_existing",
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 2073
     }
   ],
   "watchlist_path": "critical_watchlist.json",
@@ -93,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260626_021628_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260626_082943_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260625_153118_pre-update.db"
+          ".db_backups/adioranye_power.db_20260625_202625_pre-update.db"
         ]
       }
     },
@@ -133,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260626_021634_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260626_082948_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260625_153123_post-update.db"
+          ".db_backups/adioranye_power.db_20260625_202630_post-update.db"
         ]
       }
     }
@@ -738,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-25T19:16:33+00:00",
-  "finished_at_wib": "2026-06-26 02:16:33 WIB",
-  "elapsed_seconds": 5.29,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-26 02:16:33 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-26T01:29:48+00:00",
+  "finished_at_wib": "2026-06-26 08:29:48 WIB",
+  "elapsed_seconds": 5.28,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-26 08:29:48 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
