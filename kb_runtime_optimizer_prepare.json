@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-06-26T01:29:42+00:00",
-  "created_at_wib": "2026-06-26 08:29:42 WIB",
+  "created_at": "2026-06-26T08:35:25+00:00",
+  "created_at_wib": "2026-06-26 15:35:25 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,56 +14,56 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.654,
+      "score": 87.764,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.431,
+      "score": 52.541,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.267,
+      "score": 52.377,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.005,
+      "score": 52.115,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
+      "name": "arXiv cs.AI Recent",
+      "quality": 55.0,
+      "score": 43.068,
+      "tier": "warm",
+      "url": "https://arxiv.org/list/cs.AI/recent"
+    },
+    {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.663,
+      "score": 42.773,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     },
     {
-      "name": "arXiv cs.CL Recent",
-      "quality": 55.0,
-      "score": 42.567,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
-    },
-    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.721,
+      "score": 32.831,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
       "name": "Vercel Changelog",
       "quality": 55.0,
-      "score": 42.224,
+      "score": 42.334,
       "tier": "warm",
       "url": "https://vercel.com/changelog"
     }
