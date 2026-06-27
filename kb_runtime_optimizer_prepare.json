@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-06-27T00:20:08+00:00",
-  "created_at_wib": "2026-06-27 07:20:08 WIB",
+  "created_at": "2026-06-27T08:06:07+00:00",
+  "created_at_wib": "2026-06-27 15:06:07 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,56 +14,56 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 86.962,
+      "score": 87.273,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.161,
+      "score": 52.472,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.071,
+      "score": 52.382,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.021,
+      "score": 52.332,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
+      "name": "arXiv cs.AI Recent",
+      "quality": 55.0,
+      "score": 43.178,
+      "tier": "warm",
+      "url": "https://arxiv.org/list/cs.AI/recent"
+    },
+    {
       "name": "Vercel Changelog",
       "quality": 55.0,
-      "score": 42.641,
+      "score": 42.952,
       "tier": "warm",
       "url": "https://vercel.com/changelog"
     },
     {
-      "name": "arXiv cs.CL Recent",
-      "quality": 55.0,
-      "score": 42.433,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
-    },
-    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 31.672,
+      "score": 31.983,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.306,
+      "score": 42.617,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     }
