@@ -10000,6 +10000,14 @@
       "title": "WIRED - Latest Tech Feed — Best Window Air Conditioners of 2026: Midea, Zafro, GE",
       "url": "https://www.wired.com/gallery/best-window-air-conditioners/"
     },
+    "a3427dbbfc0cc6d1e1c33341c7be6a0ea760dbcc0797a8fb5432da0fccd31918": {
+      "chunks": 1,
+      "created_at": "2026-06-30T19:05:29+00:00",
+      "doc_id": 2171,
+      "source": "OpenAI News",
+      "title": "OpenAI News — How ChatGPT adoption has expanded",
+      "url": "https://openai.com/index/how-chatgpt-adoption-has-expanded"
+    },
     "a358980d65579b4c29055e83999da80fdc99cce06e957155525dfb74d0f45d79": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:52+00:00",
@@ -15215,13 +15223,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-06-15T20:33:20+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-06-16T01:46:24+00:00"
     },
     {
@@ -15629,6 +15630,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-30T13:15:32+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-30T19:05:34+00:00"
     }
   ],
   "version": 1
