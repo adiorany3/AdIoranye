@@ -1,9 +1,7 @@
 📌 Daily Intelligence Briefing Adioranye
-Waktu: 2026-06-30 15:37:31 WIB
-Dokumen baru: 1 | Chunk baru: 1 | Error: 0
+Waktu: 2026-06-30 20:15:32 WIB
+Dokumen baru: 0 | Chunk baru: 0 | Error: 0
 
-Top update penting:
-1. arXiv cs.CL Recent — Computation and Language
-   Sumber: arXiv cs.CL Recent | kualitas: 55.0 | freshness: 100.0
+Belum ada dokumen baru pada run ini.
 
 Rekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis.

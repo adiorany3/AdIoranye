@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-06-30T08:37:26+00:00",
-  "started_at_wib": "2026-06-30 15:37:26 WIB",
+  "started_at": "2026-06-30T13:15:27+00:00",
+  "started_at_wib": "2026-06-30 20:15:27 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,9 +13,9 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 1,
-  "added_chunks": 1,
-  "skipped_existing": 6,
+  "added_documents": 0,
+  "added_chunks": 0,
+  "skipped_existing": 7,
   "skipped_short": 1,
   "errors": 0,
   "items": [
@@ -38,7 +38,7 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 5094
+      "chars": 5134
     },
     {
       "source": "Google AI",
@@ -48,17 +48,11 @@
       "chars": 2195
     },
     {
-      "source": "arXiv cs.CL Recent",
-      "status": "added",
-      "title": "arXiv cs.CL Recent — Computation and Language",
-      "url": "https://arxiv.org/list/cs.CL/recent",
-      "doc_id": 2170,
-      "chunks": 1,
-      "chars": 836,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 0,
-      "claims": 4
+      "source": "Vercel Changelog",
+      "status": "skipped_existing",
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 2117
     },
     {
       "source": "Google DeepMind News",
@@ -84,7 +78,7 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 4,
+  "critical_claims_added": 0,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -99,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260630_153725_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260630_201527_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260630_021524_pre-update.db"
+          ".db_backups/adioranye_power.db_20260630_071858_pre-update.db"
         ]
       }
     },
@@ -139,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260630_153731_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260630_201532_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260630_021529_post-update.db"
+          ".db_backups/adioranye_power.db_20260630_071904_post-update.db"
         ]
       }
     }
@@ -744,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-06-30T08:37:31+00:00",
-  "finished_at_wib": "2026-06-30 15:37:31 WIB",
-  "elapsed_seconds": 5.29,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-30 15:37:31 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. arXiv cs.CL Recent — Computation and Language\n   Sumber: arXiv cs.CL Recent | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-06-30T13:15:32+00:00",
+  "finished_at_wib": "2026-06-30 20:15:32 WIB",
+  "elapsed_seconds": 4.9,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-06-30 20:15:32 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
