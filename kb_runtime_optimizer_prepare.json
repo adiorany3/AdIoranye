@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-06-30T00:18:58+00:00",
-  "created_at_wib": "2026-06-30 07:18:58 WIB",
+  "created_at": "2026-06-30T08:37:25+00:00",
+  "created_at_wib": "2026-06-30 15:37:25 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,56 +14,56 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.068,
+      "score": 87.474,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.365,
+      "score": 52.771,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.034,
+      "score": 52.44,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 51.695,
+      "score": 52.101,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
+      "name": "arXiv cs.CL Recent",
+      "quality": 55.0,
+      "score": 42.965,
+      "tier": "warm",
+      "url": "https://arxiv.org/list/cs.CL/recent"
+    },
+    {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.44,
+      "score": 42.846,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     },
     {
-      "name": "Vercel Changelog",
-      "quality": 55.0,
-      "score": 42.425,
-      "tier": "warm",
-      "url": "https://vercel.com/changelog"
-    },
-    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.031,
+      "score": 32.437,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
       "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 42.374,
+      "score": 42.78,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.AI/recent"
     }
