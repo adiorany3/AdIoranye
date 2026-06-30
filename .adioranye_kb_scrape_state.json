@@ -6552,6 +6552,14 @@
       "title": "ANTARA News - Humaniora — Jelang Isra Miraj 2026, ini alasan pentingnya menunaikan shalat",
       "url": "https://www.antaranews.com/berita/5354461/jelang-isra-miraj-2026-ini-alasan-pentingnya-menunaikan-shalat"
     },
+    "6aef583bee7ae4f9d595c6ae075a469c3b37c5eeaa8ac09cda096cb40bccb33f": {
+      "chunks": 1,
+      "created_at": "2026-06-30T00:19:04+00:00",
+      "doc_id": 2169,
+      "source": "arXiv cs.AI Recent",
+      "title": "arXiv cs.AI Recent — Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent"
+    },
     "6b18948ba52c0b6db3ee82c4057d19d23d9f93c916816e6430c179fa08016a5d": {
       "chunks": 1,
       "created_at": "2026-05-22T02:42:16+00:00",
@@ -15199,13 +15207,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-06-14T18:44:29+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-06-15T01:40:58+00:00"
     },
     {
@@ -15613,6 +15614,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-06-29T19:15:29+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-06-30T00:19:04+00:00"
     }
   ],
   "version": 1
