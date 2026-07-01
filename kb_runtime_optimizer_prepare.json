@@ -1,71 +1,71 @@
 {
-  "created_at": "2026-06-30T19:05:27+00:00",
-  "created_at_wib": "2026-07-01 02:05:27 WIB",
+  "created_at": "2026-07-01T00:21:09+00:00",
+  "created_at_wib": "2026-07-01 07:21:09 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
   "profile": "auto",
   "quota": {
     "cold": 1,
-    "hot": 4,
-    "warm": 3
+    "hot": 5,
+    "warm": 2
   },
   "selected": [
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.654,
+      "score": 87.582,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.543,
+      "score": 52.471,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.418,
+      "score": 52.346,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.165,
+      "score": 52.093,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
-      "name": "arXiv cs.CL Recent",
+      "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 43.073,
+      "score": 42.683,
       "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
+      "url": "https://arxiv.org/list/cs.AI/recent"
     },
     {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.674,
+      "score": 42.602,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     },
     {
-      "name": "Vercel Changelog",
-      "quality": 55.0,
-      "score": 42.365,
-      "tier": "warm",
-      "url": "https://vercel.com/changelog"
-    },
-    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.523,
+      "score": 32.451,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
+    },
+    {
+      "name": "arXiv cs.CL Recent",
+      "quality": 55.0,
+      "score": 42.422,
+      "tier": "warm",
+      "url": "https://arxiv.org/list/cs.CL/recent"
     }
   ],
   "selected_sources": 8,
