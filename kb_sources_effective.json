@@ -74,22 +74,23 @@
     "url": "https://huggingface.co/blog"
   },
   {
-    "collection": "Adioranye Tech Stack",
-    "confidence": "high",
+    "collection": "AI Research Papers",
+    "confidence": "medium",
     "enabled": true,
     "freshness": "current",
-    "id": "vercel_changelog",
+    "id": "arxiv_cs_ai",
     "max_items": 1,
-    "name": "Vercel Changelog",
-    "source_type": "official-docs",
+    "name": "arXiv cs.AI Recent",
+    "source_type": "research",
     "tags": [
-      "vercel",
-      "deployment",
-      "changelog"
+      "arxiv",
+      "research",
+      "ai",
+      "papers"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://vercel.com/changelog"
+    "url": "https://arxiv.org/list/cs.AI/recent"
   },
   {
     "collection": "AI Research Updates",
