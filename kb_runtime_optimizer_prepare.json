@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-07-03T00:18:37+00:00",
-  "created_at_wib": "2026-07-03 07:18:37 WIB",
+  "created_at": "2026-07-03T08:27:44+00:00",
+  "created_at_wib": "2026-07-03 15:27:44 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,56 +14,56 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 86.839,
+      "score": 87.169,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.602,
+      "score": 52.932,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 51.867,
+      "score": 52.197,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 51.818,
+      "score": 52.148,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "arXiv cs.CL Recent",
       "quality": 55.0,
-      "score": 42.688,
+      "score": 43.018,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.CL/recent"
     },
     {
-      "name": "Vercel Changelog",
+      "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.497,
+      "score": 42.814,
       "tier": "warm",
-      "url": "https://vercel.com/changelog"
+      "url": "https://deepmind.google/blog/"
     },
     {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.121,
+      "score": 32.451,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
       "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 42.028,
+      "score": 42.358,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.AI/recent"
     }
