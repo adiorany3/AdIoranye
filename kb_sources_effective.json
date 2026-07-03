@@ -24,18 +24,18 @@
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "meta_ai_blog",
+    "id": "google_ai",
     "max_items": 1,
-    "name": "Meta AI Blog",
+    "name": "Google AI",
     "source_type": "official",
     "tags": [
-      "meta",
+      "google",
       "ai",
       "official"
     ],
     "type": "html",
     "update_profile": "hot",
-    "url": "https://ai.meta.com/blog/"
+    "url": "https://blog.google/innovation-and-ai/technology/ai/"
   },
   {
     "collection": "Open Source AI",
@@ -60,18 +60,56 @@
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "google_ai",
+    "id": "meta_ai_blog",
     "max_items": 1,
-    "name": "Google AI",
+    "name": "Meta AI Blog",
     "source_type": "official",
     "tags": [
-      "google",
+      "meta",
       "ai",
       "official"
     ],
     "type": "html",
     "update_profile": "hot",
-    "url": "https://blog.google/innovation-and-ai/technology/ai/"
+    "url": "https://ai.meta.com/blog/"
+  },
+  {
+    "collection": "AI Research Updates",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "google_deepmind",
+    "max_items": 1,
+    "name": "Google DeepMind News",
+    "source_type": "official",
+    "tags": [
+      "deepmind",
+      "ai",
+      "research",
+      "official"
+    ],
+    "type": "html",
+    "update_profile": "warm",
+    "url": "https://deepmind.google/blog/"
+  },
+  {
+    "collection": "AI Research Papers",
+    "confidence": "medium",
+    "enabled": true,
+    "freshness": "current",
+    "id": "arxiv_cs_ai",
+    "max_items": 1,
+    "name": "arXiv cs.AI Recent",
+    "source_type": "research",
+    "tags": [
+      "arxiv",
+      "research",
+      "ai",
+      "papers"
+    ],
+    "type": "html",
+    "update_profile": "warm",
+    "url": "https://arxiv.org/list/cs.AI/recent"
   },
   {
     "collection": "Adioranye Tech Stack",
@@ -92,25 +130,6 @@
     "url": "https://vercel.com/changelog"
   },
   {
-    "collection": "NLP Research Papers",
-    "confidence": "medium",
-    "enabled": true,
-    "freshness": "current",
-    "id": "arxiv_cs_cl",
-    "max_items": 1,
-    "name": "arXiv cs.CL Recent",
-    "source_type": "research",
-    "tags": [
-      "arxiv",
-      "research",
-      "nlp",
-      "llm"
-    ],
-    "type": "html",
-    "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.CL/recent"
-  },
-  {
     "collection": "Adioranye Tech Stack",
     "confidence": "high",
     "enabled": true,
@@ -127,24 +146,5 @@
     "type": "html",
     "update_profile": "cold",
     "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
-  },
-  {
-    "collection": "AI Research Papers",
-    "confidence": "medium",
-    "enabled": true,
-    "freshness": "current",
-    "id": "arxiv_cs_ai",
-    "max_items": 1,
-    "name": "arXiv cs.AI Recent",
-    "source_type": "research",
-    "tags": [
-      "arxiv",
-      "research",
-      "ai",
-      "papers"
-    ],
-    "type": "html",
-    "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.AI/recent"
   }
 ]

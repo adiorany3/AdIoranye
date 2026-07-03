@@ -1,71 +1,71 @@
 {
-  "created_at": "2026-07-03T13:10:20+00:00",
-  "created_at_wib": "2026-07-03 20:10:20 WIB",
+  "created_at": "2026-07-03T18:38:25+00:00",
+  "created_at_wib": "2026-07-04 01:38:25 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
   "profile": "auto",
   "quota": {
     "cold": 1,
-    "hot": 5,
-    "warm": 2
+    "hot": 4,
+    "warm": 3
   },
   "selected": [
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 86.739,
+      "score": 87.291,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
-      "name": "Meta AI Blog",
-      "quality": 55.0,
-      "score": 52.502,
-      "tier": "hot",
-      "url": "https://ai.meta.com/blog/"
-    },
-    {
-      "name": "Hugging Face Blog",
-      "quality": 55.0,
-      "score": 51.767,
-      "tier": "hot",
-      "url": "https://huggingface.co/blog"
-    },
-    {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 51.718,
+      "score": 52.504,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
-      "name": "Vercel Changelog",
+      "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 42.705,
-      "tier": "warm",
-      "url": "https://vercel.com/changelog"
+      "score": 52.327,
+      "tier": "hot",
+      "url": "https://huggingface.co/blog"
     },
     {
-      "name": "arXiv cs.CL Recent",
+      "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 42.588,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
+      "score": 51.723,
+      "tier": "hot",
+      "url": "https://ai.meta.com/blog/"
     },
     {
-      "name": "Streamlit Release Notes",
+      "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 32.021,
-      "tier": "cold",
-      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
+      "score": 42.569,
+      "tier": "warm",
+      "url": "https://deepmind.google/blog/"
     },
     {
       "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 41.928,
+      "score": 42.432,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.AI/recent"
+    },
+    {
+      "name": "Vercel Changelog",
+      "quality": 55.0,
+      "score": 42.217,
+      "tier": "warm",
+      "url": "https://vercel.com/changelog"
+    },
+    {
+      "name": "Streamlit Release Notes",
+      "quality": 55.0,
+      "score": 32.132,
+      "tier": "cold",
+      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     }
   ],
   "selected_sources": 8,
