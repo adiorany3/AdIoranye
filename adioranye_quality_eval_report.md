@@ -1,6 +1,6 @@
 # AdIoranye Quality Evaluation Report
 
-Generated: 2026-06-29 03:42:43 WIB
+Generated: 2026-07-06 03:37:18 WIB
 Score: **100 / 100**
 Status: **good**
 
@@ -13,7 +13,7 @@ Status: **good**
 ## KB Report Summary
 ```json
 {
-  "finished_at": "2026-06-28T18:17:23+00:00",
+  "finished_at": "2026-07-05T18:16:03+00:00",
   "added_documents": 0,
   "added_chunks": 0,
   "errors": 0,
@@ -41,15 +41,15 @@ Status: **good**
     "answer_quality_reports": 0,
     "answer_templates": 0,
     "benchmarks": 0,
-    "chunks": 4465,
-    "chunks_fts": 4465,
+    "chunks": 4468,
+    "chunks_fts": 4468,
     "chunks_fts_config": 1,
-    "chunks_fts_data": 661,
-    "chunks_fts_docsize": 4465,
-    "chunks_fts_idx": 622,
+    "chunks_fts_data": 660,
+    "chunks_fts_docsize": 4468,
+    "chunks_fts_idx": 621,
     "circuit_breakers": 0,
-    "current_claims": 3868,
-    "documents": 2168,
+    "current_claims": 3878,
+    "documents": 2171,
     "exported_snapshots": 0,
     "interactions": 0,
     "issue_events": 0,
