@@ -42,6 +42,24 @@
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
+    "id": "google_ai",
+    "max_items": 1,
+    "name": "Google AI",
+    "source_type": "official",
+    "tags": [
+      "google",
+      "ai",
+      "official"
+    ],
+    "type": "html",
+    "update_profile": "hot",
+    "url": "https://blog.google/innovation-and-ai/technology/ai/"
+  },
+  {
+    "collection": "AI Official Updates",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
     "id": "meta_ai_blog",
     "max_items": 1,
     "name": "Meta AI Blog",
@@ -56,22 +74,22 @@
     "url": "https://ai.meta.com/blog/"
   },
   {
-    "collection": "AI Official Updates",
+    "collection": "Adioranye Tech Stack",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "google_ai",
+    "id": "vercel_changelog",
     "max_items": 1,
-    "name": "Google AI",
-    "source_type": "official",
+    "name": "Vercel Changelog",
+    "source_type": "official-docs",
     "tags": [
-      "google",
-      "ai",
-      "official"
+      "vercel",
+      "deployment",
+      "changelog"
     ],
     "type": "html",
-    "update_profile": "hot",
-    "url": "https://blog.google/innovation-and-ai/technology/ai/"
+    "update_profile": "warm",
+    "url": "https://vercel.com/changelog"
   },
   {
     "collection": "AI Research Updates",
@@ -93,23 +111,23 @@
     "url": "https://deepmind.google/blog/"
   },
   {
-    "collection": "AI Research Papers",
+    "collection": "NLP Research Papers",
     "confidence": "medium",
     "enabled": true,
     "freshness": "current",
-    "id": "arxiv_cs_ai",
+    "id": "arxiv_cs_cl",
     "max_items": 1,
-    "name": "arXiv cs.AI Recent",
+    "name": "arXiv cs.CL Recent",
     "source_type": "research",
     "tags": [
       "arxiv",
       "research",
-      "ai",
-      "papers"
+      "nlp",
+      "llm"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.AI/recent"
+    "url": "https://arxiv.org/list/cs.CL/recent"
   },
   {
     "collection": "Adioranye Tech Stack",
@@ -128,24 +146,5 @@
     "type": "html",
     "update_profile": "cold",
     "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
-  },
-  {
-    "collection": "NLP Research Papers",
-    "confidence": "medium",
-    "enabled": true,
-    "freshness": "current",
-    "id": "arxiv_cs_cl",
-    "max_items": 1,
-    "name": "arXiv cs.CL Recent",
-    "source_type": "research",
-    "tags": [
-      "arxiv",
-      "research",
-      "nlp",
-      "llm"
-    ],
-    "type": "html",
-    "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.CL/recent"
   }
 ]
