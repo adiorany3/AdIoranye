@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-07T13:26:03+00:00",
-  "started_at_wib": "2026-07-07 20:26:03 WIB",
+  "started_at": "2026-07-07T19:14:10+00:00",
+  "started_at_wib": "2026-07-08 02:14:10 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,32 +13,31 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 6,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 5,
   "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "skipped_existing",
-      "title": "How ChatGPT adoption has expanded",
-      "url": "https://openai.com/index/how-chatgpt-adoption-has-expanded",
-      "chars": 325
+      "status": "added",
+      "title": "OpenAI News — Australian Payments Plus moves faster with ChatGPT and Codex",
+      "url": "https://openai.com/index/australian-payments-plus",
+      "doc_id": 2172,
+      "chunks": 1,
+      "chars": 1112,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 3
     },
     {
       "source": "Hugging Face Blog",
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4662
-    },
-    {
-      "source": "Google AI",
-      "status": "skipped_existing",
-      "title": "Official Google AI news and updates | Google Blog",
-      "url": "https://blog.google/innovation-and-ai/technology/ai/",
-      "chars": 2200
+      "chars": 4796
     },
     {
       "source": "Meta AI Blog",
@@ -48,25 +47,18 @@
       "chars": 1047
     },
     {
-      "source": "arXiv cs.AI Recent",
-      "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
-      "chars": 100
+      "source": "Google AI",
+      "status": "skipped_existing",
+      "title": "Official Google AI news and updates | Google Blog",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/",
+      "chars": 2227
     },
     {
-      "source": "Google DeepMind News",
+      "source": "Vercel Changelog",
       "status": "skipped_existing",
-      "title": "News — Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4825
-    },
-    {
-      "source": "Streamlit Release Notes",
-      "status": "skipped_existing",
-      "title": "Release notes - Streamlit Docs",
-      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
-      "chars": 4242
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 2123
     },
     {
       "source": "arXiv cs.CL Recent",
@@ -74,11 +66,25 @@
       "title": "Computation and Language",
       "url": "https://arxiv.org/list/cs.CL/recent",
       "chars": 100
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 100
+    },
+    {
+      "source": "Streamlit Release Notes",
+      "status": "skipped_existing",
+      "title": "Release notes - Streamlit Docs",
+      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
+      "chars": 4242
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 3,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260707_202603_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260708_021409_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260707_071949_pre-update.db"
+          ".db_backups/adioranye_power.db_20260707_154156_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260707_202609_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260708_021414_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260707_071953_post-update.db"
+          ".db_backups/adioranye_power.db_20260707_154201_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-07T13:26:09+00:00",
-  "finished_at_wib": "2026-07-07 20:26:09 WIB",
-  "elapsed_seconds": 5.86,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-07 20:26:09 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-07T19:14:14+00:00",
+  "finished_at_wib": "2026-07-08 02:14:14 WIB",
+  "elapsed_seconds": 4.64,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-08 02:14:14 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Australian Payments Plus moves faster with ChatGPT and Codex\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
