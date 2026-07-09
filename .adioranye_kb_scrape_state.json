@@ -12880,6 +12880,14 @@
       "title": "Google News Top Headlines - Pakistan — IMF Staff Concludes Visit to Pakistan - International Monetary Fund | IMF",
       "url": "https://news.google.com/rss/articles/CBMipAFBVV95cUxPb0RUX1A3YkR2NzlVeXZjd0FQQUlLaW9MU1hSUmdRWnhFaDhpRUw5ekxIWnd2QVkyVzd4b3NXdGEzdU55NHBjMEJWNWtjZmE5TmMwQ010UjZZSU1fbkpDU3VEdHROSndxNDdDMVZOcDFZRlNBWmNybENmZTRiOFF5WE8yV2ZFd2VPTTRzemNTbmRUM2VrUXJHN2g5WUdTSG9rdmpEcw?oc=5"
     },
+    "d6ebc9ee135af9c588bd1f4114d9a532cb97cd54ebef6912742a921ca1ac01ac": {
+      "chunks": 1,
+      "created_at": "2026-07-09T00:20:03+00:00",
+      "doc_id": 2173,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Our approach to government and national security partnerships",
+      "url": "https://openai.com/index/government-national-security-partnerships"
+    },
     "d6f32a558b189a0fac6ce36489035f8413633c86a844957b57560a1e906e9386": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:39+00:00",
@@ -15227,13 +15235,6 @@
   },
   "runs": [
     {
-      "added_chunks": 1,
-      "added_documents": 1,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-06-24T00:11:43+00:00"
-    },
-    {
       "added_chunks": 0,
       "added_documents": 0,
       "dry_run": false,
@@ -15645,6 +15646,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-08T18:44:08+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-09T00:20:07+00:00"
     }
   ],
   "version": 1

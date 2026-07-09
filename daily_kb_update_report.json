@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-08T18:44:03+00:00",
-  "started_at_wib": "2026-07-09 01:44:03 WIB",
+  "started_at": "2026-07-09T00:20:01+00:00",
+  "started_at_wib": "2026-07-09 07:20:01 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,18 +13,24 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 6,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 5,
   "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "skipped_short",
-      "title": "Helping K–12 educators build practical AI skills",
-      "url": "https://openai.com/index/k-12-educators-practical-skills",
-      "chars": 297
+      "status": "added",
+      "title": "OpenAI News — Our approach to government and national security partnerships",
+      "url": "https://openai.com/index/government-national-security-partnerships",
+      "doc_id": 2173,
+      "chunks": 1,
+      "chars": 1107,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 2
     },
     {
       "source": "Meta AI Blog",
@@ -38,7 +44,7 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4851
+      "chars": 4874
     },
     {
       "source": "Google AI",
@@ -55,18 +61,11 @@
       "chars": 100
     },
     {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4835
-    },
-    {
-      "source": "Vercel Changelog",
-      "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 1889
+      "source": "arXiv cs.CL Recent",
+      "status": "skipped_short",
+      "title": "Computation and Language",
+      "url": "https://arxiv.org/list/cs.CL/recent",
+      "chars": 100
     },
     {
       "source": "Streamlit Release Notes",
@@ -74,11 +73,18 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 4242
+    },
+    {
+      "source": "Google DeepMind News",
+      "status": "skipped_existing",
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 4835
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 2,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260709_014402_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260709_072001_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260708_144110_pre-update.db"
+          ".db_backups/adioranye_power.db_20260708_195118_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260709_014408_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260709_072007_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260708_144114_post-update.db"
+          ".db_backups/adioranye_power.db_20260708_195124_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-08T18:44:08+00:00",
-  "finished_at_wib": "2026-07-09 01:44:08 WIB",
-  "elapsed_seconds": 5.41,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-09 01:44:08 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-09T00:20:07+00:00",
+  "finished_at_wib": "2026-07-09 07:20:07 WIB",
+  "elapsed_seconds": 5.62,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-09 07:20:07 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Our approach to government and national security partnerships\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
