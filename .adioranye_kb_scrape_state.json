@@ -11952,6 +11952,14 @@
       "title": "CNA.id - Bisnis — Harga emas terus naik; lemahnya data ekonomi AS redupkan optimisme dari pembicaraan Trump-Xi",
       "url": "https://www.cna.id/dunia/harga-emas-naik-data-ekonomi-amerika-serikat-pembicaraan-donald-trump-xi-jinping-china-33891"
     },
+    "c5fcd66540dc9e714f69bb1bb6012cf03e8f26fbbbb53a5ef106dcd6aafa06cc": {
+      "chunks": 1,
+      "created_at": "2026-07-10T00:18:53+00:00",
+      "doc_id": 2175,
+      "source": "OpenAI News",
+      "title": "OpenAI News — GPT-5.6 is now the preferred model in Microsoft 365 Copilot",
+      "url": "https://openai.com/index/gpt-5-6-preferred-model-microsoft-365-copilot"
+    },
     "c61c18307bd998db337899b07e6fe502694d51c5935afca465ca37c852b0acfc": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:53+00:00",
@@ -15247,13 +15255,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-06-25T01:26:54+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-06-25T08:31:23+00:00"
     },
     {
@@ -15661,6 +15662,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-09T18:59:56+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-10T00:18:57+00:00"
     }
   ],
   "version": 1

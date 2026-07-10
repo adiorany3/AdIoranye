@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-09T18:59:51+00:00",
-  "started_at_wib": "2026-07-10 01:59:51 WIB",
+  "started_at": "2026-07-10T00:18:52+00:00",
+  "started_at_wib": "2026-07-10 07:18:52 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -15,18 +15,18 @@
   "stopped_by_time_budget": false,
   "added_documents": 1,
   "added_chunks": 1,
-  "skipped_existing": 6,
-  "skipped_short": 1,
+  "skipped_existing": 5,
+  "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
       "status": "added",
-      "title": "OpenAI News — ChatGPT is now a partner for your most ambitious work",
-      "url": "https://openai.com/index/chatgpt-for-your-most-ambitious-work",
-      "doc_id": 2174,
+      "title": "OpenAI News — GPT-5.6 is now the preferred model in Microsoft 365 Copilot",
+      "url": "https://openai.com/index/gpt-5-6-preferred-model-microsoft-365-copilot",
+      "doc_id": 2175,
       "chunks": 1,
-      "chars": 1054,
+      "chars": 1111,
       "source_quality": 55.0,
       "freshness_score": 100.0,
       "criticality_score": 68,
@@ -37,14 +37,14 @@
       "status": "skipped_existing",
       "title": "AI at Meta Blog",
       "url": "https://ai.meta.com/blog/",
-      "chars": 902
+      "chars": 890
     },
     {
       "source": "Hugging Face Blog",
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4976
+      "chars": 4981
     },
     {
       "source": "Google AI",
@@ -58,21 +58,14 @@
       "status": "skipped_existing",
       "title": "Changelog - Vercel",
       "url": "https://vercel.com/changelog",
-      "chars": 2010
+      "chars": 2038
     },
     {
-      "source": "arXiv cs.AI Recent",
+      "source": "arXiv cs.CL Recent",
       "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
+      "title": "Computation and Language",
+      "url": "https://arxiv.org/list/cs.CL/recent",
       "chars": 100
-    },
-    {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4835
     },
     {
       "source": "Streamlit Release Notes",
@@ -80,6 +73,13 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 4242
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 100
     }
   ],
   "watchlist_path": "critical_watchlist.json",
@@ -99,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260710_015950_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260710_071852_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260709_154430_pre-update.db"
+          ".db_backups/adioranye_power.db_20260709_205845_pre-update.db"
         ]
       }
     },
@@ -139,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260710_015956_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260710_071857_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260709_154436_post-update.db"
+          ".db_backups/adioranye_power.db_20260709_205850_post-update.db"
         ]
       }
     }
@@ -744,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-09T18:59:56+00:00",
-  "finished_at_wib": "2026-07-10 01:59:56 WIB",
-  "elapsed_seconds": 5.65,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-10 01:59:56 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — ChatGPT is now a partner for your most ambitious work\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-10T00:18:57+00:00",
+  "finished_at_wib": "2026-07-10 07:18:57 WIB",
+  "elapsed_seconds": 5.55,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-10 07:18:57 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — GPT-5.6 is now the preferred model in Microsoft 365 Copilot\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
