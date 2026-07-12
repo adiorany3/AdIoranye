@@ -74,6 +74,24 @@
     "url": "https://ai.meta.com/blog/"
   },
   {
+    "collection": "Adioranye Tech Stack",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "vercel_changelog",
+    "max_items": 1,
+    "name": "Vercel Changelog",
+    "source_type": "official-docs",
+    "tags": [
+      "vercel",
+      "deployment",
+      "changelog"
+    ],
+    "type": "html",
+    "update_profile": "warm",
+    "url": "https://vercel.com/changelog"
+  },
+  {
     "collection": "NLP Research Papers",
     "confidence": "medium",
     "enabled": true,
@@ -93,23 +111,22 @@
     "url": "https://arxiv.org/list/cs.CL/recent"
   },
   {
-    "collection": "AI Research Papers",
-    "confidence": "medium",
+    "collection": "Adioranye Tech Stack",
+    "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "arxiv_cs_ai",
+    "id": "streamlit_release_notes",
     "max_items": 1,
-    "name": "arXiv cs.AI Recent",
-    "source_type": "research",
+    "name": "Streamlit Release Notes",
+    "source_type": "official-docs",
     "tags": [
-      "arxiv",
-      "research",
-      "ai",
-      "papers"
+      "streamlit",
+      "release-notes",
+      "python"
     ],
     "type": "html",
-    "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.AI/recent"
+    "update_profile": "cold",
+    "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
   },
   {
     "collection": "AI Research Updates",
@@ -129,23 +146,5 @@
     "type": "html",
     "update_profile": "warm",
     "url": "https://deepmind.google/blog/"
-  },
-  {
-    "collection": "Adioranye Tech Stack",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "streamlit_release_notes",
-    "max_items": 1,
-    "name": "Streamlit Release Notes",
-    "source_type": "official-docs",
-    "tags": [
-      "streamlit",
-      "release-notes",
-      "python"
-    ],
-    "type": "html",
-    "update_profile": "cold",
-    "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
   }
 ]
