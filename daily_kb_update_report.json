@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-12T12:07:19+00:00",
-  "started_at_wib": "2026-07-12 19:07:19 WIB",
+  "started_at": "2026-07-12T18:08:11+00:00",
+  "started_at_wib": "2026-07-13 01:08:11 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -15,8 +15,8 @@
   "stopped_by_time_budget": false,
   "added_documents": 0,
   "added_chunks": 0,
-  "skipped_existing": 6,
-  "skipped_short": 2,
+  "skipped_existing": 5,
+  "skipped_short": 3,
   "errors": 0,
   "items": [
     {
@@ -25,6 +25,13 @@
       "title": "How Deutsche Telekom is rewiring telecommunications with AI",
       "url": "https://openai.com/index/deutsche-telekom",
       "chars": 289
+    },
+    {
+      "source": "Meta AI Blog",
+      "status": "skipped_existing",
+      "title": "AI at Meta Blog",
+      "url": "https://ai.meta.com/blog/",
+      "chars": 890
     },
     {
       "source": "Google AI",
@@ -38,21 +45,21 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4980
+      "chars": 4899
     },
     {
-      "source": "Meta AI Blog",
-      "status": "skipped_existing",
-      "title": "AI at Meta Blog",
-      "url": "https://ai.meta.com/blog/",
-      "chars": 890
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 100
     },
     {
-      "source": "Vercel Changelog",
+      "source": "Google DeepMind News",
       "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 2030
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 4835
     },
     {
       "source": "arXiv cs.CL Recent",
@@ -67,13 +74,6 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 4242
-    },
-    {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4835
     }
   ],
   "watchlist_path": "critical_watchlist.json",
@@ -93,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260712_190718_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260713_010810_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260712_071028_pre-update.db"
+          ".db_backups/adioranye_power.db_20260712_143720_pre-update.db"
         ]
       }
     },
@@ -133,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260712_190724_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260713_010815_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260712_071033_post-update.db"
+          ".db_backups/adioranye_power.db_20260712_143725_post-update.db"
         ]
       }
     }
@@ -738,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-12T12:07:24+00:00",
-  "finished_at_wib": "2026-07-12 19:07:24 WIB",
-  "elapsed_seconds": 5.71,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-12 19:07:24 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-12T18:08:15+00:00",
+  "finished_at_wib": "2026-07-13 01:08:15 WIB",
+  "elapsed_seconds": 5.14,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-13 01:08:15 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
