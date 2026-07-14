@@ -11528,6 +11528,14 @@
       "title": "Google News Asia - Asia Health Outbreak — Airports across Asia reintroduce Covid-style health checks after outbreak of deadly Nipah virus in India - The Independent",
       "url": "https://news.google.com/rss/articles/CBMiswFBVV95cUxOVm9KTjlDWHcwR2tsV1c3Z3lBUlpQb3A0UlpGZURrd084QW4yLUNLc09wOEdSZlFJclQ2cHgwRENtNTNTMHJVWmc3OHFjS04xbzRxbUoxb2dFRWdrOWpnWmlqQnYxUmd6emhfN3NDbGZIWG5TWEZsZmtJaEJtNzJrNUk5VF81cDc0bC1vM1ZUVWwtNjZhNGtkSXNLai12QUhYRFVOYVlTa2RWNWtfMDNXRHN2MA?oc=5"
     },
+    "bc479adfd58aa187da0c068c21fb74c0125114ea2308c85924011141b37651c6": {
+      "chunks": 1,
+      "created_at": "2026-07-14T18:16:15+00:00",
+      "doc_id": 2177,
+      "source": "OpenAI News",
+      "title": "OpenAI News — How to manage AI investments in the agentic era",
+      "url": "https://openai.com/index/managing-ai-investments-in-agentic-era"
+    },
     "bc6d090a59d2eab821d0697b074f6296eaf0742c4f35a38e962fd63a70c6f631": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:42+00:00",
@@ -15259,13 +15267,6 @@
   },
   "runs": [
     {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-06-29T19:15:29+00:00"
-    },
-    {
       "added_chunks": 1,
       "added_documents": 1,
       "dry_run": false,
@@ -15677,6 +15678,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-14T12:39:49+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-14T18:16:19+00:00"
     }
   ],
   "version": 1
