@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-15T12:42:04+00:00",
-  "started_at_wib": "2026-07-15 19:42:04 WIB",
+  "started_at": "2026-07-15T18:19:26+00:00",
+  "started_at_wib": "2026-07-16 01:19:26 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,18 +13,31 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 7,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 6,
   "skipped_short": 1,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
+      "status": "added",
+      "title": "OpenAI News — The US is advancing AI safety through state and federal action",
+      "url": "https://openai.com/index/advancing-ai-safety-through-state-and-federal-action",
+      "doc_id": 2178,
+      "chunks": 1,
+      "chars": 1078,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 2
+    },
+    {
+      "source": "Google AI",
       "status": "skipped_existing",
-      "title": "How to manage AI investments in the agentic era",
-      "url": "https://openai.com/index/managing-ai-investments-in-agentic-era",
-      "chars": 311
+      "title": "Official Google AI news and updates | Google Blog",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/",
+      "chars": 2198
     },
     {
       "source": "Meta AI Blog",
@@ -38,35 +51,21 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4670
+      "chars": 4542
     },
     {
-      "source": "Google AI",
-      "status": "skipped_existing",
-      "title": "Official Google AI news and updates | Google Blog",
-      "url": "https://blog.google/innovation-and-ai/technology/ai/",
-      "chars": 2198
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 48
     },
     {
       "source": "Vercel Changelog",
       "status": "skipped_existing",
       "title": "Changelog - Vercel",
       "url": "https://vercel.com/changelog",
-      "chars": 2113
-    },
-    {
-      "source": "arXiv cs.CL Recent",
-      "status": "skipped_short",
-      "title": "Computation and Language",
-      "url": "https://arxiv.org/list/cs.CL/recent",
-      "chars": 48
-    },
-    {
-      "source": "Streamlit Release Notes",
-      "status": "skipped_existing",
-      "title": "Release notes - Streamlit Docs",
-      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
-      "chars": 6733
+      "chars": 2066
     },
     {
       "source": "Google DeepMind News",
@@ -74,11 +73,18 @@
       "title": "News — Google DeepMind",
       "url": "https://deepmind.google/blog/",
       "chars": 4871
+    },
+    {
+      "source": "Streamlit Release Notes",
+      "status": "skipped_existing",
+      "title": "Release notes - Streamlit Docs",
+      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
+      "chars": 6733
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 2,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260715_194204_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260716_011926_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260715_070449_pre-update.db"
+          ".db_backups/adioranye_power.db_20260715_142341_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260715_194209_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260716_011931_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260715_070454_post-update.db"
+          ".db_backups/adioranye_power.db_20260715_142346_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-15T12:42:09+00:00",
-  "finished_at_wib": "2026-07-15 19:42:09 WIB",
-  "elapsed_seconds": 5.28,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-15 19:42:09 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-15T18:19:31+00:00",
+  "finished_at_wib": "2026-07-16 01:19:31 WIB",
+  "elapsed_seconds": 5.23,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-16 01:19:31 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — The US is advancing AI safety through state and federal action\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }

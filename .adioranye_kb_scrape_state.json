@@ -4504,6 +4504,14 @@
       "title": "Google News Global Tech - Cybersecurity Global Critical — China-Linked Storm-1175 Exploits Zero-Days to Rapidly Deploy Medusa Ransomware - The Hacker News",
       "url": "https://news.google.com/rss/articles/CBMiggFBVV95cUxOVXdoWEtvMlV4S01tVzJ1V0dZQkt6VkUyZTVEaEF1QktYb1hFTE84X0VheDJKbFcwZTFGRnRVT0NGZlpVd0NuOGhNT013QXN1MDJsMUFLMG1XYU9CQjlabnoyOVVVN1BRVUpBaVRlckRMcFZqb0RwRHFQcjBMekRCaG5n?oc=5"
     },
+    "4a4909365379ec78e0b72071468ee5dfb594572d38167326b870311fe9202c93": {
+      "chunks": 1,
+      "created_at": "2026-07-15T18:19:27+00:00",
+      "doc_id": 2178,
+      "source": "OpenAI News",
+      "title": "OpenAI News — The US is advancing AI safety through state and federal action",
+      "url": "https://openai.com/index/advancing-ai-safety-through-state-and-federal-action"
+    },
     "4a4ae7c48c357118ed9b488e9be23fc1263437574b730fdd98c7fb3796f92676": {
       "chunks": 1,
       "created_at": "2026-05-22T02:39:33+00:00",
@@ -15267,13 +15275,6 @@
   },
   "runs": [
     {
-      "added_chunks": 1,
-      "added_documents": 1,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-06-30T19:05:34+00:00"
-    },
-    {
       "added_chunks": 0,
       "added_documents": 0,
       "dry_run": false,
@@ -15685,6 +15686,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-15T12:42:09+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-15T18:19:31+00:00"
     }
   ],
   "version": 1
