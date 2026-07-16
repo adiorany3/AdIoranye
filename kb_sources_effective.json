@@ -74,23 +74,23 @@
     "url": "https://huggingface.co/blog"
   },
   {
-    "collection": "NLP Research Papers",
-    "confidence": "medium",
+    "collection": "AI Research Updates",
+    "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "arxiv_cs_cl",
+    "id": "google_deepmind",
     "max_items": 1,
-    "name": "arXiv cs.CL Recent",
-    "source_type": "research",
+    "name": "Google DeepMind News",
+    "source_type": "official",
     "tags": [
-      "arxiv",
+      "deepmind",
+      "ai",
       "research",
-      "nlp",
-      "llm"
+      "official"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.CL/recent"
+    "url": "https://deepmind.google/blog/"
   },
   {
     "collection": "AI Research Papers",
