@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-07-16T00:09:06+00:00",
-  "created_at_wib": "2026-07-16 07:09:06 WIB",
+  "created_at": "2026-07-16T07:31:38+00:00",
+  "created_at_wib": "2026-07-16 14:31:38 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
@@ -14,58 +14,58 @@
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.38,
+      "score": 87.574,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.639,
+      "score": 52.833,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.319,
+      "score": 52.513,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 51.967,
+      "score": 52.161,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
+      "name": "arXiv cs.CL Recent",
+      "quality": 55.0,
+      "score": 43.445,
+      "tier": "warm",
+      "url": "https://arxiv.org/list/cs.CL/recent"
+    },
+    {
       "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 42.673,
+      "score": 42.867,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.AI/recent"
     },
     {
-      "name": "Vercel Changelog",
-      "quality": 55.0,
-      "score": 42.651,
-      "tier": "warm",
-      "url": "https://vercel.com/changelog"
-    },
-    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.366,
+      "score": 32.56,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     {
-      "name": "Google DeepMind News",
+      "name": "Vercel Changelog",
       "quality": 55.0,
-      "score": 42.533,
+      "score": 42.845,
       "tier": "warm",
-      "url": "https://deepmind.google/blog/"
+      "url": "https://vercel.com/changelog"
     }
   ],
   "selected_sources": 8,
