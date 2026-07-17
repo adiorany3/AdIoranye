@@ -7120,6 +7120,14 @@
       "title": "Google News Indonesia Tech - Riset Nuklir Indonesia — Organisasi Riset Tenaga Nuklir - BRIN - Badan Riset dan Inovasi Nasional",
       "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxQMjIzOXk1OGFFa1FyOXRsaHY5OUxYZjBOcHNNbXBhcjFwdFkzWE1CQ3dNWXB5bzRSdF80emdxZjFRbWh4bUxjRVBkQ01TZlpqU2J2b1dxbXFGaUxfSHU1MFdBLUV4a3NDbURtUUR2bWRvcWZzVXVVR05VVThZaVdhNklrWm8yT0VuYnpMemdjd2JWYzQzNnBwSTQ1dUN5SU9jd2NFRWZJR1ZJd21NTDdoeTJwbnFUWXdlbXBMQ182ZDRFeUVxYUlCaExyUjZ3bS1ZREtOalAzbw?oc=5"
     },
+    "75161c768fd6145a78bf0003fb5133a2975fa1cf207d87e5864161735fae0b85": {
+      "chunks": 1,
+      "created_at": "2026-07-17T18:16:19+00:00",
+      "doc_id": 2179,
+      "source": "OpenAI News",
+      "title": "OpenAI News — A scorecard for the AI age",
+      "url": "https://openai.com/index/a-scorecard-for-the-ai-age"
+    },
     "75be2b74f77d1dc9fb674cec66671aa6d68c7abf9cc453c00fa901427d229b3a": {
       "chunks": 7,
       "created_at": "2026-05-22T02:01:11+00:00",
@@ -15279,13 +15287,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-02T18:48:03+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-03T00:18:43+00:00"
     },
     {
@@ -15693,6 +15694,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-17T12:20:10+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-17T18:16:22+00:00"
     }
   ],
   "version": 1
