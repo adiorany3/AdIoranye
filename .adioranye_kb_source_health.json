@@ -1,27 +1,6 @@
 {
   "runs": [
     {
-      "at": "2026-07-08T12:51:17+00:00",
-      "at_wib": "2026-07-08 19:51:17 WIB",
-      "max_items": 1,
-      "profile": "auto",
-      "selected_sources": 8,
-      "source_limit": 8,
-      "type": "prepare"
-    },
-    {
-      "at": "2026-07-08T12:51:24+00:00",
-      "at_wib": "2026-07-08 19:51:24 WIB",
-      "failures": 0,
-      "scraper_added_documents": 0,
-      "scraper_errors": 0,
-      "selected_sources": 8,
-      "successes": 8,
-      "touched_sources": 8,
-      "type": "update-health",
-      "workflow_failed": false
-    },
-    {
       "at": "2026-07-08T18:44:02+00:00",
       "at_wib": "2026-07-09 01:44:02 WIB",
       "max_items": 1,
@@ -839,6 +818,27 @@
       "touched_sources": 8,
       "type": "update-health",
       "workflow_failed": false
+    },
+    {
+      "at": "2026-07-18T12:04:09+00:00",
+      "at_wib": "2026-07-18 19:04:09 WIB",
+      "max_items": 1,
+      "profile": "auto",
+      "selected_sources": 8,
+      "source_limit": 8,
+      "type": "prepare"
+    },
+    {
+      "at": "2026-07-18T12:04:14+00:00",
+      "at_wib": "2026-07-18 19:04:14 WIB",
+      "failures": 0,
+      "scraper_added_documents": 0,
+      "scraper_errors": 0,
+      "selected_sources": 8,
+      "successes": 8,
+      "touched_sources": 8,
+      "type": "update-health",
+      "workflow_failed": false
     }
   ],
   "sources": {
@@ -851,11 +851,11 @@
       "last_error_at": "2026-06-18T01:42:13+00:00",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-07-18T07:08:28+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "Meta AI Blog",
       "tier": "hot",
       "total_failures": 2,
-      "total_success": 185,
+      "total_success": 186,
       "url": "https://ai.meta.com/blog/"
     },
     "2ca8641a0a149df1": {
@@ -867,11 +867,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-07-18T00:08:37+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "Google DeepMind News",
       "tier": "warm",
       "total_failures": 0,
-      "total_success": 148,
+      "total_success": 149,
       "url": "https://deepmind.google/blog/"
     },
     "44d00e28db3683be": {
@@ -883,11 +883,11 @@
       "last_error_at": "2026-06-07T12:50:42+00:00",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-07-18T07:08:28+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "Hugging Face Blog",
       "tier": "hot",
       "total_failures": 1,
-      "total_success": 186,
+      "total_success": 187,
       "url": "https://huggingface.co/blog"
     },
     "5b77a0c26f2e234d": {
@@ -899,11 +899,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-07-18T07:08:28+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "OpenAI News",
       "tier": "hot",
       "total_failures": 0,
-      "total_success": 187,
+      "total_success": 188,
       "url": "https://openai.com/news/rss.xml"
     },
     "6e574cba2a0c5091": {
@@ -915,11 +915,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-07-18T07:08:28+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "Google AI",
       "tier": "hot",
       "total_failures": 0,
-      "total_success": 187,
+      "total_success": 188,
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     "9b66e7cf30deeda5": {
@@ -931,11 +931,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_short",
-      "last_success_at": "2026-07-18T07:08:28+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "arXiv cs.AI Recent",
       "tier": "warm",
       "total_failures": 0,
-      "total_success": 143,
+      "total_success": 144,
       "url": "https://arxiv.org/list/cs.AI/recent"
     },
     "a5dfcbc9882fdd58": {
@@ -947,11 +947,11 @@
       "last_error_at": "",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-07-18T07:08:28+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "Vercel Changelog",
       "tier": "warm",
       "total_failures": 0,
-      "total_success": 137,
+      "total_success": 138,
       "url": "https://vercel.com/changelog"
     },
     "ea4d098631154815": {
@@ -963,11 +963,11 @@
       "last_error_at": "2026-06-07T12:50:42+00:00",
       "last_message": "",
       "last_status": "skipped_existing",
-      "last_success_at": "2026-07-18T07:08:28+00:00",
+      "last_success_at": "2026-07-18T12:04:14+00:00",
       "name": "Streamlit Release Notes",
       "tier": "cold",
       "total_failures": 2,
-      "total_success": 185,
+      "total_success": 186,
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     },
     "ed9c8726b4e73838": {
@@ -987,6 +987,6 @@
       "url": "https://arxiv.org/list/cs.CL/recent"
     }
   },
-  "updated_at": "2026-07-18T07:08:28+00:00",
+  "updated_at": "2026-07-18T12:04:14+00:00",
   "version": 2
 }
