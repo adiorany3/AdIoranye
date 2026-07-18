@@ -1,9 +1,7 @@
 📌 Daily Intelligence Briefing Adioranye
-Waktu: 2026-07-18 01:16:22 WIB
-Dokumen baru: 1 | Chunk baru: 1 | Error: 0
+Waktu: 2026-07-18 07:08:36 WIB
+Dokumen baru: 0 | Chunk baru: 0 | Error: 0
 
-Top update penting:
-1. OpenAI News — A scorecard for the AI age
-   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0
+Belum ada dokumen baru pada run ini.
 
 Rekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis.
