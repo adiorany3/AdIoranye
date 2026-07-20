@@ -11096,6 +11096,14 @@
       "title": "Google News Research - Riset Satelit BRIN — BRIN - Badan Riset dan Inovasi Nasional - BRIN - Badan Riset dan Inovasi Nasional",
       "url": "https://news.google.com/rss/articles/CBMiNkFVX3lxTE5OOWlIZGM3WTJqbXBGa1k1Z0pObElIalB0VEZlV3NLeFk0OVhvS210UUpOc0FxZw?oc=5"
     },
+    "b46f22b4a42b21ce19cb9b95bdaea50d18cf88cbc4583b6439ee670c1026253d": {
+      "chunks": 1,
+      "created_at": "2026-07-20T19:05:54+00:00",
+      "doc_id": 2180,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Safety and alignment in an era of long-horizon models",
+      "url": "https://openai.com/index/safety-alignment-long-horizon-models"
+    },
     "b4d9341dfa2171ac4e5ea1f13465947ace0e02cc81df1cd83cb944b42278af82": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:53+00:00",
@@ -15287,13 +15295,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-05T18:16:03+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-06T00:15:57+00:00"
     },
     {
@@ -15701,6 +15702,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-20T13:16:49+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-20T19:05:57+00:00"
     }
   ],
   "version": 1

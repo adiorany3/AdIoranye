@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-20T13:16:45+00:00",
-  "started_at_wib": "2026-07-20 20:16:45 WIB",
+  "started_at": "2026-07-20T19:05:53+00:00",
+  "started_at_wib": "2026-07-21 02:05:53 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,18 +13,31 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 6,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 5,
   "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
+      "status": "added",
+      "title": "OpenAI News — Safety and alignment in an era of long-horizon models",
+      "url": "https://openai.com/index/safety-alignment-long-horizon-models",
+      "doc_id": 2180,
+      "chunks": 1,
+      "chars": 1096,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 2
+    },
+    {
+      "source": "Meta AI Blog",
       "status": "skipped_existing",
-      "title": "A scorecard for the AI age",
-      "url": "https://openai.com/index/a-scorecard-for-the-ai-age",
-      "chars": 303
+      "title": "AI at Meta Blog",
+      "url": "https://ai.meta.com/blog/",
+      "chars": 906
     },
     {
       "source": "Google AI",
@@ -38,14 +51,14 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4679
+      "chars": 4585
     },
     {
-      "source": "Meta AI Blog",
+      "source": "Vercel Changelog",
       "status": "skipped_existing",
-      "title": "AI at Meta Blog",
-      "url": "https://ai.meta.com/blog/",
-      "chars": 906
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 2107
     },
     {
       "source": "arXiv cs.CL Recent",
@@ -67,18 +80,11 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 6733
-    },
-    {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4851
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 2,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260720_201644_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260721_020552_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260720_071132_pre-update.db"
+          ".db_backups/adioranye_power.db_20260720_151739_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260720_201650_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260721_020557_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260720_071137_post-update.db"
+          ".db_backups/adioranye_power.db_20260720_151745_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-20T13:16:49+00:00",
-  "finished_at_wib": "2026-07-20 20:16:49 WIB",
-  "elapsed_seconds": 5.1,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-20 20:16:49 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-20T19:05:57+00:00",
+  "finished_at_wib": "2026-07-21 02:05:57 WIB",
+  "elapsed_seconds": 4.59,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-21 02:05:57 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Safety and alignment in an era of long-horizon models\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
