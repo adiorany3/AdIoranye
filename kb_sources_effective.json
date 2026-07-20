@@ -74,22 +74,23 @@
     "url": "https://ai.meta.com/blog/"
   },
   {
-    "collection": "Adioranye Tech Stack",
-    "confidence": "high",
+    "collection": "NLP Research Papers",
+    "confidence": "medium",
     "enabled": true,
     "freshness": "current",
-    "id": "vercel_changelog",
+    "id": "arxiv_cs_cl",
     "max_items": 1,
-    "name": "Vercel Changelog",
-    "source_type": "official-docs",
+    "name": "arXiv cs.CL Recent",
+    "source_type": "research",
     "tags": [
-      "vercel",
-      "deployment",
-      "changelog"
+      "arxiv",
+      "research",
+      "nlp",
+      "llm"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://vercel.com/changelog"
+    "url": "https://arxiv.org/list/cs.CL/recent"
   },
   {
     "collection": "AI Research Papers",
@@ -111,6 +112,24 @@
     "url": "https://arxiv.org/list/cs.AI/recent"
   },
   {
+    "collection": "Adioranye Tech Stack",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "streamlit_release_notes",
+    "max_items": 1,
+    "name": "Streamlit Release Notes",
+    "source_type": "official-docs",
+    "tags": [
+      "streamlit",
+      "release-notes",
+      "python"
+    ],
+    "type": "html",
+    "update_profile": "cold",
+    "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
+  },
+  {
     "collection": "AI Research Updates",
     "confidence": "high",
     "enabled": true,
@@ -128,23 +147,5 @@
     "type": "html",
     "update_profile": "warm",
     "url": "https://deepmind.google/blog/"
-  },
-  {
-    "collection": "Adioranye Tech Stack",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "streamlit_release_notes",
-    "max_items": 1,
-    "name": "Streamlit Release Notes",
-    "source_type": "official-docs",
-    "tags": [
-      "streamlit",
-      "release-notes",
-      "python"
-    ],
-    "type": "html",
-    "update_profile": "cold",
-    "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
   }
 ]
