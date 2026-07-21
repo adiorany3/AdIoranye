@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-21T12:43:11+00:00",
-  "started_at_wib": "2026-07-21 19:43:11 WIB",
+  "started_at": "2026-07-21T18:39:32+00:00",
+  "started_at_wib": "2026-07-22 01:39:32 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -15,23 +15,16 @@
   "stopped_by_time_budget": false,
   "added_documents": 0,
   "added_chunks": 0,
-  "skipped_existing": 7,
-  "skipped_short": 1,
+  "skipped_existing": 5,
+  "skipped_short": 3,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "skipped_existing",
-      "title": "Safety and alignment in an era of long-horizon models",
-      "url": "https://openai.com/index/safety-alignment-long-horizon-models",
-      "chars": 314
-    },
-    {
-      "source": "Meta AI Blog",
-      "status": "skipped_existing",
-      "title": "AI at Meta Blog",
-      "url": "https://ai.meta.com/blog/",
-      "chars": 906
+      "status": "skipped_short",
+      "title": "Introducing the ChatGPT for small business program",
+      "url": "https://openai.com/index/introducing-chatgpt-small-business-program",
+      "chars": 295
     },
     {
       "source": "Google AI",
@@ -45,14 +38,14 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4826
+      "chars": 4819
     },
     {
-      "source": "Google DeepMind News",
+      "source": "Meta AI Blog",
       "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4851
+      "title": "AI at Meta Blog",
+      "url": "https://ai.meta.com/blog/",
+      "chars": 943
     },
     {
       "source": "arXiv cs.CL Recent",
@@ -62,18 +55,25 @@
       "chars": 48
     },
     {
+      "source": "Vercel Changelog",
+      "status": "skipped_existing",
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 2084
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 48
+    },
+    {
       "source": "Streamlit Release Notes",
       "status": "skipped_existing",
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 6733
-    },
-    {
-      "source": "Vercel Changelog",
-      "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 2111
     }
   ],
   "watchlist_path": "critical_watchlist.json",
@@ -93,11 +93,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260721_194311_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260722_013932_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260721_070808_pre-update.db"
+          ".db_backups/adioranye_power.db_20260721_144212_pre-update.db"
         ]
       }
     },
@@ -133,11 +133,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260721_194316_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260722_013937_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260721_070814_post-update.db"
+          ".db_backups/adioranye_power.db_20260721_144216_post-update.db"
         ]
       }
     }
@@ -738,8 +738,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-21T12:43:16+00:00",
-  "finished_at_wib": "2026-07-21 19:43:16 WIB",
-  "elapsed_seconds": 5.26,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-21 19:43:16 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-21T18:39:37+00:00",
+  "finished_at_wib": "2026-07-22 01:39:37 WIB",
+  "elapsed_seconds": 5.23,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-22 01:39:37 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
