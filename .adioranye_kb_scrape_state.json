@@ -2272,6 +2272,14 @@
       "title": "Google News Top Headlines - Asia Pacific General — Perth almost created a City of South Park in 2014 — here's why it might again - Australian Broadcasting Corporation",
       "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxQbEdNQzVacTJXTWxROWd5cWptVjkybGpPRlU5M01TUjZCaGdRalpXMEd1ckhxaXhueFNMaXI3QThaTlBvUVRLZWdBTlh6Q1pvOTVWRjlSdFdyeWNUSUt1N01yYnYxendzOGdod1VPc1VJUWtmRjhoRk54REF5eURkc1NiTGxnME9CTXlTaWFOMzRMSWlEMmRhVko1a2dIZHM?oc=5"
     },
+    "23f4a55e6e36d24f39f118080821ceb1bec59996955ecccf77bc8936f9686de2": {
+      "chunks": 1,
+      "created_at": "2026-07-22T18:33:23+00:00",
+      "doc_id": 2181,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Building AI infrastructure with the Effingham County community",
+      "url": "https://openai.com/index/building-ai-infrastructure-with-the-effingham-county-community"
+    },
     "2409eeb69842472d55bcee757a0549b24286f4fb4b9f990f299acd32cc159257": {
       "chunks": 1,
       "created_at": "2026-05-22T02:42:06+00:00",
@@ -15291,13 +15299,6 @@
   },
   "runs": [
     {
-      "added_chunks": 1,
-      "added_documents": 1,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-07-07T19:14:14+00:00"
-    },
-    {
       "added_chunks": 0,
       "added_documents": 0,
       "dry_run": false,
@@ -15709,6 +15710,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-22T12:45:59+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-22T18:33:28+00:00"
     }
   ],
   "version": 1

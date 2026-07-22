@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-07-22T12:45:54+00:00",
-  "started_at_wib": "2026-07-22 19:45:54 WIB",
+  "started_at": "2026-07-22T18:33:21+00:00",
+  "started_at_wib": "2026-07-23 01:33:21 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,18 +13,24 @@
   "source_cursor_next": 0,
   "time_budget_seconds": 480,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 6,
+  "added_documents": 1,
+  "added_chunks": 1,
+  "skipped_existing": 5,
   "skipped_short": 2,
   "errors": 0,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "skipped_short",
-      "title": "Introducing the ChatGPT for small business program",
-      "url": "https://openai.com/index/introducing-chatgpt-small-business-program",
-      "chars": 295
+      "status": "added",
+      "title": "OpenAI News — Building AI infrastructure with the Effingham County community",
+      "url": "https://openai.com/index/building-ai-infrastructure-with-the-effingham-county-community",
+      "doc_id": 2181,
+      "chunks": 1,
+      "chars": 1147,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 2
     },
     {
       "source": "Google AI",
@@ -34,13 +40,6 @@
       "chars": 2111
     },
     {
-      "source": "Hugging Face Blog",
-      "status": "skipped_existing",
-      "title": "Hugging Face – Blog",
-      "url": "https://huggingface.co/blog",
-      "chars": 4455
-    },
-    {
       "source": "Meta AI Blog",
       "status": "skipped_existing",
       "title": "AI at Meta Blog",
@@ -48,11 +47,25 @@
       "chars": 943
     },
     {
+      "source": "Hugging Face Blog",
+      "status": "skipped_existing",
+      "title": "Hugging Face – Blog",
+      "url": "https://huggingface.co/blog",
+      "chars": 4544
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 48
+    },
+    {
       "source": "Google DeepMind News",
       "status": "skipped_existing",
       "title": "News â Google DeepMind",
       "url": "https://deepmind.google/blog/",
-      "chars": 4876
+      "chars": 4942
     },
     {
       "source": "arXiv cs.CL Recent",
@@ -66,19 +79,12 @@
       "status": "skipped_existing",
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
-      "chars": 6733
-    },
-    {
-      "source": "Vercel Changelog",
-      "status": "skipped_existing",
-      "title": "Changelog - Vercel",
-      "url": "https://vercel.com/changelog",
-      "chars": 2098
+      "chars": 5894
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 2,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -93,11 +99,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260722_194554_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260723_013321_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260722_070614_pre-update.db"
+          ".db_backups/adioranye_power.db_20260722_144227_pre-update.db"
         ]
       }
     },
@@ -133,11 +139,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260722_194600_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260723_013328_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260722_070619_post-update.db"
+          ".db_backups/adioranye_power.db_20260722_144233_post-update.db"
         ]
       }
     }
@@ -738,8 +744,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-07-22T12:45:59+00:00",
-  "finished_at_wib": "2026-07-22 19:45:59 WIB",
-  "elapsed_seconds": 5.66,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-22 19:45:59 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-07-22T18:33:28+00:00",
+  "finished_at_wib": "2026-07-23 01:33:28 WIB",
+  "elapsed_seconds": 7.22,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-07-23 01:33:28 WIB\nDokumen baru: 1 | Chunk baru: 1 | Error: 0\n\nTop update penting:\n1. OpenAI News — Building AI infrastructure with the Effingham County community\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
