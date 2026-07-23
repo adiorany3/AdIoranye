@@ -15303,13 +15303,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-08T12:51:24+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-08T18:44:08+00:00"
     },
     {
@@ -15717,6 +15710,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-23T07:44:10+00:00"
+    },
+    {
+      "added_chunks": 0,
+      "added_documents": 0,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-23T12:48:16+00:00"
     }
   ],
   "version": 1
