@@ -1,6 +1,6 @@
 # AdIoranye Quality Evaluation Report
 
-Generated: 2026-07-20 03:24:35 WIB
+Generated: 2026-07-27 03:31:44 WIB
 Score: **100 / 100**
 Status: **good**
 
@@ -13,7 +13,7 @@ Status: **good**
 ## KB Report Summary
 ```json
 {
-  "finished_at": "2026-07-19T18:07:20+00:00",
+  "finished_at": "2026-07-26T18:11:13+00:00",
   "added_documents": 0,
   "added_chunks": 0,
   "errors": 0,
@@ -36,20 +36,20 @@ Status: **good**
   "exists": true,
   "ok": true,
   "path": ".adioranye_power.db",
-  "size_bytes": 29913088,
+  "size_bytes": 29929472,
   "tables": {
     "answer_quality_reports": 0,
     "answer_templates": 0,
     "benchmarks": 0,
-    "chunks": 4476,
-    "chunks_fts": 4476,
+    "chunks": 4478,
+    "chunks_fts": 4478,
     "chunks_fts_config": 1,
-    "chunks_fts_data": 668,
-    "chunks_fts_docsize": 4476,
-    "chunks_fts_idx": 629,
+    "chunks_fts_data": 670,
+    "chunks_fts_docsize": 4478,
+    "chunks_fts_idx": 631,
     "circuit_breakers": 0,
-    "current_claims": 3895,
-    "documents": 2179,
+    "current_claims": 3899,
+    "documents": 2181,
     "exported_snapshots": 0,
     "interactions": 0,
     "issue_events": 0,
