@@ -1,71 +1,71 @@
 {
-  "created_at": "2026-07-29T13:07:20+00:00",
-  "created_at_wib": "2026-07-29 20:07:20 WIB",
+  "created_at": "2026-07-29T18:14:49+00:00",
+  "created_at_wib": "2026-07-30 01:14:49 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
   "max_items": 1,
   "profile": "auto",
   "quota": {
     "cold": 1,
-    "hot": 5,
-    "warm": 2
+    "hot": 4,
+    "warm": 3
   },
   "selected": [
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.116,
+      "score": 87.333,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
+      "name": "Meta AI Blog",
+      "quality": 55.0,
+      "score": 52.566,
+      "tier": "hot",
+      "url": "https://ai.meta.com/blog/"
+    },
+    {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.382,
+      "score": 52.153,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.137,
+      "score": 44.676,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
-      "name": "Meta AI Blog",
+      "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 51.947,
-      "tier": "hot",
-      "url": "https://ai.meta.com/blog/"
+      "score": 43.149,
+      "tier": "warm",
+      "url": "https://deepmind.google/blog/"
     },
     {
-      "name": "Vercel Changelog",
+      "name": "arXiv cs.CL Recent",
       "quality": 55.0,
-      "score": 43.142,
+      "score": 42.267,
       "tier": "warm",
-      "url": "https://vercel.com/changelog"
+      "url": "https://arxiv.org/list/cs.CL/recent"
     },
     {
       "name": "arXiv cs.AI Recent",
       "quality": 55.0,
-      "score": 42.434,
+      "score": 42.043,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.AI/recent"
     },
     {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.59,
+      "score": 31.662,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
-    },
-    {
-      "name": "arXiv cs.CL Recent",
-      "quality": 55.0,
-      "score": 42.369,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
     }
   ],
   "selected_sources": 8,

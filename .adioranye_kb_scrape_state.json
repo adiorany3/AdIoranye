@@ -720,6 +720,14 @@
       "title": "Google News Indonesia Tech - Riset AI Indonesia — Mafin Talks 23 Soroti Masa Depan Bisnis dan Inovasi Berbasis AI, Blockchain, dan Modal Ventura - BRIN - Badan Riset dan Inovasi Nasional",
       "url": "https://news.google.com/rss/articles/CBMiwAFBVV95cUxOOVdtVUMxYkc5RWhNS3UzTzFjMmN3QVpONVdPODRYRk5lMkNqWk0xWnFCNkMwTUlVYXIyY0JmaDR4V3l5bWFIdjlkNEcxYkxhOTNFYzBfSm5OYmxPRkNsOC03b3gwbVkyVTFRSjA0UkFYQm12NTQ4OFlDSTEzS1lGLWVNSTZwM3U2Q3Q4SUhpb3c4LVo3b2gteHV6U05vbGhxaVF6YU56eWRtekNmaXRvaE8wQ1E1NDRjdzU0Wkdwek0?oc=5"
     },
+    "0a095c3b9f136538d4c0722623f4848ff7b842ddb5042e00141a6774e92306ca": {
+      "chunks": 1,
+      "created_at": "2026-07-29T18:14:52+00:00",
+      "doc_id": 2183,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Accelerating scientific discovery with ChatGPT for Academic Researchers",
+      "url": "https://openai.com/index/chatgpt-for-academic-researchers"
+    },
     "0a3e8af0fa27eb87363266210cdf2660b3af7562f1ef4970eaaedcccb40dddc4": {
       "chunks": 1,
       "created_at": "2026-05-22T02:44:06+00:00",
@@ -15307,13 +15315,6 @@
   },
   "runs": [
     {
-      "added_chunks": 1,
-      "added_documents": 1,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-07-14T18:16:19+00:00"
-    },
-    {
       "added_chunks": 0,
       "added_documents": 0,
       "dry_run": false,
@@ -15725,6 +15726,13 @@
       "dry_run": false,
       "errors": 1,
       "finished_at": "2026-07-29T13:07:33+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-29T18:14:55+00:00"
     }
   ],
   "version": 1

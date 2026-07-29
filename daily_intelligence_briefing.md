@@ -1,7 +1,9 @@
 📌 Daily Intelligence Briefing Adioranye
-Waktu: 2026-07-29 20:07:33 WIB
-Dokumen baru: 0 | Chunk baru: 0 | Error: 1
+Waktu: 2026-07-30 01:14:55 WIB
+Dokumen baru: 1 | Chunk baru: 1 | Error: 0
 
-Belum ada dokumen baru pada run ini.
+Top update penting:
+1. OpenAI News — Accelerating scientific discovery with ChatGPT for Academic Researchers
+   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0
 
 Rekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis.
