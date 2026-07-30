@@ -1,7 +1,9 @@
 📌 Daily Intelligence Briefing Adioranye
-Waktu: 2026-07-30 19:54:40 WIB
-Dokumen baru: 0 | Chunk baru: 0 | Error: 0
+Waktu: 2026-07-31 01:44:55 WIB
+Dokumen baru: 1 | Chunk baru: 1 | Error: 0
 
-Belum ada dokumen baru pada run ini.
+Top update penting:
+1. OpenAI News — Advancing the price-performance frontier with GPT-5.6
+   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0
 
 Rekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis.

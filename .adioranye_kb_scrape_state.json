@@ -1920,6 +1920,14 @@
       "title": "ANTARA News - Humaniora — Mengenal status liber dalam aturan pernikahan Katolik",
       "url": "https://www.antaranews.com/berita/5361666/mengenal-status-liber-dalam-aturan-pernikahan-katolik"
     },
+    "1ee978728608c33fc8a971d5c718d6c7313384678dc608f70bcd752b657b8ba5": {
+      "chunks": 1,
+      "created_at": "2026-07-30T18:44:49+00:00",
+      "doc_id": 2185,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Advancing the price-performance frontier with GPT-5.6",
+      "url": "https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6"
+    },
     "1f14aea642c1ef6dc654d88c514b1a73710be9901f29d8e5b167cb909986c0e0": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:28+00:00",
@@ -15323,13 +15331,6 @@
   },
   "runs": [
     {
-      "added_chunks": 1,
-      "added_documents": 1,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-07-15T18:19:31+00:00"
-    },
-    {
       "added_chunks": 0,
       "added_documents": 0,
       "dry_run": false,
@@ -15741,6 +15742,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-30T12:54:40+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-30T18:44:55+00:00"
     }
   ],
   "version": 1
