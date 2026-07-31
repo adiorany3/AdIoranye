@@ -74,22 +74,23 @@
     "url": "https://blog.google/innovation-and-ai/technology/ai/"
   },
   {
-    "collection": "Adioranye Tech Stack",
+    "collection": "AI Research Updates",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "vercel_changelog",
+    "id": "google_deepmind",
     "max_items": 1,
-    "name": "Vercel Changelog",
-    "source_type": "official-docs",
+    "name": "Google DeepMind News",
+    "source_type": "official",
     "tags": [
-      "vercel",
-      "deployment",
-      "changelog"
+      "deepmind",
+      "ai",
+      "research",
+      "official"
     ],
     "type": "html",
     "update_profile": "warm",
-    "url": "https://vercel.com/changelog"
+    "url": "https://deepmind.google/blog/"
   },
   {
     "collection": "AI Research Papers",

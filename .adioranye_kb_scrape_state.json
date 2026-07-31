@@ -2936,6 +2936,14 @@
       "title": "ANTARA News - Metro — Fasilitas pedestrian ramah disabilitas yang perlu diwujudkan",
       "url": "https://www.antaranews.com/berita/5356730/fasilitas-pedestrian-ramah-disabilitas-yang-perlu-diwujudkan"
     },
+    "3078a0319b6eaa1dde7d64351c08924999ad48cae8661d58b2b013e906316cb5": {
+      "chunks": 1,
+      "created_at": "2026-07-31T08:09:14+00:00",
+      "doc_id": 2186,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Advancing responsible AI across Europe",
+      "url": "https://openai.com/index/advancing-responsible-ai-across-europe"
+    },
     "3088d09810fbd9c56f3dfd4b54ffb4b8bff504badc1a5036fca2bed414e1392a": {
       "chunks": 1,
       "created_at": "2026-05-22T01:59:56+00:00",
@@ -15335,13 +15343,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-16T07:31:43+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-16T12:50:46+00:00"
     },
     {
@@ -15749,6 +15750,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-31T00:15:15+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-31T08:09:17+00:00"
     }
   ],
   "version": 1
