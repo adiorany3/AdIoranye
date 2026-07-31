@@ -64,6 +64,14 @@
       "title": "Google News Indonesia - Kesehatan Populer — Sakit Belum Sembuh Total, Jemaah Haji Indonesia Terpaksa Pindah RS Akibat Batasan Asuransi - gesuri.id",
       "url": "https://news.google.com/rss/articles/CBMi0AFBVV95cUxQTTFscnJXVEpZemNkbjlycVhtNWJwYzVkajJDX2QtbHMwYVNRUU9DUFl3eGc4WDJWLVI3XzZxLUs1c2RIcTZRbFNXa3lXOVpCZGxQbEQzdk81eXhNN3ZiVHp0QWpPemFxdnE5dkNOZmxlX1J1M1k1SzRHdDkwMmY2blUwWUFqaUNmdVVMcm5vYW5sLWRvLTdKZ2tfb2VPSm4wT1plUkpPZWlPMllVd1RzeWl6NXJXZE5xdFBGN2xlNkxSdW0zZV90Q1llbFBma1lj0gHWAUFVX3lxTE5zd0FIMVFrd3hQaU5Ucl9KNTMta3NYN2w5YzlZSmNFT2hMTDFOTU5zQV84UEFkckppRmphNk02ZmJJMlBrS1pjRG00ci1nYWpEYzJsM1hVM1pJZUNMc3BoTHB0Q1dvOHE1eWVNOUhjYzNRMUs5dFgzU1hxVG9zVTlMaDcta0ppUzJYdkFQUW5JLUp0ZXRZcFZOZnlYUUN1TEFNdkNZVmFyRWNmZk9fNVc4c0VnSkxCQ0toZlFCSGJfcXE2RElBc3ZEVmhCaFdVVE50VHZtWXc?oc=5"
     },
+    "00e4a2659789e6c2f37a8b51d20954f74860ce6cb0a72351f948b94d0334c263": {
+      "chunks": 1,
+      "created_at": "2026-07-31T18:44:38+00:00",
+      "doc_id": 2187,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Disrupting a Criminal Scam Operation",
+      "url": "https://openai.com/index/disrupting-malicious-uses-of-ai-criminal-scam-operation"
+    },
     "00f70fb57a05b0505b7063df7ab814ba25948ffea8ad731e0de484e3a7f153d1": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:37+00:00",
@@ -15343,13 +15351,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-16T18:19:11+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-17T00:11:58+00:00"
     },
     {
@@ -15757,6 +15758,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-07-31T13:05:29+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-07-31T18:44:45+00:00"
     }
   ],
   "version": 1
