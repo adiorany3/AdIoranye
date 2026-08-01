@@ -12168,6 +12168,14 @@
       "title": "OpenAI News — Building self-improving tax agents with Codex | OpenAI",
       "url": "https://openai.com/index/building-self-improving-tax-agents-with-codex"
     },
+    "c7ae32afbf6469b2b68ba8c034e1f5a89f4d65a5b5d0f93153b5fba76b2915c7": {
+      "chunks": 1,
+      "created_at": "2026-08-01T07:37:40+00:00",
+      "doc_id": 2188,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Ten advances in mathematics and theoretical computer science",
+      "url": "https://openai.com/index/ten-advances-in-mathematics"
+    },
     "c7eab1a0047cbf760e97c6c431916894a562f7e3e599b7decf36c4eb2395c9cd": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:19+00:00",
@@ -15351,13 +15359,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-17T07:29:18+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-17T12:20:10+00:00"
     },
     {
@@ -15765,6 +15766,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-08-01T00:10:44+00:00"
+    },
+    {
+      "added_chunks": 1,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-08-01T07:37:44+00:00"
     }
   ],
   "version": 1
