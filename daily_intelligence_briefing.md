@@ -1,9 +1,7 @@
 📌 Daily Intelligence Briefing Adioranye
-Waktu: 2026-08-01 14:37:44 WIB
-Dokumen baru: 1 | Chunk baru: 1 | Error: 0
+Waktu: 2026-08-01 19:12:18 WIB
+Dokumen baru: 0 | Chunk baru: 0 | Error: 1
 
-Top update penting:
-1. OpenAI News — Ten advances in mathematics and theoretical computer science
-   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0
+Belum ada dokumen baru pada run ini.
 
 Rekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis.
