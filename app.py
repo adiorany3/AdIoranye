@@ -806,6 +806,60 @@ def build_local_safe_fallback_answer(
     """
     text = str(user_text or "").strip()
     lower = text.lower()
+    normalized = _normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real-time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
 
     # Fallback spesifik yang diminta user: ransum kuda.
     if "ransum" in lower and ("kuda" in lower or "horse" in lower):
@@ -851,6 +905,27 @@ Jika datanya tersedia, ransum bisa dihitung lebih tepat berdasarkan:
             "model_skipped_after_failure": True,
             "failure_reason": failure_reason[:500],
         }
+
+    # Jawaban lokal singkat untuk pertanyaan umum stabil agar pesan error publik jarang muncul.
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            answer = (
+                "Model sedang tidak stabil. Untuk sementara, kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, "
+                "misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat."
+            )
+            return answer, {
+                "local_safe_fallback_used": True,
+                "local_safe_fallback_type": "general_question_redirect",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            }
 
     # Fallback umum untuk permintaan "buatkan" yang tidak membutuhkan info terkini.
     if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):

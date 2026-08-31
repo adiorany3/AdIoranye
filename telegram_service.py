@@ -315,6 +315,60 @@ def build_telegram_local_safe_fallback_answer(
 ) -> tuple[str, Dict[str, Any]]:
     text = str(user_text or "").strip()
     lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real-time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
 
     if "ransum" in lower and ("kuda" in lower or "horse" in lower):
         answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
@@ -353,6 +407,25 @@ Catatan:
             "model_skipped_after_failure": True,
             "failure_reason": failure_reason[:500],
         }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
 
     if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
         return (
