@@ -117,6 +117,8 @@ def mode_policy(mode: str) -> Dict[str, Any]:
             "strict_rag": False,
             "verifier": False,
             "min_sources": 0,
+            "prefer_general_knowledge": True,
+            "kb_bias": "low",
             "format": "ringkas",
         }
     if mode == "pintar":
@@ -127,6 +129,8 @@ def mode_policy(mode: str) -> Dict[str, Any]:
             "strict_rag": False,
             "verifier": True,
             "min_sources": 0,
+            "prefer_general_knowledge": True,
+            "kb_bias": "low",
             "format": "lengkap",
         }
     if mode == "riset":
@@ -137,6 +141,8 @@ def mode_policy(mode: str) -> Dict[str, Any]:
             "strict_rag": False,
             "verifier": True,
             "min_sources": 1,
+            "prefer_general_knowledge": False,
+            "kb_bias": "high",
             "format": "berbasis_sumber",
         }
     if mode == "kritis":
@@ -147,6 +153,8 @@ def mode_policy(mode: str) -> Dict[str, Any]:
             "strict_rag": True,
             "verifier": True,
             "min_sources": 1,
+            "prefer_general_knowledge": False,
+            "kb_bias": "high",
             "format": "kritis",
         }
     return {
@@ -156,6 +164,8 @@ def mode_policy(mode: str) -> Dict[str, Any]:
         "strict_rag": False,
         "verifier": False,
         "min_sources": 0,
+        "prefer_general_knowledge": True,
+        "kb_bias": "low",
         "format": "auto",
     }
 

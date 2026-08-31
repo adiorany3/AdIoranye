@@ -3253,6 +3253,8 @@ def generate_power_answer(
         requested_mode = normalize_answer_mode(stored_mode)
     effective_answer_mode = infer_answer_mode(user_text, requested_mode=requested_mode, intent=intent)
     answer_mode_policy = mode_policy(effective_answer_mode)
+    prefer_general_knowledge = bool(answer_mode_policy.get("prefer_general_knowledge"))
+    kb_bias = str(answer_mode_policy.get("kb_bias") or "auto").strip().lower()
     if bool(answer_mode_policy.get("force_rag")):
         enable_rag = True
     if bool(answer_mode_policy.get("strict_rag")):
@@ -3293,6 +3295,17 @@ def generate_power_answer(
         and bool(disable_rag_for_casual)
         and not bool(answer_mode_policy.get("force_rag"))
         and is_casual_or_light_chat(user_text, intent=intent, answer_mode=effective_answer_mode)
+    ):
+        enable_rag = False
+        casual_rag_skipped = True
+
+    if (
+        enable_rag
+        and prefer_general_knowledge
+        and not bool(answer_mode_policy.get("force_rag"))
+        and kb_bias == "low"
+        and not music_chart_query
+        and str(intent or "") not in SOURCE_WORTHY_INTENTS
     ):
         enable_rag = False
         casual_rag_skipped = True
@@ -3485,6 +3498,10 @@ def generate_power_answer(
             },
         )
 
+    if prefer_general_knowledge and not rag_sources and effective_answer_mode not in {"riset", "kritis"}:
+        guard_result.allow_answer = True
+        guard_result.reason = "general_knowledge_mode_without_kb"
+
     memory_text = build_power_context(
         store=store,
         user_text=user_text,
@@ -3500,11 +3517,19 @@ def generate_power_answer(
     guard_instruction = build_guard_system_instruction(user_text, rag_sources, guard_result) if anti_hallucination_enabled else ""
     mode_instruction = build_mode_system_instruction(effective_answer_mode, user_text) if quality_control_enabled else ""
     live_instruction = build_live_search_system_instruction(live_search_result) if live_search_result is not None else ""
+    general_knowledge_instruction = ""
+    if prefer_general_knowledge and not rag_sources and effective_answer_mode not in {"riset", "kritis"}:
+        general_knowledge_instruction = (
+            "MODE PENGETAHUAN UMUM AKTIF. "
+            "Jika konteks Knowledge Base tidak dipakai atau kosong, tetap jawab dari pengetahuan umum yang stabil dan aman. "
+            "Jangan pura-pura punya sumber KB. Untuk fakta terbaru atau spesifik waktu, nyatakan keterbatasan bila belum ada bukti live."
+        )
     guarded_system_prompt = (
         str(system_prompt or "").strip()
         + ("\n\n" + mode_instruction if mode_instruction else "")
         + ("\n\n" + guard_instruction if guard_instruction else "")
         + ("\n\n" + live_instruction if live_instruction else "")
+        + ("\n\n" + general_knowledge_instruction if general_knowledge_instruction else "")
     ).strip()
     guarded_temperature = apply_temperature_policy(float(temperature or 0.3), guard_result)
 
