@@ -10,192 +10,45 @@ import requests
 
 
 # =========================
-# SlashAI model catalog
+# Single-provider model catalog
 # =========================
-# Katalog ini menjadi satu sumber referensi untuk harga, tier, fallback,
-# health-check, /speed, /rotate, /ubah murah, dan /ubah mahal.
-# Satuan harga: Rupiah per 1M token.
-SLASHAI_MODEL_CATALOG: List[Dict[str, Any]] = [
-    {"model": 'slashai/claude-haiku-4.5:fast', "aliases": [], "input": 12000, "output": 83000},
-    {"model": 'slashai/claude-opus-4-5', "aliases": [], "input": 85000, "output": 439000},
-    {"model": 'slashai/claude-opus-4.5', "aliases": [], "input": 85000, "output": 439000},
-    {"model": 'slashai/claude-opus-4.7:fast', "aliases": [], "input": 85000, "output": 439000},
-    {"model": 'slashai/claude-sonnet-4.5-free', "aliases": [], "input": 0, "output": 0},
-    {"model": 'slashai/claude-sonnet-4.5:free', "aliases": [], "input": 0, "output": 0},
-    {"model": 'slashai/deepseek-3.2:fast', "aliases": [], "input": 4100, "output": 6300},
-    {"model": 'slashai/deepseek-v4-flash-free', "aliases": [], "input": 0, "output": 0},
-    {"model": 'slashai/deepseek-v4-flash:medium', "aliases": [], "input": 1000, "output": 3200},
-    {"model": 'slashai/deepseek-v4-pro:medium', "aliases": [], "input": 7300, "output": 13000},
-    {"model": 'slashai/glm-5.1:medium', "aliases": [], "input": 14000, "output": 51000},
-    {"model": 'slashai/glm-5:fast', "aliases": [], "input": 7000, "output": 30000},
-    {"model": 'slashai/glm-5:medium', "aliases": [], "input": 7000, "output": 30000},
-    {"model": 'slashai/gpt-5-codex', "aliases": [], "input": 19000, "output": 170000},
-    {"model": 'slashai/gpt-5-codex-mini', "aliases": [], "input": 4100, "output": 32000},
-    {"model": 'slashai/gpt-5-codex-mini-review', "aliases": [], "input": 4100, "output": 32000},
-    {"model": 'slashai/gpt-5-codex-review', "aliases": [], "input": 19000, "output": 170000},
-    {"model": 'slashai/gpt-5.1', "aliases": [], "input": 20000, "output": 170000},
-    {"model": 'slashai/gpt-5.1-codex', "aliases": [], "input": 20000, "output": 170000},
-    {"model": 'slashai/gpt-5.1-codex-max', "aliases": [], "input": 22000, "output": 190000},
-    {"model": 'slashai/gpt-5.1-codex-max-review', "aliases": [], "input": 20000, "output": 170000},
-    {"model": 'slashai/gpt-5.1-codex-mini', "aliases": [], "input": 4000, "output": 31000},
-    {"model": 'slashai/gpt-5.1-codex-mini-high', "aliases": [], "input": 4200, "output": 31200},
-    {"model": 'slashai/gpt-5.1-codex-mini-high-review', "aliases": [], "input": 4200, "output": 31200},
-    {"model": 'slashai/gpt-5.1-codex-mini-review', "aliases": [], "input": 4000, "output": 30000},
-    {"model": 'slashai/gpt-5.1-codex-review', "aliases": [], "input": 20000, "output": 170000},
-    {"model": 'slashai/gpt-5.1-review', "aliases": [], "input": 20000, "output": 170000},
-    {"model": 'slashai/gpt-5.2-codex', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.2-codex-review', "aliases": [], "input": 23000, "output": 240000},
-    {"model": 'slashai/gpt-5.2-review', "aliases": [], "input": 23000, "output": 240000},
-    {"model": 'slashai/gpt-5.2:cx', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-high', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-high-review', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-low', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-low-review', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-none', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-none-review', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-review', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-spark', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-spark-review', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-xhigh', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.3-codex-xhigh-review', "aliases": [], "input": 27000, "output": 243000},
-    {"model": 'slashai/gpt-5.4-review', "aliases": [], "input": 41000, "output": 260000},
-    {"model": 'slashai/gpt-5.4:cx', "aliases": [], "input": 41000, "output": 260000},
-    {"model": 'slashai/gpt-5.5-review', "aliases": [], "input": 82000, "output": 527000},
-    {"model": 'slashai/gpt-5.5:cx', "aliases": [], "input": 82000, "output": 527000},
-    {"model": 'slashai/kimi-k2.5:medium', "aliases": [], "input": 5000, "output": 30000},
-    {"model": 'slashai/kimi-k2.6', "aliases": [], "input": 10000, "output": 30000},
-    {"model": 'slashai/mimo-v2-omni', "aliases": [], "input": 5000, "output": 32000},
-    {"model": 'slashai/mimo-v2-pro', "aliases": [], "input": 15000, "output": 50000},
-    {"model": 'slashai/mimo-v2.5', "aliases": [], "input": 5000, "output": 32000},
-    {"model": 'slashai/mimo-v2.5-pro', "aliases": [], "input": 15000, "output": 50000},
-    {"model": 'slashai/minimax-m2.5:fast', "aliases": [], "input": 500, "output": 2000},
-    {"model": 'slashai/minimax-m2.5:medium', "aliases": [], "input": 2000, "output": 17000},
-    {"model": 'slashai/minimax-m2.7:medium', "aliases": [], "input": 4200, "output": 13000},
-    {"model": 'slashai/nemotron-3-super-free', "aliases": [], "input": 0, "output": 0},
-    {"model": 'slashai/qwen3-coder-next:fast', "aliases": [], "input": 1600, "output": 11000},
-    {"model": 'slashai/qwen3.6-max-preview', "aliases": [], "input": 15000, "output": 100000},
-    {"model": 'slashai/qwen3.6-plus', "aliases": [], "input": 5000, "output": 30000},
-    {"model": 'slashai/step-3.5-flash', "aliases": [], "input": 1000, "output": 5000},
+# Saat ini aplikasi tidak lagi memakai SlashAI multi-model. Semua routing dan
+# health check hanya perlu membahas satu model aktif: Tamandata.
+SINGLE_MODEL_CATALOG: List[Dict[str, Any]] = [
+    {"model": "tamandata", "aliases": ["tamandata"], "input": 0, "output": 0},
 ]
 
-def _unique_ordered(items: List[str]) -> List[str]:
-    return list(dict.fromkeys(str(item).strip() for item in items if str(item).strip()))
+MODEL_PRICE_IDR: Dict[str, Dict[str, int]] = {
+    "tamandata": {"input": 0, "output": 0},
+}
+
+# Legacy compatibility for older modules/scripts that still reference the old name.
+SLASHAI_MODEL_CATALOG: List[Dict[str, Any]] = SINGLE_MODEL_CATALOG
+
+TOP_USAGE_MODEL_CANDIDATES = ["tamandata"]
+ALL_SLASHAI_MODELS = ["tamandata"]
+ALL_CHEAP_MODELS = ["tamandata"]
+ALL_MEDIUM_MODELS = []
+ALL_EXPENSIVE_MODELS = []
+ALL_CAPABLE_MODELS = ["tamandata"]
+DEFAULT_CHEAP_FALLBACK_MODELS = ["tamandata"]
+DEFAULT_EXPENSIVE_FALLBACK_MODELS = ["tamandata"]
+DEFAULT_FALLBACK_MODELS = ["tamandata"]
 
 
 def _tier_from_price(input_price: int, output_price: int) -> str:
-    """Klasifikasi biaya berdasarkan harga Rupiah per 1M token.
-
-    Tier dipakai untuk routing hemat:
-    - cheap: gratis atau sangat murah untuk chat sederhana;
-    - medium: masih ekonomis untuk jawaban normal;
-    - expensive: model mahal/capable;
-    - ultra: sangat mahal, dipakai hanya jika memang perlu.
-    """
+    """Views a model as cheap/medium/expensive using a simple price-based heuristic."""
     input_price = int(input_price or 0)
     output_price = int(output_price or 0)
-
     if input_price == 0 and output_price == 0:
         return "cheap"
-
     if input_price <= 5000 and output_price <= 13000:
         return "cheap"
-
     if input_price <= 15000 and output_price <= 100000:
         return "medium"
-
     if input_price <= 41000 and output_price <= 260000:
         return "expensive"
-
     return "ultra"
-
-
-MODEL_PRICE_IDR: Dict[str, Dict[str, int]] = {
-    item["model"]: {"input": int(item["input"]), "output": int(item["output"])}
-    for item in SLASHAI_MODEL_CATALOG
-}
-
-# Kompatibilitas nama lama/varian kapitalisasi/base-name.
-MODEL_PRICE_IDR.update({
-    'slashai/claude-haiku-4.5': {"input": 12000, "output": 83000},
-    'slashai/claude-sonnet-4.5': {"input": 0, "output": 0},
-    'slashai/claude-sonnet-4.5:free': {"input": 0, "output": 0},
-    'slashai/claude-opus-4.5': {"input": 85000, "output": 439000},
-    'slashai/claude-opus-4-5': {"input": 85000, "output": 439000},
-    'slashai/claude-opus-4.7': {"input": 85000, "output": 439000},
-    'slashai/deepseek-3.2': {"input": 4100, "output": 6300},
-    'slashai/deepseek-v4-flash': {"input": 1000, "output": 3200},
-    'bai/deepseek-v4-flash': {"input": 1000, "output": 3200},
-    'slashai/deepseek-v4-flash-free': {"input": 0, "output": 0},
-    'slashai/deepseek-v4-pro': {"input": 7300, "output": 13000},
-    'slashai/glm-5': {"input": 7000, "output": 30000},
-    'slashai/GLM-5': {"input": 7000, "output": 30000},
-    'slashai/glm-5.1': {"input": 14000, "output": 51000},
-    'slashai/GLM-5.1': {"input": 14000, "output": 51000},
-    'slashai/gpt-5.2': {"input": 23000, "output": 240000},
-    'slashai/gpt-5.3': {"input": 27000, "output": 243000},
-    'slashai/gpt-5.4': {"input": 41000, "output": 260000},
-    'slashai/gpt-5.5': {"input": 82000, "output": 527000},
-    'slashai/kimi-k2.5': {"input": 5000, "output": 30000},
-    'slashai/Kimi-K2.5': {"input": 5000, "output": 30000},
-    'slashai/Kimi-K2.6': {"input": 10000, "output": 30000},
-    'slashai/minimax-m2.5': {"input": 500, "output": 2000},
-    'slashai/MiniMax-M2.5': {"input": 500, "output": 2000},
-    'slashai/minimax-m2.7': {"input": 4200, "output": 13000},
-    'slashai/MiniMax-M2.7': {"input": 4200, "output": 13000},
-    'slashai/qwen3-coder-next': {"input": 1600, "output": 11000},
-    'slashai/Qwen3.6-Plus': {"input": 5000, "output": 30000},
-    'slashai/Qwen3.6-Max-Preview': {"input": 15000, "output": 100000},
-    'slashai/Step-3.5-Flash': {"input": 1000, "output": 5000},
-})
-
-# Model prioritas untuk health check dan routing hemat.
-# Aplikasi sekarang beroperasi di endpoint Tamandata, jadi kandidat default harus mengarah ke model yang benar-benar tersedia di provider ini.
-TOP_USAGE_MODEL_CANDIDATES = _unique_ordered([
-    'tamandata',
-])
-
-# Pastikan kandidat prioritas juga memiliki harga.
-MODEL_PRICE_IDR.update({
-    'slashai/deepseek-v4-flash-free': {"input": 0, "output": 0},
-    'slashai/claude-sonnet-4.5-free': {"input": 0, "output": 0},
-    'slashai/nemotron-3-super-free': {"input": 0, "output": 0},
-    'slashai/minimax-m2.5:fast': {"input": 500, "output": 2000},
-    'slashai/deepseek-v4-flash:medium': {"input": 1000, "output": 3200},
-    'slashai/step-3.5-flash': {"input": 1000, "output": 5000},
-    'slashai/qwen3-coder-next:fast': {"input": 1600, "output": 11000},
-    'slashai/minimax-m2.7:medium': {"input": 4200, "output": 13000},
-    'slashai/deepseek-3.2:fast': {"input": 4100, "output": 6300},
-    'slashai/kimi-k2.5:medium': {"input": 5000, "output": 30000},
-    'slashai/qwen3.6-plus': {"input": 5000, "output": 30000},
-})
-ALL_SLASHAI_MODELS = _unique_ordered([item["model"] for item in SLASHAI_MODEL_CATALOG] + TOP_USAGE_MODEL_CANDIDATES)
-ALL_CHEAP_MODELS = _unique_ordered([
-    item["model"] for item in SLASHAI_MODEL_CATALOG
-    if _tier_from_price(int(item["input"]), int(item["output"])) == "cheap"
-])
-ALL_MEDIUM_MODELS = _unique_ordered([
-    item["model"] for item in SLASHAI_MODEL_CATALOG
-    if _tier_from_price(int(item["input"]), int(item["output"])) == "medium"
-])
-ALL_EXPENSIVE_MODELS = _unique_ordered([
-    item["model"] for item in SLASHAI_MODEL_CATALOG
-    if _tier_from_price(int(item["input"]), int(item["output"])) == "expensive"
-])
-ALL_CAPABLE_MODELS = _unique_ordered(ALL_MEDIUM_MODELS + ALL_EXPENSIVE_MODELS)
-
-# Jalur murah: banyak opsi agar /rotate dan health-check bisa memilih yang hidup/tercepat.
-DEFAULT_CHEAP_FALLBACK_MODELS = _unique_ordered([
-    "tamandata",
-])
-
-# Jalur menengah/mahal: dipakai oleh /ubah mahal, thinking router, atau fallback saat murah kurang cukup.
-DEFAULT_EXPENSIVE_FALLBACK_MODELS = _unique_ordered([
-    "tamandata",
-])
-
-# Kompatibilitas dengan versi lama.
-DEFAULT_FALLBACK_MODELS = DEFAULT_CHEAP_FALLBACK_MODELS
 
 
 def model_price(model: str) -> Dict[str, int]:

@@ -129,7 +129,6 @@ TECHNICAL_ERROR_PATTERNS = [
     "insufficient_user_quota",
     "invalid model",
     "openai-compatible",
-    "slashai/",
     "traceback",
     "requests.exceptions",
     "connectionerror",
