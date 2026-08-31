@@ -12199,10 +12199,9 @@ def render_admin_settings() -> None:
     st.markdown(
         f"""
         <div class="admin-section-card">
-            <div class="admin-section-title">⚙️ Pusat Kontrol Admin</div>
+            <div class="admin-section-title">⚙️ Admin Sederhana</div>
             <p class="admin-section-desc">
-                Login sebagai <strong>{_html_escape(admin_username)}</strong>. Atur model, Telegram, memory, Knowledge Base,
-                live web, cache, optimizer, dan maintenance dari panel ini.
+                Login sebagai <strong>{_html_escape(admin_username)}</strong>. Fokus ke model, Telegram, memory, health, dan setup dasar.
             </p>
         </div>
         """,
@@ -12220,11 +12219,12 @@ def render_admin_settings() -> None:
 
     st.markdown('<div class="admin-divider-soft"></div>', unsafe_allow_html=True)
 
-    tab_ai, tab_bot, tab_memory, tab_health, tab_maint, tab_setup = st.tabs(
-        ["🤖 AI", "💬 Telegram", "🧠 Memory", "✅ Health", "🧹 Akses Terbatas", "🔧 Setup"]
-    )
+    with st.expander("Pengaturan inti", expanded=True):
+        tab_ai, tab_bot, tab_memory = st.tabs(
+            ["🤖 AI", "💬 Telegram", "🧠 Memory"]
+        )
 
-    with tab_ai:
+        with tab_ai:
         st.markdown("#### 🤖 Model & Persona")
         render_mode_selector()
         filter_choice = st.radio(
@@ -12535,7 +12535,7 @@ def render_admin_settings() -> None:
                 st.session_state.last_rotated_primary_model = ""
                 st.rerun()
 
-    with tab_bot:
+        with tab_bot:
         st.markdown("#### Kontrol Bot Telegram")
         format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
         format_token_status("AI_API_KEY", api_key)
@@ -12689,7 +12689,7 @@ def render_admin_settings() -> None:
             with st.expander("Error terakhir"):
                 st.code(status["last_error"][:2000])
 
-    with tab_memory:
+        with tab_memory:
         st.markdown("#### Memory Default Aktif")
         st.caption(
             "Memory default ini selalu ikut dikirim ke AI, baik ada memory cache maupun belum ada."
@@ -12815,14 +12815,19 @@ def render_admin_settings() -> None:
                 st.warning("Semua memory file lokal dihapus.")
                 st.rerun()
 
-    with tab_health:
+    with st.expander("Lanjutan", expanded=False):
+        tab_health, tab_maint, tab_setup = st.tabs(
+            ["✅ Health", "🧹 Akses Terbatas", "🔧 Setup"]
+        )
+
+        with tab_health:
         render_secrets_validator_panel()
         render_ai_health_center()
 
-    with tab_maint:
+        with tab_maint:
         render_maintenance_tools()
 
-    with tab_setup:
+        with tab_setup:
         st.markdown("#### Secrets Aplikasi")
         st.write(
             "Masukkan konfigurasi berikut di menu **Dashboard Aplikasi → Settings → Secrets**."
@@ -13698,17 +13703,21 @@ def render_public_page() -> None:
             "API key belum diisi atau konfigurasi provider masih memakai placeholder. Isi SLASHAI_API_KEY dan SLASHAI_API_URL di secrets/env agar chat dapat berjalan."
         )
 
-    col_new_chat, col_info = st.columns([1, 4])
+    st.title("Adioranye AI")
+    st.caption("Chat AI sederhana untuk tanya jawab, ringkasan, analisis, dan bantuan harian.")
+    st.markdown(
+        f'<div class="production-status-card"><span class="production-pill ok">Status</span><span>{_html_escape(public_status_label)}</span><span>{_html_escape(public_status_subtitle)}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+    col_new_chat, col_info = st.columns([1, 1])
     with col_new_chat:
         if st.button("🧹 Chat baru", use_container_width=True, key="auto_btn_3209"):
             st.session_state.chat_messages = []
             st.session_state.pending_prompt = ""
             st.rerun()
     with col_info:
-        st.markdown(
-            f'<div class="ios-chat-meta">💬 {len(st.session_state.chat_messages)} pesan</div>',
-            unsafe_allow_html=True,
-        )
+        st.caption(f"💬 {len(st.session_state.chat_messages)} pesan")
 
     if st.session_state.chat_messages:
         transcript_parts = []
@@ -13727,8 +13736,6 @@ def render_public_page() -> None:
         )
 
     st.divider()
-
-    render_math_test_panel()
 
     for idx, msg in enumerate(st.session_state.chat_messages):
         with st.chat_message(msg["role"]):
@@ -14497,11 +14504,11 @@ def render_power_features_admin_panel() -> None:
     if power_features_enabled and st.session_state.get("admin_authenticated", False):
         try:
             with st.expander(
-                "⚡ Pusat Fitur Pintar: Knowledge Base, Memory, Biaya, Optimizer",
-                expanded=True,
+                "⚡ Fitur pintar lanjutan",
+                expanded=False,
             ):
                 st.caption(
-                    "Kelola fitur pintar dari satu tempat. Mulai dari Upload File untuk knowledge base, lalu pantau Usage dan Optimizer agar model tetap hemat dan stabil."
+                    "Knowledge Base, usage, optimizer, benchmark, quality, dan performance ada di sini bila diperlukan."
                 )
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
@@ -15553,34 +15560,8 @@ def render_power_features_admin_panel() -> None:
 
 def render_admin_page() -> None:
     render_admin_custom_css()
-    st.markdown(
-        """
-        <div class="admin-page-shell">
-            <div class="mac-windowbar admin-route-bar">
-                <div class="mac-traffic">
-                    <span class="mac-close"></span>
-                    <span class="mac-min"></span>
-                    <span class="mac-max"></span>
-                </div>
-                <div class="mac-window-title">adioranye admin</div>
-                <div class="mac-window-actions">Private</div>
-            </div>
-            <div class="app-hero admin-route-hero">
-                <div class="app-logo">🔐</div>
-                <div class="admin-hero-copy">
-                    <div class="admin-hero-kicker">Admin workspace</div>
-                    <h3 class="app-title">Panel Kontrol Adioranye</h3>
-                    <p class="app-subtitle">Kelola model, Telegram, Knowledge Base, cache, health check, live web, optimizer, dan maintenance dari satu halaman yang lebih rapi.</p>
-                </div>
-                <div class="admin-hero-actions">
-                    <span class="admin-pill">🔒 Private</span>
-                    <span class="admin-pill">⚙️ System Control</span>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.title("Adioranye Admin")
+    st.caption("Panel admin ringkas untuk kontrol inti dan fitur lanjutan saat perlu.")
 
     if st.session_state.admin_authenticated:
         render_admin_settings()
