@@ -2792,7 +2792,7 @@ class PowerStore:
                 score += 0.13
             if intent_name in {"academic", "research", "deep_reasoning", "document_question"} and any(k in lower for k in ["sonnet", "qwen", "gpt-5.2", "gpt-5.4", "gpt-5.5", "glm", "kimi"]):
                 score += 0.10
-            if intent_name in {"quick_chat", "creative", "general"} and any(k in lower for k in ["nano", "mini", "flash", "haiku", "fast"]):
+            if intent_name in {"quick_chat", "creative", "general"} and any(k in lower for k in ["tamandata", "free", "nano"]):
                 score += 0.08
             score -= min(out_price / 25000.0, 1.0) * 0.08
             return round(max(0.0, min(1.0, score)), 4)

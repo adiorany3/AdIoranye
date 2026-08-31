@@ -2794,11 +2794,7 @@ def _candidate_tier(model: str) -> str:
 def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
     """Build robust model pools from defaults, config, and dynamically classified candidates."""
     free_nano_first = [
-        "slashai/deepseek-v4-flash-free",
-        "slashai/claude-sonnet-4.5-free",
-        "slashai/nemotron-3-super-free",
         "tamandata",
-        "slashai/gpt-5.4-nano",
     ]
     default_cheap = telegram_sort_models_for_simple_chat(
         free_nano_first

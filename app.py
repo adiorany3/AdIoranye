@@ -1889,10 +1889,6 @@ def init_state() -> None:
             )
             and not bool(frontend_ultra_safe_mode)
         )
-    if "model_performance_stats" not in st.session_state:
-        st.session_state.model_performance_stats = load_model_performance_stats_from_file()
-    if "last_model_performance_event" not in st.session_state:
-        st.session_state.last_model_performance_event = {}
     if "active_health_check_scope" not in st.session_state:
         st.session_state.active_health_check_scope = "quick"
 
@@ -2253,14 +2249,6 @@ model_health_preserve_cache = parse_bool(
     get_secret("MODEL_HEALTH_PRESERVE_CACHE", True),
     default=True,
 )
-model_performance_state_file = str(
-    get_secret("MODEL_PERFORMANCE_STATE_FILE", ".adioranye_model_performance.json")
-    or ".adioranye_model_performance.json"
-).strip()
-model_performance_routing_enabled = parse_bool(
-    get_secret("MODEL_PERFORMANCE_ROUTING_ENABLED", True), default=True
-)
-model_performance_min_samples = int(get_secret("MODEL_PERFORMANCE_MIN_SAMPLES", 2) or 2)
 request_timeout_seconds = int(get_secret("MODEL_REQUEST_TIMEOUT_SECONDS", 45) or 45)
 # Health check model aktif kapan saja.
 # Default baru: tidak perlu menunggu jendela waktu tertentu.
@@ -3184,11 +3172,7 @@ def record_model_performance_from_meta(
 
 
 def get_model_success_rate(model_name: str) -> float:
-    entry = (st.session_state.get("model_performance_stats") or {}).get(str(model_name or ""), {})
-    requests_count = int(entry.get("requests", 0) or 0)
-    if requests_count <= 0:
-        return 0.92
-    return float(entry.get("success", 0) or 0) / max(1, requests_count)
+    return 1.0
 
 
 def get_model_effective_latency_ms(
@@ -3197,34 +3181,16 @@ def get_model_effective_latency_ms(
 ) -> float:
     health = health_cache or {}
     health_latency = health.get(model_name, {}).get("latency_ms")
-    perf = (st.session_state.get("model_performance_stats") or {}).get(str(model_name or ""), {})
-    perf_latency = perf.get("avg_latency_ms")
-    values = []
-    for value in [perf_latency, health_latency]:
-        try:
-            if value is not None and float(value) > 0:
-                values.append(float(value))
-        except Exception:
-            pass
-    if not values:
-        return 999999.0
-    return min(values)
+    try:
+        if health_latency is not None and float(health_latency) > 0:
+            return float(health_latency)
+    except Exception:
+        pass
+    return 999999.0
 
 
 def get_model_performance_penalty(model_name: str) -> float:
-    if not bool(model_performance_routing_enabled):
-        return 0.0
-    entry = (st.session_state.get("model_performance_stats") or {}).get(str(model_name or ""), {})
-    requests_count = int(entry.get("requests", 0) or 0)
-    if requests_count < int(model_performance_min_samples or 2):
-        return 0.0
-    success_rate = get_model_success_rate(model_name)
-    timeouts = int(entry.get("timeouts", 0) or 0)
-    failures = int(entry.get("failures", 0) or 0)
-    penalty = (1.0 - success_rate) * 10000
-    penalty += min(5000, timeouts * 900)
-    penalty += min(3000, failures * 250)
-    return penalty
+    return 0.0
 
 
 def reset_model_runtime_and_performance() -> None:
@@ -10490,7 +10456,7 @@ def render_admin_production_dashboard() -> None:
             )
 
     st.caption(
-        "Rate limit, penyamaran error, block model, dan ranking performa berjalan otomatis untuk halaman publik."
+        "Rate limit, penyamaran error, dan block model berjalan otomatis untuk halaman publik."
     )
     st.caption(
         f"Standby health saver: {'ON' if standby_health_saver_enabled else 'OFF'} • "
@@ -10513,43 +10479,14 @@ def render_admin_production_dashboard() -> None:
             success_count = int(info.get("success", 0) or 0)
             perf_rows.append(
                 {
-                    "model": model_name,
-                    "request": requests_count,
-                    "sukses": success_count,
-                    "success_rate": f"{(success_count / max(1, requests_count)) * 100:.1f}%",
-                    "avg_latency_ms": info.get("avg_latency_ms"),
-                    "timeout": info.get("timeouts", 0),
-                    "error_terakhir": str(info.get("last_error") or "")[:120],
-                }
-            )
-        perf_rows.sort(
-            key=lambda row: (
-                -float(str(row["success_rate"]).replace("%", "") or 0),
-                float(row.get("avg_latency_ms") or 999999),
-            )
-        )
-        with st.expander("Ranking performa model", expanded=False):
-            st.dataframe(perf_rows[:25], use_container_width=True, hide_index=True)
-
-    reset_col_a, reset_col_b = st.columns(2)
-    with reset_col_a:
-        if st.button(
-            "♻️ Reset model block",
-            use_container_width=True,
-            key="reset_runtime_blocks_btn",
-        ):
-            st.session_state.model_runtime_blocks = {}
-            st.success("Model block aktif sudah direset.")
-            st.rerun()
-    with reset_col_b:
-        if st.button(
-            "🧹 Reset performa model",
-            use_container_width=True,
-            key="reset_model_perf_btn",
-        ):
-            reset_model_runtime_and_performance()
-            st.success("Log performa model sudah direset.")
-            st.rerun()
+    if st.button(
+        "♻️ Reset model block",
+        use_container_width=True,
+        key="reset_runtime_blocks_btn",
+    ):
+        st.session_state.model_runtime_blocks = {}
+        st.success("Model block aktif sudah direset.")
+        st.rerun()
 
 
 
@@ -14515,7 +14452,6 @@ def render_power_features_admin_panel() -> None:
                         "📚 Knowledge Base",
                         "🧠 Memory",
                         "💰 Usage",
-                        "🛠️ Optimizer",
                         "🧪 Benchmark",
                         "🧠 Learning Loop",
                         "✅ Quality Control",
@@ -15178,47 +15114,6 @@ def render_power_features_admin_panel() -> None:
                     )
 
                 with tabs_power[3]:
-                    st.caption(
-                        "Optimizer memakai data nyata: success rate, latency, quality score, biaya, dan circuit breaker."
-                    )
-                    opt_intent = st.selectbox(
-                        "Lihat skor untuk intent",
-                        [
-                            "",
-                            "quick_chat",
-                            "coding",
-                            "academic",
-                            "livestock",
-                            "health",
-                            "calculation",
-                            "document_question",
-                            "research",
-                            "creative",
-                            "deep_reasoning",
-                            "general",
-                        ],
-                        format_func=lambda x: "semua intent" if x == "" else x,
-                        key="power_optimizer_intent",
-                    )
-                    st.dataframe(
-                        power_store.model_score_rows(
-                            intent=opt_intent or None, limit=120
-                        ),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-                    with st.expander("Circuit breaker / model yang sedang dikarantina"):
-                        st.dataframe(
-                            power_store.circuit_breaker_status(limit=120),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
-                    st.caption(
-                        f"Response cache: {'ON' if power_response_cache_enabled else 'OFF'} | TTL {power_response_cache_ttl_seconds}s | "
-                        f"Adaptive scoring: {'ON' if power_adaptive_scoring_enabled else 'OFF'} | Circuit breaker: {'ON' if power_circuit_breaker_enabled else 'OFF'}"
-                    )
-
-                with tabs_power[4]:
                     route_preview = build_model_routing_plan()
                     bench_models = unique_models(
                         [route_preview.get("primary_model", "")]
@@ -15253,7 +15148,7 @@ def render_power_features_admin_panel() -> None:
                             hide_index=True,
                         )
 
-                with tabs_power[5]:
+                with tabs_power[4]:
                     st.caption(
                         "Learning Loop menyimpan feedback, knowledge gap, pertanyaan berulang, dan template jawaban agar AI makin relevan."
                     )
@@ -15365,7 +15260,7 @@ def render_power_features_admin_panel() -> None:
                             )
                             st.success(f"Template tersimpan #{tid}")
 
-                with tabs_power[6]:
+                with tabs_power[5]:
                     st.caption(
                         "Quality Control memantau skor jawaban, mode jawaban, verifier model, export/import KB, dan evaluasi mingguan."
                     )
@@ -15466,7 +15361,7 @@ def render_power_features_admin_panel() -> None:
                         f"Quality Control: {'ON' if power_quality_control_enabled else 'OFF'} | Verifier: {'ON' if power_quality_verifier_enabled else 'OFF'} | Min score: {power_quality_min_score}"
                     )
 
-                with tabs_power[7]:
+                with tabs_power[6]:
                     st.caption(
                         "Performance Optimizer memantau retrieval, reranker, semantic cache, latency, dan maintenance SQLite."
                     )
