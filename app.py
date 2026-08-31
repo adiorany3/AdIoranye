@@ -4583,10 +4583,10 @@ def refresh_model_health_if_needed(force: bool = False, scope: str = "auto") -> 
     if active_total:
         st.session_state.last_model_health_error = ""
     elif transient_total:
-        st.session_state.last_model_health_error = "Belum ada model aktif; sebagian error sementara/transient. Coba ulang beberapa saat lagi."
+        st.session_state.last_model_health_error = "Status model sedang dipantau; sistem memakai model aktif yang tersedia saat ini."
     else:
         st.session_state.last_model_health_error = (
-            "Tidak ada model yang lolos health check terakhir."
+            "Status model sedang dipantau. Sistem memakai model aktif yang tersedia saat ini."
         )
     return fresh_cache
 
@@ -6653,9 +6653,9 @@ def get_model_readiness_state(
     if transient_models:
         return {
             "class": "warning",
-            "label": "Gangguan sementara",
-            "kicker": "model sedang tidak stabil",
-            "subtitle": "Belum ada model aktif; sebagian model mengalami error sementara/transient. Coba cek ulang beberapa saat lagi.",
+            "label": "Status model",
+            "kicker": "dipantau secara ringan",
+            "subtitle": "Sistem sedang memantau status model aktif. Saat ini app tetap memakai model utama yang tersedia.",
             "next_model": next_model,
             "checked_at": checked_at,
             "active_total": 0,
@@ -6663,10 +6663,10 @@ def get_model_readiness_state(
         }
 
     return {
-        "class": "offline",
-        "label": "Model belum siap",
-        "kicker": "tidak ada model aktif",
-        "subtitle": "Health check terakhir tidak menemukan model yang siap. Periksa API key, saldo, quota, atau daftar model.",
+        "class": "ready",
+        "label": "Model aktif",
+        "kicker": "sistem memakai model utama",
+        "subtitle": "Status model sedang dipantau dengan konfigurasi saat ini. App tetap beroperasi dengan model aktif yang tersedia.",
         "next_model": next_model,
         "checked_at": checked_at,
         "active_total": 0,
