@@ -283,4 +283,10 @@ def lightweight_claim_risk(answer: str) -> Dict[str, Any]:
             score += 1
         if score >= 2:
             claim_like.append(sl[:180])
-    return {"claim_like_count": len(claim_like), "examples": claim_like[:5], "overconfident": answer_has_overconfident_language(answer)}
+    overconfident = answer_has_overconfident_language(answer)
+    return {
+        "claim_like_count": len(claim_like),
+        "examples": claim_like[:5],
+        "overconfident": overconfident,
+        "risk_score": min(1.0, (len(claim_like) * 0.2) + (0.25 if overconfident else 0.0)),
+    }

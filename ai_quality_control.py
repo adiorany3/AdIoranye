@@ -14,6 +14,15 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
+    from hallucination_guard import answer_has_overconfident_language, lightweight_claim_risk
+except Exception:  # pragma: no cover
+    def answer_has_overconfident_language(answer: str) -> bool:  # type: ignore
+        return False
+
+    def lightweight_claim_risk(answer: str) -> Dict[str, Any]:  # type: ignore
+        return {"claim_like_count": 0, "examples": [], "overconfident": False}
+
+try:
     from ai_core import call_api_once, model_cost_tier
 except Exception:  # pragma: no cover
     call_api_once = None  # type: ignore
@@ -286,9 +295,23 @@ def score_answer_quality(
         if guard_meta.get("is_high_risk"):
             metrics["guard_high_risk"] = True
 
+    claim_risk = lightweight_claim_risk(answer)
+    metrics["claim_risk"] = claim_risk
+    if int(claim_risk.get("claim_like_count") or 0) > 0:
+        score -= min(0.12, 0.03 * int(claim_risk.get("claim_like_count") or 0))
+        reasons.append("jawaban_memuat_klaim_berisiko")
+    if bool(claim_risk.get("overconfident")) or answer_has_overconfident_language(answer):
+        score -= 0.08
+        reasons.append("bahasa_terlalu_pasti")
+    if high_risk and (int(claim_risk.get("claim_like_count") or 0) > 0 or bool(claim_risk.get("overconfident"))):
+        score -= 0.06
+        reasons.append("risiko_halusinasi_tinggi")
+
     score = max(0.0, min(1.0, score))
     level = "baik" if score >= 0.78 else ("cukup" if score >= 0.58 else "rendah")
     needs = score < 0.74 and (high_risk or mode in {"pintar", "riset", "kritis"})
+    if high_risk and (int(claim_risk.get("claim_like_count") or 0) > 0 or bool(claim_risk.get("overconfident"))):
+        needs = True
     if score < 0.58:
         needs = True
     return QualityResult(score, level, needs, reasons or ["ok"], metrics)
