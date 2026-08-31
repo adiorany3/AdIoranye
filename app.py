@@ -2075,7 +2075,7 @@ animated_loading_enabled = parse_bool(
     default=False,
 )
 telegram_show_model_info = parse_bool(
-    get_secret("TELEGRAM_SHOW_MODEL_INFO", True), default=True
+    get_secret("TELEGRAM_SHOW_MODEL_INFO", False), default=False
 )
 telegram_speed_update_code = str(
     get_secret("TELEGRAM_SPEED_UPDATE_CODE", "4321") or "4321"
@@ -2116,12 +2116,12 @@ return_to_primary_default = parse_bool(
     get_secret("RETURN_TO_PRIMARY_MODEL", True), default=True
 )
 max_smart_models_default = max(
-    2,
-    int(get_secret("MAX_SMART_MODELS", 2) or 2),
+    1,
+    int(get_secret("MAX_SMART_MODELS", 1) or 1),
 )
 min_primary_active_models = max(
-    2,
-    int(get_secret("MIN_PRIMARY_ACTIVE_MODELS", 2) or 2),
+    1,
+    int(get_secret("MIN_PRIMARY_ACTIVE_MODELS", 1) or 1),
 )
 required_primary_models_raw = str(
     get_secret(
@@ -5125,15 +5125,13 @@ def ensure_minimum_primary_model_pool(
     active_expensive_models: List[str],
     health_cache: Dict[str, Dict[str, Any]],
 ) -> Tuple[str, List[str], Dict[str, Any]]:
-    """Pastikan routing selalu membawa minimal 2 model utama.
+    """Pastikan routing selalu membawa minimal 1 model utama aktif.
 
-    Model utama di sini berarti model yang akan dicoba dalam jalur cepat:
-    primary + fallback langsung. Jika health cache sudah tersedia, kandidat
-    yang ditambahkan harus berstatus active=True. Jika cache belum ada saat
-    cold start, kandidat tetap disiapkan agar health check/generate_answer
-    bisa menguji minimal dua model.
+    Kondisi saat ini hanya ada satu model AI yang dipakai, jadi fallback dan
+    routing harus tetap berjalan dengan satu model utama yang valid. Jika health
+    cache sudah tersedia, kandidat yang dipakai harus berstatus active=True.
     """
-    minimum = max(2, int(globals().get("min_primary_active_models", 2) or 2))
+    minimum = max(1, int(globals().get("min_primary_active_models", 1) or 1))
     required_models = unique_models(
         list(globals().get("required_primary_models", []) or [])
     )
@@ -12856,7 +12854,7 @@ TELEGRAM_AUTO_START = true
 TELEGRAM_DROP_PENDING_UPDATES = true
 TELEGRAM_SEND_PROCESSING_MESSAGE = false
 TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
-TELEGRAM_SHOW_MODEL_INFO = true
+TELEGRAM_SHOW_MODEL_INFO = false
 TELEGRAM_SPEED_UPDATE_CODE = "4321"
 TELEGRAM_ADMIN_CHAT_IDS = ""
 ALLOW_UNRESTRICTED_MODEL_COMMANDS = false

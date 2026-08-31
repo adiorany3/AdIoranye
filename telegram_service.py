@@ -2597,55 +2597,10 @@ def build_telegram_model_note(
     requested_model: str,
     default_model: str,
 ) -> str:
-    """Build a compact footer appended below every Telegram answer."""
-    answering_model = resolve_answering_model(meta, requested_model or default_model)
-    mode_label = _telegram_mode_label(meta)
-    footer_parts = [f"Model: {answering_model}", f"Mode: {mode_label}"]
-
-    if isinstance(meta, dict):
-        requested = str(meta.get("telegram_model_requested") or requested_model or "").strip()
-        if requested and requested != answering_model:
-            footer_parts.append(f"Awal: {requested}")
-
-        intent = str(meta.get("power_intent") or meta.get("intent") or "").strip()
-        if intent:
-            footer_parts.append(f"Intent: {intent}")
-
-        answer_mode = str(meta.get("answer_mode") or "").strip()
-        if answer_mode:
-            footer_parts.append(f"Jawab: {answer_mode}")
-
-        quality = meta.get("answer_quality_after_verifier") or meta.get("answer_quality") or {}
-        if isinstance(quality, dict) and quality.get("score") is not None:
-            try:
-                footer_parts.append(f"QC: {float(quality.get('score') or 0):.2f}")
-            except Exception:
-                pass
-        if meta.get("quality_verified_by"):
-            footer_parts.append(f"Verifier: {meta.get('quality_verified_by')}")
-
-        if meta.get("power_response_cache_hit") or meta.get("cache_hit"):
-            footer_parts.append("Cache: hit")
-
-        rag_sources = meta.get("power_kb_sources") or meta.get("power_rag_sources") or meta.get("rag_sources") or []
-        try:
-            rag_count = len(rag_sources)
-        except Exception:
-            rag_count = 0
-        if rag_count and bool(meta.get("show_kb_sources", False)):
-            footer_parts.append(f"KB: {rag_count} sumber")
-
-        consulted = meta.get("consulted_models") or []
-        if consulted:
-            short_consulted = ", ".join(str(item) for item in consulted[:3])
-            footer_parts.append(f"Konsultasi: {short_consulted}")
-
-        if meta.get("telegram_auto_rotated_after_error"):
-            footer_parts.append("Retry: auto-rotate")
-        elif meta.get("expensive_fallback_used"):
-            footer_parts.append("Fallback: capable")
-
-    return TELEGRAM_THIN_SEPARATOR + "ℹ️ " + " | ".join(footer_parts)
+    """Return an empty footer for Telegram responses to keep them clean and private."""
+    # Kondisi saat ini hanya satu model AI yang dipakai. Tidak perlu menampilkan
+    # model, mode routing, callback, atau metadata teknis di bawah jawaban Telegram.
+    return ""
 
 
 def _model_tier_rank(model: str) -> int:

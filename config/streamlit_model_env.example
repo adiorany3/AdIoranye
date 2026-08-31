@@ -4,11 +4,11 @@
 # Model default provider: isi di Streamlit Secrets, jangan simpan di repo.
 SLASHAI_MODEL = "your-model-name"
 
-# WAJIB: minimal 2 model utama disiapkan dalam routing.
-# App akan memaksa max_smart_models >= MIN_PRIMARY_ACTIVE_MODELS.
-MIN_PRIMARY_ACTIVE_MODELS = 2
-MAX_SMART_MODELS = 2
-REQUIRED_PRIMARY_MODELS = "slashai/deepseek-v4-flash-free,slashai/claude-sonnet-4.5-free"
+# Saat ini hanya satu model AI aktif yang dipakai.
+# App akan memaksa max_smart_models dan minimum pool mengikuti kondisi satu model.
+MIN_PRIMARY_ACTIVE_MODELS = 1
+MAX_SMART_MODELS = 1
+REQUIRED_PRIMARY_MODELS = "your-model-name"
 
 # Router responsif dan hemat.
 SMART_MODEL_ROUTER = true
