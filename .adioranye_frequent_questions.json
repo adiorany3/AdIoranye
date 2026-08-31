@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "items": {
+    "f16a5ecb0f8f82bd95cee981a4c4dbe82433cdbb0e690e64fa8a112ec5f65fce": {
+      "question": "halo",
+      "normalized_question": "halo",
+      "answer": "Halo. Ada yang perlu dibantu?",
+      "meta": {
+        "model": "tamandata",
+        "strategy": ""
+      },
+      "created_at": "2026-08-31 09:01:34 WIB",
+      "created_at_ts": 1788141694.901068,
+      "updated_at": "2026-08-31 09:01:34 WIB",
+      "updated_at_ts": 1788141694.901068,
+      "expires_at": "2026-09-01 09:01:34 WIB",
+      "expires_at_ts": 1788228094.901068,
+      "hit_count": 1,
+      "last_hit_at": "2026-08-31 09:03:49 WIB",
+      "last_hit_at_ts": 1788141829.85666
+    },
+    "bde930a45e8a07c2623e9d62cf5b2c1f06d0a61b002c287696a3fed9fb7d1590": {
+      "question": "apa yang bisa kamu kerjakan?",
+      "normalized_question": "apa yang bisa kamu kerjakan",
+      "answer": "Bisa bantu banyak hal. Inti:\n\n1. Tulis\n- Email\n- CV\n- proposal\n- caption\n- artikel\n- laporan\n- SOP\n- presentasi\n- surat resmi\n- copywriting\n\n2. Edit\n- rapikan bahasa\n- perbaiki typo\n- ubah nada formal/santai\n- ringkas teks\n- parafrase\n- cek struktur argumen\n\n3. Akademik\n- cari ide topik\n- buat kerangka\n- jelaskan konsep\n- bantu rumus\n- rangkum jurnal\n- susun tinjauan pustaka\n- bantu metodologi\n- latihan soal\n\nBatasan:\n- tidak boleh mengarang sumber, data, sitasi, hasil riset.\n- kalau perlu referensi nyata, kirim sumber atau minta format pencarian/verifikasi.\n\n4. Coding\n- debug error\n- jelaskan kode\n- refactor\n- buat script\n- bantu SQL\n- API\n- regex\n- HTML/CSS/JS\n- Python\n- PHP\n- Java\n- C/C++\n- shell\n\nGaya kerja:\n- tunjuk letak masalah\n- kasih solusi inti\n- beri kode siap tempel\n- pilih cara paling pendek dan aman\n\n5. Data dan analisis\n- bersihkan data\n- bantu Excel/Spreadsheet\n- rumus\n- pivot\n- analisis sederhana\n- interpretasi tabel/grafik\n- template dashboard\n- logika KPI\n\n6. Bisnis dan kerja\n- analisis SWOT\n- business model\n- SOP\n- OKR/KPI\n- template invoice/quotation\n- riset kompetitor\n- ide produk\n- simulasi alur kerja\n\n7. Dokumen praktis\n- format surat\n- notulen\n- TOR\n- memo\n- MoM\n- checklist kerja\n- template form\n\n8. Terjemahan\n- Indonesia ↔ Inggris\n- rapikan terjemahan\n- sesuaikan ke konteks formal, akademik, bisnis, kasual\n\n9. Brainstorming\n- nama brand\n- ide konten\n- topik skripsi\n- strategi promosi\n- alur produk\n- pertanyaan wawancara\n\n10. Bantuan keputusan\n- bandingkan opsi\n- bikin tabel pro-kontra\n- susun prioritas\n- pecah masalah jadi langkah kecil\n\nYang tidak aman untuk dipastikan tanpa data terbaru:\n- harga\n- jadwal\n- berita\n- regulasi terbaru\n- diagnosis medis\n- saran hukum/keuangan final\n\nUntuk itu, langkah aman:\n- beri konteks\n- kirim data/sumber\n- minta template analisis atau checklist verifikasi\n\nCara paling efektif pakai:\n- tempel teks/data/error\n- sebut tujuan\n- sebut format output\n- sebut batasan\n\nContoh:\n- “Ringkas teks ini jadi 5 poin.”\n- “Perbaiki query SQL ini.”\n- “Buat email penawaran formal.”\n- “Jelaskan rumus ini langkah demi langkah.”\n- “Buat SOP absensi 1 halaman.”\n- “Debug error Python ini.”\n\nKalau mau, kirim satu tugas sekarang. Format:\n- tujuan:\n- konteks:\n- bahan:\n- output yang diinginkan:",
+      "meta": {
+        "model": "tamandata",
+        "strategy": ""
+      },
+      "created_at": "2026-08-31 09:02:42 WIB",
+      "created_at_ts": 1788141762.761715,
+      "updated_at": "2026-08-31 09:02:42 WIB",
+      "updated_at_ts": 1788141762.761715,
+      "expires_at": "2026-09-01 09:02:42 WIB",
+      "expires_at_ts": 1788228162.761715,
+      "hit_count": 0
+    },
+    "a7cad8d36aef46bd860420b088e741d81bffd059fdf048caea4322f73af623cd": {
+      "question": "apa kabarnya?",
+      "normalized_question": "apa kabarnya",
+      "answer": "Baik. Siap bantu cepat dan rapi.\n\nKalau maksudmu kabar kamu, data belum ada. Cara aman:\n- Kalau sehat: lanjut aktivitas.\n- Kalau capek/stres: istirahat, minum, makan, tidur cukup.\n- Kalau ada gejala serius: periksa ke tenaga medis.",
+      "meta": {
+        "model": "tamandata",
+        "strategy": ""
+      },
+      "created_at": "2026-08-31 09:04:03 WIB",
+      "created_at_ts": 1788141843.990767,
+      "updated_at": "2026-08-31 09:04:03 WIB",
+      "updated_at_ts": 1788141843.990767,
+      "expires_at": "2026-09-01 09:04:03 WIB",
+      "expires_at_ts": 1788228243.990767,
+      "hit_count": 0
+    },
+    "bd007704ff9d6393057b92cc4d68a18adf276e5f3461c64045fd559e928e2148": {
+      "question": "bagaimana kabarmu?",
+      "normalized_question": "bagaimana kabarmu",
+      "answer": "Baik, siap membantu.\n\nBatasan singkat: tidak punya kondisi fisik atau perasaan seperti manusia. Kondisi dinilai dari fungsi saat ini.  \nAsumsi aman: sistem siap dipakai untuk bantu tanya jawab, menulis, analisis, dan coding.\n\nKalau mau, lanjut kirim tugas atau pertanyaanmu.",
+      "meta": {
+        "model": "tamandata",
+        "strategy": ""
+      },
+      "created_at": "2026-08-31 09:05:51 WIB",
+      "created_at_ts": 1788141951.040641,
+      "updated_at": "2026-08-31 09:05:51 WIB",
+      "updated_at_ts": 1788141951.040641,
+      "expires_at": "2026-09-01 09:05:51 WIB",
+      "expires_at_ts": 1788228351.040641,
+      "hit_count": 0
+    },
+    "7b0ef5c58bfac3aa7a85d37d756fe35d79334b86c8b5b14a1fad45ecdd3b19a6": {
+      "question": "buatkan saya ransum sapi perah umur 1 tahun",
+      "normalized_question": "buatkan saya ransum sapi perah umur 1 tahun",
+      "answer": "Masalah: data kunci kurang. Ransum sapi perah umur 1 tahun tidak bisa dipukul rata. Kebutuhan beda menurut bobot badan, target pertambahan bobot, kualitas hijauan, dan bahan pakan yang tersedia.\n\nLetak masalah:\n1. Umur saja tidak cukup.\n2. \"Sapi perah umur 1 tahun\" biasanya masih fase dara/growing, belum laktasi.\n3. Tanpa bobot badan, ransum presisi tidak aman dibuat.\n\nAsumsi aman:\n- Fase: dara sapi perah umur ±12 bulan.\n- Bobot badan: 180 sampai 250 kg.\n- Target: pertumbuhan normal, bukan penggemukan agresif.\n- Bahan umum tersedia: rumput gajah/odot, hay bila ada, dedak padi, pollard/bekatul gandum, bungkil kedelai atau bungkil kelapa, mineral, garam, air.\n- Fokus: ransum praktis lapangan, bukan formulasi laboratorium.\n\nDiagnosis singkat:\n- Kebutuhan utama dara: cukup energi, protein sedang, serat efektif, mineral, air.\n- Jangan terlalu tinggi konsentrat. Risiko gemuk berlebih, gangguan rumen, dan perkembangan ambing kurang baik.\n- Basis aman: hijauan dominan, konsentrat secukupnya.\n\nPatch yang bisa langsung dipakai\n\nOpsi 1. Ransum praktis per ekor per hari\nCocok untuk dara sapi perah umur 1 tahun dengan bobot sekitar 200 sampai 250 kg.\n\nA.\nJika pakai hijauan segar sebagai basis:\n- Rumput gajah/odot segar:\n  15 sampai 20 kg\n- Konsentrat:\n  2,0 sampai 3,0 kg\n- Mineral mix:\n  50 g\n- Garam:\n  25 sampai 30 g\n- Air minum:\n  ad libitum\n\nKomposisi konsentrat sederhana:\n- Dedak padi:\n  40%\n- Pollard:\n  30%\n- Bungkil kedelai\n  atau bungkil kelapa:\n  20%\n- Jagung giling:\n  8%\n- Mineral mix:\n  1%\n- Garam:\n  1%\n\nContoh buat 100 kg konsentrat:\n```text\nDedak padi        40 kg\nPollard           30 kg\nBungkil protein   20 kg\nJagung giling      8 kg\nMineral mix        1 kg\nGaram              1 kg\n```\n\nPemberian per hari:\n```text\nPagi:\n- Hijauan 7 sampai 10 kg\n- Konsentrat 1,0 sampai 1,5 kg\n\nSore:\n- Hijauan 8 sampai 10 kg\n- Konsentrat 1,0 sampai 1,5 kg\n```\n\nOpsi 2. Kalau hijauan kualitas rendah\nJika rumput tua, batang banyak, atau musim kering:\n- Rumput segar:\n  12 sampai 15 kg\n- Tambah legum segar:\n  3 sampai 5 kg\n  misal lamtoro, indigofera, kaliandra secukupnya yang aman dan sudah biasa diberikan\n- Konsentrat:\n  2,5 sampai 3,0 kg\n- Mineral mix:\n  50 g\n- Garam:\n  25 sampai 30 g\n\nOpsi 3. Basis persen dari bobot badan\nKalau mau lebih fleksibel:\n- Bahan kering total:\n  sekitar 2,5 sampai 3,0% dari bobot badan\n- Hijauan:\n  70 sampai 80% dari total bahan kering\n- Konsentrat:\n  20 sampai 30% dari total bahan kering\n\nContoh kasar sapi 220 kg:\n- Target BK total:\n  sekitar 5,5 sampai 6,5 kg per hari\n- Dari hijauan:\n  sekitar 4,0 sampai 5,0 kg BK\n- Dari konsentrat:\n  sekitar 1,5 sampai 2,0 kg BK\n\nKarena rumput segar banyak air, bentuk segarnya jadi jauh lebih besar dari angka BK.\n\nAturan pakai\n1. Ganti pakan bertahap 7 sampai 10 hari.\n2. Jangan langsung naikkan konsentrat banyak.\n3. Hijauan jangan terlalu tua dan berjamur.\n4. Air harus selalu tersedia.\n5. Mineral jangan dihilangkan.\n6. Jika feses terlalu encer, turunkan konsentrat dan cek kualitas hijauan.\n7. Jika badan kurus, naikkan konsentrat bertahap 0,25 sampai 0,5 kg.\n\nLangkah test singkat\n1. Ukur bobot badan atau pakai taksiran lingkar dada.\n2. Pakai ransum awal 14 hari.\n3. Pantau:\n   - nafsu makan\n   - feses\n   - bulu\n   - pertambahan bobot\n   - kondisi tubuh\n4. Target aman:\n   pertumbuhan stabil, tidak terlalu gemuk, feses normal, tidak kembung.\n5. Jika bobot tidak naik:\n   tambah kualitas hijauan dulu, lalu tambah konsentrat sedikit.\n\nChecklist data agar bisa dibuat lebih presisi\nKirim 5 data ini:\n```text\n1. Bobot badan sapi\n2. Jenis hijauan yang tersedia\n3. Bahan konsentrat yang tersedia\n4. Target: pertumbuhan biasa atau kejar bobot kawin\n5. Sistem pemeliharaan: dikandangkan atau digembalakan\n```\n\nSkipped:\n- Belum hitung nutrisi presisi per BK, PK, TDN. Add saat bobot badan dan bahan pakan jelas.\n- Belum optimasi biaya. Add saat harga bahan tersedia.\n- Belum cek mineral spesifik daerah. Add saat lokasi peternakan jelas.",
+      "meta": {
+        "model": "tamandata",
+        "strategy": ""
+      },
+      "created_at": "2026-08-31 09:11:29 WIB",
+      "created_at_ts": 1788142289.736995,
+      "updated_at": "2026-08-31 09:11:29 WIB",
+      "updated_at_ts": 1788142289.736995,
+      "expires_at": "2026-09-01 09:11:29 WIB",
+      "expires_at_ts": 1788228689.736995,
+      "hit_count": 0
+    }
+  },
+  "saved_at": "2026-08-31 09:11:29 WIB"
+}

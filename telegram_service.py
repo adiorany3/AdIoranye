@@ -2769,7 +2769,7 @@ def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dic
         "slashai/deepseek-v4-flash-free",
         "slashai/claude-sonnet-4.5-free",
         "slashai/nemotron-3-super-free",
-        "slashai/gpt-5-nano",
+        "tamandata",
         "slashai/gpt-5.4-nano",
     ]
     default_cheap = telegram_sort_models_for_simple_chat(
@@ -4044,7 +4044,7 @@ class TelegramBotService:
         token = config.get("telegram_token", "")
         api_key = config.get("slashai_api_key", "")
         api_url = config.get("slashai_api_url", "")
-        model = config.get("slashai_model", "slashai/gpt-5-nano")
+        model = config.get("slashai_model", "tamandata")
         persona = config.get("persona", "")
         memory_file = config.get("memory_file", "assistant_memory.json")
         maintenance_lock_file = str(

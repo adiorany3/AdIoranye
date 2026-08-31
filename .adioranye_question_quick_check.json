@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "last_trigger_ts": 1788142159.253721,
+  "last_trigger_at": "2026-08-31 09:09:19 WIB",
+  "last_source": "web",
+  "last_status": "done",
+  "running_since_ts": 0,
+  "running_source": "",
+  "last_checked_count": 4,
+  "last_active_count": 0,
+  "last_error": ""
+}

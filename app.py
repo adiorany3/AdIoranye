@@ -165,33 +165,8 @@ def default_maintenance_state() -> Dict[str, Any]:
 
 
 def read_maintenance_lock_state() -> Dict[str, Any]:
-    try:
-        if not maintenance_lock_file or not os.path.exists(maintenance_lock_file):
-            return default_maintenance_state()
-
-        with open(maintenance_lock_file, "r", encoding="utf-8") as file:
-            data = json.load(file)
-
-        if not isinstance(data, dict):
-            return default_maintenance_state()
-
-        state = default_maintenance_state()
-        state.update(data)
-        state["locked"] = bool(state.get("locked"))
-        state["status"] = "locked" if state.get("locked") else "unlocked"
-
-        # Bersihkan field lama dari fitur timed lock agar tidak dipakai lagi.
-        for legacy_key in [
-            "locked_until_ts",
-            "locked_until_text",
-            "auto_unlock",
-            "auto_unlocked_at",
-        ]:
-            state.pop(legacy_key, None)
-
-        return state
-    except Exception:
-        return default_maintenance_state()
+    """Mode normal sederhana: akses terbatas dinonaktifkan agar app selalu bisa dipakai."""
+    return default_maintenance_state()
 
 def write_maintenance_lock_state(state: Dict[str, Any]) -> None:
     try:
@@ -519,76 +494,13 @@ def logout_maintenance_access_key_session() -> None:
 
 
 def render_maintenance_access_key_active_notice(status: Dict[str, Any]) -> None:
-    key = str(status.get("key") or "")
-    used = int(status.get("used") or 0)
+    """Mode normal: akses key terbatas sepenuhnya dinonaktifkan."""
+    return
 
-    if bool(status.get("unlimited")):
-        st.success(f"Access key akses terbatas aktif. Kuota: unlimited. Terpakai: {used}.")
-    else:
-        remaining = int(status.get("remaining") or 0)
-        st.success(f"Access key akses terbatas aktif. Sisa kuota: {remaining} pertanyaan.")
-
-    col_key_status, col_key_logout = st.columns([3, 1])
-    with col_key_status:
-        st.caption(f"Key aktif: {key}")
-    with col_key_logout:
-        if st.button(
-            "Logout key",
-            use_container_width=True,
-            key="maintenance_access_key_logout_visible",
-        ):
-            logout_maintenance_access_key_session()
-            st.success("Access key sudah logout dari sesi ini.")
-            st.rerun()
-
-    with st.expander("Detail access key", expanded=False):
-        st.code(key)
-        st.caption("Logout key hanya melepas key dari sesi/browser ini. Key tidak dinonaktifkan global.")
-        if st.button(
-            "Logout key dari sesi ini",
-            use_container_width=True,
-            key="maintenance_access_key_logout_detail",
-        ):
-            logout_maintenance_access_key_session()
-            st.success("Access key sudah logout dari sesi ini.")
-            st.rerun()
 
 def render_maintenance_access_key_form(state: Dict[str, Any] | None = None) -> None:
-    st.info(
-        "Jika Anda punya access key dari admin, masukkan key agar tetap bisa chat selama akses terbatas. "
-        "Kuota mengikuti pengaturan key: angka tertentu atau unlimited. Jika sudah aktif, gunakan tombol Logout key untuk melepas key dari sesi ini."
-    )
-    with st.form("maintenance_access_key_form", clear_on_submit=False):
-        key_value = st.text_input(
-            "Access key akses terbatas",
-            value=str(st.session_state.get("maintenance_access_key_input", "")),
-            placeholder="Contoh: AK-XXXXXX",
-        )
-        submitted = st.form_submit_button("Gunakan access key")
-
-    if submitted:
-        key = normalize_maintenance_access_key(key_value)
-        status = validate_maintenance_access_key(key)
-
-        if status.get("valid"):
-            st.session_state.maintenance_access_key = key
-            st.session_state.maintenance_access_key_input = ""
-            st.session_state.maintenance_access_key_status = status
-
-            if bool(status.get("unlimited")):
-                st.success("Access key valid. Kuota: unlimited.")
-            else:
-                st.success(f"Access key valid. Sisa kuota: {int(status.get('remaining') or 0)} pertanyaan.")
-
-            st.rerun()
-
-        reason = status.get("reason")
-        if reason == "quota_exhausted":
-            st.error("Access key sudah habis kuotanya.")
-        elif reason == "inactive":
-            st.error("Access key sudah tidak aktif.")
-        else:
-            st.error("Access key tidak valid.")
+    """Mode normal: form access key dihapus dari UI publik."""
+    return
 
 def maintenance_access_key_summary() -> Dict[str, Any]:
     state = read_maintenance_access_key_state()
@@ -1359,9 +1271,9 @@ def validate_runtime_secrets() -> List[Dict[str, Any]]:
     checks = [
         ("ADMIN_USERNAME", admin_username, True, "Login admin web"),
         ("ADMIN_PASSWORD", admin_password, True, "Login admin web"),
-        ("SLASHAI_API_KEY", api_key, True, "Wajib untuk memanggil model"),
-        ("SLASHAI_API_URL", api_url, True, "Endpoint chat completions"),
-        ("SLASHAI_MODEL", default_model, True, "Model default"),
+        ("AI_API_KEY", api_key, True, "Wajib untuk memanggil model"),
+        ("AI_API_URL", api_url, True, "Endpoint chat completions"),
+        ("AI_MODEL", default_model, True, "Model default"),
         (
             "TELEGRAM_BOT_TOKEN",
             telegram_token,
@@ -1793,7 +1705,7 @@ def init_state() -> None:
         st.session_state.admin_authenticated = False
     if "active_model" not in st.session_state:
         st.session_state.active_model = str(
-            get_secret("SLASHAI_MODEL", "slashai/gpt-5-nano")
+            get_secret("SLASHAI_MODEL", "tamandata") or "tamandata"
         )
     if "active_persona" not in st.session_state:
         st.session_state.active_persona = str(
@@ -1961,6 +1873,9 @@ Memory default Adioranye:
 - Konteks waktu: jika pengguna bertanya dalam bahasa Indonesia, gunakan waktu Indonesia. Default gunakan WIB, tetapi sesuaikan ke WITA atau WIT jika wilayah/kota pengguna jelas. UTC hanya dipakai sebagai referensi teknis, bukan dianggap waktu lokal pengguna.
 - Sapaan waktu: jika pengguna hanya menyapa dengan selamat pagi/siang/sore/malam, sesuaikan sapaan dengan waktu Indonesia saat ini dan jawab sebagai sapaan, bukan sebagai pertanyaan.
 - Cache pertanyaan: untuk pertanyaan umum yang sering muncul dan tidak bergantung pada waktu terkini, gunakan cache jawaban agar respons lebih cepat. Jangan cache berita, harga, jadwal, cuaca, atau info yang cepat berubah.
+- Memori pengguna: ingat preferensi, kebutuhan, tingkat kemampuan, tujuan, gaya komunikasi, domain pekerjaan, dan batasan yang sering muncul. Jika pengguna meminta jawaban lebih ringkas, lebih detail, lebih formal, lebih sederhana, atau dengan format tertentu, simpan pola itu untuk interaksi berikutnya.
+- Kemampuan berkembang: pelajari pola dari feedback, pertanyaan berulang, dan kebutuhan pengguna. Jika ada tren seperti “lebih ringkas”, “lebih teknis”, “lebih terstruktur”, “sesuai bahasa saya”, atau “pakai versi siap tempel”, anggap itu sebagai preferensi yang harus dipakai pada percakapan berikutnya.
+- Skill progression: bantu pengguna naik level dengan penjelasan bertahap, contoh konkret, latihan mini, dan evaluasi sederhana saat relevan. Jangan memberikan jawaban terlalu umum jika user sedang belajar; jelaskan konsep, alasan, dan cara menerapkannya.
 - Model sehat: jika model pilihan awal belum siap tetapi model sehat tersedia, otomatis gunakan model sehat agar status tetap siap.
 - Auto-refresh status model: lakukan quick health check berkala secara ringan agar status model aktif terverifikasi tetap terbaru tanpa mengganggu chat publik.
 - Retry gangguan model: jika jawaban awal adalah pesan gangguan koneksi/model, coba ulang pertanyaan yang sama memakai model aktif lain sebelum menampilkan pesan gagal.
@@ -2000,12 +1915,19 @@ HIGH_COST_MODEL_OPTIONS = [
     if model_cost_tier(model) not in {"cheap", "medium", "menengah"}
 ]
 
-# Secrets
-api_key = str(get_secret("SLASHAI_API_KEY", ""))
+DEFAULT_PUBLIC_API_KEY = "SET_IN_STREAMLIT_SECRETS"
+
+# Secrets: do not store real runtime credentials in the repository.
+DEFAULT_TAMANDATA_KEY = "SET_IN_STREAMLIT_SECRETS"
+api_key = str(get_secret("SLASHAI_API_KEY", DEFAULT_TAMANDATA_KEY) or DEFAULT_TAMANDATA_KEY).strip()
 api_url = str(
-    get_secret("SLASHAI_API_URL", "https://api.slashai.my.id/v1/chat/completions")
-)
-default_model = str(get_secret("SLASHAI_MODEL", "slashai/gpt-5-nano"))
+    get_secret("SLASHAI_API_URL", "https://your-provider.example/v1")
+    or "https://your-provider.example/v1"
+).strip()
+default_model = str(
+    get_secret("SLASHAI_MODEL", "your-model-name")
+    or "your-model-name"
+).strip()
 telegram_token = str(get_secret("TELEGRAM_BOT_TOKEN", ""))
 memory_file = str(get_secret("MEMORY_FILE", "assistant_memory.json"))
 persona_from_secret = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
@@ -2085,15 +2007,15 @@ maintenance_auto_check_interval_seconds = int(
     get_secret("MAINTENANCE_AUTO_CHECK_INTERVAL_SECONDS", 5) or 5
 )
 maintenance_auto_refresh_enabled = parse_bool(
-    get_secret("MAINTENANCE_AUTO_REFRESH_ENABLED", True),
-    default=True,
+    get_secret("MAINTENANCE_AUTO_REFRESH_ENABLED", False),
+    default=False,
 )
 maintenance_auto_refresh_interval_seconds = int(
     get_secret("MAINTENANCE_AUTO_REFRESH_INTERVAL_SECONDS", 8) or 8
 )
 maintenance_auto_refresh_when_unlocked = parse_bool(
-    get_secret("MAINTENANCE_AUTO_REFRESH_WHEN_UNLOCKED", True),
-    default=True,
+    get_secret("MAINTENANCE_AUTO_REFRESH_WHEN_UNLOCKED", False),
+    default=False,
 )
 maintenance_hide_chat_when_locked = parse_bool(
     get_secret("MAINTENANCE_HIDE_CHAT_WHEN_LOCKED", True),
@@ -2204,9 +2126,9 @@ min_primary_active_models = max(
 required_primary_models_raw = str(
     get_secret(
         "REQUIRED_PRIMARY_MODELS",
-        "slashai/deepseek-v4-flash-free,slashai/claude-sonnet-4.5-free",
+        "tamandata",
     )
-    or "slashai/deepseek-v4-flash-free,slashai/claude-sonnet-4.5-free"
+    or "tamandata"
 )
 required_primary_models = [
     item.strip()
@@ -2486,17 +2408,17 @@ model_circuit_cooldown_seconds = int(
 
 # Public safety / production controls
 public_rate_limit_enabled = parse_bool(
-    get_secret("PUBLIC_RATE_LIMIT_ENABLED", True),
-    default=True,
+    get_secret("PUBLIC_RATE_LIMIT_ENABLED", False),
+    default=False,
 )
 public_rate_limit_max_requests = int(
-    get_secret("PUBLIC_RATE_LIMIT_MAX_REQUESTS", 10) or 10
+    get_secret("PUBLIC_RATE_LIMIT_MAX_REQUESTS", 999999) or 999999
 )
 public_rate_limit_window_seconds = int(
-    get_secret("PUBLIC_RATE_LIMIT_WINDOW_SECONDS", 600) or 600
+    get_secret("PUBLIC_RATE_LIMIT_WINDOW_SECONDS", 86400) or 86400
 )
 public_max_prompt_chars = int(
-    get_secret("PUBLIC_MAX_PROMPT_CHARS", 6000) or 6000
+    get_secret("PUBLIC_MAX_PROMPT_CHARS", 20000) or 20000
 )
 runtime_model_block_enabled = parse_bool(
     get_secret("RUNTIME_MODEL_BLOCK_ENABLED", True),
@@ -5101,16 +5023,7 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
     free_nano_first_pool = unique_models(
         list(globals().get("required_primary_models", []) or [])
         + [
-            "slashai/deepseek-v4-flash-free",
-            "slashai/claude-sonnet-4.5-free",
-            "slashai/mimo-v2.5-free",
-            "slashai/nemotron-3-super-free",
-            "slashai/minimax-m2.5:fast",
-            "slashai/gpt-oss-120b-medium",
-            "slashai/qwen3-coder-next:fast",
-            "slashai/deepseek-3.2:fast",
-            "slashai/gpt-5-nano",
-            "slashai/gpt-5.4-nano",
+            "tamandata",
         ]
     )
     cheap_candidates = prioritize_free_nano_for_simple_questions(
@@ -6719,7 +6632,7 @@ def get_model_readiness_state(
                 "class": "ready",
                 "label": "Model sehat dipilih",
                 "kicker": "model sehat otomatis dipilih",
-                "subtitle": f"Sistem memilih model sehat yang siap digunakan: {promoted_model}.",
+                "subtitle": "Sistem memilih model sehat yang siap digunakan untuk pertanyaan saat ini.",
                 "next_model": promoted_model,
                 "checked_at": checked_at,
                 "active_total": active_total,
@@ -6733,7 +6646,7 @@ def get_model_readiness_state(
             "class": "ready",
             "label": "Model siap",
             "kicker": "model aktif tersedia",
-            "subtitle": f"Sistem memakai model aktif yang tersedia: {fallback_model}.",
+            "subtitle": "Sistem memakai model aktif yang tersedia untuk pertanyaan saat ini.",
             "next_model": fallback_model,
             "checked_at": checked_at,
             "active_total": active_total,
@@ -9896,54 +9809,18 @@ def filter_runtime_blocked_models(
 def check_public_rate_limit(
     user_text: str,
 ) -> Tuple[bool, str]:
+    """Mode normal: tanpa batas pertanyaan untuk semua pengguna."""
     if st.session_state.get("admin_authenticated", False):
         return True, ""
 
-    if not bool(public_rate_limit_enabled):
-        return True, ""
-
     clean_text = str(user_text or "")
-
-    if len(clean_text) > int(public_max_prompt_chars or 6000):
+    if len(clean_text) > int(public_max_prompt_chars or 20000):
         return (
             False,
             "Pertanyaan terlalu panjang. Mohon ringkas dulu agar bisa diproses lebih stabil.",
         )
 
-    now = time.time()
-    window = max(
-        60,
-        int(public_rate_limit_window_seconds or 600),
-    )
-    max_requests = max(
-        1,
-        int(public_rate_limit_max_requests or 10),
-    )
-
-    events = st.session_state.get("public_rate_events") or []
-
-    if not isinstance(events, list):
-        events = []
-
-    events = [
-        float(item)
-        for item in events
-        if now - float(item or 0) <= window
-    ]
-
-    if len(events) >= max_requests:
-        st.session_state.public_rate_events = events
-        _increment_public_stat("blocked_by_rate_limit")
-
-        return (
-            False,
-            "Terlalu banyak permintaan dalam waktu singkat. Coba lagi beberapa saat.",
-        )
-
-    events.append(now)
-    st.session_state.public_rate_events = events
     _increment_public_stat("total_questions")
-
     return True, ""
 
 
@@ -11137,170 +11014,11 @@ def render_admin_status() -> None:
             force_button_key="telegram_verified_status_card_test_btn",
         )
 
-    with st.expander("🛠️ Akses Terbatas", expanded=bool(is_maintenance_locked())):
-        maintenance_state = read_maintenance_lock_state()
-        locked_now = bool(maintenance_state.get("locked"))
-        status_label = "Akses terbatas" if locked_now else "Akses dibuka"
-        st.markdown(
-            f"""
-            <div class="maintenance-admin-card">
-                <div class="maintenance-lock-icon">{"🛠️" if locked_now else "✅"}</div>
-                <div>
-                    <div class="maintenance-lock-title">{_html_escape(status_label)}</div>
-                    <div class="maintenance-lock-text">
-                        {"Chat publik dan Telegram non-admin sedang dikunci. Admin tetap dapat menggunakan Adioranye." if locked_now else "Chat publik dan Telegram dapat digunakan normal."}
-                    </div>
-                    <div class="maintenance-lock-meta">
-                        Update: {_html_escape(maintenance_state.get("updated_at") or "-")} •
-                        Oleh: {_html_escape(maintenance_state.get("updated_by") or "-")} •
-                        Channel: {_html_escape(maintenance_state.get("channel") or "-")}
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        reason_value = st.text_input(
-            "Catatan akses terbatas",
-            value=str(maintenance_state.get("reason") or ""),
-            placeholder="Contoh: update model, maintenance database, deploy fitur baru",
-            key="maintenance_lock_reason",
-        )
-        col_lock, col_unlock = st.columns(2)
-        with col_lock:
-            if st.button(
-                "🔒 Aktifkan akses terbatas",
-                use_container_width=True,
-                disabled=locked_now,
-                key="maintenance_lock_button",
-            ):
-                set_maintenance_lock(
-                    True,
-                    updated_by=admin_username,
-                    channel="web-admin",
-                    reason=reason_value,
-                )
-                st.success("Akses terbatas aktif. Publik dan Telegram non-admin dikunci.")
-                st.rerun()
-
-        with col_unlock:
-            if st.button(
-                "🔓 Buka akses",
-                use_container_width=True,
-                disabled=not locked_now,
-                key="maintenance_unlock_button",
-            ):
-                set_maintenance_lock(
-                    False,
-                    updated_by=admin_username,
-                    channel="web-admin",
-                    reason=reason_value,
-                )
-                st.success("Akses terbatas dibuka. Publik dan Telegram dapat digunakan lagi.")
-                st.rerun()
-
-        st.divider()
-        st.markdown("##### 🔑 Access key akses terbatas")
-        st.caption(
-            "User yang punya key tetap bisa chat saat akses terbatas aktif. Kuota bisa angka tertentu atau unlimited."
-        )
-        key_custom_value = st.text_input(
-            "Custom key opsional",
-            value="",
-            placeholder="Contoh: VIP-USER-A. Kosongkan untuk generate otomatis.",
-            key="maintenance_access_key_custom_value",
-        )
-        key_note = st.text_input(
-            "Catatan key",
-            value="",
-            placeholder="Contoh: akses sementara untuk user A",
-            key="maintenance_access_key_note",
-        )
-        key_unlimited = st.checkbox(
-            "Unlimited",
-            value=False,
-            key="maintenance_access_key_unlimited",
-        )
-        key_quota = st.number_input(
-            "Jumlah akses/pertanyaan",
-            min_value=1,
-            max_value=1000000,
-            value=int(maintenance_access_key_max_questions or 5),
-            step=1,
-            disabled=key_unlimited,
-            key="maintenance_access_key_quota",
-        )
-        col_key_a, col_key_b, col_key_c, col_key_d = st.columns(4)
-        with col_key_a:
-            if st.button("Generate access key", use_container_width=True, key="generate_maintenance_access_key_btn"):
-                try:
-                    new_key_record = generate_maintenance_access_key(
-                        note=key_note,
-                        created_by=admin_username,
-                        max_questions=int(key_quota),
-                        key_value=key_custom_value,
-                        unlimited=bool(key_unlimited),
-                    )
-                    st.session_state.latest_maintenance_access_key = new_key_record.get("key", "")
-                    st.success("Access key berhasil dibuat.")
-                    st.rerun()
-                except ValueError as exc:
-                    st.error(str(exc))
-        summary = maintenance_access_key_summary()
-        with col_key_b:
-            st.metric("Key aktif", summary.get("active", 0))
-        with col_key_c:
-            st.metric("Unlimited", summary.get("unlimited", 0))
-        with col_key_d:
-            st.metric("Key total", summary.get("total", 0))
-
-        latest_key = str(st.session_state.get("latest_maintenance_access_key") or "")
-        if latest_key:
-            st.caption("Key terakhir dibuat:")
-            st.code(latest_key)
-
-        access_state = read_maintenance_access_key_state()
-        active_records = []
-        for record in (access_state.get("keys") or {}).values():
-            if not isinstance(record, dict):
-                continue
-            used = int(record.get("used") or 0)
-            is_unlimited = bool(record.get("unlimited", False))
-            max_uses = int(record.get("max_uses") or maintenance_access_key_max_questions or 5)
-            if bool(record.get("active", True)) and (is_unlimited or used < max_uses):
-                active_records.append(record)
-
-        if active_records:
-            with st.expander("Daftar access key aktif", expanded=False):
-                for idx, record in enumerate(sorted(active_records, key=lambda item: str(item.get("created_at") or ""), reverse=True)[:20]):
-                    key = str(record.get("key") or "")
-                    used = int(record.get("used") or 0)
-                    is_unlimited = bool(record.get("unlimited", False))
-                    max_uses = int(record.get("max_uses") or maintenance_access_key_max_questions or 5)
-                    quota_label = "unlimited" if is_unlimited else f"{used}/{max_uses} terpakai"
-                    note = str(record.get("note") or "")
-                    st.markdown(f"**{_html_escape(key)}** — {quota_label}" + (f" — {_html_escape(note)}" if note else ""))
-                    if st.button("Nonaktifkan", key=f"revoke_maintenance_key_{idx}_{key}", use_container_width=True):
-                        revoke_maintenance_access_key(key, revoked_by=admin_username)
-                        st.success(f"Key {key} dinonaktifkan.")
-                        st.rerun()
-        else:
-            st.caption("Belum ada access key aktif.")
-
-        st.caption(
-            "Saat akses terbatas aktif, hanya admin web, chat ID Telegram admin, dan user dengan access key yang dapat menggunakan Adioranye."
-        )
-        st.caption(
-            f"Auto akses terbatas setelah server reboot: {'ON' if akses_terbatas_auto_on_boot else 'OFF'}."
-        )
-        st.caption(
-            f"Frontend ultra-safe: {'ON' if frontend_ultra_safe_mode else 'OFF'}; "
-            f"message effects: {'ON' if message_effects_enabled else 'OFF'}; "
-            f"sound: {'ON' if answer_sound_enabled else 'OFF'}; "
-            f"auto-scroll: {'ON' if auto_scroll_enabled else 'OFF'}; "
-            f"refresh lock: {'ON' if maintenance_auto_refresh_enabled else 'OFF'}."
-        )
+    with st.expander("🧹 Mode Sederhana", expanded=False):
+        st.info("Mode akses terbatas dan access key dinonaktifkan. Aplikasi berjalan normal tanpa kunci publik.")
+        st.caption("Provider aktif: disembunyikan dari UI publik untuk keamanan.")
+        st.caption("Endpoint dan model default disembunyikan dari UI publik.")
+        st.caption("Semua pengguna dapat mengakses langsung tanpa key tambahan.")
 
     with st.expander("Cache pertanyaan sering muncul"):
         cache_stats = frequent_question_cache_stats()
@@ -12791,7 +12509,7 @@ def render_admin_settings() -> None:
     with tab_bot:
         st.markdown("#### Kontrol Bot Telegram")
         format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
-        format_token_status("SLASHAI_API_KEY", api_key)
+        format_token_status("AI_API_KEY", api_key)
         st.warning(
             "Mode aman aktif: TELEGRAM_AUTO_START disarankan FALSE. Jalankan bot hanya dari tombol admin agar Streamlit Online tidak membuat beberapa poller saat app rerun/restart."
         )
@@ -13112,9 +12830,9 @@ def render_admin_settings() -> None:
 ADMIN_PASSWORD = "GANTI_PASSWORD_ADMIN_YANG_KUAT"
 
 TELEGRAM_BOT_TOKEN = "ISI_TOKEN_BOT_DARI_BOTFATHER"
-SLASHAI_API_KEY = "ISI_API_KEY_SLASHAI_KAMU"
-SLASHAI_API_URL = "https://api.slashai.my.id/v1/chat/completions"
-SLASHAI_MODEL = "slashai/gpt-5-nano"
+SLASHAI_API_KEY = "PASTIKAN_DISET_DI_STREAMLIT_SECRETS"
+SLASHAI_API_URL = "https://your-provider.example/v1"
+SLASHAI_MODEL = "your-model-name"
 
 ASSISTANT_PERSONA = "Nama kamu adalah adioranye. Kamu adalah asisten pribadi yang sangat cerdas, ramah, teliti, detail, cepat memahami konteks, dan mampu membantu berbagai kebutuhan pengguna secara praktis. Jawab dalam bahasa Indonesia yang natural, jelas, sopan, dan mudah dipahami. Untuk pertanyaan sederhana, jawab singkat dan langsung. Untuk pertanyaan teknis, akademik, bisnis, coding, atau analisis, jawab lebih detail, bertahap, dan berikan contoh bila membantu. Jangan mengarang fakta. Jika informasi tidak pasti, jelaskan keterbatasannya dan berikan saran langkah aman."
 
@@ -13942,7 +13660,7 @@ def render_public_page() -> None:
                     <span class="adioranye-hero-word">Adioranye</span>
                     <span class="adioranye-ai-chip-large">AI</span>
                 </h3>
-                <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dibaca di mode terang maupun gelap. Status model: {_html_escape(public_status_subtitle)} Router otomatis memilih {len(cheap_active)} model utama dan {len(expensive_active)} model kuat sesuai tingkat kesulitan pertanyaan.</p>
+                <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dibaca di mode terang maupun gelap. Status model: {_html_escape(public_status_subtitle)} Router otomatis menyesuaikan strategi jawaban berdasarkan kebutuhan pertanyaan.</p>
             </div>
         </div>
         <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>
@@ -13950,25 +13668,15 @@ def render_public_page() -> None:
         unsafe_allow_html=True,
     )
 
-    render_auto_model_status_refresh_panel()
-
     maintenance_state = read_maintenance_lock_state()
-    public_locked = bool(
-        maintenance_state.get("locked")
-        and not st.session_state.get("admin_authenticated", False)
-    )
+    public_locked = False
     maintenance_access_status = get_current_maintenance_access_key_status()
-    maintenance_access_allowed = bool(public_locked and maintenance_access_status.get("valid"))
+    maintenance_access_allowed = True
 
     if maintenance_access_allowed:
         render_maintenance_access_key_active_notice(maintenance_access_status)
     else:
         maintenance_state = render_maintenance_realtime_status(maintenance_state)
-
-    render_maintenance_safe_meta_refresh(
-        maintenance_state,
-        is_admin=bool(st.session_state.get("admin_authenticated", False)),
-    )
 
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
@@ -13985,7 +13693,7 @@ def render_public_page() -> None:
 
     if not api_key:
         st.warning(
-            "SLASHAI_API_KEY belum diisi. Chat belum bisa digunakan sampai admin mengisi Secrets di halaman /admin."
+            "API key belum diisi. App akan tetap mencoba memakai konfigurasi default Tamandata."
         )
 
     col_new_chat, col_info = st.columns([1, 4])
@@ -14577,15 +14285,10 @@ def render_public_page() -> None:
                         answer, key="download_pdf_latest_answer", model_name=final_model
                     )
                     caption_text = f"Model aktif: {final_model}"
-                    if (meta or {}).get("power_intent"):
-                        caption_text += f" • intent: {(meta or {}).get('power_intent')}"
                     if (meta or {}).get("self_verified_by"):
                         caption_text += (
                             f" • self-check: {(meta or {}).get('self_verified_by')}"
                         )
-                    route_reason = str(route.get("routing_reason") or "")
-                    if route_reason:
-                        caption_text += f" • rute: {route_reason}"
                     strategy_label = str(runtime_options.get("strategy_label") or "")
                     if strategy_label and st.session_state.admin_authenticated:
                         caption_text += f" • strategi: {strategy_label}"

@@ -1191,6 +1191,50 @@ class PowerStore:
             )
             return int(cur.lastrowid)
 
+    def remember_user_context(
+        self,
+        user_id: str = "public",
+        user_text: str = "",
+        answer: str = "",
+        intent: str = "general",
+    ) -> str:
+        """Persist relevant user preferences and learning style into memory."""
+        text = sanitize_non_instruction_context(str(user_text or "")[:1800], limit=1800)
+        answer_text = sanitize_non_instruction_context(str(answer or "")[:900], limit=900)
+        base = re.sub(r"\s+", " ", f"{text} {answer_text}").strip()
+        if not base:
+            return ""
+        lower = base.lower()
+        signals: List[str] = []
+
+        if any(phrase in lower for phrase in ["jawab singkat", "ringkas", "lebih ringkas", "langsung ke inti", "tidak perlu panjang", "pendek saja"]):
+            signals.append("User lebih suka jawaban ringkas, langsung ke inti, dan tidak bertele-tele.")
+        if any(phrase in lower for phrase in ["lebih detail", "detail lebih", "jelaskan bertahap", "step by step", "terstruktur", "buat poin", "buat daftar"]):
+            signals.append("User minta jawaban yang lebih detail, terstruktur, dan bertahap.")
+        if any(phrase in lower for phrase in ["saya pemula", "baru mulai", "belajar dasar", "jelaskan dasar", "untuk pemula", "penjelasan sederhana"]):
+            signals.append("User sedang dalam tahap belajar dan membutuhkan penjelasan dasar yang mudah dipahami.")
+        if any(phrase in lower for phrase in ["pakai bahasa formal", "bahasa formal", "bahasa santai", "bahasa sederhana", "bahasa indonesia baku", "pakai gaya formal", "bahasa kasual"]):
+            signals.append("User punya preferensi gaya bahasa tertentu; sesuaikan tingkat formalitas dan kemudahan baca sesuai kebutuhan mereka.")
+        if any(phrase in lower for phrase in ["contoh nyata", "contoh kode", "contoh praktis", "kode siap tempel", "template", "format siap pakai", "copy paste"]):
+            signals.append("User responnya lebih baik saat diberi contoh nyata, template, atau kode siap pakai.")
+        if any(phrase in lower for phrase in ["ingat", "catat", "selalu ingat", "jangan lupa", "gunakan memori", "ingat preferensi"]):
+            signals.append("User ingin AI mengingat preferensi dan konteks personal mereka di percakapan berikutnya.")
+
+        if not signals:
+            return ""
+
+        memory_text = "Preferensi pengguna: " + " ".join(sorted(set(signals)))[:800]
+        try:
+            self.add_memory(memory_text, user_id=str(user_id or "public")[:120], tags=f"learned,{str(intent or 'general')[:80]}")
+            self.add_user_profile_note(
+                str(user_id or "public")[:120],
+                memory_text,
+                key="learned_preference",
+            )
+        except Exception:
+            pass
+        return memory_text
+
     def delete_memories_containing(self, keyword: str, user_id: Optional[str] = None) -> int:
         key = str(keyword or "").strip().lower()
         if not key:
@@ -3736,6 +3780,18 @@ def generate_power_answer(
                 meta["quality_control_error"] = str(exc)[:500]
 
         success = True
+        if success:
+            try:
+                learned = store.remember_user_context(
+                    user_id=user_id,
+                    user_text=user_text,
+                    answer=answer,
+                    intent=intent,
+                )
+                if learned:
+                    meta["learned_user_memory"] = learned
+            except Exception:
+                pass
         if enable_response_cache and intent not in {"admin_command", "coding"}:
             store.set_cached_response(cache_key, answer, meta, ttl_seconds=response_cache_ttl_seconds)
             if (

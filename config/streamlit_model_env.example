@@ -1,8 +1,8 @@
 # Secrets Streamlit rekomendasi untuk routing minimal 2 model utama aktif.
 # Tempel ke Streamlit Community Cloud → App → Settings → Secrets.
 
-# Model default tetap murah/gratis.
-SLASHAI_MODEL = "slashai/deepseek-v4-flash-free"
+# Model default provider: isi di Streamlit Secrets, jangan simpan di repo.
+SLASHAI_MODEL = "your-model-name"
 
 # WAJIB: minimal 2 model utama disiapkan dalam routing.
 # App akan memaksa max_smart_models >= MIN_PRIMARY_ACTIVE_MODELS.

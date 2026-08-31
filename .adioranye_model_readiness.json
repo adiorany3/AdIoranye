@@ -1,0 +1,62 @@
+{
+  "checked_at": 1788142158.730957,
+  "checked_at_text": "2026-08-31 09:09:18 WIB",
+  "cache": {
+    "slashai/deepseek-v4-flash-free": {
+      "active": false,
+      "health_status": "dead",
+      "error_class": "http_error",
+      "status_code": 405,
+      "latency_ms": 206.9,
+      "attempts": 1,
+      "checked_at": "2026-08-31 08:56:08 WIB",
+      "tier": "cheap",
+      "error": "{\"error\":{\"message\":\"Method tidak didukung untuk endpoint ini.\",\"type\":\"method_not_allowed\",\"request_id\":\"68062ac7d15f64dbe162497f6a46d0e6\"},\"request_id\":\"68062ac7d15f64dbe162497f6a46d0e6\"}"
+    },
+    "tamandata": {
+      "active": false,
+      "health_status": "dead",
+      "error_class": "http_error",
+      "status_code": 405,
+      "latency_ms": 331.0,
+      "attempts": 1,
+      "checked_at": "2026-08-31 09:09:19 WIB",
+      "tier": "cheap",
+      "error": "{\"error\":{\"message\":\"Method tidak didukung untuk endpoint ini.\",\"type\":\"method_not_allowed\",\"request_id\":\"5b0ab00dd7ec3645b85ace083f865d76\"},\"request_id\":\"5b0ab00dd7ec3645b85ace083f865d76\"}"
+    },
+    "slashai/nemotron-3-super-free": {
+      "active": false,
+      "health_status": "dead",
+      "error_class": "http_error",
+      "status_code": 405,
+      "latency_ms": 183.9,
+      "attempts": 1,
+      "checked_at": "2026-08-31 09:09:18 WIB",
+      "tier": "cheap",
+      "error": "{\"error\":{\"message\":\"Method tidak didukung untuk endpoint ini.\",\"type\":\"method_not_allowed\",\"request_id\":\"00e850b4e827a5d6d8741e7a8d59ea2f\"},\"request_id\":\"00e850b4e827a5d6d8741e7a8d59ea2f\"}"
+    },
+    "slashai/claude-sonnet-4.5-free": {
+      "active": false,
+      "health_status": "dead",
+      "error_class": "http_error",
+      "status_code": 405,
+      "latency_ms": 216.7,
+      "attempts": 1,
+      "checked_at": "2026-08-31 09:09:19 WIB",
+      "tier": "cheap",
+      "error": "{\"error\":{\"message\":\"Method tidak didukung untuk endpoint ini.\",\"type\":\"method_not_allowed\",\"request_id\":\"0d31be94f317a2252ef2e353ea4f5990\"},\"request_id\":\"0d31be94f317a2252ef2e353ea4f5990\"}"
+    },
+    "slashai/claude-sonnet-4.5:free": {
+      "active": false,
+      "health_status": "dead",
+      "error_class": "http_error",
+      "status_code": 405,
+      "latency_ms": 181.7,
+      "attempts": 1,
+      "checked_at": "2026-08-31 09:09:19 WIB",
+      "tier": "cheap",
+      "error": "{\"error\":{\"message\":\"Method tidak didukung untuk endpoint ini.\",\"type\":\"method_not_allowed\",\"request_id\":\"7bf2318dd1a16615cff5844b4dd231fd\"},\"request_id\":\"7bf2318dd1a16615cff5844b4dd231fd\"}"
+    }
+  },
+  "saved_at": 1788142159.252953
+}

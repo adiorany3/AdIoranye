@@ -1,0 +1,9 @@
+{
+  "locked": true,
+  "status": "locked",
+  "message": "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses.",
+  "reason": "Akses terbatas otomatis aktif setelah server reboot.",
+  "updated_at": "2026-08-31 09:12:13 WIB",
+  "updated_by": "system-boot",
+  "channel": "server-boot"
+}

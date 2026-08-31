@@ -150,18 +150,9 @@ MODEL_PRICE_IDR.update({
 })
 
 # Model prioritas untuk health check dan routing hemat.
+# Aplikasi sekarang beroperasi di endpoint Tamandata, jadi kandidat default harus mengarah ke model yang benar-benar tersedia di provider ini.
 TOP_USAGE_MODEL_CANDIDATES = _unique_ordered([
-    'slashai/deepseek-v4-flash-free',
-    'slashai/claude-sonnet-4.5-free',
-    'slashai/nemotron-3-super-free',
-    'slashai/minimax-m2.5:fast',
-    'slashai/deepseek-v4-flash:medium',
-    'slashai/step-3.5-flash',
-    'slashai/qwen3-coder-next:fast',
-    'slashai/minimax-m2.7:medium',
-    'slashai/deepseek-3.2:fast',
-    'slashai/kimi-k2.5:medium',
-    'slashai/qwen3.6-plus',
+    'tamandata',
 ])
 
 # Pastikan kandidat prioritas juga memiliki harga.
@@ -195,59 +186,13 @@ ALL_CAPABLE_MODELS = _unique_ordered(ALL_MEDIUM_MODELS + ALL_EXPENSIVE_MODELS)
 
 # Jalur murah: banyak opsi agar /rotate dan health-check bisa memilih yang hidup/tercepat.
 DEFAULT_CHEAP_FALLBACK_MODELS = _unique_ordered([
-    # Free first untuk pertanyaan ringan/non-thinking.
-    "slashai/deepseek-v4-flash-free",
-    "slashai/claude-sonnet-4.5-free",
-    "slashai/nemotron-3-super-free",
-
-    # Nano second: hemat dan cepat untuk chat ringan.
-    "slashai/gpt-5-nano",
-    "slashai/gpt-5.4-nano",
-
-    # Cheap/fast setelah free dan nano.
-    "slashai/minimax-m2.5:fast",
-    "slashai/deepseek-v4-flash:medium",
-    "slashai/step-3.5-flash",
-    "slashai/qwen3-coder-next:fast",
-    "slashai/minimax-m2.7:medium",
-    "slashai/deepseek-3.2:fast",
-    "slashai/deepseek-v4-flash",
-    "slashai/claude-haiku-4.5",
-    "bai/deepseek-v4-flash",
-    "slashai/gemini-3-flash",
-    "slashai/gpt-5-mini",
-    "slashai/gpt-5.5-instant",
-    "slashai/gpt-5.4-mini",
-    "slashai/gemini-3.1-pro",
-    "slashai/claude-haiku-4.5:fast",
-    "slashai/gpt-5-codex-mini",
-    "slashai/gpt-5.1-codex-mini",
-    "slashai/gpt-5.3-codex-spark",
-    "slashai/gpt-5.3-codex-low",
-] + ALL_CHEAP_MODELS)
+    "tamandata",
+])
 
 # Jalur menengah/mahal: dipakai oleh /ubah mahal, thinking router, atau fallback saat murah kurang cukup.
 DEFAULT_EXPENSIVE_FALLBACK_MODELS = _unique_ordered([
-    "slashai/Qwen3.6-Plus",
-    "slashai/Kimi-K2.5",
-    "slashai/qwen3-coder-next",
-    "slashai/qwen3.6-plus",
-    "slashai/claude-sonnet-4.5:fast",
-    "slashai/deepseek-3.2:fast",
-    "slashai/deepseek-v3.2",
-    "slashai/glm-5:fast",
-    "slashai/glm-5.1:medium",
-    "slashai/kimi-k2.6",
-    "slashai/gpt-5.1",
-    "slashai/gpt-5.2:cx",
-    "slashai/gpt-5-codex",
-    "slashai/qwen3-coder-next:fast",
-    "slashai/mimo-v2.5",
-    "slashai/mimo-v2-omni",
-    "slashai/gpt-5.4-pro",
-    "slashai/qwen3.6-max-preview",
-    "slashai/claude-opus-4.5",
-] + ALL_CAPABLE_MODELS)
+    "tamandata",
+])
 
 # Kompatibilitas dengan versi lama.
 DEFAULT_FALLBACK_MODELS = DEFAULT_CHEAP_FALLBACK_MODELS
@@ -346,6 +291,21 @@ def _unique_strings(items: List[Any]) -> List[str]:
     return _unique_ordered([str(item or "").strip() for item in items if str(item or "").strip()])
 
 
+def normalize_api_url(api_url: str) -> str:
+    """Normalize provider base URLs to working OpenAI-compatible chat completions URLs."""
+    url = str(api_url or "").strip()
+    if not url:
+        return url
+    cleaned = url.split("?", 1)[0].rstrip("/")
+    if cleaned.endswith("/chat/completions"):
+        return cleaned
+    if cleaned.endswith("/v1"):
+        return cleaned + "/chat/completions"
+    if "/v1/" in cleaned:
+        return cleaned.split("/v1/", 1)[0].rstrip("/") + "/v1/chat/completions"
+    return cleaned + "/chat/completions"
+
+
 def _candidate_models_api_urls(api_url: str, models_api_url: str = "") -> List[str]:
     """Build likely OpenAI-compatible model-list endpoints from chat URL."""
     urls: List[str] = []
@@ -361,6 +321,8 @@ def _candidate_models_api_urls(api_url: str, models_api_url: str = "") -> List[s
             urls.append(no_query.split("/v1/", 1)[0].rstrip("/") + "/v1/models")
         else:
             urls.append(no_query.rstrip("/") + "/models")
+        if no_query.endswith("/v1"):
+            urls.append(no_query + "/models")
     return _unique_ordered(urls)
 
 
@@ -823,9 +785,10 @@ def call_api_once(
     max_completion_tokens: int = 1600,
     timeout: int = 45,
 ) -> Tuple[str, Dict[str, Any]]:
+    effective_api_url = normalize_api_url(api_url)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = build_payload(model=model, messages=messages, temperature=temperature, max_completion_tokens=max_completion_tokens)
-    response = _HTTP_SESSION.post(api_url, headers=headers, json=payload, timeout=timeout)
+    response = _HTTP_SESSION.post(effective_api_url, headers=headers, json=payload, timeout=timeout)
     raw_text = response.text or ""
 
     if response.status_code != 200:
