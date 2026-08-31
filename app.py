@@ -12225,14 +12225,14 @@ def render_admin_settings() -> None:
         )
 
         with tab_ai:
-        st.markdown("#### 🤖 Model & Persona")
-        render_mode_selector()
-        filter_choice = st.radio(
-            "Tampilan model",
-            ["Hemat saja", "Hemat + menengah/mahal"],
-            horizontal=False,
-            index=0,
-        )
+            st.markdown("#### 🤖 Model & Persona")
+            render_mode_selector()
+            filter_choice = st.radio(
+                "Tampilan model",
+                ["Hemat saja", "Hemat + menengah/mahal"],
+                horizontal=False,
+                index=0,
+            )
         model_list = (
             CHEAP_MODEL_OPTIONS if filter_choice == "Hemat saja" else MODEL_OPTIONS
         )
@@ -12536,12 +12536,12 @@ def render_admin_settings() -> None:
                 st.rerun()
 
         with tab_bot:
-        st.markdown("#### Kontrol Bot Telegram")
-        format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
-        format_token_status("AI_API_KEY", api_key)
-        st.warning(
-            "Auto-start Telegram aktif dan dibatasi satu worker per container. Lock OS mencegah tumpang tindih saat Streamlit rerun atau restart."
-        )
+            st.markdown("#### Kontrol Bot Telegram")
+            format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
+            format_token_status("AI_API_KEY", api_key)
+            st.warning(
+                "Auto-start Telegram aktif dan dibatasi satu worker per container. Lock OS mencegah tumpang tindih saat Streamlit rerun atau restart."
+            )
         st.info(
             "Jika bot tetap double/triple, artinya token masih hidup di deployment lama/lokal/VPS lain. Gunakan reset koneksi atau force reset lokal."
         )
@@ -12690,12 +12690,12 @@ def render_admin_settings() -> None:
                 st.code(status["last_error"][:2000])
 
         with tab_memory:
-        st.markdown("#### Memory Default Aktif")
-        st.caption(
-            "Memory default ini selalu ikut dikirim ke AI, baik ada memory cache maupun belum ada."
-        )
-        st.session_state.active_default_memory = st.text_area(
-            "Memory default",
+            st.markdown("#### Memory Default Aktif")
+            st.caption(
+                "Memory default ini selalu ikut dikirim ke AI, baik ada memory cache maupun belum ada."
+            )
+            st.session_state.active_default_memory = st.text_area(
+                "Memory default",
             value=st.session_state.active_default_memory,
             height=220,
         )
@@ -12821,17 +12821,17 @@ def render_admin_settings() -> None:
         )
 
         with tab_health:
-        render_secrets_validator_panel()
-        render_ai_health_center()
+            render_secrets_validator_panel()
+            render_ai_health_center()
 
         with tab_maint:
-        render_maintenance_tools()
+            render_maintenance_tools()
 
         with tab_setup:
-        st.markdown("#### Secrets Aplikasi")
-        st.write(
-            "Masukkan konfigurasi berikut di menu **Dashboard Aplikasi → Settings → Secrets**."
-        )
+            st.markdown("#### Secrets Aplikasi")
+            st.write(
+                "Masukkan konfigurasi berikut di menu **Dashboard Aplikasi → Settings → Secrets**."
+            )
         st.code(
             '''ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "GANTI_PASSWORD_ADMIN_YANG_KUAT"
