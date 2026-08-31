@@ -224,7 +224,7 @@ except Exception:  # keep app alive if the guard file is absent
     def build_guard_system_instruction(user_text: str, rag_sources: Optional[List[Dict[str, Any]]] = None, guard: Any = None) -> str:
         return ""
     def build_insufficient_evidence_answer(user_text: str, guard: Any, intent: str = "") -> str:
-        return "Data belum cukup kuat di Knowledge Base untuk menjawab pertanyaan ini secara aman."
+        return "Informasi belum cukup kuat untuk memberi jawaban spesifik dengan aman. Tambahkan konteks atau sumber tepercaya lalu coba lagi."
     def apply_temperature_policy(temperature: float, guard: Any = None) -> float:
         return float(temperature or 0.3)
     def append_guard_note(answer: str, rag_sources: Optional[List[Dict[str, Any]]] = None, **kwargs: Any) -> str:

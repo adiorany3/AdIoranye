@@ -185,15 +185,15 @@ ATURAN ANTI-HALUSINASI ADIORANYE:
 
 
 def build_insufficient_evidence_answer(user_text: str, guard: HallucinationGuardResult, intent: str = "") -> str:
-    keywords = ", ".join(guard.matched_keywords[:6]) if guard.matched_keywords else "pertanyaan kritis/terkini"
+    keywords = ", ".join(guard.matched_keywords[:6]) if guard.matched_keywords else "topik sensitif atau butuh verifikasi"
     return (
-        "Data belum cukup kuat di Knowledge Base untuk menjawab pertanyaan ini secara aman.\n\n"
-        f"Alasan: sistem mendeteksi topik berisiko/terkini ({keywords}), tetapi sumber relevan yang memenuhi batas minimal belum cukup.\n\n"
-        "Yang bisa dilakukan admin:\n"
-        "1. Jalankan /update untuk memperbarui Knowledge Base.\n"
-        "2. Tambahkan sumber resmi/jurnal/dokumen tepercaya untuk topik tersebut.\n"
-        "3. Coba tanyakan ulang setelah update selesai.\n\n"
-        "Saya tidak akan mengarang jawaban untuk topik ini tanpa bukti yang cukup."
+        "Informasi belum cukup kuat untuk memberi jawaban spesifik dengan aman.\n\n"
+        f"Topik ini terdeteksi perlu bukti yang lebih kuat ({keywords}), sementara sumber yang tersedia belum memadai untuk memastikan detail penting.\n\n"
+        "Agar tetap membantu, lakukan langkah berikut:\n"
+        "1. Beri detail konteks lebih lengkap, misalnya tujuan, umur/fase, bahan tersedia, atau batasan yang diinginkan.\n"
+        "2. Perbarui atau tambahkan sumber resmi, jurnal, atau dokumen teknis yang relevan ke Knowledge Base.\n"
+        "3. Ajukan ulang pertanyaan setelah data tambahan tersedia agar jawaban bisa lebih presisi.\n\n"
+        "Untuk saat ini, jawaban paling aman adalah memberi arahan umum dulu, bukan angka atau klaim spesifik yang belum terverifikasi."
     )
 
 
