@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 # =========================
@@ -348,7 +350,27 @@ HEDGE_MARKERS = ["sepertinya", "kemungkinan", "mungkin", "perkiraan", "secara um
 _RESPONSE_CACHE: Dict[str, Tuple[float, str, Dict[str, Any]]] = {}
 _RESPONSE_CACHE_MAX_ITEMS = 60
 _RESPONSE_CACHE_TTL_SECONDS = 300
-_HTTP_SESSION = requests.Session()
+
+
+def _build_http_session() -> requests.Session:
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        status=3,
+        allowed_methods=None,
+        status_forcelist=(429, 500, 502, 503, 504),
+        backoff_factor=0.5,
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+
+_HTTP_SESSION = _build_http_session()
 
 
 class ContentFilterError(RuntimeError):
@@ -641,43 +663,67 @@ def call_api_once(
     effective_api_url = normalize_api_url(api_url)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = build_payload(model=model, messages=messages, temperature=temperature, max_completion_tokens=max_completion_tokens)
-    response = _HTTP_SESSION.post(effective_api_url, headers=headers, json=payload, timeout=timeout)
-    raw_text = response.text or ""
+    timeout_seconds = max(15, min(90, int(timeout or 45)))
 
-    if response.status_code != 200:
-        if is_content_filter_error(raw_text):
-            raise ContentFilterError(f"Prompt ditolak oleh content filter provider. Raw: {raw_text[:900]}")
-        raise RuntimeError(f"API status {response.status_code}: {raw_text[:1200]}")
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        try:
+            response = _HTTP_SESSION.post(
+                effective_api_url,
+                headers=headers,
+                json=payload,
+                timeout=timeout_seconds,
+            )
+            raw_text = response.text or ""
 
-    try:
-        data = response.json()
-    except Exception:
-        content = extract_text_from_response_text(raw_text)
-        if content:
-            return content, {
-                "model": model,
-                "warning": "Respons bukan JSON valid, tetapi content berhasil diekstrak.",
-                "raw_preview": raw_text[:1200],
-            }
-        raise RuntimeError(f"Respons API bukan JSON valid: {raw_text[:1200]}")
+            if response.status_code != 200:
+                if is_content_filter_error(raw_text):
+                    raise ContentFilterError(f"Prompt ditolak oleh content filter provider. Raw: {raw_text[:900]}")
+                raise RuntimeError(f"API status {response.status_code}: {raw_text[:1200]}")
 
-    content, meta = parse_chat_completion(data, raw_text=raw_text)
-    meta["raw_preview"] = raw_text[:1200]
-    meta["model_requested"] = model
+            try:
+                data = response.json()
+            except Exception:
+                content = extract_text_from_response_text(raw_text)
+                if content:
+                    return content, {
+                        "model": model,
+                        "warning": "Respons bukan JSON valid, tetapi content berhasil diekstrak.",
+                        "raw_preview": raw_text[:1200],
+                    }
+                raise RuntimeError(f"Respons API bukan JSON valid: {raw_text[:1200]}")
 
-    usage = meta.get("usage") or {}
-    details = usage.get("completion_tokens_details") or {}
-    reasoning_tokens = details.get("reasoning_tokens", 0)
+            content, meta = parse_chat_completion(data, raw_text=raw_text)
+            meta["raw_preview"] = raw_text[:1200]
+            meta["model_requested"] = model
 
-    if not content and reasoning_tokens:
-        raise EmptyResponseError(
-            "Respons kosong karena output habis untuk reasoning_tokens. "
-            f"reasoning_tokens={reasoning_tokens}. Coba max_completion_tokens lebih besar."
+            usage = meta.get("usage") or {}
+            details = usage.get("completion_tokens_details") or {}
+            reasoning_tokens = details.get("reasoning_tokens", 0)
+
+            if not content and reasoning_tokens:
+                raise EmptyResponseError(
+                    "Respons kosong karena output habis untuk reasoning_tokens. "
+                    f"reasoning_tokens={reasoning_tokens}. Coba max_completion_tokens lebih besar."
+                )
+            if not content:
+                raise EmptyResponseError(f"Respons API berhasil, tetapi isi jawaban kosong. Raw: {raw_text[:1200]}")
+
+            return content, meta
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as exc:
+            last_error = exc
+            if attempt < 3:
+                time.sleep(min(2.0 * attempt, 5.0))
+                continue
+        except Exception:
+            raise
+
+    if last_error is not None:
+        raise RuntimeError(
+            f"Koneksi AI terputus/timeout setelah {attempt} percobaan: {last_error.__class__.__name__}: {str(last_error)[:600]}"
         )
-    if not content:
-        raise EmptyResponseError(f"Respons API berhasil, tetapi isi jawaban kosong. Raw: {raw_text[:1200]}")
 
-    return content, meta
+    raise RuntimeError("Koneksi AI gagal tanpa detail respons yang jelas.")
 
 
 # =========================
