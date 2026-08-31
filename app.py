@@ -95,6 +95,40 @@ def parse_bool(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def is_placeholder_runtime_config(value: Any) -> bool:
+    """True when the app still holds default placeholder config instead of real credentials."""
+    raw = str(value or "").strip()
+    if not raw:
+        return True
+
+    lowered = raw.lower()
+    placeholder_markers = {
+        "set_in_streamlit_secrets",
+        "your-provider.example",
+        "your-model-name",
+        "your-api-key",
+        "your-token",
+        "changeme",
+        "example.com",
+        "example.org",
+        "placeholder",
+    }
+
+    if lowered in placeholder_markers:
+        return True
+
+    if lowered.startswith("https://your-provider.example"):
+        return True
+
+    if lowered.startswith("http://your-provider.example"):
+        return True
+
+    if lowered.startswith("your-") and any(token in lowered for token in ["model", "provider", "api", "token", "key"]):
+        return True
+
+    return False
+
+
 def safe_compare(left: Any, right: Any) -> bool:
     return hmac.compare_digest(str(left or ""), str(right or ""))
 
@@ -1870,15 +1904,24 @@ DEFAULT_PUBLIC_API_KEY = "SET_IN_STREAMLIT_SECRETS"
 
 # Secrets: do not store real runtime credentials in the repository.
 DEFAULT_TAMANDATA_KEY = "SET_IN_STREAMLIT_SECRETS"
-api_key = str(get_secret("SLASHAI_API_KEY", DEFAULT_TAMANDATA_KEY) or DEFAULT_TAMANDATA_KEY).strip()
-api_url = str(
+_default_api_key = str(
+    get_secret("SLASHAI_API_KEY", DEFAULT_TAMANDATA_KEY)
+    or DEFAULT_TAMANDATA_KEY
+).strip()
+api_key = "" if is_placeholder_runtime_config(_default_api_key) else _default_api_key
+
+_default_api_url = str(
     get_secret("SLASHAI_API_URL", "https://your-provider.example/v1")
     or "https://your-provider.example/v1"
 ).strip()
-default_model = str(
+api_url = "" if is_placeholder_runtime_config(_default_api_url) else _default_api_url
+
+_default_model = str(
     get_secret("SLASHAI_MODEL", "your-model-name")
     or "your-model-name"
 ).strip()
+default_model = "tamandata" if is_placeholder_runtime_config(_default_model) else _default_model
+
 telegram_token = str(get_secret("TELEGRAM_BOT_TOKEN", ""))
 memory_file = str(get_secret("MEMORY_FILE", "assistant_memory.json"))
 persona_from_secret = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
@@ -13577,7 +13620,7 @@ def render_public_page() -> None:
 
     if not api_key:
         st.warning(
-            "API key belum diisi. App akan tetap mencoba memakai konfigurasi default Tamandata."
+            "API key belum diisi atau konfigurasi provider masih memakai placeholder. Isi SLASHAI_API_KEY dan SLASHAI_API_URL di secrets/env agar chat dapat berjalan."
         )
 
     col_new_chat, col_info = st.columns([1, 4])
