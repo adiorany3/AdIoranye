@@ -6114,13 +6114,13 @@ def get_answer_model_name(meta: Dict[str, Any] | None, fallback: str = "") -> st
 def render_answer_model_caption(
     meta: Dict[str, Any] | None, fallback: str = "", admin_detail: bool = False
 ) -> None:
-    # Tampilkan model yang menjawab di bawah respons assistant.
+    # Public UI tidak menampilkan model aktif untuk menjaga privasi provider.
     model_name = get_answer_model_name(meta, fallback=fallback)
     if not model_name:
         return
 
     data = meta or {}
-    caption_text = f"Model aktif: {model_name}"
+    caption_text = ""
 
     kb_sources = data.get("power_kb_sources") or data.get("power_rag_sources") or []
     show_kb_sources = bool(data.get("show_kb_sources", False))
@@ -14284,7 +14284,7 @@ def render_public_page() -> None:
                     answer_pdf_download_button(
                         answer, key="download_pdf_latest_answer", model_name=final_model
                     )
-                    caption_text = f"Model aktif: {final_model}"
+                    caption_text = ""
                     if (meta or {}).get("self_verified_by"):
                         caption_text += (
                             f" • self-check: {(meta or {}).get('self_verified_by')}"
