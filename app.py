@@ -644,59 +644,22 @@ def render_maintenance_safe_meta_refresh(
     state: Dict[str, Any] | None = None,
     is_admin: bool = False,
 ) -> None:
-    """Auto-refresh aman untuk sinkronisasi lock/unlock.
+    """Tidak menampilkan refresh note apa pun di UI publik/admin.
 
-    Tidak memakai JavaScript, st.fragment, components.html, setTimeout,
-    atau st.rerun otomatis. Hanya memakai meta refresh HTML.
+    Aplikasi memakai status yang lebih bersih dan tidak memunculkan detail teknis.
     """
-    if is_admin:
-        return
-
-    if not bool(maintenance_auto_refresh_enabled):
-        return
-
-    state = state or read_maintenance_lock_state()
-    locked = bool(state.get("locked"))
-
-    if not locked and not bool(maintenance_auto_refresh_when_unlocked):
-        return
-
-    interval = max(
-        5,
-        min(60, int(maintenance_auto_refresh_interval_seconds or 8)),
-    )
-    status_text = "lock aktif" if locked else "cek lock"
-
-    st.markdown(
-        f"""
-        <div class="maintenance-refresh-note">
-            🔄 Auto-check {status_text} setiap {interval} detik
-        </div>
-        <meta http-equiv="refresh" content="{interval}">
-        """,
-        unsafe_allow_html=True,
-    )
+    return
 
 
 def maintenance_public_message() -> str:
     state = read_maintenance_lock_state()
     message = str(state.get("message") or maintenance_default_message).strip()
-    reason = str(state.get("reason") or "").strip()
-    updated_at = str(state.get("updated_at") or "").strip()
 
     lines = [
         "🛠️ **Akses terbatas**",
         "",
         message,
     ]
-
-    if reason:
-        lines.append("")
-        lines.append(f"Catatan admin: {reason}")
-
-    if updated_at:
-        lines.append("")
-        lines.append(f"Status diperbarui: {updated_at}")
 
     return "\n".join(lines)
 
@@ -706,25 +669,14 @@ def render_maintenance_banner(state: Dict[str, Any] | None = None) -> None:
     if not state.get("locked"):
         return
 
-    reason = str(state.get("reason") or "").strip()
-    updated_at = str(state.get("updated_at") or "").strip()
-    updated_by = str(state.get("updated_by") or "admin").strip()
-
     st.markdown(
-        f"""
+        """
         <div class="maintenance-lock-banner">
             <div class="maintenance-lock-icon">🛠️</div>
             <div>
                 <div class="maintenance-lock-title">Akses terbatas</div>
                 <div class="maintenance-lock-text">
-                    Chat publik sedang dalam akses terbatas. Hanya admin atau user dengan access key yang dapat menggunakan Adioranye sampai akses dibuka kembali.
-                </div>
-                <div class="maintenance-lock-meta">
-                    {_html_escape(reason or "Manual unlock")}
-                    {" • " if updated_at else ""}
-                    {_html_escape(updated_at)}
-                    {" • " if updated_by else ""}
-                    {_html_escape(updated_by)}
+                    Chat publik sedang dalam akses terbatas. Silakan coba lagi nanti.
                 </div>
             </div>
         </div>
@@ -4698,57 +4650,24 @@ def build_live_model_status_html(
     readiness: Dict[str, Any],
     refresh_meta: Dict[str, Any] | None = None,
 ) -> str:
-    """HTML kecil untuk status refresh model tanpa mengganggu chat."""
-    refresh_meta = refresh_meta or {}
+    """UI status publik yang tidak menampilkan detail model atau refresh teknis."""
     status_class = str(readiness.get("class") or "checking")
     status_label = sanitize_model_readiness_text(
-        readiness.get("label") or "Perlu cek model"
+        readiness.get("label") or "Siap digunakan"
     )
-    next_model = str(readiness.get("next_model") or "").strip()
-    checked_at = str(readiness.get("checked_at") or "belum dicek")
-    last_auto = str(
-        st.session_state.get("model_status_auto_refresh_last_text")
-        or "-"
-    )
-    duration = st.session_state.get("model_status_auto_refresh_last_duration_ms")
-    duration_text = f" • {duration} ms" if duration else ""
-
-    if refresh_meta.get("ran"):
-        refresh_text = f"auto-refresh: baru saja{duration_text}"
-    else:
-        refresh_text = f"auto-refresh terakhir: {last_auto}{duration_text}"
 
     return f"""
     <div class="model-auto-refresh-panel status-{_html_escape(status_class)}">
         <span class="model-auto-dot"></span>
         <span><strong>{_html_escape(status_label)}</strong></span>
-        <span>Model: {_html_escape(next_model or '-')}</span>
-        <span>Cek: {_html_escape(checked_at)}</span>
-        <span>{_html_escape(refresh_text)}</span>
     </div>
     """
 
 
 
 def render_auto_model_status_refresh_panel() -> None:
-    """Panel status model tanpa fragment/polling frontend."""
-    if not bool(model_status_auto_refresh_public_panel):
-        return
-
-    refresh_meta = maybe_auto_refresh_model_status(
-        reason="public-status-panel",
-    )
-    route_preview = build_model_routing_plan(
-        user_text="halo",
-    )
-    readiness = get_model_readiness_state(route_preview)
-    st.markdown(
-        build_live_model_status_html(
-            readiness,
-            refresh_meta=refresh_meta,
-        ),
-        unsafe_allow_html=True,
-    )
+    """Panel status publik tidak menampilkan detail teknis atau model."""
+    return
 
 
 
@@ -12077,14 +11996,9 @@ def render_admin_overview_cards() -> None:
         f"""
         <div class="admin-overview-grid">
             <div class="admin-overview-card">
-                <div class="admin-overview-label"><span>🤖 Model aktif</span><span>{_admin_status_badge(tier)}</span></div>
-                <div class="admin-overview-value">{_html_escape(model_name)}</div>
-                <div class="admin-overview-caption">Dipakai sebagai model utama/routing awal.</div>
-            </div>
-            <div class="admin-overview-card">
-                <div class="admin-overview-label"><span>✅ Model sehat</span><span>health</span></div>
-                <div class="admin-overview-value">{_html_escape(active_count)}</div>
-                <div class="admin-overview-caption">Cek terakhir: {_html_escape(checked_at)}</div>
+                <div class="admin-overview-label"><span>✅ AI siap</span><span>status</span></div>
+                <div class="admin-overview-value">{_html_escape(telegram_status)}</div>
+                <div class="admin-overview-caption">Sistem siap menerima pertanyaan.</div>
             </div>
             <div class="admin-overview-card">
                 <div class="admin-overview-label"><span>💬 Telegram</span><span>tested</span></div>
@@ -13633,9 +13547,9 @@ def render_public_page() -> None:
                     <span class="adioranye-brand-ai">AI</span>
                 </span>
             </div>
-            <div class="mac-window-actions online-status status-{_html_escape(public_status_class)}" aria-label="Status AI model">
+            <div class="mac-window-actions online-status status-{_html_escape(public_status_class)}" aria-label="Status AI">
                 <span class="online-dot" aria-hidden="true"></span>
-                <span class="online-text">{_html_escape(public_status_label)}</span>
+                <span class="online-text">Siap digunakan</span>
                 <span class="online-wave" aria-hidden="true">
                     <span></span>
                     <span></span>
@@ -13652,12 +13566,12 @@ def render_public_page() -> None:
                 </div>
             </div>
             <div class="adioranye-hero-content">
-                <div class="adioranye-hero-kicker status-{_html_escape(public_status_class)}">{_html_escape(public_status_kicker)}</div>
+                <div class="adioranye-hero-kicker status-{_html_escape(public_status_class)}">Siap membantu</div>
                 <h3 class="app-title adioranye-hero-title">
                     <span class="adioranye-hero-word">Adioranye</span>
                     <span class="adioranye-ai-chip-large">AI</span>
                 </h3>
-                <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dibaca di mode terang maupun gelap. Status model: {_html_escape(public_status_subtitle)} Router otomatis menyesuaikan strategi jawaban berdasarkan kebutuhan pertanyaan.</p>
+                <p class="app-subtitle">Asisten AI yang rapi, cepat, dan mudah dipakai untuk kebutuhan chat, analisis, dan bantuan harian.</p>
             </div>
         </div>
         <div class="developer-credit"><span>Developed by Galuh Adi Insani</span></div>

@@ -5571,17 +5571,7 @@ class TelegramBotService:
                             history.append({"role": "user", "content": text})
                             history.append({"role": "assistant", "content": answer})
                             self._histories[key] = history[-8:]
-                            # Keterangan model ditampilkan di bawah setiap jawaban Telegram
-                            # agar admin/pengguna tahu model mana yang benar-benar menjawab.
-                            show_model = bool(config.get("show_model_info", True))
-                            if show_model:
-                                answer_to_send = answer + build_telegram_model_note(
-                                    meta=meta,
-                                    requested_model=request_model,
-                                    default_model=model,
-                                )
-                            else:
-                                answer_to_send = answer
+                            answer_to_send = answer
                             self._send_message(token, chat_id, answer_to_send, parse_mode=telegram_parse_mode)
 
                         except Exception as exc:
@@ -5771,16 +5761,8 @@ class TelegramBotService:
                                     history.append({"role": "user", "content": text})
                                     history.append({"role": "assistant", "content": retry_answer})
                                     self._histories[key] = history[-8:]
-                                    show_model = bool(config.get("show_model_info", True))
-                                    if show_model:
-                                        retry_answer_to_send = retry_answer + build_telegram_model_note(
-                                            meta=retry_meta,
-                                            requested_model=model,
-                                            default_model=model,
-                                        )
-                                        retry_answer_to_send += "\n♻️ Catatan: model awal gagal, lalu bot otomatis rotate ke model aktif dan mengulang jawaban."
-                                    else:
-                                        retry_answer_to_send = retry_answer
+                                    show_model = bool(config.get("show_model_info", False))
+                                    retry_answer_to_send = retry_answer
                                     self._send_message(token, chat_id, retry_answer_to_send, parse_mode=telegram_parse_mode)
                                     continue
                                 except Exception as retry_exc:
