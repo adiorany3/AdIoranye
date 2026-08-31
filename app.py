@@ -10469,16 +10469,6 @@ def render_admin_production_dashboard() -> None:
         f"scope: {question_quick_check_scope or 'quick'}."
     )
 
-    perf_stats = get_model_performance_stats()
-    if perf_stats:
-        perf_rows = []
-        for model_name, info in perf_stats.items():
-            requests_count = int(info.get("requests", 0) or 0)
-            if requests_count <= 0:
-                continue
-            success_count = int(info.get("success", 0) or 0)
-            perf_rows.append(
-                {
     if st.button(
         "♻️ Reset model block",
         use_container_width=True,
