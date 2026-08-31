@@ -78,8 +78,6 @@ def model_price(model: str) -> Dict[str, int]:
         return {"input": 50, "output": 200}
     if "deepseek-v4-pro" in lower_name:
         return {"input": 5000, "output": 25000}
-    if "haiku-4.5" in lower_name:
-        return {"input": 50, "output": 200}
     if "qwen3.6-plus" in lower_name or "qwen3-coder-next" in lower_name or "kimi-k2.5" in lower_name:
         return {"input": 500, "output": 2000}
     return {"input": 0, "output": 0}

@@ -12227,36 +12227,28 @@ def render_admin_settings() -> None:
         with tab_ai:
             st.markdown("#### 🤖 Model & Persona")
             render_mode_selector()
-            filter_choice = st.radio(
-                "Tampilan model",
-                ["Hemat saja", "Hemat + menengah/mahal"],
-                horizontal=False,
-                index=0,
+            model_list = MODEL_OPTIONS or [default_model]
+            current_model = (
+                st.session_state.active_model
+                if st.session_state.active_model in model_list
+                else default_model
             )
-        model_list = (
-            CHEAP_MODEL_OPTIONS if filter_choice == "Hemat saja" else MODEL_OPTIONS
-        )
-        current_model = (
-            st.session_state.active_model
-            if st.session_state.active_model in model_list
-            else default_model
-        )
-        if current_model not in model_list:
-            current_model = model_list[0]
+            if current_model not in model_list:
+                current_model = model_list[0]
 
-        st.session_state.active_model = st.selectbox(
-            "Model utama aktif",
-            model_list,
-            index=model_list.index(current_model),
-            format_func=model_price_label,
-        )
-        tier = model_cost_tier(st.session_state.active_model)
-        price = model_price(st.session_state.active_model)
-        st.info(
-            f"Model utama: {st.session_state.active_model} | tier: {tier} | input Rp{price.get('input', 0):,}/1M, output Rp{price.get('output', 0):,}/1M".replace(
-                ",", "."
+            st.session_state.active_model = st.selectbox(
+                "Model utama aktif",
+                model_list,
+                index=model_list.index(current_model),
+                format_func=model_price_label,
             )
-        )
+            tier = model_cost_tier(st.session_state.active_model)
+            price = model_price(st.session_state.active_model)
+            st.info(
+                f"Model utama: {st.session_state.active_model} | tier: {tier} | input Rp{price.get('input', 0):,}/1M, output Rp{price.get('output', 0):,}/1M".replace(
+                    ",", "."
+                )
+            )
         current_health = (st.session_state.get("model_health_cache") or {}).get(
             st.session_state.active_model,
             {},
@@ -12539,30 +12531,29 @@ def render_admin_settings() -> None:
             st.markdown("#### Kontrol Bot Telegram")
             format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
             format_token_status("AI_API_KEY", api_key)
-            st.warning(
-                "Auto-start Telegram aktif dan dibatasi satu worker per container. Lock OS mencegah tumpang tindih saat Streamlit rerun atau restart."
+            status = service.status()
+            st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
+            st.caption(f"Pesan diproses: {status.get('processed', 0)}")
+            if status.get("started_at"):
+                st.caption(f"Mulai: {_to_wib_display_text(status['started_at'])}")
+            if status.get("worker_id"):
+                st.caption(f"Worker: {status['worker_id']}")
+            st.caption(f"Duplikat dicegah: {status.get('duplicates_skipped', 0)}")
+            if status.get("runtime_primary_model"):
+                st.caption(
+                    f"Primary runtime Telegram: {status.get('runtime_primary_model')}"
+                )
+            if status.get("model_health_checked_at"):
+                st.caption(
+                    f"Update model Telegram terakhir: {_to_wib_display_text(status.get('model_health_checked_at'))} | aktif: {status.get('model_health_active_count', 0)}"
+                )
+            if not telegram_token or not api_key:
+                st.warning("Token bot atau API key belum lengkap.")
+            else:
+                st.success("Token bot dan API key terdeteksi.")
+            st.caption(
+                f"Perintah cek cepat Telegram: /speed {telegram_speed_update_code}"
             )
-        st.info(
-            "Jika bot tetap double/triple, artinya token masih hidup di deployment lama/lokal/VPS lain. Gunakan reset koneksi atau force reset lokal."
-        )
-        st.caption(
-            "Telegram dikirim sebagai plain text secara default agar kode/XML seperti <uses-permission> tidak dianggap tag HTML."
-        )
-        st.caption(
-            f"Perintah admin Telegram: /speed {telegram_speed_update_code} untuk cek ulang model kapan saja dan memakai hanya model yang hidup."
-        )
-        st.info(
-            "Kontrol admin juga tersedia dari Telegram: /admin, /status, /telegramtest, /health, /router auto|murah|mahal, /lock, /unlock, /key generate, /keys, /akses, /update, /reset_runtime, /reset_telegram."
-        )
-
-        status = service.status()
-        st.write("Status bot:", "🟢 Berjalan" if status["running"] else "🔴 Mati")
-        st.caption(f"Pesan diproses: {status.get('processed', 0)}")
-        if status.get("started_at"):
-            st.caption(f"Mulai: {_to_wib_display_text(status['started_at'])}")
-        if status.get("worker_id"):
-            st.caption(f"Worker: {status['worker_id']}")
-        st.caption(f"Duplikat dicegah: {status.get('duplicates_skipped', 0)}")
         if status.get("runtime_primary_model"):
             st.caption(
                 f"Primary runtime Telegram: {status.get('runtime_primary_model')}"
@@ -12816,16 +12807,12 @@ def render_admin_settings() -> None:
                 st.rerun()
 
     with st.expander("Lanjutan", expanded=False):
-        tab_health, tab_maint, tab_setup = st.tabs(
-            ["✅ Health", "🧹 Akses Terbatas", "🔧 Setup"]
-        )
+        st.caption("Bagian ini hanya untuk pengecekan dan setup saat dibutuhkan.")
+        tab_health, tab_setup = st.tabs(["✅ Health", "🔧 Setup"])
 
         with tab_health:
             render_secrets_validator_panel()
             render_ai_health_center()
-
-        with tab_maint:
-            render_maintenance_tools()
 
         with tab_setup:
             st.markdown("#### Secrets Aplikasi")
