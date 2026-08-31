@@ -1934,7 +1934,7 @@ persona_from_secret = str(get_secret("ASSISTANT_PERSONA", DEFAULT_PERSONA))
 default_memory_context_from_secret = str(
     get_secret("DEFAULT_MEMORY_CONTEXT", DEFAULT_MEMORY_CONTEXT)
 )
-auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", False), default=False)
+auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", True), default=True)
 drop_pending_updates = parse_bool(
     get_secret("TELEGRAM_DROP_PENDING_UPDATES", True), default=True
 )
@@ -12511,10 +12511,10 @@ def render_admin_settings() -> None:
         format_token_status("TELEGRAM_BOT_TOKEN", telegram_token)
         format_token_status("AI_API_KEY", api_key)
         st.warning(
-            "Mode aman aktif: TELEGRAM_AUTO_START disarankan FALSE. Jalankan bot hanya dari tombol admin agar Streamlit Online tidak membuat beberapa poller saat app rerun/restart."
+            "Auto-start Telegram aktif dan dibatasi satu worker per container. Lock OS mencegah tumpang tindih saat Streamlit rerun atau restart."
         )
         st.info(
-            "Lock OS aktif untuk mencegah lebih dari satu worker dalam container yang sama. Jika tetap double/triple, berarti token bot masih hidup di deployment lama/lokal/VPS lain."
+            "Jika bot tetap double/triple, artinya token masih hidup di deployment lama/lokal/VPS lain. Gunakan reset koneksi atau force reset lokal."
         )
         st.caption(
             "Telegram dikirim sebagai plain text secara default agar kode/XML seperti <uses-permission> tidak dianggap tag HTML."
@@ -12852,7 +12852,7 @@ Memory default Adioranye:
 MEMORY_FILE = "assistant_memory.json"
 
 # true = bot Telegram otomatis start saat app Streamlit dibuka/aktif
-TELEGRAM_AUTO_START = false
+TELEGRAM_AUTO_START = true
 TELEGRAM_DROP_PENDING_UPDATES = true
 TELEGRAM_SEND_PROCESSING_MESSAGE = false
 TELEGRAM_LOCK_FILE = ".telegram_bot_worker.lock"
