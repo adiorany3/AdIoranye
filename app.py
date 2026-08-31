@@ -12469,32 +12469,10 @@ def render_admin_settings() -> None:
             ),
         )
 
-        st.markdown("#### Mode model Telegram")
-        current_telegram_mode = normalize_telegram_model_mode(
-            st.session_state.get(
-                "telegram_model_mode",
-                telegram_model_mode_default,
-            )
-        )
-        mode_options = {
-            "auto": "Otomatis",
-            "cheap": "Murah/Cepat",
-            "expensive": "Medium/Mahal",
-        }
-        selected_label = st.radio(
-            "Mode routing bot",
-            options=list(mode_options.keys()),
-            format_func=lambda value: mode_options.get(value, value),
-            index=list(mode_options.keys()).index(current_telegram_mode)
-            if current_telegram_mode in mode_options
-            else 0,
-            horizontal=True,
-            key="telegram_model_mode",
-            help="Sesuai format telegram_service.py: auto, cheap, atau expensive.",
-        )
-        bot_config["telegram_model_mode"] = normalize_telegram_model_mode(
-            selected_label
-        )
+        st.markdown("#### Mode routing bot")
+        st.session_state["telegram_model_mode"] = "auto"
+        bot_config["telegram_model_mode"] = "auto"
+        st.caption("Mode router bot dijalankan secara otomatis.")
 
         col_start, col_stop = st.columns(2)
         with col_start:
@@ -12529,12 +12507,7 @@ def render_admin_settings() -> None:
                         "active_expensive_models": start_route.get(
                             "active_expensive_models", []
                         ),
-                        "telegram_model_mode": normalize_telegram_model_mode(
-                            st.session_state.get(
-                                "telegram_model_mode",
-                                telegram_model_mode_default,
-                            )
-                        ),
+                        "telegram_model_mode": "auto",
                         "telegram_runtime_state_file": telegram_runtime_state_file,
                         "auto_rotate_on_model_error": bool(
                             telegram_auto_rotate_on_model_error
