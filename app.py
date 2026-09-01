@@ -1460,6 +1460,145 @@ def run_local_kb_publish(
     }
 
 
+def github_secret_ready(value: Any) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    lowered = raw.lower()
+    blocked = {
+        "set_in_streamlit_secrets",
+        "your-token",
+        "your-api-key",
+        "changeme",
+        "placeholder",
+    }
+    return lowered not in blocked and len(raw) >= 20
+
+
+def github_publish_target_files(root_dir: str) -> List[str]:
+    files = [
+        ".adioranye_power.db",
+        ".adioranye_kb_scrape_state.json",
+        ".adioranye_kb_source_health.json",
+        "daily_intelligence_briefing.md",
+    ]
+    if os.path.isfile(os.path.join(root_dir, "daily_kb_update_report.json")):
+        files.append("daily_kb_update_report.json")
+    return [path for path in files if os.path.isfile(os.path.join(root_dir, path))]
+
+
+def github_api_request(
+    method: str,
+    url: str,
+    token: str,
+    payload: Dict[str, Any] | None = None,
+) -> requests.Response:
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    return requests.request(method.upper(), url, headers=headers, json=payload, timeout=60)
+
+
+def publish_files_to_github_contents_api(
+    *,
+    repo: str,
+    branch: str,
+    token: str,
+    root_dir: str,
+    commit_message: str,
+) -> Dict[str, Any]:
+    published: List[str] = []
+    skipped: List[str] = []
+    errors: List[str] = []
+
+    for rel_path in github_publish_target_files(root_dir):
+        abs_path = os.path.join(root_dir, rel_path)
+        try:
+            content_bytes = read_file_bytes_safe(abs_path)
+            if not content_bytes:
+                skipped.append(f"{rel_path} (empty)")
+                continue
+            safe_rel_path = "/".join(part for part in rel_path.split(os.sep) if part)
+            endpoint = f"https://api.github.com/repos/{repo}/contents/{safe_rel_path}"
+
+            sha = None
+            get_response = github_api_request("GET", f"{endpoint}?ref={branch}", token)
+            if get_response.status_code == 200:
+                sha = (get_response.json() or {}).get("sha")
+            elif get_response.status_code != 404:
+                errors.append(f"GET {rel_path}: {get_response.status_code} {get_response.text[:200]}")
+                continue
+
+            payload: Dict[str, Any] = {
+                "message": commit_message,
+                "content": base64.b64encode(content_bytes).decode("ascii"),
+                "branch": branch,
+            }
+            if sha:
+                payload["sha"] = sha
+
+            put_response = github_api_request("PUT", endpoint, token, payload)
+            if put_response.status_code in {200, 201}:
+                published.append(rel_path)
+            else:
+                errors.append(f"PUT {rel_path}: {put_response.status_code} {put_response.text[:200]}")
+        except Exception as exc:
+            errors.append(f"{rel_path}: {exc}")
+
+    return {
+        "ok": not errors and bool(published),
+        "published_files": published,
+        "skipped_files": skipped,
+        "errors": errors,
+        "mode": "github_contents_api",
+    }
+
+
+def run_streamlit_kb_publish(
+    *,
+    run_update_first: bool,
+    source_limit: int,
+    max_items_per_source: int,
+    time_budget_seconds: int,
+    dry_run: bool,
+    force: bool,
+    no_source_rotation: bool,
+    github_repo: str,
+    github_branch: str,
+    github_token: str,
+) -> Dict[str, Any]:
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    update_report = None
+
+    if run_update_first:
+        update_report = run_daily_kb_update(
+            db_path=power_db_path,
+            sources_path=kb_scraper_sources_file,
+            state_path=kb_scraper_state_file,
+            max_items_per_source=int(max_items_per_source),
+            timeout=int(kb_scraper_timeout or 20),
+            dry_run=bool(dry_run),
+            force=bool(force),
+            time_budget_seconds=int(time_budget_seconds or 0),
+            source_limit=int(source_limit or 0),
+            auto_rotate_sources=not bool(no_source_rotation),
+        )
+
+    commit_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    publish_result = publish_files_to_github_contents_api(
+        repo=github_repo,
+        branch=github_branch or "main",
+        token=github_token,
+        root_dir=root_dir,
+        commit_message=f"chore: publish knowledge base {commit_stamp}",
+    )
+    publish_result["update_report"] = update_report
+    publish_result["run_update_first"] = bool(run_update_first)
+    return publish_result
+
+
 def file_size_label(path: str) -> str:
     try:
         size = os.path.getsize(path)
@@ -15075,6 +15214,14 @@ def render_power_features_admin_panel() -> None:
                                 help="Aktifkan hanya jika ingin selalu mulai dari sumber awal/state manual.",
                             )
 
+                        publish_only_without_update = st.checkbox(
+                            "Publish saja tanpa update ulang",
+                            value=False,
+                            key="kb_publish_only_without_update",
+                            help="Centang untuk upload file KB terakhir ke GitHub tanpa menjalankan scraper lagi.",
+                        )
+                        streamlit_github_ready = github_secret_ready(get_secret("GITHUB_TOKEN", "")) and bool(github_repo)
+
                         col_kb_action1, col_kb_action2 = st.columns(2)
                         with col_kb_action1:
                             if st.button(
@@ -15115,28 +15262,70 @@ def render_power_features_admin_panel() -> None:
                                 except Exception as exc:
                                     st.error(f"Auto update gagal: {exc}")
                         with col_kb_action2:
+                            publish_button_label = (
+                                "📤 Publish GitHub saja"
+                                if publish_only_without_update
+                                else "📤 Update lalu publish GitHub"
+                            )
                             if st.button(
-                                "📤 Update lokal lalu publish GitHub",
+                                publish_button_label,
                                 use_container_width=True,
                                 key="kb_local_publish_now",
                             ):
                                 try:
-                                    with st.spinner("Menjalankan update lokal dan publish GitHub..."):
-                                        publish_result = run_local_kb_publish(
-                                            run_update_first=True,
-                                            source_limit=int(auto_source_limit or 0),
-                                            max_items_per_source=int(auto_max_items),
-                                            time_budget_seconds=int(auto_time_budget or 0),
-                                            dry_run=bool(auto_dry_run),
-                                            force=bool(auto_force),
-                                            no_source_rotation=bool(auto_no_rotation),
+                                    run_update_first = not bool(publish_only_without_update)
+                                    if streamlit_github_ready:
+                                        spinner_text = (
+                                            "Publish file KB ke GitHub dari Streamlit..."
+                                            if not run_update_first
+                                            else "Menjalankan update KB lalu publish ke GitHub dari Streamlit..."
                                         )
-                                    if publish_result.get("ok"):
-                                        st.success("Update lokal lalu publish GitHub selesai.")
+                                        with st.spinner(spinner_text):
+                                            publish_result = run_streamlit_kb_publish(
+                                                run_update_first=run_update_first,
+                                                source_limit=int(auto_source_limit or 0),
+                                                max_items_per_source=int(auto_max_items),
+                                                time_budget_seconds=int(auto_time_budget or 0),
+                                                dry_run=bool(auto_dry_run),
+                                                force=bool(auto_force),
+                                                no_source_rotation=bool(auto_no_rotation),
+                                                github_repo=github_repo,
+                                                github_branch=github_branch,
+                                                github_token=str(get_secret("GITHUB_TOKEN", "") or "").strip(),
+                                            )
                                     else:
-                                        st.error(
-                                            f"Publish GitHub gagal. Exit code: {publish_result.get('returncode', 1)}"
+                                        with st.spinner("Menjalankan publish lokal via git shell..."):
+                                            publish_result = run_local_kb_publish(
+                                                run_update_first=run_update_first,
+                                                source_limit=int(auto_source_limit or 0),
+                                                max_items_per_source=int(auto_max_items),
+                                                time_budget_seconds=int(auto_time_budget or 0),
+                                                dry_run=bool(auto_dry_run),
+                                                force=bool(auto_force),
+                                                no_source_rotation=bool(auto_no_rotation),
+                                            )
+                                    if publish_result.get("ok"):
+                                        st.success("Publish GitHub selesai.")
+                                    else:
+                                        if publish_result.get("mode") == "github_contents_api":
+                                            st.error("Publish GitHub via API gagal.")
+                                        else:
+                                            st.error(
+                                                f"Publish GitHub gagal. Exit code: {publish_result.get('returncode', 1)}"
+                                            )
+                                    update_report = publish_result.get("update_report") or {}
+                                    if update_report:
+                                        st.caption(
+                                            f"Update KB: dokumen baru {update_report.get('added_documents', 0)}, "
+                                            f"chunks baru {update_report.get('added_chunks', 0)}, "
+                                            f"error {update_report.get('errors', 0)}"
                                         )
+                                    if publish_result.get("published_files"):
+                                        st.write("File dipublish:")
+                                        st.json(publish_result.get("published_files"))
+                                    if publish_result.get("errors"):
+                                        st.write("Error publish:")
+                                        st.json(publish_result.get("errors"))
                                     if publish_result.get("output"):
                                         st.code(str(publish_result.get("output") or ""), language="bash")
                                 except subprocess.TimeoutExpired:

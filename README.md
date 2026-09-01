@@ -31,6 +31,13 @@ Script ini akan:
 - `git commit`
 - `git push origin HEAD`
 
+Untuk Streamlit online tanpa GitHub Actions:
+- isi `GITHUB_TOKEN` di Streamlit secrets
+- isi `GITHUB_REPO` mis. `owner/repo`
+- opsional isi `GITHUB_BRANCH` bila bukan `main`
+- di panel admin Knowledge Base, pakai tombol publish GitHub
+- centang `Publish saja tanpa update ulang` bila ingin upload snapshot KB terakhir tanpa scrape ulang
+
 Env penting untuk update lokal:
 - `KB_SCRAPER_SOURCES_FILE`
 - `KB_SCRAPER_STATE_FILE`
