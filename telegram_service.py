@@ -312,6 +312,13 @@ def call_generate_power_answer_compat(
 
 
 
+def telegram_normalize_short_greeting_text(text: str) -> str:
+    value = str(text or "").strip().lower()
+    value = re.sub(r"[^\w\s]", " ", value)
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
 def build_telegram_local_safe_fallback_answer(
     user_text: str,
     failure_reason: str = "",
@@ -410,3 +417,250 @@ Catatan:
             "answer": answer,
             "reason": "safe_domain_specific_local_answer",
         }
+
+    hidden_detail = str(failure_reason or "")[:500]
+
+    if not text:
+        return (
+            "Halo. Tulis pertanyaan atau kebutuhan Anda, nanti saya bantu jawab sejelas mungkin.",
+            {
+                "public_safe_message": True,
+                "telegram_public_error_sanitized": True,
+                "fallback_reason": "empty_input_local_fallback",
+                "hidden_telegram_error_detail": hidden_detail,
+            },
+        )
+
+    greeting_tokens = {
+        "halo", "hai", "hi", "hello", "pagi", "siang", "sore", "malam",
+        "permisi", "bro", "sis", "min", "admin", "adioranye",
+    }
+    thanks_tokens = {"makasih", "terima kasih", "thanks", "thank you", "thx"}
+
+    if normalized in greeting_tokens or any(token in greeting_tokens for token in tokens[:2]):
+        return (
+            "Halo juga. Kirim pertanyaan Anda, saya bantu jawab singkat dan jelas.",
+            {
+                "public_safe_message": True,
+                "telegram_public_error_sanitized": True,
+                "fallback_reason": "short_greeting_local_fallback",
+                "hidden_telegram_error_detail": hidden_detail,
+            },
+        )
+
+    if normalized in thanks_tokens or "terima kasih" in lower or "makasih" in lower:
+        return (
+            "Sama-sama. Jika masih ada yang ingin ditanyakan, lanjutkan saja.",
+            {
+                "public_safe_message": True,
+                "telegram_public_error_sanitized": True,
+                "fallback_reason": "thanks_local_fallback",
+                "hidden_telegram_error_detail": hidden_detail,
+            },
+        )
+
+    if any(marker in lower for marker in current_info_markers):
+        return (
+            "Maaf, data real-time belum bisa diambil saat ini. Coba lagi beberapa saat lagi, atau kirim pertanyaan yang tidak butuh info terbaru.",
+            {
+                "public_safe_message": True,
+                "telegram_public_error_sanitized": True,
+                "fallback_reason": "current_info_local_fallback",
+                "hidden_telegram_error_detail": hidden_detail,
+            },
+        )
+
+    if any(marker in lower for marker in risky_domain_markers):
+        return (
+            "Maaf, untuk topik sensitif seperti medis, dosis, hukum, atau investasi, kirim konteks lebih lengkap agar jawaban bisa lebih aman dan terarah.",
+            {
+                "public_safe_message": True,
+                "telegram_public_error_sanitized": True,
+                "fallback_reason": "risky_domain_local_fallback",
+                "hidden_telegram_error_detail": hidden_detail,
+            },
+        )
+
+    if tokens and (tokens[0] in question_starters or text.endswith("?")):
+        return (
+            "Maaf, layanan sedang terbatas. Coba kirim ulang pertanyaan dengan versi lebih singkat atau beberapa saat lagi.",
+            {
+                "public_safe_message": True,
+                "telegram_public_error_sanitized": True,
+                "fallback_reason": "question_local_fallback",
+                "hidden_telegram_error_detail": hidden_detail,
+            },
+        )
+
+    return (
+        "Maaf, Adioranye sedang mengalami gangguan koneksi/model. Silakan coba lagi beberapa saat lagi.",
+        {
+            "public_safe_message": True,
+            "telegram_public_error_sanitized": True,
+            "fallback_reason": "default_public_fallback",
+            "hidden_telegram_error_detail": hidden_detail,
+        },
+    )
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Minimal safe wrapper after truncated file recovery."""
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+        return str(answer or ""), meta if isinstance(meta, dict) else {}
+    except Exception as exc:
+        fallback_answer, fallback_meta = build_telegram_local_safe_fallback_answer(
+            str(kwargs.get("user_text") or ""),
+            failure_reason=str(exc),
+        )
+        fallback_meta["error_class"] = exc.__class__.__name__
+        return fallback_answer, fallback_meta
+
+
+class TelegramService:
+    def __init__(self) -> None:
+        self._running = False
+        self._processed = 0
+        self._started_at = ""
+        self._worker_id = ""
+        self._last_update = ""
+        self._last_error = ""
+        self._duplicates_skipped = 0
+        self._runtime_primary_model = ""
+        self._model_health_checked_at = ""
+        self._model_health_active_count = 0
+        self._lock = threading.Lock()
+
+    def status(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "running": self._running,
+                "processed": self._processed,
+                "started_at": self._started_at,
+                "worker_id": self._worker_id,
+                "last_update": self._last_update,
+                "last_error": self._last_error,
+                "duplicates_skipped": self._duplicates_skipped,
+                "runtime_primary_model": self._runtime_primary_model,
+                "model_health_checked_at": self._model_health_checked_at,
+                "model_health_active_count": self._model_health_active_count,
+            }
+
+    def start(self, config: Dict[str, Any] | None = None) -> bool:
+        config = config or {}
+        with self._lock:
+            if self._running:
+                return True
+            self._running = True
+            self._started_at = datetime.utcnow().isoformat()
+            self._worker_id = f"local-{int(time.time())}"
+            self._runtime_primary_model = str(config.get("slashai_model") or config.get("model") or "")
+            self._model_health_checked_at = datetime.utcnow().isoformat()
+            self._model_health_active_count = len(config.get("active_cheap_models") or []) + len(config.get("active_expensive_models") or [])
+            self._last_error = ""
+            self._last_update = "Telegram worker berjalan dalam mode aman minimal."
+        return True
+
+    def stop(self) -> None:
+        with self._lock:
+            self._running = False
+            self._last_update = "Telegram worker dihentikan."
+
+    def diagnose(self, config: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        config = config or {}
+        token = str(config.get("telegram_token") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+        timeout = telegram_safe_int(config.get("telegram_status_test_timeout_seconds"), 12)
+
+        result = {
+            "ok": False,
+            "bot_username": "",
+            "bot_id": "",
+            "webhook_url": "",
+            "pending_update_count": None,
+            "last_error": "",
+        }
+
+        if not token:
+            result["last_error"] = "TELEGRAM_BOT_TOKEN kosong."
+            return result
+
+        try:
+            get_me = requests.get(
+                TELEGRAM_API.format(token=token, method="getMe"),
+                timeout=timeout,
+            )
+            get_me.raise_for_status()
+            me_payload = get_me.json()
+            if not me_payload.get("ok"):
+                raise RuntimeError(str(me_payload))
+
+            bot_info = me_payload.get("result") or {}
+            result["bot_username"] = str(bot_info.get("username") or "")
+            result["bot_id"] = str(bot_info.get("id") or "")
+
+            webhook_resp = requests.get(
+                TELEGRAM_API.format(token=token, method="getWebhookInfo"),
+                timeout=timeout,
+            )
+            webhook_resp.raise_for_status()
+            webhook_payload = webhook_resp.json()
+            webhook_info = webhook_payload.get("result") or {}
+            result["webhook_url"] = str(webhook_info.get("url") or "")
+            result["pending_update_count"] = webhook_info.get("pending_update_count")
+            result["ok"] = True
+            return result
+        except Exception as exc:
+            result["last_error"] = str(exc)[:1200]
+            with self._lock:
+                self._last_error = result["last_error"]
+            return result
+
+    def reset_telegram_session(self, config: Dict[str, Any] | None = None) -> str:
+        config = config or {}
+        token = str(config.get("telegram_token") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+        timeout = telegram_safe_int(config.get("telegram_status_test_timeout_seconds"), 12)
+
+        if not token:
+            return "Reset dibatalkan: TELEGRAM_BOT_TOKEN kosong."
+
+        messages: List[str] = []
+        try:
+            resp = requests.get(
+                TELEGRAM_API.format(token=token, method="deleteWebhook") + "?drop_pending_updates=true",
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if payload.get("ok"):
+                messages.append("Webhook dihapus dan pending update dibersihkan.")
+            else:
+                messages.append(f"deleteWebhook tidak OK: {payload}")
+        except Exception as exc:
+            messages.append(f"Reset Telegram gagal: {exc}")
+            with self._lock:
+                self._last_error = str(exc)[:1200]
+
+        return " ".join(messages) or "Reset Telegram selesai."
+
+    def force_local_reset(self) -> str:
+        with self._lock:
+            self._running = False
+            self._processed = 0
+            self._worker_id = ""
+            self._last_update = "Force reset lokal selesai."
+            self._last_error = ""
+        return "Force reset lokal worker Telegram selesai."
+
+
+_TELEGRAM_SERVICE_SINGLETON: TelegramService | None = None
+
+
+def get_telegram_service(*args: Any, **kwargs: Any) -> TelegramService:
+    del args, kwargs
+    global _TELEGRAM_SERVICE_SINGLETON
+    if _TELEGRAM_SERVICE_SINGLETON is None:
+        _TELEGRAM_SERVICE_SINGLETON = TelegramService()
+    return _TELEGRAM_SERVICE_SINGLETON
+
+
+assert callable(get_telegram_service)
