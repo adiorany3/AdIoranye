@@ -529,12 +529,19 @@ class TelegramService:
         self._runtime_primary_model = ""
         self._model_health_checked_at = ""
         self._model_health_active_count = 0
+        self._poll_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._offset = 0
+        self._token = ""
+        self._config: Dict[str, Any] = {}
         self._lock = threading.Lock()
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
+            thread_alive = bool(self._poll_thread and self._poll_thread.is_alive())
+            running = bool(self._running and thread_alive)
             return {
-                "running": self._running,
+                "running": running,
                 "processed": self._processed,
                 "started_at": self._started_at,
                 "worker_id": self._worker_id,
@@ -546,11 +553,145 @@ class TelegramService:
                 "model_health_active_count": self._model_health_active_count,
             }
 
+    def _telegram_request(
+        self,
+        method: str,
+        payload: Dict[str, Any] | None = None,
+        timeout: int = 60,
+    ) -> Dict[str, Any]:
+        if not self._token:
+            raise RuntimeError("TELEGRAM_BOT_TOKEN kosong.")
+        response = requests.post(
+            TELEGRAM_API.format(token=self._token, method=method),
+            json=payload or {},
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("ok"):
+            raise RuntimeError(str(data))
+        return data
+
+    def _build_answer(self, text: str) -> tuple[str, Dict[str, Any]]:
+        answer, meta = safe_generate_power_answer(
+            api_url=str(self._config.get("slashai_api_url") or self._config.get("api_url") or ""),
+            api_key=str(self._config.get("slashai_api_key") or self._config.get("api_key") or ""),
+            model=str(self._config.get("slashai_model") or self._config.get("model") or "tamandata"),
+            system_prompt=str(self._config.get("persona_text") or self._config.get("system_prompt") or ""),
+            user_text=text,
+            memory_text="",
+            recent_messages=[],
+            fallback_models=list(self._config.get("fallback_models") or []),
+            expensive_fallback_models=list(self._config.get("expensive_fallback_models") or []),
+            allow_expensive_fallback=bool(self._config.get("allow_expensive_fallback", True)),
+            max_expensive_models=telegram_safe_int(self._config.get("max_expensive_models"), 1),
+            temperature=float(self._config.get("temperature") or 0.3),
+            max_completion_tokens=telegram_safe_int(self._config.get("max_completion_tokens"), 1200),
+            timeout=telegram_safe_int(self._config.get("timeout"), 90),
+            max_smart_models=telegram_safe_int(self._config.get("max_smart_models"), 1),
+            return_to_primary=bool(self._config.get("return_to_primary", False)),
+        )
+        return str(answer or "").strip(), meta if isinstance(meta, dict) else {}
+
+    def _handle_message(self, message: Dict[str, Any]) -> None:
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        text = str(message.get("text") or "").strip()
+        update_id = message.get("update_id")
+
+        if not chat_id or not text:
+            return
+
+        with self._lock:
+            self._last_update = f"update_id={update_id} chat_id={chat_id} text={text[:120]}"
+
+        try:
+            answer, _meta = self._build_answer(text)
+            if not answer:
+                answer, _meta = build_telegram_local_safe_fallback_answer(text, failure_reason="empty_answer")
+            self._telegram_request(
+                "sendMessage",
+                {
+                    "chat_id": chat_id,
+                    "text": answer[:4000],
+                },
+                timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
+            )
+            with self._lock:
+                self._processed += 1
+        except Exception as exc:
+            fallback_answer, _ = build_telegram_local_safe_fallback_answer(text, failure_reason=str(exc))
+            try:
+                self._telegram_request(
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": fallback_answer[:4000],
+                    },
+                    timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
+                )
+            except Exception as send_exc:
+                with self._lock:
+                    self._last_error = str(send_exc)[:1200]
+            else:
+                with self._lock:
+                    self._processed += 1
+                    self._last_error = str(exc)[:1200]
+
+    def _poll_loop(self) -> None:
+        timeout_seconds = telegram_safe_int(self._config.get("telegram_poll_timeout_seconds"), 30)
+        while not self._stop_event.is_set():
+            try:
+                payload = {
+                    "timeout": timeout_seconds,
+                    "offset": self._offset,
+                    "allowed_updates": ["message"],
+                }
+                data = self._telegram_request(
+                    "getUpdates",
+                    payload,
+                    timeout=timeout_seconds + 10,
+                )
+                for item in data.get("result") or []:
+                    update_id = int(item.get("update_id") or 0)
+                    self._offset = max(self._offset, update_id + 1)
+                    message = dict(item.get("message") or {})
+                    message["update_id"] = update_id
+                    self._handle_message(message)
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = str(exc)[:1200]
+                if self._stop_event.wait(3):
+                    break
+
+        with self._lock:
+            self._running = False
+            self._poll_thread = None
+            self._last_update = "Telegram worker berhenti."
+
     def start(self, config: Dict[str, Any] | None = None) -> bool:
         config = config or {}
+        token = str(config.get("telegram_token") or os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+        api_key = str(config.get("slashai_api_key") or config.get("api_key") or "").strip()
+        api_url = str(config.get("slashai_api_url") or config.get("api_url") or "").strip()
+
+        if not token:
+            with self._lock:
+                self._last_error = "TELEGRAM_BOT_TOKEN kosong."
+            return False
+
+        if not api_key or not api_url:
+            with self._lock:
+                self._last_error = "Konfigurasi AI belum lengkap. Isi API key dan API URL."
+            return False
+
         with self._lock:
-            if self._running:
+            if self._poll_thread and self._poll_thread.is_alive():
+                self._running = True
                 return True
+            self._config = dict(config)
+            self._token = token
+            self._stop_event.clear()
             self._running = True
             self._started_at = datetime.utcnow().isoformat()
             self._worker_id = f"local-{int(time.time())}"
@@ -558,13 +699,20 @@ class TelegramService:
             self._model_health_checked_at = datetime.utcnow().isoformat()
             self._model_health_active_count = len(config.get("active_cheap_models") or []) + len(config.get("active_expensive_models") or [])
             self._last_error = ""
-            self._last_update = "Telegram worker berjalan dalam mode aman minimal."
+            self._last_update = "Telegram worker mulai polling."
+            self._poll_thread = threading.Thread(target=self._poll_loop, name="adioranye-telegram-poll", daemon=True)
+            self._poll_thread.start()
         return True
 
     def stop(self) -> None:
+        thread = None
         with self._lock:
             self._running = False
+            self._stop_event.set()
+            thread = self._poll_thread
             self._last_update = "Telegram worker dihentikan."
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
 
     def diagnose(self, config: Dict[str, Any] | None = None) -> Dict[str, Any]:
         config = config or {}
