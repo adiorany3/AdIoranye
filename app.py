@@ -250,8 +250,21 @@ def default_maintenance_state() -> Dict[str, Any]:
 
 
 def read_maintenance_lock_state() -> Dict[str, Any]:
-    """Mode normal sederhana: akses terbatas dinonaktifkan agar app selalu bisa dipakai."""
-    return default_maintenance_state()
+    try:
+        if not maintenance_lock_file or not os.path.exists(maintenance_lock_file):
+            return default_maintenance_state()
+
+        with open(maintenance_lock_file, "r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        state = default_maintenance_state()
+        if isinstance(data, dict):
+            state.update(data)
+        state["locked"] = bool(state.get("locked"))
+        state["status"] = "locked" if state.get("locked") else "unlocked"
+        return state
+    except Exception:
+        return default_maintenance_state()
 
 def write_maintenance_lock_state(state: Dict[str, Any]) -> None:
     try:
@@ -11296,8 +11309,11 @@ def render_admin_status() -> None:
     if st.session_state.get("model_health_checked_at"):
         checked_at = _timestamp_to_wib_text(st.session_state.model_health_checked_at)
 
+    maintenance_state = read_maintenance_lock_state()
+    web_chat_status = "LOCKED" if maintenance_state.get("locked") else "UNLOCKED"
+
     st.markdown("#### Status Sistem")
-    st.caption("Chat publik aktif. Setting hanya untuk admin.")
+    st.caption("Status web chat bisa di-lock dari admin. Telegram tetap bisa jalan.")
     status_text = (
         f"Model utama: {cfg['model']}\n\n"
         f"Tier: {model_cost_tier(cfg['model'])} | Rp{price.get('input', 0):,}/Rp{price.get('output', 0):,}\n\n"
@@ -11306,6 +11322,9 @@ def render_admin_status() -> None:
         f"Telegram: {telegram_status}\n"
         f"Telegram tested: {telegram_verified.get('checked_at_text') or '-'}\n"
         f"Telegram detail: {telegram_verified.get('caption') or '-'}\n\n"
+        f"Web chat: {web_chat_status}\n"
+        f"Web chat updated: {maintenance_state.get('updated_at') or '-'}\n"
+        f"Web chat by: {maintenance_state.get('updated_by') or '-'}\n\n"
         f"Rotasi murah: {'ON' if st.session_state.get('active_rotate_cheap_primary', True) else 'OFF'}\n\n"
         f"Thinking router: {'ON' if st.session_state.get('active_thinking_model_router', True) else 'OFF'}\n\n"
         f"Fast normal: {'ON' if st.session_state.get('active_fast_normal_model_router', True) else 'OFF'}\n\n"
@@ -11323,11 +11342,47 @@ def render_admin_status() -> None:
             force_button_key="telegram_verified_status_card_test_btn",
         )
 
-    with st.expander("🧹 Mode Sederhana", expanded=False):
-        st.info("Mode akses terbatas dan access key dinonaktifkan. Aplikasi berjalan normal tanpa kunci publik.")
-        st.caption("Provider aktif: disembunyikan dari UI publik untuk keamanan.")
-        st.caption("Endpoint dan model default disembunyikan dari UI publik.")
-        st.caption("Semua pengguna dapat mengakses langsung tanpa key tambahan.")
+    with st.expander("🔒 Kontrol Web Chat", expanded=False):
+        current_state = read_maintenance_lock_state()
+        is_locked = bool(current_state.get("locked"))
+        st.info(
+            "Kontrol ini hanya mengunci chat publik di web. Telegram tetap berjalan normal."
+        )
+        st.caption(
+            f"Status sekarang: {'LOCKED' if is_locked else 'UNLOCKED'} | updated: {current_state.get('updated_at') or '-'} | by: {current_state.get('updated_by') or '-'}"
+        )
+        col_lock_web, col_unlock_web = st.columns(2)
+        with col_lock_web:
+            if st.button(
+                "🔒 Lock chat web",
+                use_container_width=True,
+                key="admin_lock_web_chat_btn",
+                disabled=is_locked,
+            ):
+                set_maintenance_lock(
+                    True,
+                    updated_by="admin-web",
+                    channel="web-admin",
+                    reason="manual_web_chat_lock",
+                )
+                st.warning("Chat web dikunci. Telegram tetap aktif.")
+                st.rerun()
+        with col_unlock_web:
+            if st.button(
+                "🔓 Unlock chat web",
+                use_container_width=True,
+                key="admin_unlock_web_chat_btn",
+                disabled=not is_locked,
+            ):
+                set_maintenance_lock(
+                    False,
+                    updated_by="admin-web",
+                    channel="web-admin",
+                    reason="manual_web_chat_unlock",
+                )
+                st.success("Chat web dibuka lagi. Telegram tetap aktif.")
+                st.rerun()
+        st.caption("User web akan melihat pesan akses terbatas saat lock aktif.")
 
     with st.expander("Cache pertanyaan sering muncul"):
         cache_stats = frequent_question_cache_stats()
@@ -13955,21 +14010,17 @@ def render_public_page() -> None:
     )
 
     maintenance_state = read_maintenance_lock_state()
-    public_locked = False
+    public_locked = bool(maintenance_state.get("locked"))
     maintenance_access_status = get_current_maintenance_access_key_status()
-    maintenance_access_allowed = True
-
-    if maintenance_access_allowed:
-        render_maintenance_access_key_active_notice(maintenance_access_status)
-    else:
-        maintenance_state = render_maintenance_realtime_status(maintenance_state)
+    maintenance_access_allowed = False
 
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
 
-    if public_locked and not maintenance_access_allowed:
-        render_maintenance_access_key_form(maintenance_state)
+    if public_locked and not st.session_state.get("admin_authenticated", False):
+        render_maintenance_realtime_status(maintenance_state)
         render_maintenance_locked_public_guard(maintenance_state)
+        st.warning(maintenance_public_message())
         st.markdown(
             '<div class="auto-scroll-anchor"></div>'
             '<div class="chat-input-safe-space"></div>',
