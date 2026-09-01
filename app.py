@@ -47,13 +47,57 @@ from db_guard import (
     default_max_backups,
 )
 
+TELEGRAM_SERVICE_IMPORT_ERROR = ""
+
 try:
     from telegram_service import get_telegram_service
-except Exception:
+except Exception as exc:
+    TELEGRAM_SERVICE_IMPORT_ERROR = str(exc)
+
+    class NullTelegramService:
+        def status(self) -> Dict[str, Any]:
+            return {
+                "running": False,
+                "processed": 0,
+                "duplicates_skipped": 0,
+                "last_error": (
+                    TELEGRAM_SERVICE_IMPORT_ERROR
+                    or "telegram_service import failed"
+                ),
+                "worker_id": "",
+                "started_at": "",
+                "last_update": "",
+            }
+
+        def start(self, *args: Any, **kwargs: Any) -> bool:
+            return False
+
+        def stop(self) -> None:
+            return None
+
+        def diagnose(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+            return {
+                "ok": False,
+                "last_error": (
+                    TELEGRAM_SERVICE_IMPORT_ERROR
+                    or "telegram_service import failed"
+                ),
+            }
+
+        def reset_telegram_session(self, *args: Any, **kwargs: Any) -> str:
+            return (
+                "Telegram nonaktif. Import `telegram_service.py` gagal: "
+                f"{TELEGRAM_SERVICE_IMPORT_ERROR or 'unknown error'}"
+            )
+
+        def force_local_reset(self, *args: Any, **kwargs: Any) -> str:
+            return (
+                "Telegram nonaktif. Import `telegram_service.py` gagal: "
+                f"{TELEGRAM_SERVICE_IMPORT_ERROR or 'unknown error'}"
+            )
+
     def get_telegram_service(*args: Any, **kwargs: Any) -> Any:
-        raise RuntimeError(
-            "telegram_service import failed. Check streamlit logs for root cause."
-        )
+        return NullTelegramService()
 
 from daily_kb_scraper import (
     DEFAULT_SOURCES_FILE as KB_DEFAULT_SOURCES_FILE,
@@ -11104,6 +11148,9 @@ def get_runtime_config() -> Dict[str, Any]:
 def start_telegram_if_needed() -> None:
     cfg = get_runtime_config()
 
+    if TELEGRAM_SERVICE_IMPORT_ERROR:
+        return
+
     if auto_start and telegram_token and api_key and not service.status()["running"]:
         route = build_model_routing_plan(advance_rotation=True)
         bot_config = build_telegram_config_payload(
@@ -12667,7 +12714,11 @@ def render_admin_settings() -> None:
                 st.caption(
                     f"Update model Telegram terakhir: {_to_wib_display_text(status.get('model_health_checked_at'))} | aktif: {status.get('model_health_active_count', 0)}"
                 )
-            if not telegram_token or not api_key:
+            if TELEGRAM_SERVICE_IMPORT_ERROR:
+                st.warning("Telegram dimatikan sementara karena modul gagal diimport.")
+                with st.expander("Detail error import Telegram"):
+                    st.code(TELEGRAM_SERVICE_IMPORT_ERROR[:3000])
+            elif not telegram_token or not api_key:
                 st.warning("Token bot atau API key belum lengkap.")
             else:
                 st.success("Token bot dan API key terdeteksi.")
@@ -12683,10 +12734,11 @@ def render_admin_settings() -> None:
                 f"Update model Telegram terakhir: {_to_wib_display_text(status.get('model_health_checked_at'))} | aktif: {status.get('model_health_active_count', 0)}"
             )
 
-        with st.expander("💬 Test status Telegram dari API", expanded=True):
-            render_telegram_verified_status_card(
-                force_button_key="telegram_diagnose_connection_btn",
-            )
+        if not TELEGRAM_SERVICE_IMPORT_ERROR:
+            with st.expander("💬 Test status Telegram dari API", expanded=True):
+                render_telegram_verified_status_card(
+                    force_button_key="telegram_diagnose_connection_btn",
+                )
 
         cfg = get_runtime_config()
         route = build_model_routing_plan()
@@ -12705,7 +12757,12 @@ def render_admin_settings() -> None:
 
         col_start, col_stop = st.columns(2)
         with col_start:
-            if st.button("▶️ Start Bot", use_container_width=True, key="auto_btn_2932"):
+            if st.button(
+                "▶️ Start Bot",
+                use_container_width=True,
+                key="auto_btn_2932",
+                disabled=bool(TELEGRAM_SERVICE_IMPORT_ERROR),
+            ):
                 start_route = build_model_routing_plan(advance_rotation=True)
                 bot_config.update(
                     {
@@ -12767,7 +12824,12 @@ def render_admin_settings() -> None:
                             "token masih dipakai instance lain; revoke token di BotFather dan masukkan token baru."
                         )
         with col_stop:
-            if st.button("⏹️ Stop Bot", use_container_width=True, key="auto_btn_2954"):
+            if st.button(
+                "⏹️ Stop Bot",
+                use_container_width=True,
+                key="auto_btn_2954",
+                disabled=bool(TELEGRAM_SERVICE_IMPORT_ERROR),
+            ):
                 service.stop()
                 st.session_state.telegram_verified_status_cache = {}
                 st.warning("Bot Telegram dihentikan pada instance Streamlit ini.")
@@ -12776,6 +12838,7 @@ def render_admin_settings() -> None:
             "🧯 Reset koneksi Telegram / hapus pending update",
             use_container_width=True,
             key="auto_btn_2958",
+            disabled=bool(TELEGRAM_SERVICE_IMPORT_ERROR),
         ):
             result = service.reset_telegram_session(bot_config)
             st.session_state.telegram_verified_status_cache = {}
@@ -12785,6 +12848,7 @@ def render_admin_settings() -> None:
             "🛠️ Force reset lokal worker Telegram",
             use_container_width=True,
             key="telegram_force_local_reset_btn",
+            disabled=bool(TELEGRAM_SERVICE_IMPORT_ERROR),
         ):
             st.session_state.telegram_verified_status_cache = {}
             st.warning(service.force_local_reset())
