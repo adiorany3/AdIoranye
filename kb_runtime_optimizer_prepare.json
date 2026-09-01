@@ -1,71 +1,71 @@
 {
-  "created_at": "2026-08-02T18:10:13+00:00",
-  "created_at_wib": "2026-08-03 01:10:13 WIB",
+  "created_at": "2026-09-01T03:57:10+00:00",
+  "created_at_wib": "2026-09-01 10:57:10 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 9,
-  "max_items": 1,
+  "max_items": 2,
   "profile": "auto",
   "quota": {
     "cold": 1,
-    "hot": 4,
-    "warm": 3
+    "hot": 5,
+    "warm": 2
   },
   "selected": [
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 87.378,
+      "score": 104.389,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
       "name": "Meta AI Blog",
       "quality": 55.0,
-      "score": 52.666,
+      "score": 69.743,
       "tier": "hot",
       "url": "https://ai.meta.com/blog/"
     },
     {
       "name": "Google AI",
       "quality": 55.0,
-      "score": 52.595,
+      "score": 69.419,
       "tier": "hot",
       "url": "https://blog.google/innovation-and-ai/technology/ai/"
     },
     {
       "name": "Hugging Face Blog",
       "quality": 55.0,
-      "score": 52.374,
+      "score": 69.146,
       "tier": "hot",
       "url": "https://huggingface.co/blog"
     },
     {
-      "name": "arXiv cs.AI Recent",
-      "quality": 55.0,
-      "score": 42.79,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.AI/recent"
-    },
-    {
       "name": "Google DeepMind News",
       "quality": 55.0,
-      "score": 42.563,
+      "score": 59.926,
       "tier": "warm",
       "url": "https://deepmind.google/blog/"
     },
     {
       "name": "arXiv cs.CL Recent",
       "quality": 55.0,
-      "score": 42.433,
+      "score": 59.914,
       "tier": "warm",
       "url": "https://arxiv.org/list/cs.CL/recent"
     },
     {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 32.588,
+      "score": 49.948,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
+    },
+    {
+      "name": "arXiv cs.AI Recent",
+      "quality": 55.0,
+      "score": 59.86,
+      "tier": "warm",
+      "url": "https://arxiv.org/list/cs.AI/recent"
     }
   ],
   "selected_sources": 8,
