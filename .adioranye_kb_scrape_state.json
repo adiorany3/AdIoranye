@@ -1776,6 +1776,14 @@
       "title": "Google News Top Headlines - Thailand — Audit Immunity for Trump Family Puts I.R.S. in a Bind - The New York Times",
       "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE12MHZtNVBxaXVfQU9TWlRuWl9IUnZLQjNsc1JrQzRVSE1iVGlPeFlhU3Jab3ZBZGhmeUEtbHRaZ2xVZjJpa0c4U1F3TjBjM1hMZVFqV2J3bU1VbDZZUmhEWlIwdjl0SUZCUDJQMGxZdFFuRW9FUzNtbGZ0MzQtUQ?oc=5"
     },
+    "1caf54f8db4fad6f273423d9d2ae41de35c5f418ffd40c52f1b3db8af64b0cab": {
+      "chunks": 10,
+      "created_at": "2026-09-01T01:36:30+00:00",
+      "doc_id": 2189,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Polimill builds Japan's next-generation public AI infrastructure | OpenAI",
+      "url": "https://openai.com/index/polimill"
+    },
     "1cbc00af654f1a02549b257970a1b0834fa9fe0ab1a01768ed8a1d9cdc0e41ae": {
       "chunks": 1,
       "created_at": "2026-05-22T02:40:39+00:00",
@@ -11952,6 +11960,14 @@
       "title": "Google News Global Tech - AR VR XR Global — Essential books that shape how we understand spatial computing and XR - haptic.al",
       "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxQdmpITEFOZ3p1Y0UyX0dXd3FUVkxCTHJFN0liTkdZcS1rX1lkWW41M2wtR0VIRWRUdzYzcGNLZnhPVGZVdUV5VkZTeE1SQlIxaHU2cmpwM3FrTWxEd29sSWhJcTlfWUw3OUxWTnpmNlRhMjNGSEs3S2lVSHA2WWNESzhFN25wdUJGZURrdUxYN3Vaak9TMG1UWDlzcERqTHViT0E?oc=5"
     },
+    "c33b4720426451b1a8cd6830c5dc0a64d49033d2c6f45f42e7a41d808000bfbf": {
+      "chunks": 9,
+      "created_at": "2026-09-01T01:36:30+00:00",
+      "doc_id": 2192,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Better answers, broader thinking: What students gain from ChatGPT and critical-thinking training | OpenAI",
+      "url": "https://openai.com/index/what-students-gain-from-chatgpt-critical-thinking-training"
+    },
     "c3959673ee9bee40ce22a152621e0ac4c5acd712fa122f9ff7d902024eb4a748": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:39+00:00",
@@ -14120,6 +14136,14 @@
       "title": "ANTARA News - Ekonomi — Bolehkah menolak pembayaran uang tunai? Ini aturan hukum dan sanksinya",
       "url": "https://www.antaranews.com/berita/5319970/bolehkah-menolak-pembayaran-uang-tunai-ini-aturan-hukum-dan-sanksinya"
     },
+    "eadbe5dd34ce159c710fdc305c7aac30cdc541c77ab5a53015458de2b9578997": {
+      "chunks": 12,
+      "created_at": "2026-09-01T01:36:30+00:00",
+      "doc_id": 2191,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Supporting Thailand’s next generation of AI startups | OpenAI",
+      "url": "https://openai.com/index/supporting-next-generation-ai-startups-thailand"
+    },
     "eae61da49782b7e5f794957274be58452afdf1992d34a87bf8ea79e2542e9e2c": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:47+00:00",
@@ -14127,6 +14151,14 @@
       "source": "CNA.id - Bisnis",
       "title": "CNA.id - Bisnis — iPhone 16 update: Wamenperin sebut Apple saat ini serius tanggapi syarat investasi",
       "url": "https://www.cna.id/lifestyle/iphone-16-update-investasi-apple-indonesia-tkdn-kritik-amcham-25041"
+    },
+    "eb02f12355048a6435bd4ecfe3b575fb26891058ecaa14d22d2f0799b7998d8a": {
+      "chunks": 4,
+      "created_at": "2026-09-01T01:36:30+00:00",
+      "doc_id": 2190,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Our decision on Cursor following its acquisition by SpaceX | OpenAI",
+      "url": "https://openai.com/index/our-decision-on-cursor-following-its-acquisition-by-spacex"
     },
     "eb098e212aa1791cb8a0865e73cb884bf2f02702dc66cbc6009f88c801370b2e": {
       "chunks": 1,
@@ -15359,13 +15391,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-19T00:09:43+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-19T07:35:35+00:00"
     },
     {
@@ -15773,6 +15798,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-08-02T18:10:18+00:00"
+    },
+    {
+      "added_chunks": 35,
+      "added_documents": 4,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-09-01T01:36:36+00:00"
     }
   ],
   "version": 1
