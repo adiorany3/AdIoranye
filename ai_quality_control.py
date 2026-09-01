@@ -227,6 +227,8 @@ def score_answer_quality(
         "answer_chars": len(answer_text),
         "mode": mode,
         "intent": intent,
+        "citation_coverage": 0.0,
+        "stale_source_rate": 0.0,
     }
 
     if not answer_text:
@@ -245,6 +247,7 @@ def score_answer_quality(
         score += min(0.20, 0.055 * len(sources))
         qualities = []
         freshness = []
+        cited_sources = 0
         for item in sources:
             try:
                 qualities.append(float(item.get("source_quality") or 0))
@@ -254,6 +257,16 @@ def score_answer_quality(
                 freshness.append(float(item.get("freshness_score") or 0))
             except Exception:
                 pass
+            title = str(item.get("title") or item.get("citation") or "").strip()
+            source = str(item.get("source") or "").strip()
+            if (title and title.lower() in lower_answer) or (source and source.lower() in lower_answer):
+                cited_sources += 1
+        metrics["citation_coverage"] = round(cited_sources / max(1, len(sources)), 3)
+        if metrics["citation_coverage"] >= 0.5:
+            score += 0.04
+        elif high_risk:
+            score -= 0.05
+            reasons.append("cakupan_sitasi_rendah")
         if qualities:
             avg_quality = sum(qualities) / len(qualities)
             metrics["avg_source_quality"] = round(avg_quality, 2)
@@ -264,9 +277,14 @@ def score_answer_quality(
                 reasons.append("kualitas_sumber_rendah")
         if freshness:
             avg_freshness = sum(freshness) / len(freshness)
+            stale_count = sum(1 for value in freshness if value < 40)
             metrics["avg_freshness"] = round(avg_freshness, 2)
+            metrics["stale_source_rate"] = round(stale_count / max(1, len(freshness)), 3)
             if avg_freshness >= 70:
                 score += 0.05
+            elif high_risk and metrics["stale_source_rate"] >= 0.5:
+                score -= 0.06
+                reasons.append("sumber_kedaluwarsa_dominan")
     elif high_risk:
         score -= 0.24
         reasons.append("pertanyaan_kritis_tanpa_sumber_kb")

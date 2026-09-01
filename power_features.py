@@ -1422,12 +1422,12 @@ class PowerStore:
                 if item.get("pinned"):
                     score += 0.08
                 try:
-                    score += (float(item.get("source_quality") or 55) / 100.0) * 0.12
+                    score += (float(item.get("source_quality") or 55) / 100.0) * 0.20
                 except Exception:
                     pass
                 score += _recency_boost(float(item.get("created_at") or 0))
                 try:
-                    score += (float(item.get("freshness_score") or 45) / 100.0) * 0.10
+                    score += (float(item.get("freshness_score") or 45) / 100.0) * 0.14
                     score += min(0.08, (float(item.get("criticality_score") or 0) / 100.0) * 0.08)
                 except Exception:
                     pass
@@ -1468,12 +1468,12 @@ class PowerStore:
             if item.get("pinned"):
                 score += 0.08
             try:
-                score += (float(item.get("source_quality") or 55) / 100.0) * 0.12
+                score += (float(item.get("source_quality") or 55) / 100.0) * 0.20
             except Exception:
                 pass
             score += _recency_boost(float(item.get("created_at") or 0))
             try:
-                score += (float(item.get("freshness_score") or 45) / 100.0) * 0.10
+                score += (float(item.get("freshness_score") or 45) / 100.0) * 0.14
                 score += min(0.08, (float(item.get("criticality_score") or 0) / 100.0) * 0.08)
             except Exception:
                 pass

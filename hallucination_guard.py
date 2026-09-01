@@ -210,11 +210,15 @@ def apply_temperature_policy(temperature: float, guard: Optional[HallucinationGu
 
 
 def format_source_note(rag_sources: Optional[List[Dict[str, Any]]], limit: int = 4) -> str:
-    sources = list(rag_sources or [])[: max(1, int(limit or 4))]
-    if not sources:
+    ranked = sorted(
+        list(rag_sources or []),
+        key=lambda item: (_source_quality(item), _source_freshness(item)),
+        reverse=True,
+    )[: max(1, int(limit or 4))]
+    if not ranked:
         return ""
     lines = []
-    for idx, item in enumerate(sources, start=1):
+    for idx, item in enumerate(ranked, start=1):
         title = str(item.get("title") or item.get("citation") or "Sumber KB").strip()
         source = str(item.get("source") or "").strip()
         quality = item.get("source_quality")

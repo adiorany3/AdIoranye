@@ -136,6 +136,38 @@ def summarize_for_kb(text: str, max_sentences: int = 5) -> str:
     return clean_spaces(" ".join(item[2] for item in picked))[:1800]
 
 
+def content_quality_flags(text: str, title: str = "") -> Dict[str, Any]:
+    clean = clean_spaces(text)
+    title_clean = clean_spaces(title)
+    combined = f"{title_clean}\n{clean}".strip()
+    words = re.findall(r"[a-zA-ZÀ-ÿ0-9_\-]{3,}", combined.lower())
+    unique_words = len(set(words))
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", clean) if s.strip()]
+    repeated_short_lines = len(re.findall(r"\b(read more|selengkapnya|klik di sini|subscribe|share|advertisement|iklan)\b", combined.lower()))
+    thin = len(clean) < 320 or len(sentences) < 2 or unique_words < 45
+    boilerplate_heavy = repeated_short_lines >= 2
+    score = 100.0
+    if len(clean) < 500:
+        score -= 22.0
+    if len(sentences) < 3:
+        score -= 18.0
+    if unique_words < 70:
+        score -= 18.0
+    if boilerplate_heavy:
+        score -= 24.0
+    return {
+        "content_quality_score": round(max(0.0, min(100.0, score)), 2),
+        "content_quality_flags": {
+            "thin_content": bool(thin),
+            "boilerplate_heavy": bool(boilerplate_heavy),
+            "sentence_count": len(sentences),
+            "unique_words": unique_words,
+            "char_count": len(clean),
+        },
+        "should_skip": bool(thin or boilerplate_heavy),
+    }
+
+
 def source_domain(url: str) -> str:
     try:
         return urlparse(str(url or "")).netloc.lower().replace("www.", "")[:160]
@@ -795,6 +827,7 @@ def enrich_article_metadata(article: Dict[str, str], source: SourceConfig, conte
         source_name=source.name,
         configured_quality=estimate_source_quality_from_config(source),
     )
+    content_quality = content_quality_flags(content, title=title)
     detection = detect_critical_question(" ".join([title, source.collection, source.tags, content[:1800]]))
     claims = extract_claims(
         text=content,
@@ -804,7 +837,7 @@ def enrich_article_metadata(article: Dict[str, str], source: SourceConfig, conte
         published_at=published,
         max_claims=source.claim_max_items,
     ) if source.critical else []
-    return {
+    metadata = {
         "source_name": source.name,
         "source_type": source.type,
         "source_url": source.url,
@@ -826,6 +859,8 @@ def enrich_article_metadata(article: Dict[str, str], source: SourceConfig, conte
         "auto_summary": summarize_for_kb(content, max_sentences=source.summary_sentences),
         "keywords": extract_keywords(" ".join([title, content]), limit=14),
     }
+    metadata.update(content_quality)
+    return metadata
 
 
 def append_claims_to_document_text(document_text: str, claims: List[Dict[str, Any]]) -> str:
@@ -987,6 +1022,18 @@ def run_daily_kb_update(
                 continue
 
             metadata = enrich_article_metadata(article, source, content, title, url)
+            if metadata.get("should_skip"):
+                report["skipped_short"] += 1
+                report["items"].append({
+                    "source": source.name,
+                    "status": "skipped_low_quality",
+                    "title": title,
+                    "url": url,
+                    "chars": len(content),
+                    "content_quality_score": metadata.get("content_quality_score"),
+                    "content_quality_flags": metadata.get("content_quality_flags"),
+                })
+                continue
             metadata["processed_key"] = key
             document_text = build_document_text(article, source)
             document_text = append_claims_to_document_text(document_text, metadata.get("claims") or [])
