@@ -3046,11 +3046,14 @@ def add_session_memory(
     if clean_text.lower() in normalized_existing:
         return False
 
+    memory_kind = "preference" if source.startswith("auto-") else "note"
+
     items.append(
         {
             "text": clean_text,
             "source": str(source or "web-session"),
             "created_at": _wib_now_text(),
+            "kind": memory_kind,
         }
     )
 
@@ -3159,6 +3162,67 @@ def reset_session_memory() -> int:
     st.session_state.session_memory_updated_at = _wib_now_text()
 
     return count
+
+
+def _auto_session_memory_candidates(user_text: str) -> List[str]:
+    text = str(user_text or "").strip()
+
+    if not text:
+        return []
+
+    compact = re.sub(r"\s+", " ", text)
+    lowered = compact.lower()
+    candidates: List[str] = []
+
+    preference_markers = [
+        "jawab singkat",
+        "jawab ringkas",
+        "lebih ringkas",
+        "lebih detail",
+        "lebih formal",
+        "lebih santai",
+        "bahasa indonesia",
+        "bahasa inggris",
+        "pakai bahasa",
+        "siap tempel",
+        "step by step",
+        "bertahap",
+        "jangan terlalu teknis",
+        "jangan pakai istilah teknis",
+        "fokus ke",
+    ]
+
+    goal_markers = [
+        "saya sedang",
+        "aku sedang",
+        "saya ingin",
+        "aku ingin",
+        "tujuan saya",
+        "proyek saya",
+        "project saya",
+        "saya pakai",
+        "aku pakai",
+        "saya bekerja",
+        "aku bekerja",
+    ]
+
+    if any(marker in lowered for marker in preference_markers):
+        candidates.append(f"Preferensi pengguna: {compact[:220]}")
+
+    if any(marker in lowered for marker in goal_markers):
+        candidates.append(f"Konteks/tujuan aktif: {compact[:220]}")
+
+    return candidates[:2]
+
+
+def remember_session_context_from_user_text(user_text: str) -> int:
+    saved_count = 0
+
+    for candidate in _auto_session_memory_candidates(user_text):
+        if add_session_memory(candidate, source="auto-user-context"):
+            saved_count += 1
+
+    return saved_count
 
 
 def handle_session_memory_command(
@@ -14108,6 +14172,8 @@ def render_public_page() -> None:
                     "public_safe_message": True,
                     "session_memory_count": len(_session_memory_items()),
                 }
+            else:
+                remember_session_context_from_user_text(user_input)
 
         if not local_reply and st.session_state.admin_authenticated:
             local_reply = handle_local_memory_command(user_input, memory)
