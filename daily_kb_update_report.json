@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-09-01T03:57:11+00:00",
-  "started_at_wib": "2026-09-01 10:57:11 WIB",
+  "started_at": "2026-09-01T04:16:26+00:00",
+  "started_at_wib": "2026-09-01 11:16:26 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -13,12 +13,66 @@
   "source_cursor_next": 3,
   "time_budget_seconds": 0,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
-  "skipped_existing": 6,
-  "skipped_short": 3,
-  "errors": 0,
+  "added_documents": 5,
+  "added_chunks": 30,
+  "skipped_existing": 2,
+  "skipped_short": 4,
+  "errors": 2,
   "items": [
+    {
+      "source": "MarketWatch Markets",
+      "status": "skipped_short",
+      "title": "Jobless claims fall to lowest level since mid-May",
+      "url": "https://www.marketwatch.com/story/jobless-claims-fall-to-lowest-level-since-mid-may-bda58e3b?mod=mw_rss_marketpulse",
+      "chars": 207
+    },
+    {
+      "source": "MarketWatch Markets",
+      "status": "skipped_short",
+      "title": "Jobless claims stay low in latest week",
+      "url": "https://www.marketwatch.com/story/jobless-claims-stay-low-in-latest-week-27b4b50b?mod=mw_rss_marketpulse",
+      "chars": 196
+    },
+    {
+      "source": "AP World News",
+      "status": "error_source",
+      "title": "AP World News",
+      "url": "https://apnews.com/hub/world-news",
+      "message": "403 Client Error: Forbidden for url: https://apnews.com/hub/world-news"
+    },
+    {
+      "source": "AP Technology",
+      "status": "error_source",
+      "title": "AP Technology",
+      "url": "https://apnews.com/hub/technology",
+      "message": "403 Client Error: Forbidden for url: https://apnews.com/hub/technology"
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Karhutla 2026: Menyelamatkan satwa, menjaga rumahnya - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5720023/karhutla-2026-menyelamatkan-satwa-menjaga-rumahnya",
+      "doc_id": 2193,
+      "chunks": 1,
+      "chars": 979,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — WSJ: Dan Driscoll mundur usai berselisih dengan Menteri Perang - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5720019/wsj-dan-driscoll-mundur-usai-berselisih-dengan-menteri-perang",
+      "doc_id": 2194,
+      "chunks": 1,
+      "chars": 1003,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
     {
       "source": "OpenAI News",
       "status": "skipped_existing",
@@ -42,39 +96,58 @@
       }
     },
     {
-      "source": "Meta AI Blog",
-      "status": "skipped_existing",
-      "title": "AI at Meta Blog",
-      "url": "https://ai.meta.com/blog/",
-      "chars": 926
+      "source": "WHO News",
+      "status": "added",
+      "title": "WHO News — WHO Director-General visits Jordan to recognize strong collaboration on health system delivery, emergency relief and advancing mental health",
+      "url": "https://www.who.int/news/item/25-02-2026-who-director-general-visits-jordan-to-recognize-strong-collaboration-on-health-system-delivery--emergency-relief-and-advancing-mental-health",
+      "doc_id": 2195,
+      "chunks": 10,
+      "chars": 11201,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
     },
     {
-      "source": "Google AI",
-      "status": "skipped_existing",
-      "title": "Official Google AI news and updates | Google Blog",
-      "url": "https://blog.google/innovation-and-ai/technology/ai/",
-      "chars": 2123
+      "source": "WHO News",
+      "status": "added",
+      "title": "WHO News — WHO statement on notification of withdrawal of the United States",
+      "url": "https://www.who.int/news/item/24-01-2026-who-statement-on-notification-of-withdrawal-of-the-united-states",
+      "doc_id": 2196,
+      "chunks": 9,
+      "chars": 10061,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
     },
     {
-      "source": "Hugging Face Blog",
-      "status": "skipped_existing",
-      "title": "Hugging Face – Blog",
-      "url": "https://huggingface.co/blog",
-      "chars": 4651
+      "source": "NASA Breaking News",
+      "status": "added",
+      "title": "NASA Breaking News — NASA Welcomes Türkiye as Newest Artemis Accords Signatory   - NASA",
+      "url": "https://www.nasa.gov/organizations/oiir/artemis-accords/nasa-welcomes-turkiye-as-newest-artemis-accords-signatory/",
+      "doc_id": 2197,
+      "chunks": 9,
+      "chars": 11312,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
     },
     {
-      "source": "Google DeepMind News",
-      "status": "skipped_existing",
-      "title": "News â Google DeepMind",
-      "url": "https://deepmind.google/blog/",
-      "chars": 4965
-    },
-    {
-      "source": "arXiv cs.CL Recent",
-      "status": "skipped_short",
-      "title": "Computation and Language",
-      "url": "https://arxiv.org/list/cs.CL/recent",
-      "chars": 48
+      "source": "NASA Breaking News",
+      "status": "skipped_low_quality",
+      "title": "September 2026 Satellite Puzzler - NASA Science",
+      "url": "https://science.nasa.gov/earth/earth-observatory/september-2026-satellite-puzzler/",
+      "chars": 6833,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 233,
+        "unique_words": 467,
+        "char_count": 6833
+      }
     },
     {
       "source": "Streamlit Release Notes",
@@ -82,18 +155,11 @@
       "title": "Release notes - Streamlit Docs",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
       "chars": 6454
-    },
-    {
-      "source": "arXiv cs.AI Recent",
-      "status": "skipped_short",
-      "title": "Artificial Intelligence",
-      "url": "https://arxiv.org/list/cs.AI/recent",
-      "chars": 48
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 18,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -108,11 +174,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260901_105711_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260901_111626_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260802_191528_pre-update.db"
+          ".db_backups/adioranye_power.db_20260901_083618_pre-update.db"
         ]
       }
     },
@@ -148,11 +214,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260901_105721_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260901_111645_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260802_191533_post-update.db"
+          ".db_backups/adioranye_power.db_20260901_083637_post-update.db"
         ]
       }
     }
@@ -753,8 +819,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-09-01T03:57:21+00:00",
-  "finished_at_wib": "2026-09-01 10:57:21 WIB",
-  "elapsed_seconds": 10.72,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-01 10:57:21 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 0\n\nBelum ada dokumen baru pada run ini.\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-09-01T04:16:45+00:00",
+  "finished_at_wib": "2026-09-01 11:16:45 WIB",
+  "elapsed_seconds": 19.19,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-01 11:16:45 WIB\nDokumen baru: 5 | Chunk baru: 30 | Error: 2\n\nTop update penting:\n1. WHO News — WHO Director-General visits Jordan to recognize strong collaboration on health system delivery, emergency relief and advancing mental health\n   Sumber: WHO News | kualitas: 92.0 | freshness: 100.0\n2. WHO News — WHO statement on notification of withdrawal of the United States\n   Sumber: WHO News | kualitas: 92.0 | freshness: 100.0\n3. NASA Breaking News — NASA Welcomes Türkiye as Newest Artemis Accords Signatory   - NASA\n   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0\n4. ANTARA Terkini — Karhutla 2026: Menyelamatkan satwa, menjaga rumahnya - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — WSJ: Dan Driscoll mundur usai berselisih dengan Menteri Perang - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
