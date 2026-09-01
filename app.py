@@ -912,6 +912,48 @@ def build_local_safe_fallback_answer(
         "hukum",
         "kontrak",
     }
+    greeting_markers = {
+        "halo",
+        "hai",
+        "hi",
+        "hello",
+        "selamat pagi",
+        "selamat siang",
+        "selamat sore",
+        "selamat malam",
+        "assalamualaikum",
+        "permisi",
+    }
+    thanks_markers = {
+        "makasih",
+        "terima kasih",
+        "thanks",
+        "thank you",
+    }
+
+    if normalized and len(tokens) <= 12:
+        if any(marker == normalized or normalized.startswith(marker + " ") for marker in greeting_markers):
+            answer = (
+                "Koneksi model sedang gangguan. Jika mau, kirim pertanyaan langsung sekarang, "
+                "nanti saya bantu jawab sebisa mungkin dengan mode aman."
+            )
+            return answer, {
+                "local_safe_fallback_used": True,
+                "local_safe_fallback_type": "greeting_redirect",
+                "model_skipped_after_failure": True,
+                "public_safe_message": True,
+                "failure_reason": failure_reason[:500],
+            }
+
+        if any(marker == normalized for marker in thanks_markers):
+            answer = "Sama-sama. Jika mau lanjut, kirim pertanyaan berikutnya."
+            return answer, {
+                "local_safe_fallback_used": True,
+                "local_safe_fallback_type": "thanks_reply",
+                "model_skipped_after_failure": True,
+                "public_safe_message": True,
+                "failure_reason": failure_reason[:500],
+            }
 
     # Fallback spesifik yang diminta user: ransum kuda.
     if "ransum" in lower and ("kuda" in lower or "horse" in lower):
@@ -976,6 +1018,7 @@ Jika datanya tersedia, ransum bisa dihitung lebih tepat berdasarkan:
                 "local_safe_fallback_used": True,
                 "local_safe_fallback_type": "general_question_redirect",
                 "model_skipped_after_failure": True,
+                "public_safe_message": True,
                 "failure_reason": failure_reason[:500],
             }
 
@@ -989,6 +1032,7 @@ Jika datanya tersedia, ransum bisa dihitung lebih tepat berdasarkan:
             "local_safe_fallback_used": True,
             "local_safe_fallback_type": "generic_draft",
             "model_skipped_after_failure": True,
+            "public_safe_message": True,
             "failure_reason": failure_reason[:500],
         }
 
@@ -14030,7 +14074,11 @@ def render_public_page() -> None:
                 user_input,
                 failure_reason="pre_model_safe_template",
             )
-            if local_safe_answer and local_safe_meta.get("local_safe_fallback_type") == "horse_ration":
+            if local_safe_answer and local_safe_meta.get("local_safe_fallback_type") in {
+                "horse_ration",
+                "greeting_redirect",
+                "thanks_reply",
+            }:
                 local_reply = local_safe_answer
                 local_meta = local_safe_meta
 
