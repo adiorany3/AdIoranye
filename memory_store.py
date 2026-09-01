@@ -69,13 +69,46 @@ class MemoryStore:
             "source": str(source or "manual"),
             "created_at": _now_text(),
             "ts": time.time(),
+            "kind": self._infer_kind(body),
+            "pinned": self._should_pin(body),
         })
         self._write(items[-1000:])
         return True
 
+    def _infer_kind(self, text: str) -> str:
+        lowered = _clean(text).lower()
+        if any(token in lowered for token in ["selalu", "jangan", "harus", "format", "gaya", "bahasa"]):
+            return "preference"
+        if any(token in lowered for token in ["proyek", "repo", "aplikasi", "deploy", "telegram", "streamlit", "model"]):
+            return "project"
+        if any(token in lowered for token in ["tujuan", "deadline", "target", "fokus", "prioritas"]):
+            return "goal"
+        return "general"
+
+    def _should_pin(self, text: str) -> bool:
+        lowered = _clean(text).lower()
+        return any(token in lowered for token in [
+            "selalu",
+            "jangan",
+            "harus",
+            "prefer",
+            "format",
+            "bahasa",
+            "ringkas",
+            "detail",
+            "siap tempel",
+        ])
+
     def as_prompt_text(self, limit: int = 12) -> str:
-        items = self._read()[-max(1, int(limit or 12)):]
-        return "\n".join(f"- {item.get('text', '')}" for item in items if _clean(item.get("text", "")))
+        items = self._read()
+        pinned = [item for item in items if item.get("pinned")]
+        recent = [item for item in items if not item.get("pinned")]
+        picked = (pinned[-6:] + recent[-max(1, int(limit or 12)):])[-max(1, int(limit or 12)):]
+        return "\n".join(
+            f"- [{item.get('kind', 'general')}] {item.get('text', '')}"
+            for item in picked
+            if _clean(item.get("text", ""))
+        )
 
     def list_text(self, limit: int = 80) -> str:
         items = self._read()[-max(1, int(limit or 80)):]
