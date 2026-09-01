@@ -917,10 +917,6 @@ def build_local_safe_fallback_answer(
         "hai",
         "hi",
         "hello",
-        "selamat pagi",
-        "selamat siang",
-        "selamat sore",
-        "selamat malam",
         "assalamualaikum",
         "permisi",
     }
@@ -933,14 +929,11 @@ def build_local_safe_fallback_answer(
 
     if normalized and len(tokens) <= 12:
         if any(marker == normalized or normalized.startswith(marker + " ") for marker in greeting_markers):
-            answer = (
-                "Koneksi model sedang gangguan. Jika mau, kirim pertanyaan langsung sekarang, "
-                "nanti saya bantu jawab sebisa mungkin dengan mode aman."
-            )
+            answer = "Halo. Ada yang mau dibantu?"
             return answer, {
                 "local_safe_fallback_used": True,
-                "local_safe_fallback_type": "greeting_redirect",
-                "model_skipped_after_failure": True,
+                "local_safe_fallback_type": "greeting_reply",
+                "model_skipped": True,
                 "public_safe_message": True,
                 "failure_reason": failure_reason[:500],
             }
@@ -14147,7 +14140,7 @@ def render_public_page() -> None:
             )
             if local_safe_answer and local_safe_meta.get("local_safe_fallback_type") in {
                 "horse_ration",
-                "greeting_redirect",
+                "greeting_reply",
                 "thanks_reply",
             }:
                 local_reply = local_safe_answer
