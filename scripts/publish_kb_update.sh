@@ -14,6 +14,9 @@ if ! git remote get-url origin >/dev/null 2>&1; then
   exit 1
 fi
 
+git config user.name "${KB_GIT_USER_NAME:-adioranye-kb-bot}"
+git config user.email "${KB_GIT_USER_EMAIL:-actions@users.noreply.github.com}"
+
 RUN_UPDATE="${RUN_KB_UPDATE_FIRST:-1}"
 if [[ "$RUN_UPDATE" == "1" ]]; then
   bash scripts/run_kb_update_local.sh
