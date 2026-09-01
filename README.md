@@ -19,6 +19,18 @@ Atau pakai runner lokal tanpa GitHub Actions:
 bash scripts/run_kb_update_local.sh
 ```
 
+Kalau mau hasil update dari laptop Mac lalu dikirim berkala ke GitHub:
+
+```bash
+bash scripts/publish_kb_update.sh
+```
+
+Script ini akan:
+- jalankan update KB lokal dulu
+- `git add` file KB penting
+- `git commit`
+- `git push origin HEAD`
+
 Env penting untuk update lokal:
 - `KB_SCRAPER_SOURCES_FILE`
 - `KB_SCRAPER_STATE_FILE`
@@ -35,6 +47,17 @@ Env penting untuk update lokal:
 Contoh jalur lokal hemat risiko:
 - `KB_SCRAPER_SOURCE_LIMIT=10 KB_UPDATE_TIME_BUDGET_SECONDS=180 bash scripts/run_kb_update_local.sh`
 - `KB_SCRAPER_DRY_RUN=1 KB_SCRAPER_SOURCE_LIMIT=5 bash scripts/run_kb_update_local.sh`
+
+Contoh publish berkala dari Mac:
+- `KB_SCRAPER_SOURCE_LIMIT=10 KB_UPDATE_TIME_BUDGET_SECONDS=180 bash scripts/publish_kb_update.sh`
+- `RUN_KB_UPDATE_FIRST=0 KB_GIT_COMMIT_MESSAGE="chore: publish KB snapshot" bash scripts/publish_kb_update.sh`
+
+File yang dipublish script:
+- `.adioranye_power.db`
+- `.adioranye_kb_scrape_state.json`
+- `.adioranye_kb_source_health.json`
+- `daily_intelligence_briefing.md`
+- `daily_kb_update_report.json` bila ada
 
 ## Update: Quality Control & Verifier System
 
