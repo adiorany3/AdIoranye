@@ -873,6 +873,34 @@ def append_claims_to_document_text(document_text: str, claims: List[Dict[str, An
             lines.append(f"{idx}. {claim}")
     return "\n".join(lines)
 
+def compact_report_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "source": item.get("source"),
+        "status": item.get("status"),
+        "title": item.get("title"),
+        "url": item.get("url"),
+        "doc_id": item.get("doc_id"),
+        "chunks": item.get("chunks"),
+        "chars": item.get("chars"),
+        "message": item.get("message"),
+        "content_quality_score": item.get("content_quality_score"),
+        "claims": item.get("claims"),
+    }
+
+def compact_report(report: Dict[str, Any], include_items: bool = True) -> Dict[str, Any]:
+    compact = dict(report)
+    if "watchlist" in compact:
+        compact["watchlist_count"] = len(compact.get("watchlist") or [])
+        compact.pop("watchlist", None)
+    if compact.get("briefing_text"):
+        compact["briefing_preview"] = truncate(str(compact.get("briefing_text") or ""), 400)
+        compact.pop("briefing_text", None)
+    if include_items:
+        compact["items"] = [compact_report_item(item) for item in (report.get("items") or [])]
+    else:
+        compact.pop("items", None)
+    return compact
+
 def run_daily_kb_update(
     db_path: str = DEFAULT_DB_PATH,
     sources_path: str = DEFAULT_SOURCES_FILE,
@@ -1207,6 +1235,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         except Exception as write_exc:
             print(json.dumps({"warning": "failed_to_write_report_file", "error": str(write_exc)[:300]}, ensure_ascii=False))
 
+    compact = compact_report(report, include_items=not bool(args.quiet))
+
     if args.quiet:
         summary = {
             "ok": True,
@@ -1224,10 +1254,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             "errors": report.get("errors"),
             "stopped_by_time_budget": report.get("stopped_by_time_budget"),
             "stop_reason": report.get("stop_reason", ""),
+            "watchlist_count": compact.get("watchlist_count", 0),
+            "briefing_preview": compact.get("briefing_preview", ""),
         }
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
-        print(json.dumps(report, ensure_ascii=False, indent=2))
+        print(json.dumps(compact, ensure_ascii=False, indent=2))
     # Non-zero only if every selected source failed. One or two bad feeds should not break deploy.
     if report.get("db_guard_error"):
         return 3

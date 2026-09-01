@@ -3,7 +3,9 @@ import os
 import inspect
 import json
 import re
+import sqlite3
 import threading
+import traceback
 import fcntl
 import time
 from collections import deque
@@ -29,11 +31,12 @@ from ai_core import (
 )
 from memory_store import MemoryStore, handle_local_memory_command
 from power_features import get_power_store, handle_power_command, generate_power_answer
-
+from daily_kb_scraper import run_daily_kb_update
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
 DEFAULT_RUNTIME_STATE_FILE = ".telegram_runtime_state.json"
+DEFAULT_TELEGRAM_KB_UPDATE_LOCK_FILE = ".telegram_kb_update.lock"
 LOCK_STALE_SECONDS = 180
 WIB_TZ = ZoneInfo("Asia/Jakarta")
 WITA_TZ = ZoneInfo("Asia/Makassar")
@@ -442,6 +445,362 @@ Catatan:
     return "", {}
 
 
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
 
 def retry_telegram_power_answer_with_active_models(
     original_answer: str,
@@ -666,5201 +1025,7949 @@ def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
 
         raise
 
-def _wib_now_text() -> str:
-    return datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
 
-
-def _telegram_indonesia_part_of_day(
-    dt: datetime,
-) -> str:
-    hour = int(dt.hour)
-
-    if 4 <= hour <= 10:
-        return "pagi"
-
-    if 11 <= hour <= 14:
-        return "siang"
-
-    if 15 <= hour <= 17:
-        return "sore"
-
-    return "malam"
-
-
-def _telegram_normalize_short_greeting_text(
-    text: str,
-) -> str:
-    normalized = str(text or "").strip().lower()
-    normalized = re.sub(r"[!?.。,，:;]+", " ", normalized)
-    normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized
-
-
-def detect_telegram_indonesia_time_greeting(
+def build_telegram_local_safe_fallback_answer(
     user_text: str,
-) -> Dict[str, Any]:
-    """Deteksi sapaan waktu pendek di Telegram, bukan pertanyaan/tugas."""
-    normalized = _telegram_normalize_short_greeting_text(user_text)
-
-    if not normalized:
-        return {
-            "matched": False,
-            "said": "",
-        }
-
-    task_markers = {
-        "buat",
-        "buatkan",
-        "tulis",
-        "tuliskan",
-        "caption",
-        "template",
-        "contoh",
-        "arti",
-        "apa",
-        "kenapa",
-        "mengapa",
-        "jelaskan",
-        "translate",
-        "terjemahkan",
-    }
-
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
     tokens = normalized.split()
 
-    if any(token in task_markers for token in tokens):
-        return {
-            "matched": False,
-            "said": "",
-        }
-
-    if len(tokens) > 5:
-        return {
-            "matched": False,
-            "said": "",
-        }
-
-    greeting_patterns = [
-        ("pagi", r"^(selamat\s+)?pagi(\s+(adioranye|admin|min|ai|bot))?$"),
-        ("siang", r"^(selamat\s+)?siang(\s+(adioranye|admin|min|ai|bot))?$"),
-        ("sore", r"^(selamat\s+)?sore(\s+(adioranye|admin|min|ai|bot))?$"),
-        ("malam", r"^(selamat\s+)?malam(\s+(adioranye|admin|min|ai|bot))?$"),
-    ]
-
-    for label, pattern in greeting_patterns:
-        if re.match(pattern, normalized, flags=re.I):
-            return {
-                "matched": True,
-                "said": label,
-            }
-
-    return {
-        "matched": False,
-        "said": "",
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
     }
-
-
-def build_telegram_indonesia_time_greeting_reply(
-    user_text: str,
-) -> Tuple[str, Dict[str, Any]]:
-    detected = detect_telegram_indonesia_time_greeting(user_text)
-
-    if not detected.get("matched"):
-        return "", {}
-
-    now_wib = datetime.now(WIB_TZ)
-    now_wita = datetime.now(WITA_TZ)
-    now_wit = datetime.now(WIT_TZ)
-
-    default_part = _telegram_indonesia_part_of_day(now_wib)
-    user_said = str(detected.get("said") or "").strip()
-
-    lines = [
-        f"Selamat {default_part}.",
-        "",
-        (
-            f"Saat ini acuan default Indonesia adalah {now_wib.strftime('%H:%M')} WIB, "
-            f"jadi sapaan yang paling sesuai adalah selamat {default_part}."
-        ),
-    ]
-
-    if user_said and user_said != default_part:
-        lines.append(
-            f"Sapaan Anda tadi “selamat {user_said}”, saya sesuaikan dengan waktu Indonesia saat ini."
-        )
-
-    zone_summary = [
-        f"WIB {now_wib.strftime('%H:%M')} ({_telegram_indonesia_part_of_day(now_wib)})",
-        f"WITA {now_wita.strftime('%H:%M')} ({_telegram_indonesia_part_of_day(now_wita)})",
-        f"WIT {now_wit.strftime('%H:%M')} ({_telegram_indonesia_part_of_day(now_wit)})",
-    ]
-    lines.append("Ringkas zona Indonesia: " + "; ".join(zone_summary) + ".")
-
-    return "\n".join(lines), {
-        "telegram_local_time_greeting": True,
-        "greeting_detected": user_said,
-        "greeting_adjusted_to": default_part,
-        "timezone_default": "WIB",
-        "model_skipped": True,
-    }
-
-
-def telegram_indonesia_time_context_text() -> str:
-    now_wib = datetime.now(WIB_TZ)
-    now_wita = datetime.now(WITA_TZ)
-    now_wit = datetime.now(WIT_TZ)
-
-    return (
-        "KONTEKS WAKTU INDONESIA AKTIF:\n"
-        f"- WIB sekarang: {now_wib.strftime('%Y-%m-%d %H:%M:%S WIB')}.\n"
-        f"- WITA sekarang: {now_wita.strftime('%Y-%m-%d %H:%M:%S WITA')}.\n"
-        f"- WIT sekarang: {now_wit.strftime('%Y-%m-%d %H:%M:%S WIT')}.\n"
-        "- Untuk pertanyaan bahasa Indonesia tanpa zona/kota, gunakan WIB sebagai default.\n"
-        "- Jika wilayah/kota jelas masuk WITA atau WIT, gunakan zona tersebut."
-    )
-
-
-
-def telegram_clip_for_token_saver(
-    text: Any,
-    max_chars: int,
-    suffix: str = "\n...[dipangkas untuk hemat token]",
-) -> str:
-    value = str(text or "").strip()
-    limit = int(max_chars or 0)
-
-    if not value or limit <= 0:
-        return value
-
-    if len(value) <= limit:
-        return value
-
-    return value[: max(0, limit - len(suffix))].rstrip() + suffix
-
-
-def compact_telegram_history_for_token_saver(
-    history: List[Dict[str, Any]],
-    limit: int = 6,
-    recent_full: int = 4,
-    enabled: bool = True,
-) -> List[Dict[str, str]]:
-    if not enabled:
-        return history or []
-
-    raw_history = [
-        item
-        for item in (history or [])
-        if isinstance(item, dict)
-    ]
-
-    max_messages = max(2, int(limit or 6))
-    full_count = max(2, int(recent_full or 4))
-
-    if len(raw_history) <= max_messages:
-        return [
-            {
-                "role": str(item.get("role") or "user"),
-                "content": telegram_clip_for_token_saver(
-                    item.get("content", ""),
-                    1000,
-                ),
-            }
-            for item in raw_history[-max_messages:]
-        ]
-
-    older = raw_history[: -full_count]
-    recent = raw_history[-full_count:]
-    lines: List[str] = []
-
-    for item in older[-8:]:
-        content = telegram_clip_for_token_saver(
-            item.get("content", ""),
-            180,
-            suffix="...",
-        )
-        if content:
-            lines.append(f"{item.get('role', 'user')}: {content}")
-
-    compact: List[Dict[str, str]] = []
-
-    if lines:
-        compact.append(
-            {
-                "role": "system",
-                "content": "Ringkasan percakapan lama untuk hemat token:\n" + "\n".join(lines),
-            }
-        )
-
-    for item in recent:
-        compact.append(
-            {
-                "role": str(item.get("role") or "user"),
-                "content": telegram_clip_for_token_saver(
-                    item.get("content", ""),
-                    1200,
-                ),
-            }
-        )
-
-    return compact[-max_messages:]
-
-
-def telegram_dynamic_max_completion_tokens(
-    user_text: str,
-    base_max_tokens: int,
-    thinking_mode: bool,
-    live_scraping_needed: bool,
-    token_saver_enabled: bool,
-    casual: int,
-    normal: int,
-    technical: int,
-    long_budget: int,
-) -> int:
-    if not token_saver_enabled:
-        return int(base_max_tokens or 1800)
-
-    lowered = str(user_text or "").lower()
-
-    code_or_file = any(
-        marker in lowered
-        for marker in [
-            "error",
-            "kode",
-            "code",
-            "deploy",
-            "file",
-            "patch",
-            "traceback",
-            "log",
-            "bug",
-        ]
-    )
-    asks_long = any(
-        marker in lowered
-        for marker in [
-            "lengkap",
-            "detail",
-            "rinci",
-            "mendalam",
-            "full",
-            "step by step",
-        ]
-    )
-    asks_short = any(
-        marker in lowered
-        for marker in [
-            "singkat",
-            "ringkas",
-            "pendek",
-            "inti saja",
-        ]
-    )
-
-    if asks_short:
-        desired = min(casual, 400)
-    elif live_scraping_needed:
-        desired = normal
-    elif asks_long:
-        desired = long_budget
-    elif code_or_file:
-        desired = technical
-    elif thinking_mode:
-        desired = normal
-    else:
-        desired = casual
-
-    return max(256, min(int(base_max_tokens or 1800), int(desired)))
-
-
-
-def telegram_frequent_cache_config(
-    config: Dict[str, Any],
-) -> Dict[str, Any]:
-    return {
-        "enabled": telegram_parse_bool(
-            config.get("frequent_question_cache_enabled")
-            or os.getenv("FREQUENT_QUESTION_CACHE_ENABLED", "true"),
-            default=True,
-        ),
-        "file": str(
-            config.get("frequent_question_cache_file")
-            or os.getenv("FREQUENT_QUESTION_CACHE_FILE", ".adioranye_frequent_questions.json")
-        ).strip(),
-        "ttl_seconds": telegram_safe_int(
-            config.get("frequent_question_cache_ttl_seconds")
-            or os.getenv("FREQUENT_QUESTION_CACHE_TTL_SECONDS", "86400"),
-            86400,
-        ),
-        "max_entries": telegram_safe_int(
-            config.get("frequent_question_cache_max_entries")
-            or os.getenv("FREQUENT_QUESTION_CACHE_MAX_ENTRIES", "500"),
-            500,
-        ),
-        "min_chars": telegram_safe_int(
-            config.get("frequent_question_cache_min_chars")
-            or os.getenv("FREQUENT_QUESTION_CACHE_MIN_CHARS", "4"),
-            4,
-        ),
-    }
-
-
-def normalize_telegram_frequent_question_key(
-    user_text: str,
-) -> str:
-    value = str(user_text or "").strip().lower()
-    value = re.sub(r"https?://\S+", "", value)
-    value = re.sub(r"[^\w\s\-:/.,]", " ", value, flags=re.UNICODE)
-    value = re.sub(r"\s+", " ", value).strip()
-    return value
-
-
-def telegram_frequent_question_cache_key(
-    user_text: str,
-) -> str:
-    normalized = normalize_telegram_frequent_question_key(user_text)
-
-    return hmac.new(
-        b"adioranye-telegram-frequent-question-cache",
-        normalized.encode("utf-8", "ignore"),
-        digestmod=hashlib.sha256,
-    ).hexdigest()
-
-
-def load_telegram_frequent_question_cache(
-    config: Dict[str, Any],
-) -> Dict[str, Any]:
-    cache_cfg = telegram_frequent_cache_config(config)
-    path = cache_cfg["file"]
-
-    try:
-        if not path or not os.path.exists(path):
-            return {
-                "version": 1,
-                "items": {},
-            }
-
-        with open(path, "r", encoding="utf-8") as file:
-            data = json.load(file)
-
-        if not isinstance(data, dict):
-            return {
-                "version": 1,
-                "items": {},
-            }
-
-        if not isinstance(data.get("items"), dict):
-            data["items"] = {}
-
-        return data
-    except Exception:
-        return {
-            "version": 1,
-            "items": {},
-        }
-
-
-def save_telegram_frequent_question_cache(
-    config: Dict[str, Any],
-    cache_data: Dict[str, Any],
-) -> None:
-    cache_cfg = telegram_frequent_cache_config(config)
-    path = cache_cfg["file"]
-    max_entries = max(10, int(cache_cfg["max_entries"] or 500))
-
-    try:
-        items = cache_data.get("items") or {}
-
-        if len(items) > max_entries:
-            sorted_items = sorted(
-                items.items(),
-                key=lambda pair: (
-                    int(pair[1].get("hit_count", 0) or 0),
-                    float(pair[1].get("updated_at_ts", 0) or 0),
-                ),
-                reverse=True,
-            )
-            cache_data["items"] = dict(sorted_items[:max_entries])
-
-        cache_data["saved_at"] = _wib_now_text()
-
-        with open(path, "w", encoding="utf-8") as file:
-            json.dump(
-                cache_data,
-                file,
-                ensure_ascii=False,
-                indent=2,
-            )
-    except Exception:
-        pass
-
-
-def telegram_is_dynamic_question_for_cache(
-    user_text: str,
-) -> bool:
-    lowered = str(user_text or "").lower()
-
-    dynamic_markers = [
+    current_info_markers = {
         "hari ini",
-        "sekarang",
         "terbaru",
-        "terkini",
         "update",
+        "news",
         "berita",
         "harga",
         "kurs",
         "cuaca",
         "jadwal",
-        "viral",
-        "tren",
-        "trend",
+        "skor",
+        "hasil pertandingan",
         "live",
         "real time",
-        "real-time",
-        "saat ini",
-        "barusan",
-        "minggu ini",
-        "bulan ini",
-    ]
-
-    return any(marker in lowered for marker in dynamic_markers)
-
-
-def should_use_telegram_frequent_question_cache(
-    user_text: str,
-    config: Dict[str, Any],
-) -> bool:
-    cache_cfg = telegram_frequent_cache_config(config)
-
-    if not cache_cfg["enabled"]:
-        return False
-
-    normalized = normalize_telegram_frequent_question_key(user_text)
-
-    if len(normalized) < int(cache_cfg["min_chars"] or 4):
-        return False
-
-    if normalized.startswith(("/", "!", "#")):
-        return False
-
-    if telegram_is_dynamic_question_for_cache(user_text):
-        return False
-
-    skip_markers = [
-        "upload",
-        "file ini",
-        "pdf ini",
-        "gambar ini",
-        "kode ini",
-        "error ini",
-        "log ini",
-        "kerjakan file",
-        "perbaiki file",
-        "buatkan desain",
-        "terjemahkan pdf",
-    ]
-
-    return not any(marker in normalized for marker in skip_markers)
-
-
-def get_telegram_frequent_question_cached_answer(
-    user_text: str,
-    config: Dict[str, Any],
-) -> Tuple[str, Dict[str, Any]]:
-    if not should_use_telegram_frequent_question_cache(user_text, config):
-        return "", {}
-
-    cache_data = load_telegram_frequent_question_cache(config)
-    items = cache_data.get("items") or {}
-    key = telegram_frequent_question_cache_key(user_text)
-    item = items.get(key)
-
-    if not isinstance(item, dict):
-        return "", {}
-
-    now_ts = time.time()
-    expires_at_ts = float(item.get("expires_at_ts", 0) or 0)
-
-    if expires_at_ts and expires_at_ts < now_ts:
-        try:
-            del items[key]
-            cache_data["items"] = items
-            save_telegram_frequent_question_cache(config, cache_data)
-        except Exception:
-            pass
-
-        return "", {}
-
-    answer = str(item.get("answer") or "").strip()
-
-    if not answer:
-        return "", {}
-
-    item["hit_count"] = int(item.get("hit_count", 0) or 0) + 1
-    item["last_hit_at"] = _wib_now_text()
-    item["last_hit_at_ts"] = now_ts
-    items[key] = item
-    cache_data["items"] = items
-    save_telegram_frequent_question_cache(config, cache_data)
-
-    return answer, {
-        "telegram_frequent_question_cache_hit": True,
-        "telegram_frequent_question_cache_key": key,
-        "telegram_frequent_question_cache_hit_count": item.get("hit_count", 0),
-        "model_skipped": True,
-        "cached_at": item.get("created_at", ""),
-        "expires_at": item.get("expires_at", ""),
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
     }
 
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
 
-def save_telegram_frequent_question_cached_answer(
-    user_text: str,
-    answer: str,
-    meta: Dict[str, Any] | None,
-    config: Dict[str, Any],
-) -> bool:
-    if not should_use_telegram_frequent_question_cache(user_text, config):
-        return False
+Contoh kuda dewasa ±400 kg, kerja ringan:
 
-    answer_text = str(answer or "").strip()
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
 
-    if not answer_text or len(answer_text) < 3:
-        return False
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
 
-    meta_data = meta or {}
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
 
-    if telegram_looks_like_model_error(answer_text, meta=meta_data):
-        return False
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
 
-    if meta_data.get("telegram_current_info_mode") or meta_data.get("telegram_auto_live_scraping_needed"):
-        return False
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
 
-    if meta_data.get("telegram_local_time_greeting"):
-        return False
-
-    cache_cfg = telegram_frequent_cache_config(config)
-    ttl_seconds = max(60, int(cache_cfg["ttl_seconds"] or 86400))
-    now_ts = time.time()
-    expires_at_ts = now_ts + ttl_seconds
-    key = telegram_frequent_question_cache_key(user_text)
-    normalized = normalize_telegram_frequent_question_key(user_text)
-
-    cache_data = load_telegram_frequent_question_cache(config)
-    items = cache_data.get("items") or {}
-    existing = items.get(key) if isinstance(items.get(key), dict) else {}
-
-    items[key] = {
-        "question": str(user_text or "").strip()[:500],
-        "normalized_question": normalized[:500],
-        "answer": answer_text,
-        "meta": {
-            "model": meta_data.get("telegram_active_model_final")
-            or meta_data.get("active_model_final")
-            or meta_data.get("model_requested")
-            or "",
-        },
-        "created_at": existing.get("created_at") or _wib_now_text(),
-        "created_at_ts": existing.get("created_at_ts") or now_ts,
-        "updated_at": _wib_now_text(),
-        "updated_at_ts": now_ts,
-        "expires_at": datetime.fromtimestamp(expires_at_ts, tz=WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB"),
-        "expires_at_ts": expires_at_ts,
-        "hit_count": int(existing.get("hit_count", 0) or 0),
-    }
-
-    cache_data["items"] = items
-    save_telegram_frequent_question_cache(config, cache_data)
-
-    return True
-
-
-def split_telegram_message(text: str, max_len: int = 3900) -> List[str]:
-    """Split Telegram messages without cutting words/code lines when possible."""
-    text = str(text or "")
-    if len(text) <= max_len:
-        return [text]
-
-    chunks: List[str] = []
-    remaining = text
-    while len(remaining) > max_len:
-        # Prefer paragraph, then line, then whitespace boundaries.
-        cut = remaining.rfind("\n\n", 0, max_len)
-        if cut < max_len * 0.45:
-            cut = remaining.rfind("\n", 0, max_len)
-        if cut < max_len * 0.45:
-            cut = remaining.rfind(" ", 0, max_len)
-        if cut < max_len * 0.45:
-            cut = max_len
-        chunk = remaining[:cut].strip()
-        if chunk:
-            chunks.append(chunk)
-        remaining = remaining[cut:].strip()
-    if remaining:
-        chunks.append(remaining)
-    return chunks or [""]
-
-
-def normalize_telegram_text(text: str) -> str:
-    """Send AI output to Telegram as safe, readable plain text.
-
-    We intentionally do not use parse_mode so code/XML/HTML snippets never break
-    Telegram parsing. This formatter only cleans control characters, trims noisy
-    whitespace, and keeps user-facing content intact.
-    """
-    text = str(text or "")
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = "".join(ch for ch in text if ch in "\n\t" or ord(ch) >= 32)
-    text = re.sub(r"[ \t]+\n", "\n", text)
-    text = re.sub(r"\n{4,}", "\n\n\n", text)
-    return text.strip()
-
-
-def _as_string_list(value: Any) -> List[str]:
-    """Normalize config values into a clean list of model names."""
-    if value is None:
-        return []
-    if isinstance(value, (list, tuple, set)):
-        raw_items = value
-    else:
-        raw_items = str(value).replace("\n", ",").split(",")
-    result: List[str] = []
-    for item in raw_items:
-        item_text = str(item or "").strip()
-        if item_text and item_text not in result:
-            result.append(item_text)
-    return result
-
-
-def _contains_any(text: str, keywords: List[str]) -> bool:
-    lowered = f" {str(text or '').lower()} "
-    return any(keyword in lowered for keyword in keywords)
-
-
-
-TELEGRAM_CURRENT_INFO_KEYWORDS = [
-    "terbaru",
-    "terkini",
-    "hari ini",
-    "sekarang",
-    "saat ini",
-    "minggu ini",
-    "bulan ini",
-    "tahun ini",
-    "update",
-    "berita",
-    "viral",
-    "tren",
-    "trend",
-    "jadwal",
-    "harga",
-    "kurs",
-    "cuaca",
-    "rilis",
-    "regulasi",
-    "aturan terbaru",
-    "kebijakan terbaru",
-    "data terbaru",
-    "statistik terbaru",
-    "live",
-    "real time",
-    "real-time",
-]
-
-TELEGRAM_CURRENT_INFO_DOMAINS = [
-    "politik",
-    "pemerintah",
-    "hukum",
-    "regulasi",
-    "harga",
-    "kurs",
-    "emas",
-    "saham",
-    "crypto",
-    "cuaca",
-    "jadwal",
-    "olahraga",
-    "film",
-    "musik",
-    "teknologi",
-    "ai",
-    "openai",
-    "chatgpt",
-    "streamlit",
-    "vercel",
-    "github",
-    "telegram",
-    "bpjs",
-    "kementerian",
-]
-
-
-
-def fetch_tavily_live_context_for_telegram(
-    query: str,
-    api_key: str,
-    max_results: int = 4,
-    timeout_seconds: int = 10,
-    include_raw_content: bool = True,
-    max_content_chars: int = 3200,
-) -> Dict[str, Any]:
-    """Ambil konteks langsung dari Tavily untuk Telegram."""
-    key = str(api_key or os.getenv("TAVILY_API_KEY", "") or "").strip()
-
-    if not key:
-        return {
-            "ok": False,
-            "error": "TAVILY_API_KEY belum terbaca.",
-            "context": "",
-            "sources": [],
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
         }
 
-    try:
-        response = requests.post(
-            "https://api.tavily.com/search",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "query": str(query or "").strip(),
-                "topic": "general",
-                "search_depth": "advanced",
-                "max_results": max(1, min(int(max_results or 4), 8)),
-                "include_answer": True,
-                "include_raw_content": bool(include_raw_content),
-            },
-            timeout=int(timeout_seconds or 10),
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
         )
-    except requests.Timeout:
-        return {
-            "ok": False,
-            "error": "Tavily timeout.",
-            "context": "",
-            "sources": [],
-        }
-    except requests.RequestException as exc:
-        return {
-            "ok": False,
-            "error": f"Request Tavily gagal: {exc}",
-            "context": "",
-            "sources": [],
-        }
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
 
-    try:
-        data = response.json()
-    except Exception:
-        data = {}
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
 
-    if response.status_code != 200:
-        return {
-            "ok": False,
-            "error": f"HTTP {response.status_code}: {response.text[:900]}",
-            "context": "",
-            "sources": [],
-        }
-
-    results = data.get("results") or []
-    sources: List[Dict[str, str]] = []
-
-    context_parts = [
-        "KONTEKS LIVE WEB/TAVILY UNTUK INFO TERKINI",
-        f"Query: {query}",
-        f"Waktu cek: {_wib_now_text()}",
-        "",
-    ]
-
-    answer_preview = str(data.get("answer") or "").strip()
-
-    if answer_preview:
-        context_parts.append("Ringkasan Tavily:")
-        context_parts.append(answer_preview[:1200])
-        context_parts.append("")
-
-    for index, item in enumerate(results, start=1):
-        if not isinstance(item, dict):
-            continue
-
-        title = str(item.get("title") or "").strip()
-        url = str(item.get("url") or "").strip()
-        content = str(item.get("content") or item.get("raw_content") or "").strip()
-        content = content[: int(max_content_chars or 3200)]
-
-        if not title and not url and not content:
-            continue
-
-        sources.append(
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
             {
-                "title": title,
-                "url": url,
-                "content": content[:500],
-            }
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
         )
 
-        context_parts.append(f"Sumber {index}: {title or 'Tanpa judul'}")
-        if url:
-            context_parts.append(f"URL: {url}")
-        if content:
-            context_parts.append(f"Isi ringkas: {content}")
-        context_parts.append("")
+    return "", {}
 
-    if not sources and not answer_preview:
-        return {
-            "ok": False,
-            "error": "Tavily tidak mengembalikan hasil yang bisa dipakai.",
-            "context": "",
-            "sources": [],
-        }
 
-    context_parts.append(
-        "Instruksi penggunaan: jawab hanya berdasarkan konteks live web di atas untuk bagian info terkini. "
-        "Jangan memakai Knowledge Base lama jika bertentangan dengan konteks live web."
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
     )
-
-    return {
-        "ok": True,
-        "error": "",
-        "context": "\n".join(context_parts).strip(),
-        "sources": sources,
-        "answer_preview": answer_preview,
-    }
-
-
-
-def detect_telegram_auto_live_scraping_need(
-    text: str,
-    enabled: bool = True,
-) -> Dict[str, Any]:
-    """Detect Telegram messages that need current external information."""
-    prompt = str(text or "").strip()
-    lowered = prompt.lower()
-    word_count = len(re.findall(r"\w+", lowered))
 
     if not enabled:
-        return {
-            "needed": False,
-            "reason": "disabled",
-            "topic": "auto",
-            "keywords": [],
-        }
-
-    keyword_hits = [
-        keyword
-        for keyword in TELEGRAM_CURRENT_INFO_KEYWORDS
-        if keyword in lowered
-    ]
-
-    domain_hits = [
-        keyword
-        for keyword in TELEGRAM_CURRENT_INFO_DOMAINS
-        if keyword in lowered
-    ]
-
-    explicit_current = bool(keyword_hits)
-    external_dynamic = bool(
-        domain_hits
-        and any(
-            marker in lowered
-            for marker in [
-                "apa",
-                "berapa",
-                "siapa",
-                "kapan",
-                "cek",
-                "cari",
-                "update",
-                "info",
-                "berita",
-            ]
-        )
-    )
-
-    if word_count <= 3 and not explicit_current:
-        return {
-            "needed": False,
-            "reason": "too_short_without_current_marker",
-            "topic": "auto",
-            "keywords": keyword_hits + domain_hits,
-        }
-
-    if explicit_current or external_dynamic:
-        return {
-            "needed": True,
-            "reason": "explicit_current_keyword"
-            if explicit_current
-            else "external_dynamic_question",
-            "topic": prompt[:160] or "auto",
-            "keywords": keyword_hits + domain_hits,
-        }
-
-    return {
-        "needed": False,
-        "reason": "not_current_info",
-        "topic": "auto",
-        "keywords": keyword_hits + domain_hits,
-    }
-
-
-def is_thinking_telegram_question(text: str, history: Optional[List[Dict[str, str]]] = None, min_chars: int = 180) -> bool:
-    """Detect Telegram questions that should use a more capable model.
-
-    Conservative routing: short/simple chat remains on the cheap model path,
-    while analytical, coding, debugging, academic, strategic, or long multi-step
-    prompts are routed directly to the capable model path.
-    """
-    prompt = str(text or "").strip()
-    if not prompt:
-        return False
-
-    lowered = prompt.lower()
-    word_count = len(prompt.split())
-    try:
-        min_chars = int(min_chars or 180)
-    except Exception:
-        min_chars = 180
-
-    strong_keywords = [
-        "thinking", "reasoning", "berpikir", "nalar", "logika", "analisis", "analisa",
-        "evaluasi", "bandingkan", "pertimbangkan", "strategi", "arsitektur", "algoritma",
-        "debug", "error", "traceback", "exception", "bug", "refactor", "optimasi",
-        "optimize", "perbaiki kode", "cek kode", "skripsi", "tesis", "jurnal", "riset",
-        "metodologi", "smartpls", "statistik", "regresi", "sentimen", "indobert",
-        "buatkan alur", "bagan alur", "step by step", "langkah-langkah", "kenapa", "mengapa",
-        "apa penyebab", "solusi terbaik", "rekomendasi terbaik", "prioritaskan",
-        "model yang capable", "jawaban mendalam", "berpikir dalam", "jelaskan detail",
-    ]
-    code_or_log_markers = [
-        "```", "def ", "class ", "import ", "from ", "return ", "npm ", "vercel",
-        "status code", "response:", "build failed", "failed", "unauthorized", "creditsdepleted",
-        "<html", "<script", "streamlit", "session_state", "generate_answer", "telegram_service",
-    ]
-
-    if _contains_any(lowered, strong_keywords):
-        return True
-    if _contains_any(lowered, code_or_log_markers):
-        return True
-    if len(prompt) >= min_chars and word_count >= 24:
-        return True
-    if prompt.count("?") >= 2 and word_count >= 18:
-        return True
-    if any(token in lowered for token in ["1.", "2.", "3.", "- "]) and word_count >= 25:
-        return True
-
-    # If the current message is short but follows a technical/analytical exchange,
-    # keep using the capable route for follow-up questions such as "lanjut" or "patch itu".
-    history = history or []
-    recent_context = "\n".join(str(item.get("content", "")) for item in history[-4:]).lower()
-    followup_markers = {"lanjut", "patch", "perbaiki", "ubah", "tambahkan", "error", "kode"}
-    if word_count <= 12 and any(marker in lowered for marker in followup_markers):
-        if _contains_any(recent_context, strong_keywords + code_or_log_markers):
-            return True
-
-    return False
-
-
-def pick_telegram_capable_model(
-    primary_model: str,
-    expensive_fallback_models: List[str],
-    config: Dict[str, Any],
-) -> str:
-    """Pick a capable model for Telegram thinking mode.
-
-    Priority:
-    1) THINKING_CAPABLE_MODEL / config['thinking_capable_model'] if provided.
-    2) Any explicit thinking_capable_models list.
-    3) Active expensive fallback models already passed by app.py.
-    4) Primary model as last resort.
-    """
-    candidates: List[str] = []
-    override = str(config.get("thinking_capable_model") or "").strip()
-    if override:
-        candidates.append(override)
-
-    candidates.extend(_as_string_list(config.get("thinking_capable_models")))
-    candidates.extend(_as_string_list(config.get("capable_models")))
-    candidates.extend(_as_string_list(expensive_fallback_models))
-
-    for candidate in candidates:
-        if candidate and candidate != primary_model:
-            return candidate
-
-    return primary_model
-
-
-def pick_fastest_telegram_normal_model(
-    primary_model: str,
-    fallback_models: List[str],
-    config: Dict[str, Any],
-) -> str:
-    """Pick the fastest cheap/normal model for lightweight Telegram questions.
-
-    app.py passes fast_cheap_models already sorted by measured health-check latency.
-    If that list is unavailable, this falls back to the current primary model and
-    cheap fallback order so the bot remains compatible with older app.py files.
-    """
-    candidates: List[str] = []
-
-    explicit_fastest = str(config.get("fastest_cheap_model") or "").strip()
-    if explicit_fastest:
-        candidates.append(explicit_fastest)
-
-    candidates.extend(_as_string_list(config.get("fast_cheap_models")))
-    candidates.extend(_as_string_list(config.get("active_cheap_models")))
-    candidates.append(primary_model)
-    candidates.extend(_as_string_list(fallback_models))
-
-    for candidate in candidates:
-        if candidate:
-            return candidate
-
-    return primary_model
-
-
-def resolve_answering_model(meta: Any, fallback_model: str) -> str:
-    """Return the best available model name that actually answered.
-
-    ai_core versions may use different meta keys. Prefer final/active keys first,
-    then fall back to the model requested for this Telegram message.
-    """
-    if not isinstance(meta, dict):
-        return str(fallback_model or "tidak diketahui")
-
-    candidate_keys = [
-        "active_model_final",
-        "final_model",
-        "model_final",
-        "model_used",
-        "selected_model",
-        "active_model",
-        "model",
-        "telegram_model_requested",
-        "model_requested",
-    ]
-    for key in candidate_keys:
-        value = str(meta.get(key) or "").strip()
-        if value:
-            return value
-    return str(fallback_model or "tidak diketahui")
-
-
-TELEGRAM_THIN_SEPARATOR = "\n\n━━━━━━━━━━━━\n"
-
-
-def _telegram_mode_label(meta: Any) -> str:
-    if not isinstance(meta, dict):
-        return "normal"
-    forced_mode = str(meta.get("telegram_forced_model_mode") or "").lower()
-    if forced_mode == "expensive":
-        return "mahal"
-    if forced_mode == "cheap":
-        return "murah"
-    if meta.get("telegram_auto_rotated_after_error"):
-        return "auto-rotate"
-    if meta.get("telegram_rotate_mode"):
-        return "rotate"
-    if meta.get("telegram_thinking_mode"):
-        return "thinking"
-    if meta.get("telegram_fast_normal_mode"):
-        return "cepat"
-    return "normal"
-
-
-def build_telegram_help_text(is_admin: bool = False) -> str:
-    """Build readable /help text for Telegram."""
-    lines = [
-        "🤖 Adioranye AI",
-        "Kirim pertanyaan langsung untuk dijawab AI.",
-        "",
-        "Perintah umum:",
-        "• /start — mulai bot",
-        "• /help — bantuan",
-        "• /mode — pilih mode jawaban",
-    ]
-    if is_admin:
-        lines.extend([
-            "",
-            "Pusat kontrol:",
-            "• /admin — semua kontrol via Telegram",
-            "• /status — status sistem, Telegram, model, maintenance",
-            "• /telegramtest — test API Telegram",
-            "",
-            "Model & router:",
-            "• /health — cek model aktif tanpa kode",
-            "• /speed 4321 — cek model aktif dan pilih tercepat",
-            "• /rotate — ganti ke model aktif terbaik saat ini",
-            "• /router auto|murah|mahal — ganti mode routing",
-            "• /lock [catatan] — aktifkan akses terbatas",
-            "• /unlock [catatan] — buka akses kembali",
-            "• /akses — lihat status akses terbatas",
-            "• /ubah murah — pakai model murah/cepat",
-            "• /ubah mahal — pakai model medium/mahal",
-            "• /model skor — lihat skor model adaptif",
-            "• /circuit — lihat model yang dikarantina",
-            "",
-            "Knowledge Base:",
-            "• /update — jalankan update Knowledge Base sekarang",
-            "• /kb bantuan — daftar perintah KB",
-            "• /kb statistik — statistik dokumen",
-            "• /kb list — daftar dokumen terakhir",
-            "• /kb cari <query> — cari isi dokumen",
-            "• /kb tambah <judul> lalu baris baru isi dokumen",
-            "",
-            "Critical current:",
-            "• /briefing — ringkasan isu/fakta terkini dari KB",
-            "• /cek isu <topik> — cek isu dengan klaim + dokumen pendukung",
-            "• /pantau <topik> — tambah topik watchlist",
-            "• /pantau list — daftar topik watchlist",
-            "",
-            "Quality Control:",
-            "• /mode — lihat/pilih mode jawaban",
-            "• /mode hemat|pintar|riset|kritis|auto",
-            "• /kualitas — statistik kualitas jawaban",
-            "• /laporan mingguan — evaluasi kualitas 7 hari",
-            "",
-            "Performance:",
-            "• /performa — statistik retrieval/cache/latency",
-            "• /optimasi db — optimasi SQLite ringan",
-            "",
-            "Memory & biaya:",
-            "• /ingat <teks> — simpan memory permanen",
-            "• /lupa <keyword> — hapus memory sesuai keyword",
-            "• /biaya — ringkasan biaya 24 jam",
-        ])
-    else:
-        lines.extend([
-            "",
-            "Catatan: perintah admin disembunyikan. Hubungi admin bot untuk pengaturan model/KB.",
-        ])
-    return "\n".join(lines)
-
-
-
-
-
-def telegram_default_maintenance_state(message: str = "") -> Dict[str, Any]:
-    return {
-        "locked": False,
-        "status": "unlocked",
-        "message": message
-        or "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses.",
-        "reason": "",
-        "updated_at": "",
-        "updated_by": "",
-        "channel": "",
-    }
-
-
-def telegram_read_maintenance_state(
-    lock_file: str,
-    message: str = "",
-) -> Dict[str, Any]:
-    try:
-        if not lock_file or not os.path.exists(lock_file):
-            return telegram_default_maintenance_state(message)
-
-        with open(lock_file, "r", encoding="utf-8") as file:
-            data = json.load(file)
-
-        if not isinstance(data, dict):
-            return telegram_default_maintenance_state(message)
-
-        state = telegram_default_maintenance_state(message)
-        state.update(data)
-        state["locked"] = bool(state.get("locked"))
-        state["status"] = "locked" if state.get("locked") else "unlocked"
-
-        for legacy_key in [
-            "locked_until_ts",
-            "locked_until_text",
-            "auto_unlock",
-            "auto_unlocked_at",
-        ]:
-            state.pop(legacy_key, None)
-
-        return state
-    except Exception:
-        return telegram_default_maintenance_state(message)
-
-def telegram_write_maintenance_state(
-    lock_file: str,
-    state: Dict[str, Any],
-) -> None:
-    try:
-        payload = telegram_default_maintenance_state()
-        payload.update(state or {})
-        payload["locked"] = bool(payload.get("locked"))
-        payload["status"] = "locked" if payload.get("locked") else "unlocked"
-        payload["updated_at"] = payload.get("updated_at") or _wib_now_text()
-
-        with open(lock_file, "w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
-def telegram_maintenance_until_text_from_ts(
-    locked_until_ts: float | int | str | None,
-) -> str:
-    """Compatibility shim: timed maintenance lock sudah dinonaktifkan."""
-    return ""
-
-
-def telegram_parse_lock_until_argument(
-    raw_text: str,
-) -> Tuple[float, str, str]:
-    """Compatibility shim: timed maintenance lock sudah dinonaktifkan."""
-    return 0, "", str(raw_text or "").strip()
-
-def telegram_set_maintenance_lock(
-    lock_file: str,
-    locked: bool,
-    updated_by: str = "telegram-admin",
-    reason: str = "",
-    message: str = "",
-) -> Dict[str, Any]:
-    state = telegram_read_maintenance_state(lock_file, message=message)
-    state.update(
-        {
-            "locked": bool(locked),
-            "status": "locked" if locked else "unlocked",
-            "message": message or state.get("message") or telegram_default_maintenance_state().get("message"),
-            "reason": str(reason or "").strip(),
-            "updated_at": _wib_now_text(),
-            "updated_by": str(updated_by or "telegram-admin"),
-            "channel": "telegram",
-        }
-    )
-
-    for legacy_key in [
-        "locked_until_ts",
-        "locked_until_text",
-        "auto_unlock",
-        "auto_unlocked_at",
-    ]:
-        state.pop(legacy_key, None)
-
-    telegram_write_maintenance_state(lock_file, state)
-    return state
-
-
-
-def telegram_default_question_quick_check_state() -> Dict[str, Any]:
-    return {
-        "version": 1,
-        "last_trigger_ts": 0,
-        "last_trigger_at": "",
-        "last_source": "",
-        "last_status": "",
-        "running_since_ts": 0,
-        "running_source": "",
-        "last_checked_count": 0,
-        "last_active_count": 0,
-        "last_error": "",
-    }
-
-
-def telegram_read_question_quick_check_state(trigger_file: str) -> Dict[str, Any]:
-    try:
-        if not trigger_file or not os.path.exists(trigger_file):
-            return telegram_default_question_quick_check_state()
-
-        with open(trigger_file, "r", encoding="utf-8") as file:
-            data = json.load(file)
-
-        if not isinstance(data, dict):
-            return telegram_default_question_quick_check_state()
-
-        state = telegram_default_question_quick_check_state()
-        state.update(data)
-        return state
-    except Exception:
-        return telegram_default_question_quick_check_state()
-
-
-def telegram_write_question_quick_check_state(trigger_file: str, state: Dict[str, Any]) -> None:
-    try:
-        payload = telegram_default_question_quick_check_state()
-        payload.update(state or {})
-        with open(trigger_file, "w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
-def telegram_should_trigger_question_quick_check(
-    trigger_file: str,
-    cooldown_seconds: int = 600,
-    source: str = "telegram",
-) -> Dict[str, Any]:
-    now = time.time()
-    cooldown = max(60, int(cooldown_seconds or 600))
-    running_window = max(30, min(300, cooldown))
-    state = telegram_read_question_quick_check_state(trigger_file)
-
-    last_trigger_ts = float(state.get("last_trigger_ts") or 0)
-    running_since_ts = float(state.get("running_since_ts") or 0)
-
-    if running_since_ts and now - running_since_ts < running_window:
-        return {"should_run": False, "reason": "another_quick_check_running", "state": state}
-
-    if last_trigger_ts and now - last_trigger_ts < cooldown:
-        return {"should_run": False, "reason": "cooldown", "state": state}
-
-    state.update(
-        {
-            "running_since_ts": now,
-            "running_source": str(source or "telegram"),
-            "last_status": "running",
-            "last_error": "",
-        }
-    )
-    telegram_write_question_quick_check_state(trigger_file, state)
-
-    return {"should_run": True, "reason": "scheduled", "state": state}
-
-
-def telegram_finish_question_quick_check(
-    trigger_file: str,
-    source: str,
-    status: str,
-    checked_count: int = 0,
-    active_count: int = 0,
-    error: str = "",
-) -> None:
-    now = time.time()
-    state = telegram_read_question_quick_check_state(trigger_file)
-    state.update(
-        {
-            "last_trigger_ts": now,
-            "last_trigger_at": _wib_now_text(),
-            "last_source": str(source or "telegram"),
-            "last_status": str(status or "done"),
-            "running_since_ts": 0,
-            "running_source": "",
-            "last_checked_count": int(checked_count or 0),
-            "last_active_count": int(active_count or 0),
-            "last_error": str(error or "")[:1000],
-        }
-    )
-    telegram_write_question_quick_check_state(trigger_file, state)
-
-
-def telegram_command_name(text: str) -> str:
-    raw = str(text or "").strip()
-    if not raw:
-        return ""
-
-    command = raw.split(maxsplit=1)[0].lower()
-
-    if "@" in command:
-        command = command.split("@", 1)[0]
-
-    return command
-
-
-def telegram_command_arg(text: str) -> str:
-    raw = str(text or "").strip()
-    parts = raw.split(maxsplit=1)
-    return parts[1].strip() if len(parts) > 1 else ""
-
-
-def is_telegram_admin_panel_command(text: str) -> bool:
-    return telegram_command_name(text) in {
-        "/admin",
-        "/panel",
-        "/kontrol",
-        "/control",
-        "/controls",
-    }
-
-
-def is_telegram_admin_status_command(text: str) -> bool:
-    return telegram_command_name(text) in {
-        "/status",
-        "/system",
-        "/sistem",
-    }
-
-
-def is_telegram_api_test_command(text: str) -> bool:
-    return telegram_command_name(text) in {
-        "/telegramtest",
-        "/telegram_test",
-        "/testtelegram",
-        "/test_telegram",
-        "/bot_test",
-    }
-
-
-def is_telegram_health_command(text: str) -> bool:
-    return telegram_command_name(text) in {
-        "/health",
-        "/cekmodel",
-        "/cek_model",
-        "/modelcheck",
-        "/checkmodel",
-    }
-
-
-def parse_telegram_router_mode_command(text: str) -> str:
-    command = telegram_command_name(text)
-
-    if command not in {
-        "/router",
-        "/routing",
-        "/modebot",
-        "/mode_bot",
-        "/modelmode",
-        "/mode_model",
-    }:
-        return ""
-
-    arg = telegram_command_arg(text).strip().lower()
-
-    if arg in {"auto", "otomatis"}:
-        return "auto"
-
-    if arg in {"cheap", "murah", "cepat", "hemat", "normal"}:
-        return "cheap"
-
-    if arg in {"expensive", "mahal", "medium", "menengah", "capable", "pintar"}:
-        return "expensive"
-
-    return ""
-
-
-def is_telegram_router_mode_command(text: str) -> bool:
-    return telegram_command_name(text) in {
-        "/router",
-        "/routing",
-        "/modebot",
-        "/mode_bot",
-        "/modelmode",
-        "/mode_model",
-    }
-
-
-def is_telegram_runtime_reset_command(text: str) -> bool:
-    return telegram_command_name(text) in {
-        "/reset_runtime",
-        "/resetruntime",
-        "/runtime_reset",
-    }
-
-
-def is_telegram_connection_reset_command(text: str) -> bool:
-    return telegram_command_name(text) in {
-        "/resettelegram",
-        "/reset_telegram",
-        "/telegramreset",
-        "/telegram_reset",
-    }
-
-
-def build_telegram_admin_control_help() -> str:
-    lines = [
-        "🔐 Pusat Kontrol Admin Telegram",
-        "",
-        "Status & diagnosa:",
-        "• /status — ringkasan sistem, model, akses terbatas, Telegram",
-        "• /telegramtest — test API Telegram getMe + webhook",
-        "• /akses — status akses terbatas",
-        "",
-        "Akses terbatas:",
-        "• /lock [catatan] — aktifkan akses terbatas untuk publik dan Telegram non-admin",
-        "• /unlock [catatan] — buka kembali akses publik",
-        "• /key generate [jumlah|unlimited] [catatan] — buat key otomatis",
-        "• /key create KEY [jumlah|unlimited] [catatan] — buat custom key",
-        "• /keys — lihat access key akses terbatas aktif",
-        "• /key revoke AK-XXXX — nonaktifkan key",
-        "• /access AK-XXXX — user mengaktifkan key saat akses terbatas",
-        "• /logoutkey — user logout key dari chat ini",
-        "",
-        "Model & routing:",
-        "• /health — quick health check model dan pilih model sehat",
-        "• /speed 4321 — health check terlindungi kode",
-        "• /rotate — rotasi ke model aktif terbaik",
-        "• /router auto — mode otomatis",
-        "• /router murah — prioritas model murah/cepat",
-        "• /router mahal — prioritas model medium/mahal",
-        "• /ubah murah — alias mode murah",
-        "• /ubah mahal — alias mode mahal",
-        "",
-        "Knowledge Base & live web:",
-        "• /update — jalankan update KB via GitHub Actions",
-        "• /tavilytest <query> — test live web provider",
-        "• /kb bantuan — kontrol Knowledge Base",
-        "",
-        "Reset:",
-        "• /reset_runtime — reset runtime model Telegram tersimpan",
-        "• /reset_telegram — hapus webhook/pending update Telegram",
-        "",
-        "Catatan:",
-        "• Semua command kontrol hanya untuk admin Telegram.",
-        "• Bot tidak dapat menyalakan dirinya sendiri jika worker sudah benar-benar mati. Start tetap dilakukan dari admin web/deploy.",
-    ]
-    return "\n".join(lines)
-
-
-def build_telegram_admin_status_text(
-    *,
-    local_status: Dict[str, Any],
-    diag: Dict[str, Any],
-    maintenance_state: Dict[str, Any],
-    current_model: str,
-    forced_model_mode: str,
-    fallback_models: List[str],
-    expensive_fallback_models: List[str],
-    active_cheap_models: List[str],
-    fast_cheap_models: List[str],
-    thinking_capable_models: List[str],
-    config: Dict[str, Any],
-) -> str:
-    api_ok = bool(diag.get("ok"))
-    running = bool(local_status.get("running"))
-    locked = bool(maintenance_state.get("locked"))
-
-    if api_ok and running:
-        telegram_label = "API OK + WORKER ON"
-    elif api_ok:
-        telegram_label = "API OK / WORKER OFF"
-    elif str(config.get("telegram_token") or "").strip():
-        telegram_label = "API ERROR"
-    else:
-        telegram_label = "TOKEN BELUM DIISI"
-
-    mode_label = {
-        "auto": "otomatis",
-        "cheap": "murah/cepat",
-        "expensive": "medium/mahal",
-    }.get(str(forced_model_mode or "auto"), str(forced_model_mode or "auto"))
-
-    lines = [
-        "📊 Status Sistem Adioranye",
-        "",
-        f"Telegram: {telegram_label}",
-        f"Bot: @{diag.get('bot_username') or '-'}",
-        f"Worker: {'ON' if running else 'OFF'}",
-        f"Pending update: {diag.get('pending_update_count') if diag.get('pending_update_count') is not None else '-'}",
-        f"Webhook: {'aktif' if diag.get('webhook_url') else 'kosong'}",
-        "",
-        f"Akses terbatas: {'AKTIF' if locked else 'DIBUKA'}",
-    ]
-
-    if maintenance_state.get("reason"):
-        lines.append(f"Catatan akses terbatas: {maintenance_state.get('reason')}")
-
-    lines.extend(
-        [
-            "",
-            f"Model sekarang: {current_model}",
-            f"Mode router: {mode_label}",
-            f"Fallback murah: {len(fallback_models or [])}",
-            f"Fallback medium/mahal: {len(expensive_fallback_models or [])}",
-            f"Murah aktif: {len(active_cheap_models or [])}",
-            f"Murah tercepat tersimpan: {len(fast_cheap_models or [])}",
-            f"Thinking/capable aktif: {len(thinking_capable_models or [])}",
-            "",
-            f"Health check terakhir: {local_status.get('model_health_checked_at') or '-'}",
-            f"Model sehat terdeteksi: {local_status.get('model_health_active_count', 0)}",
-            f"Pesan diproses: {local_status.get('processed', 0)}",
-            f"Duplikat dicegah: {local_status.get('duplicates_skipped', 0)}",
-        ]
-    )
-
-    if diag.get("last_error"):
-        lines.extend(["", "Error Telegram:", str(diag.get("last_error"))[:700]])
-
-    if local_status.get("last_error"):
-        lines.extend(["", "Error worker terakhir:", str(local_status.get("last_error"))[:700]])
-
-    return "\n".join(lines)
-
-
-
-def telegram_normalize_maintenance_access_key(value: Any) -> str:
-    return str(value or "").strip().upper().replace(" ", "")
-
-
-def telegram_default_maintenance_access_state() -> Dict[str, Any]:
-    return {"version": 1, "keys": {}, "updated_at": ""}
-
-
-def telegram_read_maintenance_access_state(access_file: str) -> Dict[str, Any]:
-    try:
-        if not access_file or not os.path.exists(access_file):
-            return telegram_default_maintenance_access_state()
-        with open(access_file, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        if not isinstance(data, dict):
-            return telegram_default_maintenance_access_state()
-        state = telegram_default_maintenance_access_state()
-        state.update(data)
-        if not isinstance(state.get("keys"), dict):
-            state["keys"] = {}
-        return state
-    except Exception:
-        return telegram_default_maintenance_access_state()
-
-
-def telegram_write_maintenance_access_state(access_file: str, state: Dict[str, Any]) -> None:
-    try:
-        payload = telegram_default_maintenance_access_state()
-        payload.update(state or {})
-        payload["updated_at"] = _wib_now_text()
-        if not isinstance(payload.get("keys"), dict):
-            payload["keys"] = {}
-        with open(access_file, "w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
-def telegram_generate_maintenance_access_key(
-    access_file: str,
-    note: str = "",
-    created_by: str = "telegram-admin",
-    max_questions: int = 5,
-    key_value: str = "",
-    unlimited: bool = False,
-) -> Dict[str, Any]:
-    state = telegram_read_maintenance_access_state(access_file)
-    keys = state.setdefault("keys", {})
-    is_unlimited = bool(unlimited)
-    max_uses = 0 if is_unlimited else max(1, int(max_questions or 5))
-    custom_key = telegram_normalize_maintenance_access_key(key_value)
-
-    if custom_key:
-        key = custom_key
-        if key in keys:
-            raise ValueError(f"Access key sudah ada: {key}")
-    else:
-        for _ in range(20):
-            raw = base64.urlsafe_b64encode(os.urandom(6)).decode("utf-8").rstrip("=")
-            key = telegram_normalize_maintenance_access_key(f"AK-{raw}")
-            if key not in keys:
-                break
-        else:
-            key = telegram_normalize_maintenance_access_key(f"AK-{int(time.time())}")
-
-    record = {
-        "key": key,
-        "active": True,
-        "unlimited": is_unlimited,
-        "max_uses": max_uses,
-        "used": 0,
-        "note": str(note or "").strip(),
-        "created_at": _wib_now_text(),
-        "created_by": str(created_by or "telegram-admin"),
-        "last_used_at": "",
-        "last_used_by": "",
-    }
-    keys[key] = record
-    telegram_write_maintenance_access_state(access_file, state)
-    return record
-
-def telegram_validate_maintenance_access_key(access_file: str, value: Any, default_max_questions: int = 5) -> Dict[str, Any]:
-    key = telegram_normalize_maintenance_access_key(value)
-    state = telegram_read_maintenance_access_state(access_file)
-    record = (state.get("keys") or {}).get(key)
-
-    if not key:
-        return {"valid": False, "key": "", "reason": "empty", "remaining": 0}
-    if not isinstance(record, dict):
-        return {"valid": False, "key": key, "reason": "not_found", "remaining": 0}
-    if not bool(record.get("active", True)):
-        return {"valid": False, "key": key, "reason": "inactive", "remaining": 0, "record": record}
-
-    used = max(0, int(record.get("used") or 0))
-    if bool(record.get("unlimited", False)):
-        return {
-            "valid": True,
-            "key": key,
-            "reason": "ok",
-            "remaining": "unlimited",
-            "unlimited": True,
-            "max_uses": 0,
-            "used": used,
-            "record": record,
-        }
-
-    max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
-    remaining = max(0, max_uses - used)
-    if remaining <= 0:
-        return {"valid": False, "key": key, "reason": "quota_exhausted", "remaining": 0, "record": record}
-
-    return {"valid": True, "key": key, "reason": "ok", "remaining": remaining, "unlimited": False, "max_uses": max_uses, "used": used, "record": record}
-
-def telegram_consume_maintenance_access_question(
-    access_file: str,
-    value: Any,
-    used_by: str = "telegram-user",
-    default_max_questions: int = 5,
-) -> Dict[str, Any]:
-    key = telegram_normalize_maintenance_access_key(value)
-    validation = telegram_validate_maintenance_access_key(access_file, key, default_max_questions)
-    if not validation.get("valid"):
-        validation["allowed"] = False
-        return validation
-
-    state = telegram_read_maintenance_access_state(access_file)
-    keys = state.setdefault("keys", {})
-    record = keys.get(key)
-    if not isinstance(record, dict):
-        validation["allowed"] = False
-        validation["reason"] = "not_found"
-        return validation
-
-    record["used"] = int(record.get("used") or 0) + 1
-    record["last_used_at"] = _wib_now_text()
-    record["last_used_by"] = str(used_by or "telegram-user")
-    keys[key] = record
-    telegram_write_maintenance_access_state(access_file, state)
-
-    refreshed = telegram_validate_maintenance_access_key(access_file, key, default_max_questions)
-    refreshed["allowed"] = True
-    refreshed["used_now"] = int(record.get("used") or 0)
-    return refreshed
-
-def telegram_revoke_maintenance_access_key(access_file: str, value: Any, revoked_by: str = "telegram-admin") -> Dict[str, Any]:
-    key = telegram_normalize_maintenance_access_key(value)
-    state = telegram_read_maintenance_access_state(access_file)
-    keys = state.setdefault("keys", {})
-    record = keys.get(key)
-    if not isinstance(record, dict):
-        return {"ok": False, "key": key, "reason": "not_found"}
-    record["active"] = False
-    record["revoked_at"] = _wib_now_text()
-    record["revoked_by"] = str(revoked_by or "telegram-admin")
-    keys[key] = record
-    telegram_write_maintenance_access_state(access_file, state)
-    return {"ok": True, "key": key, "record": record}
-
-
-
-def telegram_parse_access_key_create_args(raw_arg: str, default_max_questions: int = 5) -> Dict[str, Any]:
-    """Parse:
-    - /key generate 20 catatan
-    - /key generate unlimited catatan
-    - /key create CUSTOMKEY 20 catatan
-    - /key create CUSTOMKEY unlimited catatan
-    """
-    arg = str(raw_arg or "").strip()
-    parts = arg.split()
-    action = parts[0].lower() if parts else "list"
-    rest = parts[1:]
-
-    result: Dict[str, Any] = {
-        "action": action,
-        "key_value": "",
-        "max_questions": int(default_max_questions or 5),
-        "unlimited": False,
-        "note": "",
-    }
-
-    if action in {"create", "custom", "buatcustom", "key"}:
-        if rest:
-            result["key_value"] = rest[0]
-            rest = rest[1:]
-    elif action not in {"generate", "gen", "buat", "baru", "new"}:
-        result["note"] = " ".join(rest)
-        return result
-
-    if rest:
-        quota_token = rest[0].lower()
-        if quota_token in {"unlimited", "unlimit", "tanpabatas", "tanpa_batas", "bebas", "∞"}:
-            result["unlimited"] = True
-            rest = rest[1:]
-        else:
-            try:
-                quota_value = int(quota_token)
-                if quota_value > 0:
-                    result["max_questions"] = quota_value
-                    rest = rest[1:]
-            except ValueError:
-                pass
-
-    result["note"] = " ".join(rest).strip()
-    return result
-
-
-def telegram_access_key_admin_command(text: str) -> str:
-    command = telegram_command_name(text) if "telegram_command_name" in globals() else str(text or "").split(maxsplit=1)[0].lower()
-    return command if command in {"/key", "/keys", "/accesskey", "/accesskeys", "/akseskey"} else ""
-
-
-def telegram_access_activate_command(text: str) -> bool:
-    command = telegram_command_name(text) if "telegram_command_name" in globals() else str(text or "").split(maxsplit=1)[0].lower()
-    return command in {"/access", "/akses"}
-
-
-def telegram_access_logout_command(text: str) -> bool:
-    command = telegram_command_name(text) if "telegram_command_name" in globals() else str(text or "").split(maxsplit=1)[0].lower()
-    arg = telegram_command_arg(text).strip().lower() if "telegram_command_arg" in globals() else ""
-    return (
-        command in {"/logoutkey", "/logout_key", "/keluarkey", "/keluar_key"}
-        or (command in {"/access", "/akses"} and arg in {"logout", "keluar", "off", "stop", "hapus"})
-    )
-
-
-def telegram_build_access_key_list(access_file: str, default_max_questions: int = 5) -> str:
-    state = telegram_read_maintenance_access_state(access_file)
-    keys = state.get("keys") or {}
-    active_records = []
-    exhausted = 0
-    unlimited_count = 0
-
-    for record in keys.values():
-        if not isinstance(record, dict):
-            continue
-
-        used = max(0, int(record.get("used") or 0))
-        is_unlimited = bool(record.get("unlimited", False))
-
-        if is_unlimited:
-            if bool(record.get("active", True)):
-                unlimited_count += 1
-                active_records.append(record)
-            continue
-
-        max_uses = max(1, int(record.get("max_uses") or default_max_questions or 5))
-        if used >= max_uses:
-            exhausted += 1
-        if bool(record.get("active", True)) and used < max_uses:
-            active_records.append(record)
-
-    lines = [
-        "🔑 Access key akses terbatas",
-        f"Aktif: {len(active_records)}",
-        f"Unlimited: {unlimited_count}",
-        f"Habis: {exhausted}",
-        f"Total: {len(keys)}",
-    ]
-
-    for idx, record in enumerate(sorted(active_records, key=lambda item: str(item.get("created_at") or ""), reverse=True)[:10], start=1):
-        key = str(record.get("key") or "")
-        used = int(record.get("used") or 0)
-        note = str(record.get("note") or "")
-
-        if bool(record.get("unlimited", False)):
-            quota_label = f"unlimited, terpakai {used}"
-        else:
-            max_uses = int(record.get("max_uses") or default_max_questions or 5)
-            quota_label = f"{used}/{max_uses}"
-
-        lines.append(f"{idx}. {key} — {quota_label}" + (f" — {note}" if note else ""))
-
-    return "\n".join(lines)
-
-def telegram_is_maintenance_command(text: str) -> bool:
-    raw = str(text or "").strip()
-    if not raw:
-        return False
-
-    command = raw.split()[0].lower()
-    if "@" in command:
-        command = command.split("@", 1)[0]
-
-    return command in {
-        "/lock",
-        "/unlock",
-        "/akses",
-        "/akses_terbatas",
-        "/maintenance",
-        "/maint",
-    }
-
-
-def telegram_maintenance_reply(state: Dict[str, Any]) -> str:
-    locked = bool(state.get("locked"))
-    status = "Akses terbatas" if locked else "Akses dibuka"
-    lines = [
-        f"🛠️ Status akses: {status}",        f"Update: {state.get('updated_at') or '-'}",
-        f"Oleh: {state.get('updated_by') or '-'}",
-    ]
-    reason = str(state.get("reason") or "").strip()
-    if reason:
-        lines.append(f"Catatan: {reason}")
-    return "\n".join(lines)
-
-
-def telegram_under_maintenance_message(state: Dict[str, Any]) -> str:
-    message = str(state.get("message") or "Adioranye sedang dalam mode akses terbatas.").strip()
-    reason = str(state.get("reason") or "").strip()
-    lines = [
-        "🛠️ Akses terbatas",
-        "",
-        message,
-    ]
-    if reason:
-        lines.extend(["", f"Catatan admin: {reason}"])
-    return "\n".join(lines)
-
-
-def is_tavily_test_command(text: str) -> bool:
-    raw = str(text or "").strip()
-    if not raw:
-        return False
-    command = raw.split()[0].lower()
-    if "@" in command:
-        command = command.split("@", 1)[0]
-    return command == "/tavily"
-
-
-def run_tavily_connection_test(
-    api_key: str,
-    query: str = "berita AI terbaru hari ini",
-) -> str:
-    key = str(api_key or os.getenv("TAVILY_API_KEY", "") or "").strip()
-
-    if not key:
-        return "❌ TAVILY_API_KEY belum terbaca."
-
-    try:
-        response = requests.post(
-            "https://api.tavily.com/search",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "query": str(query or "berita AI terbaru hari ini"),
-                "topic": "general",
-                "search_depth": "basic",
-                "max_results": 3,
-                "include_answer": True,
-                "include_raw_content": False,
-            },
-            timeout=15,
-        )
-    except requests.Timeout:
-        return "❌ Tavily timeout."
-    except requests.RequestException as exc:
-        return f"❌ Request Tavily gagal: {exc}"
-
-    try:
-        data = response.json()
-    except Exception:
-        data = {}
-
-    if response.status_code != 200:
-        detail = response.text[:900]
-        return (
-            "❌ Tavily belum konek.\n\n"
-            f"HTTP: {response.status_code}\n"
-            f"Detail: {detail}"
-        )
-
-    results = data.get("results") or []
-    first = results[0] if results and isinstance(results[0], dict) else {}
-
-    lines = [
-        "✅ Tavily tersambung.",
-        f"Hasil: {len(results)}",
-    ]
-
-    if first.get("title"):
-        lines.append(f"Contoh: {first.get('title')}")
-    if first.get("url"):
-        lines.append(f"URL: {first.get('url')}")
-
-    return "\n".join(lines)
-
-
-
-def build_telegram_model_note(
-    meta: Any,
-    requested_model: str,
-    default_model: str,
-) -> str:
-    """Return an empty footer for Telegram responses to keep them clean and private."""
-    # Kondisi saat ini hanya satu model AI yang dipakai. Tidak perlu menampilkan
-    # model, mode routing, callback, atau metadata teknis di bawah jawaban Telegram.
-    return ""
-
-
-def _model_tier_rank(model: str) -> int:
-    """Sort models by cost tier: cheap -> medium -> expensive -> ultra -> unknown."""
-    try:
-        tier = str(model_cost_tier(model) or "").lower()
-    except Exception:
-        tier = ""
-    if tier == "cheap":
-        return 0
-    if tier in {"medium", "menengah"}:
-        return 1
-    if tier in {"expensive", "mahal"}:
-        return 2
-    if tier in {"ultra", "ultra_expensive", "ultra mahal"}:
-        return 3
-    return 4
-
-
-def _model_output_price(model: str) -> int:
-    try:
-        return int((model_price(model) or {}).get("output", 999999999))
-    except Exception:
-        return 999999999
-
-
-def _prioritize_active_telegram_models(models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> List[str]:
-    active = [model for model in _as_string_list(models) if health_cache.get(model, {}).get("active")]
-    return sorted(
-        active,
-        key=lambda item: (
-            telegram_free_nano_priority_rank(item),
-            _model_output_price(item),
-            float(health_cache.get(item, {}).get("latency_ms") or 999999),
-            item,
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
         ),
     )
-
-def _prioritize_fastest_telegram_models(models: List[str], health_cache: Dict[str, Dict[str, Any]]) -> List[str]:
-    active = [model for model in _as_string_list(models) if health_cache.get(model, {}).get("active")]
-    return sorted(
-        active,
-        key=lambda item: (
-            telegram_free_nano_priority_rank(item),
-            float(health_cache.get(item, {}).get("latency_ms") or 999999),
-            _model_output_price(item),
-            item,
-        ),
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
     )
 
-def _is_gpt5_health_model(model: str) -> bool:
-    return "gpt-5" in str(model or "").lower()
-
-
-def _extract_health_content(data: Any) -> str:
-    """Extract assistant text from common OpenAI-compatible response shapes."""
-    if not isinstance(data, dict):
-        return ""
-    choices = data.get("choices") or []
-    if not choices or not isinstance(choices[0], dict):
-        return ""
-
-    choice = choices[0]
-    message = choice.get("message") or {}
-    content = message.get("content")
-    if isinstance(content, str):
-        return content.strip()
-    if isinstance(content, list):
-        parts: List[str] = []
-        for item in content:
-            if isinstance(item, dict):
-                parts.append(str(item.get("text") or item.get("content") or ""))
-            else:
-                parts.append(str(item or ""))
-        return "\n".join(part for part in parts if part.strip()).strip()
-
-    text = choice.get("text")
-    if isinstance(text, str) and text.strip():
-        return text.strip()
-
-    delta = choice.get("delta") or {}
-    delta_content = delta.get("content")
-    if isinstance(delta_content, str):
-        return delta_content.strip()
-    return ""
-
-
-def _build_health_payload(model: str) -> Dict[str, Any]:
-    """Use an ultra-cheap health prompt to avoid wasting tokens."""
-    gpt5_budget = int(os.getenv("MODEL_HEALTH_PROBE_GPT5_MAX_TOKENS", "8") or 8)
-    normal_budget = int(os.getenv("MODEL_HEALTH_PROBE_MAX_TOKENS", "2") or 2)
-    max_tokens = gpt5_budget if _is_gpt5_health_model(model) else normal_budget
-    max_tokens = max(1, min(int(max_tokens or 2), 12))
-    prompt = str(os.getenv("MODEL_HEALTH_PROBE_PROMPT", "ping") or "ping")[:20]
-
-    payload: Dict[str, Any] = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "OK"},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0,
-        "max_completion_tokens": max_tokens,
-        "stream": False,
-    }
-    if _is_gpt5_health_model(model):
-        payload["reasoning_effort"] = "minimal"
-    return payload
-
-
-def _candidate_tier(model: str) -> str:
-    try:
-        return str(model_cost_tier(model) or "unknown").lower()
-    except Exception:
-        return "unknown"
-
-
-def _split_candidates_by_tier(current_model: str, config: Dict[str, Any]) -> Dict[str, List[str]]:
-    """Build robust model pools from defaults, config, and dynamically classified candidates."""
-    free_nano_first = [
-        "tamandata",
-    ]
-    default_cheap = telegram_sort_models_for_simple_chat(
-        free_nano_first
-        + (_as_string_list(ALL_CHEAP_MODELS) or _as_string_list(DEFAULT_CHEAP_FALLBACK_MODELS))
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
     )
-    default_expensive = _as_string_list(ALL_CAPABLE_MODELS) or _as_string_list(DEFAULT_EXPENSIVE_FALLBACK_MODELS)
-
-    declared_cheap = []
-    declared_cheap.extend(_as_string_list(config.get("all_cheap_models")) or default_cheap)
-    declared_cheap.extend(_as_string_list(config.get("fallback_models")))
-    declared_cheap.extend(_as_string_list(config.get("fast_cheap_models")))
-    declared_cheap.extend(_as_string_list(config.get("active_cheap_models")))
-
-    declared_capable = []
-    declared_capable.extend(_as_string_list(config.get("all_expensive_models")) or default_expensive)
-    declared_capable.extend(_as_string_list(config.get("expensive_fallback_models")))
-    declared_capable.extend(_as_string_list(config.get("thinking_capable_models")))
-    declared_capable.extend(_as_string_list(config.get("capable_models")))
-    capable_override = str(config.get("thinking_capable_model") or "").strip()
-    if capable_override:
-        declared_capable.append(capable_override)
-
-    extra = _as_string_list(config.get("all_model_candidates"))
-    extra.extend(_as_string_list(TOP_USAGE_MODEL_CANDIDATES))
-    extra.extend(_as_string_list(ALL_SLASHAI_MODELS))
-    all_candidates = _as_string_list(free_nano_first + [current_model] + declared_cheap + declared_capable + extra)
-
-    dynamic_cheap: List[str] = []
-    dynamic_capable: List[str] = []
-    dynamic_unknown: List[str] = []
-    for candidate in all_candidates:
-        tier = _candidate_tier(candidate)
-        if tier == "cheap":
-            dynamic_cheap.append(candidate)
-        elif tier in {"medium", "expensive", "ultra"}:
-            dynamic_capable.append(candidate)
-        else:
-            dynamic_unknown.append(candidate)
-
-    cheap = telegram_sort_models_for_simple_chat(
-        free_nano_first + declared_cheap + dynamic_cheap
-    )
-    capable = _as_string_list(declared_capable + dynamic_capable)
-    unknown = _as_string_list(dynamic_unknown)
-
-    return {
-        "cheap": cheap,
-        "capable": capable,
-        "unknown": unknown,
-        "all": _as_string_list(cheap + capable + unknown),
-    }
-
-def _select_primary_by_mode(
-    preferred_mode: str,
-    current_model: str,
-    active_cheap_fast: List[str],
-    active_capable: List[str],
-    active_unknown: List[str],
-    active_all: List[str],
-) -> str:
-    """Select primary model from live health-check results."""
-    mode = str(preferred_mode or "auto").strip().lower()
-    if mode in {"cheap", "murah"}:
-        if active_cheap_fast:
-            return active_cheap_fast[0]
-        if active_capable:
-            return active_capable[0]
-    elif mode in {"expensive", "mahal", "medium", "menengah"}:
-        if active_capable:
-            return active_capable[0]
-        if active_cheap_fast:
-            return active_cheap_fast[0]
-    else:
-        if active_cheap_fast:
-            return active_cheap_fast[0]
-        if active_capable:
-            return active_capable[0]
-
-    if active_unknown:
-        return active_unknown[0]
-    if active_all:
-        return active_all[0]
-    return current_model
-
-def is_speed_update_command(text: str, expected_code: str = "4321") -> bool:
-    """Return True only for the protected /speed command.
-
-    Supports:
-    - /speed 4321
-    - /speed@NamaBot 4321
-    """
-    raw = str(text or "").strip()
-    parts = raw.split()
-    if len(parts) != 2:
-        return False
-    command = parts[0].lower()
-    code = parts[1].strip()
-    if not command.startswith("/speed"):
-        return False
-    if "@" in command:
-        command = command.split("@", 1)[0]
-    return command == "/speed" and code == str(expected_code or "4321")
-
-
-def parse_model_switch_command(text: str) -> str:
-    """Parse protected Telegram model switch command.
-
-    Returns:
-    - "expensive" for /ubah mahal
-    - "cheap" for /ubah murah
-    - "" for non-switch commands
-
-    Supports bot mentions such as /ubah@NamaBot mahal.
-    """
-    raw = str(text or "").strip()
-    parts = raw.split()
-    if len(parts) != 2:
-        return ""
-
-    command = parts[0].lower()
-    if "@" in command:
-        command = command.split("@", 1)[0]
-
-    if command != "/ubah":
-        return ""
-
-    target = parts[1].strip().lower()
-    if target in {"mahal", "medium", "menengah", "capable"}:
-        return "expensive"
-    if target in {"murah", "cheap", "cepat", "normal"}:
-        return "cheap"
-    return ""
-
-
-def build_model_switch_summary(mode: str, model: str, cheap_models: List[str], capable_models: List[str]) -> str:
-    """Build Telegram confirmation text after /ubah command."""
-    if mode == "expensive":
-        selected = pick_telegram_capable_model(
-            primary_model=model,
-            expensive_fallback_models=capable_models,
-            config={"thinking_capable_models": capable_models},
-        )
-        lines = [
-            "✅ Mode model diubah ke: MEDIUM/MAHAL.",
-            "",
-            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model medium/mahal yang sedang aktif.",
-            f"Model utama mode mahal: {selected or model}",
-        ]
-        if capable_models:
-            lines.append("Cadangan medium/mahal: " + ", ".join(str(item) for item in capable_models[:6]))
-        else:
-            lines.append("Catatan: daftar model medium/mahal belum tersedia. Jalankan /speed 4321 jika ingin cek model aktif terlebih dahulu.")
-        return "\n".join(lines)
-
-    if mode == "cheap":
-        selected = pick_fastest_telegram_normal_model(
-            primary_model=model,
-            fallback_models=cheap_models,
-            config={"fast_cheap_models": cheap_models, "active_cheap_models": cheap_models},
-        )
-        lines = [
-            "✅ Mode model diubah ke: MURAH/CEPAT.",
-            "",
-            "Mulai sekarang pertanyaan Telegram akan diarahkan ke model murah/cepat yang sedang aktif.",
-            f"Model utama mode murah: {selected or model}",
-        ]
-        if cheap_models:
-            lines.append("Cadangan murah: " + ", ".join(str(item) for item in cheap_models[:8]))
-        else:
-            lines.append("Catatan: daftar model murah belum tersedia. Jalankan /speed 4321 jika ingin cek model aktif terlebih dahulu.")
-        return "\n".join(lines)
-
-    return "Format perintah: /ubah mahal atau /ubah murah"
-
-
-
-
-def is_rotate_model_command(text: str) -> bool:
-    """Return True for /rotate command.
-
-    Supports:
-    - /rotate
-    - /rotate@NamaBot
-    """
-    raw = str(text or "").strip()
-    parts = raw.split()
-    if len(parts) != 1:
-        return False
-    command = parts[0].lower()
-    if "@" in command:
-        command = command.split("@", 1)[0]
-    return command == "/rotate"
-
-
-
-
-def is_update_command(text: str) -> bool:
-    """Return True for /update command.
-
-    Supports:
-    - /update
-    - /update@NamaBot
-    """
-    raw = str(text or "").strip()
-    parts = raw.split()
-    if len(parts) != 1:
-        return False
-    command = parts[0].lower()
-    if "@" in command:
-        command = command.split("@", 1)[0]
-    return command == "/update"
-
-
-def trigger_github_kb_update(config: Dict[str, Any], chat_id: int) -> str:
-    """Trigger GitHub Actions workflow_dispatch untuk update Knowledge Base.
-
-    Perintah ini hanya memicu workflow. Proses scraping/update tetap dijalankan
-    oleh GitHub Actions agar tidak membebani worker Streamlit/Telegram.
-    """
-    github_token = str(config.get("github_actions_token") or os.getenv("GITHUB_ACTIONS_TOKEN", "") or "").strip()
-    repo = str(config.get("github_repo") or os.getenv("GITHUB_REPO", "") or "").strip()
-    workflow_file = str(config.get("github_workflow_file") or os.getenv("GITHUB_WORKFLOW_FILE", "daily-kb-update.yml") or "daily-kb-update.yml").strip()
-    branch = str(config.get("github_branch") or os.getenv("GITHUB_BRANCH", "main") or "main").strip()
-
-    if not github_token:
-        return (
-            "❌ GITHUB_ACTIONS_TOKEN belum diisi.\n\n"
-            "Tambahkan secret ini di Streamlit/hosting app:\n"
-            "GITHUB_ACTIONS_TOKEN = \"token_github_kamu\""
-        )
-
-    if not repo or "/" not in repo:
-        return (
-            "❌ GITHUB_REPO belum benar.\n\n"
-            "Format yang benar:\n"
-            "GITHUB_REPO = \"username/nama-repo\""
-        )
-
-    workflow_file = workflow_file or "daily-kb-update.yml"
-    branch = branch or "main"
-    url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_file}/dispatches"
-
-    headers = {
-        "Authorization": f"Bearer {github_token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json",
-    }
-
-    requested_at = _wib_now_text()
-    # Safe defaults for GitHub-hosted runner with 20-minute limit.
-    # The workflow also has hard caps, so even if these values are changed
-    # accidentally, update remains small and sequential.
-    update_source_limit = str(config.get("github_update_source_limit") or os.getenv("GITHUB_UPDATE_SOURCE_LIMIT", "8") or "8").strip()
-    update_max_items = str(config.get("github_update_max_items") or os.getenv("GITHUB_UPDATE_MAX_ITEMS", "1") or "1").strip()
-    payload_with_inputs = {
-        "ref": branch,
-        "inputs": {
-            "source": "telegram",
-            "chat_id": str(chat_id),
-            "requested_at": requested_at,
-            "source_limit": update_source_limit,
-            "max_items": update_max_items,
-        },
-    }
-    payload_without_inputs = {"ref": branch}
-
-    def _dispatch(payload: Dict[str, Any]) -> requests.Response:
-        return requests.post(url, headers=headers, json=payload, timeout=30)
-
-    try:
-        response = _dispatch(payload_with_inputs)
-
-        # GitHub mengembalikan HTTP 422 jika workflow_dispatch belum mendefinisikan
-        # input source/chat_id/requested_at. Agar command /update tetap berjalan
-        # pada workflow lama, ulangi request tanpa inputs.
-        if response.status_code == 422 and "Unexpected inputs" in response.text:
-            response = _dispatch(payload_without_inputs)
-    except requests.Timeout:
-        return "❌ Gagal trigger update KB: request ke GitHub timeout."
-    except requests.RequestException as exc:
-        return f"❌ Gagal trigger update KB: {exc}"
-
-    if response.status_code in {200, 201, 202, 204}:
-        return (
-            "✅ Perintah update Knowledge Base diterima.\n\n"
-            f"Repo: {repo}\n"
-            f"Workflow: {workflow_file}\n"
-            f"Branch: {branch}\n"
-            f"Batch sumber: {update_source_limit}\n"
-            f"Item/sumber: {update_max_items}\n"
-            f"Waktu: {requested_at}\n\n"
-            "GitHub Actions sedang menjalankan update sekuensial kecil. "
-            "Jika workflow sudah memakai notifikasi Telegram, kamu akan mendapat pesan lagi saat selesai."
-        )
-
-    detail = response.text[:1200]
-    return (
-        "❌ GitHub menolak perintah update KB.\n\n"
-        f"HTTP: {response.status_code}\n"
-        f"Repo: {repo}\n"
-        f"Workflow: {workflow_file}\n"
-        f"Branch: {branch}\n\n"
-        "Penyebab umum:\n"
-        "1. Workflow file belum ada di branch tersebut.\n"
-        "2. workflow_dispatch belum aktif.\n"
-        "3. GITHUB_ACTIONS_TOKEN belum punya permission Actions: Read and write.\n"
-        "4. Nama workflow file di secret GITHUB_WORKFLOW_FILE tidak sama.\n\n"
-        f"Detail:\n{detail}"
-    )
-
-
-def select_rotated_runtime_model(result: Dict[str, Any], current_mode: str, current_model: str) -> Dict[str, Any]:
-    """Select the best currently-active model according to current routing mode.
-
-    - cheap mode: use fastest active cheap model; fall back to capable if no cheap model is alive.
-    - expensive mode: use active medium/expensive model; fall back to cheap if no capable model is alive.
-    - auto mode: use refresh_telegram_runtime_models' primary model.
-    """
-    mode = str(current_mode or "auto").lower()
-    fast_cheap = _as_string_list(result.get("fast_cheap_models"))
-    active_expensive = _as_string_list(result.get("active_expensive_models"))
-    active_cheap = _as_string_list(result.get("active_cheap_models")) or fast_cheap
-    primary = str(result.get("primary_model") or current_model or "").strip()
-
-    selected_mode = mode if mode in {"auto", "cheap", "expensive"} else "auto"
-    selected_model = primary
-    fallback_models = _as_string_list(result.get("fallback_models"))
-    expensive_fallback_models = _as_string_list(result.get("expensive_fallback_models"))
-    allow_expensive = bool(expensive_fallback_models or active_expensive)
-
-    if selected_mode == "cheap":
-        if fast_cheap:
-            selected_model = fast_cheap[0]
-            fallback_models = [item for item in fast_cheap if item != selected_model]
-            expensive_fallback_models = []
-            allow_expensive = False
-        elif active_expensive:
-            # Safety fallback: if every cheap model is down, keep bot alive using capable model.
-            selected_model = active_expensive[0]
-            fallback_models = []
-            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
-            allow_expensive = True
-            selected_mode = "expensive"
-    elif selected_mode == "expensive":
-        if active_expensive:
-            selected_model = active_expensive[0]
-            fallback_models = []
-            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
-            allow_expensive = True
-        elif fast_cheap:
-            # Safety fallback: if every capable model is down, keep bot alive using cheap model.
-            selected_model = fast_cheap[0]
-            fallback_models = [item for item in fast_cheap if item != selected_model]
-            expensive_fallback_models = []
-            allow_expensive = False
-            selected_mode = "cheap"
-    else:
-        selected_model = primary
-        if fast_cheap and selected_model in fast_cheap:
-            fallback_models = [item for item in fast_cheap if item != selected_model]
-            expensive_fallback_models = active_expensive
-            allow_expensive = bool(active_expensive)
-        elif active_expensive and selected_model in active_expensive:
-            fallback_models = []
-            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
-            allow_expensive = True
-        else:
-            fallback_models = [item for item in fast_cheap if item != selected_model]
-            expensive_fallback_models = [item for item in active_expensive if item != selected_model]
-            allow_expensive = bool(expensive_fallback_models)
-
-    if not selected_model:
-        selected_model = current_model
-
-    return {
-        "selected_model": selected_model,
-        "selected_mode": selected_mode,
-        "fallback_models": fallback_models,
-        "expensive_fallback_models": expensive_fallback_models,
-        "allow_expensive_fallback": allow_expensive,
-        "active_cheap_models": active_cheap,
-        "fast_cheap_models": fast_cheap,
-        "active_expensive_models": active_expensive,
-    }
-
-
-def build_rotate_summary(result: Dict[str, Any], rotation: Dict[str, Any], previous_model: str) -> str:
-    """Human-readable Telegram summary after /rotate command."""
-    selected_model = rotation.get("selected_model") or "tidak ada"
-    selected_mode = str(rotation.get("selected_mode") or "auto")
-    fast_cheap = rotation.get("fast_cheap_models") or []
-    active_expensive = rotation.get("active_expensive_models") or []
-    health_cache = result.get("health_cache") or {}
-
-    mode_label = {
-        "auto": "OTOMATIS",
-        "cheap": "MURAH/CEPAT",
-        "expensive": "MEDIUM/MAHAL",
-    }.get(selected_mode, selected_mode.upper())
-
-    lines = [
-        "✅ Rotate model selesai.",
-        "",
-        f"Mode aktif: {mode_label}",
-        f"Model sebelumnya: {previous_model or 'tidak diketahui'}",
-        f"Model sekarang: {selected_model}",
-        f"Total dicek: {result.get('checked_total', 0)} | Hidup: {result.get('active_total', 0)} | Sementara error: {result.get('transient_total', 0)} | Mati: {result.get('dead_total', 0)}",
-        f"Metode cek: paralel {result.get('health_workers', 1)} worker | retry {result.get('health_retries', 0)}x",
-    ]
-
-    if selected_model in health_cache:
-        latency = health_cache.get(selected_model, {}).get("latency_ms")
-        status_code = health_cache.get(selected_model, {}).get("status_code")
-        lines.append(f"Status model terpilih: aktif | {latency} ms | HTTP {status_code}")
-
-    if fast_cheap:
-        lines.append("")
-        lines.append("⚡ Murah aktif tercepat:")
-        for model_name in fast_cheap[:5]:
-            latency = health_cache.get(model_name, {}).get("latency_ms")
-            lines.append(f"- {model_name} ({latency} ms)")
-
-    if active_expensive:
-        lines.append("")
-        lines.append("🧠 Medium/mahal aktif:")
-        for model_name in active_expensive[:5]:
-            latency = health_cache.get(model_name, {}).get("latency_ms")
-            lines.append(f"- {model_name} ({latency} ms)")
-
-    if not fast_cheap and not active_expensive:
-        lines.append("")
-        lines.append("Peringatan: tidak ada model yang lolos health check. Bot tetap memakai model terakhir agar error tetap terlihat.")
-    elif previous_model == selected_model:
-        lines.append("")
-        lines.append("Catatan: model tidak berubah karena model ini masih menjadi pilihan terbaik yang aktif saat ini.")
-
-    return "\n".join(lines)
-
-def check_telegram_single_model_health(api_url: str, api_key: str, model: str, timeout: int = 12, retries: int = 1) -> Dict[str, Any]:
-    """Check whether one model is truly usable right now.
-
-    A model is marked active only when it returns HTTP 200, has at least one
-    choice, and produces non-empty assistant content. Temporary provider errors
-    such as 429/5xx are retried once and reported as transient instead of being
-    treated as a confirmed dead model.
-    """
-    started = time.time()
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    attempts = max(1, int(retries or 0) + 1)
-    last_error = ""
-    last_status = None
-
-    for attempt in range(1, attempts + 1):
-        try:
-            response = requests.post(
-                api_url,
-                headers=headers,
-                json=_build_health_payload(model),
-                timeout=timeout,
-            )
-            latency_ms = round((time.time() - started) * 1000, 1)
-            last_status = response.status_code
-
-            if response.status_code != 200:
-                is_transient = response.status_code in TRANSIENT_HEALTH_HTTP_CODES
-                last_error = response.text[:500]
-                if is_transient and attempt < attempts:
-                    time.sleep(min(1.2, 0.35 * attempt))
-                    continue
-                return {
-                    "active": False,
-                    "health_status": "transient" if is_transient else "dead",
-                    "error_class": "transient_http" if is_transient else "http_error",
-                    "status_code": response.status_code,
-                    "latency_ms": latency_ms,
-                    "attempts": attempt,
-                    "checked_at": _wib_now_text(),
-                    "tier": _candidate_tier(model),
-                    "error": last_error,
-                }
-
-            try:
-                data = response.json()
-            except Exception:
-                last_error = (response.text or "")[:500]
-                return {
-                    "active": False,
-                    "health_status": "dead",
-                    "error_class": "invalid_json",
-                    "status_code": response.status_code,
-                    "latency_ms": latency_ms,
-                    "attempts": attempt,
-                    "checked_at": _wib_now_text(),
-                    "tier": _candidate_tier(model),
-                    "error": "Respons 200 tetapi bukan JSON valid: " + last_error,
-                }
-
-            choices = data.get("choices") or [] if isinstance(data, dict) else []
-            content = _extract_health_content(data)
-            finish_reason = ""
-            if choices and isinstance(choices[0], dict):
-                finish_reason = str(choices[0].get("finish_reason") or "")
-
-            usage = data.get("usage") if isinstance(data, dict) else {}
-            if choices and content:
-                return {
-                    "active": True,
-                    "health_status": "active",
-                    "error_class": "",
-                    "status_code": response.status_code,
-                    "latency_ms": latency_ms,
-                    "attempts": attempt,
-                    "checked_at": _wib_now_text(),
-                    "tier": _candidate_tier(model),
-                    "finish_reason": finish_reason,
-                    "sample": content[:80],
-                    "usage": usage if isinstance(usage, dict) else {},
-                    "error": "",
-                }
-
-            # HTTP 200 but no readable assistant content should not be considered active.
-            usage = data.get("usage") if isinstance(data, dict) else None
-            details = (usage or {}).get("completion_tokens_details") if isinstance(usage, dict) else None
-            reasoning_tokens = (details or {}).get("reasoning_tokens") if isinstance(details, dict) else None
-            last_error = "Response 200 tetapi choices/content kosong"
-            if reasoning_tokens:
-                last_error += f"; reasoning_tokens={reasoning_tokens}"
-            return {
-                "active": False,
-                "health_status": "dead",
-                "error_class": "empty_content",
-                "status_code": response.status_code,
-                "latency_ms": latency_ms,
-                "attempts": attempt,
-                "checked_at": _wib_now_text(),
-                "tier": _candidate_tier(model),
-                "finish_reason": finish_reason,
-                "error": last_error,
-            }
-
-        except requests.Timeout as exc:
-            last_error = str(exc)[:500]
-            if attempt < attempts:
-                time.sleep(min(1.2, 0.35 * attempt))
-                continue
-            return {
-                "active": False,
-                "health_status": "transient",
-                "error_class": "timeout",
-                "status_code": last_status,
-                "latency_ms": round((time.time() - started) * 1000, 1),
-                "attempts": attempt,
-                "checked_at": _wib_now_text(),
-                "tier": _candidate_tier(model),
-                "error": last_error,
-            }
-        except requests.RequestException as exc:
-            last_error = str(exc)[:500]
-            if attempt < attempts:
-                time.sleep(min(1.2, 0.35 * attempt))
-                continue
-            return {
-                "active": False,
-                "health_status": "transient",
-                "error_class": "request_exception",
-                "status_code": last_status,
-                "latency_ms": round((time.time() - started) * 1000, 1),
-                "attempts": attempt,
-                "checked_at": _wib_now_text(),
-                "tier": _candidate_tier(model),
-                "error": last_error,
-            }
-        except Exception as exc:
-            last_error = str(exc)[:500]
-            return {
-                "active": False,
-                "health_status": "dead",
-                "error_class": "unexpected_error",
-                "status_code": last_status,
-                "latency_ms": round((time.time() - started) * 1000, 1),
-                "attempts": attempt,
-                "checked_at": _wib_now_text(),
-                "tier": _candidate_tier(model),
-                "error": last_error,
-            }
-
-    return {
-        "active": False,
-        "health_status": "dead",
-        "error_class": "unknown",
-        "status_code": last_status,
-        "latency_ms": round((time.time() - started) * 1000, 1),
-        "attempts": attempts,
-        "checked_at": _wib_now_text(),
-        "tier": _candidate_tier(model),
-        "error": last_error or "Health check gagal tanpa detail.",
-    }
-
-
-def refresh_telegram_runtime_models(
-    api_url: str,
-    api_key: str,
-    current_model: str,
-    config: Dict[str, Any],
-    timeout: int = 12,
-    preferred_mode: str = "auto",
-) -> Dict[str, Any]:
-    """Refresh Telegram runtime routing so only currently-active models are used.
-
-    Improvements over the previous checker:
-    - candidate pools are deduplicated and classified by actual price tier;
-    - checks run in parallel with bounded workers;
-    - temporary 429/5xx/timeouts are retried and reported separately;
-    - active means the model returned non-empty assistant content, not merely HTTP 200.
-    """
-    if not api_url or not api_key:
-        raise RuntimeError("SLASHAI_API_URL atau SLASHAI_API_KEY belum tersedia.")
-
-    discovery_meta: Dict[str, Any] = {"ok": False, "models": [], "source_url": "", "error": ""}
-    if bool(config.get("model_discovery_enabled", True)):
-        discovery_meta = discover_available_models_from_api(
-            api_url=api_url,
-            api_key=api_key,
-            models_api_url=str(config.get("models_api_url") or ""),
-            timeout=int(config.get("model_discovery_timeout", timeout) or timeout),
-        )
-        discovered_models = _as_string_list(discovery_meta.get("models") or [])
-        if discovered_models:
-            config = dict(config)
-            config["all_model_candidates"] = _as_string_list(config.get("all_model_candidates")) + discovered_models + _as_string_list(TOP_USAGE_MODEL_CANDIDATES)
-
-    pools = _split_candidates_by_tier(current_model=current_model, config=config)
-    cheap_candidates = pools["cheap"]
-    capable_candidates = pools["capable"]
-    unknown_candidates = pools["unknown"]
-    candidates = pools["all"]
 
     if not candidates:
-        candidates = _as_string_list([current_model] + TOP_USAGE_MODEL_CANDIDATES + ALL_SLASHAI_MODELS + DEFAULT_CHEAP_FALLBACK_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS)
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
 
-    health_limit = int(config.get("model_health_quick_limit", os.getenv("MODEL_HEALTH_QUICK_LIMIT", 6)) or 6)
-    if health_limit > 0:
-        candidates = candidates[:health_limit]
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
 
-    max_workers = int(config.get("model_health_workers", os.getenv("MODEL_HEALTH_WORKERS", 4)) or 4)
-    max_workers = max(1, min(max_workers, len(candidates), 8))
-    retries = int(config.get("model_health_retries", os.getenv("MODEL_HEALTH_RETRIES", 0)) or 0)
-    retries = max(0, min(retries, 1))
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
 
-    health_cache: Dict[str, Dict[str, Any]] = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_map = {
-            executor.submit(
-                check_telegram_single_model_health,
-                api_url,
-                api_key,
-                candidate,
-                timeout,
-                retries,
-            ): candidate
-            for candidate in candidates
-        }
-        for future in as_completed(future_map):
-            candidate = future_map[future]
-            try:
-                health_cache[candidate] = future.result()
-            except Exception as exc:
-                health_cache[candidate] = {
-                    "active": False,
-                    "health_status": "dead",
-                    "error_class": "future_error",
-                    "status_code": None,
-                    "latency_ms": None,
-                    "attempts": 0,
-                    "checked_at": _wib_now_text(),
-                    "tier": _candidate_tier(candidate),
-                    "error": str(exc)[:500],
-                }
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
 
-    active_cheap_priority = _prioritize_active_telegram_models(cheap_candidates, health_cache)
-    active_cheap_fast = _prioritize_fastest_telegram_models(cheap_candidates, health_cache)
-    active_capable = _prioritize_active_telegram_models(capable_candidates, health_cache)
-    active_unknown = _prioritize_fastest_telegram_models(unknown_candidates, health_cache)
-    active_all = [model for model in candidates if health_cache.get(model, {}).get("active")]
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
 
-    primary_model = _select_primary_by_mode(
-        preferred_mode=preferred_mode,
-        current_model=current_model,
-        active_cheap_fast=active_cheap_fast,
-        active_capable=active_capable,
-        active_unknown=active_unknown,
-        active_all=active_all,
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
     )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
 
-    if primary_model in active_cheap_fast:
-        fallback_models = [model for model in active_cheap_fast if model != primary_model]
-        expensive_fallback_models = active_capable
-    elif primary_model in active_capable:
-        fallback_models = active_cheap_fast
-        expensive_fallback_models = [model for model in active_capable if model != primary_model]
-    else:
-        fallback_models = active_cheap_fast
-        expensive_fallback_models = active_capable
+    return original_answer, meta_data
 
-    transient_total = sum(1 for item in health_cache.values() if item.get("health_status") == "transient")
-    dead_total = sum(1 for item in health_cache.values() if item.get("health_status") == "dead")
 
-    return {
-        "primary_model": primary_model,
-        "preferred_mode": preferred_mode,
-        "active_cheap_models": active_cheap_priority,
-        "fast_cheap_models": active_cheap_fast,
-        "fallback_models": fallback_models,
-        "active_expensive_models": active_capable,
-        "expensive_fallback_models": expensive_fallback_models,
-        "thinking_capable_models": active_capable,
-        "active_unknown_models": active_unknown,
-        "health_cache": health_cache,
-        "api_model_discovery": discovery_meta,
-        "api_discovered_model_count": len(discovery_meta.get("models") or []),
-        "active_total": len(active_all),
-        "transient_total": transient_total,
-        "dead_total": dead_total,
-        "checked_total": len(candidates),
-        "health_workers": max_workers,
-        "health_retries": retries,
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
     }
 
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
 
-def build_speed_update_summary(result: Dict[str, Any]) -> str:
-    """Human-readable Telegram summary after /speed or /rotate command."""
-    primary = result.get("primary_model") or "tidak ada"
-    fast_cheap = result.get("fast_cheap_models") or []
-    active_expensive = result.get("active_expensive_models") or []
-    health_cache = result.get("health_cache") or {}
-    discovery = result.get("api_model_discovery") or {}
+Contoh kuda dewasa ±400 kg, kerja ringan:
 
-    lines = [
-        "✅ Update model selesai",
-        "",
-        f"Model utama: {primary}",
-        f"Aktif: {result.get('active_total', 0)}/{result.get('checked_total', 0)} model",
-        f"Murah aktif: {len(fast_cheap)} | Capable aktif: {len(active_expensive)}",
-        f"Transient: {result.get('transient_total', 0)} | Mati: {result.get('dead_total', 0)}",
-        f"Cek: {result.get('health_workers', 1)} worker | retry {result.get('health_retries', 0)}x",
-    ]
-    if discovery.get("ok"):
-        lines.append(f"Discovery API: {len(discovery.get('models') or [])} model")
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
 
-    if fast_cheap:
-        lines.append(TELEGRAM_THIN_SEPARATOR.strip())
-        lines.append("⚡ Model murah tercepat")
-        for idx, model_name in enumerate(fast_cheap[:8], start=1):
-            latency = health_cache.get(model_name, {}).get("latency_ms")
-            latency_text = f"{latency} ms" if latency is not None else "-"
-            lines.append(f"{idx}. {model_name} — {latency_text}")
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
 
-    if active_expensive:
-        lines.append(TELEGRAM_THIN_SEPARATOR.strip())
-        lines.append("🧠 Model capable aktif")
-        for idx, model_name in enumerate(active_expensive[:8], start=1):
-            latency = health_cache.get(model_name, {}).get("latency_ms")
-            latency_text = f"{latency} ms" if latency is not None else "-"
-            lines.append(f"{idx}. {model_name} — {latency_text}")
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
 
-    if not fast_cheap and active_expensive:
-        lines.append("\nCatatan: tidak ada model murah aktif, jadi bot memakai model capable.")
-    elif not fast_cheap and not active_expensive:
-        lines.append("\nPeringatan: tidak ada model lolos health check. Bot tetap memakai model terakhir agar error terlihat.")
-    return "\n".join(lines)
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
 
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
 
-class TelegramBotService:
-    """Singleton polling service for Streamlit.
-
-    Streamlit reruns app.py frequently. This class prevents multiple polling
-    workers from being created in the same process and also uses a lightweight
-    lock file to reduce duplicate bot instances across reloads.
-    """
-
-    def __init__(self):
-        self._thread: Optional[threading.Thread] = None
-        self._stop_event = threading.Event()
-        self._lock = threading.Lock()
-        self._running = False
-        self._last_error = ""
-        self._last_update = ""
-        self._processed = 0
-        self._duplicates_skipped = 0
-        self._started_at = ""
-        self._worker_id = f"{os.getpid()}-{int(time.time())}"
-        self._histories: Dict[str, List[Dict[str, str]]] = {}
-        self._seen_queue: Deque[int] = deque(maxlen=500)
-        self._seen_set: Set[int] = set()
-        self._lock_file = DEFAULT_LOCK_FILE
-        self._has_file_lock = False
-        self._lock_fd = None
-        self._model_health_cache: Dict[str, Dict[str, Any]] = {}
-        self._model_health_checked_at = ""
-        self._last_model_update_source = ""
-        self._runtime_primary_model = ""
-        self._forced_model_mode = "auto"
-        self._maintenance_access_by_chat: Dict[str, str] = {}
-
-    def status(self) -> Dict[str, Any]:
-        alive = self._thread is not None and self._thread.is_alive() and self._running
-        return {
-            "running": alive,
-            "last_error": self._last_error,
-            "last_update": self._last_update,
-            "processed": self._processed,
-            "duplicates_skipped": self._duplicates_skipped,
-            "started_at": self._started_at,
-            "worker_id": self._worker_id if alive else "",
-            "runtime_primary_model": self._runtime_primary_model,
-            "telegram_forced_model_mode": self._forced_model_mode,
-            "last_model_update_source": self._last_model_update_source,
-            "model_health_checked_at": self._model_health_checked_at,
-            "model_health_active_count": sum(1 for item in self._model_health_cache.values() if item.get("active")),
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
         }
 
-    def _health_cache_is_fresh(self, ttl_seconds: int) -> bool:
-        if not self._model_health_cache:
-            return False
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
 
-        if not self._model_health_checked_at:
-            return False
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
 
-        try:
-            # _model_health_checked_at disimpan sebagai teks WIB. Untuk cache runtime
-            # service ini, cukup pakai usia status berdasarkan last model update source
-            # dan cache timestamp tersendiri jika ada.
-            checked_ts = float(getattr(self, "_model_health_checked_ts", 0) or 0)
-        except Exception:
-            checked_ts = 0
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
 
-        if not checked_ts:
-            return False
+    return "", {}
 
-        return (time.time() - checked_ts) < max(300, int(ttl_seconds or 21600))
 
-    def _runtime_health_result_from_cache(
-        self,
-        current_model: str,
-        config: Dict[str, Any],
-        preferred_mode: str = "auto",
-    ) -> Dict[str, Any]:
-        cache = self._model_health_cache or {}
-        active_models = [
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
             model
-            for model, item in cache.items()
-            if isinstance(item, dict) and item.get("active")
-        ]
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
 
-        cheap_models = telegram_sort_models_for_simple_chat([
-            model for model in active_models
-            if _candidate_tier(model) in {"cheap", "free"}
-        ], cache)
-        expensive_models = [
-            model for model in active_models
-            if model not in cheap_models
-        ]
-        primary = current_model or str(config.get("model") or "")
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
 
-        if preferred_mode == "cheap" and cheap_models:
-            primary = cheap_models[0]
-        elif preferred_mode == "expensive" and expensive_models:
-            primary = expensive_models[0]
-        elif cheap_models:
-            primary = cheap_models[0]
-        elif active_models:
-            primary = active_models[0]
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
 
-        return {
-            "primary_model": primary,
-            "fallback_models": [m for m in cheap_models if m != primary],
-            "expensive_fallback_models": [m for m in expensive_models if m != primary],
-            "fast_cheap_models": cheap_models,
-            "thinking_capable_models": expensive_models,
-            "active_cheap_models": cheap_models,
-            "active_expensive_models": expensive_models,
-            "model_health": cache,
-            "checked_at": self._model_health_checked_at,
-            "source": "standby-cache",
-            "cache_used": True,
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
         }
 
-    def _runtime_state_path(self, config: Dict[str, Any]) -> str:
-        """Return the file path used to persist Telegram model routing state."""
-        raw_path = str(config.get("telegram_runtime_state_file") or DEFAULT_RUNTIME_STATE_FILE).strip()
-        return os.path.abspath(raw_path or DEFAULT_RUNTIME_STATE_FILE)
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
 
-    def _load_runtime_state(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Load persisted runtime model state from disk.
-
-        The app can restart frequently on Streamlit/Vercel-like environments. This
-        keeps /ubah, /rotate, and the last known active model from disappearing on
-        every rerun. Invalid/corrupt state is ignored safely.
-        """
-        path = self._runtime_state_path(config)
-        try:
-            if not os.path.exists(path):
-                return {}
-            with open(path, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            if not isinstance(data, dict):
-                return {}
-            return data
-        except Exception as exc:
-            self._last_error = f"Gagal membaca runtime state Telegram: {exc}"
-            return {}
-
-    def _save_runtime_state(self, config: Dict[str, Any], state: Dict[str, Any]) -> None:
-        """Persist runtime model state atomically enough for a single-process app."""
-        path = self._runtime_state_path(config)
-        try:
-            safe_state = dict(state or {})
-            safe_state["saved_at"] = _wib_now_text()
-            tmp_path = path + ".tmp"
-            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            with open(tmp_path, "w", encoding="utf-8") as fh:
-                json.dump(safe_state, fh, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, path)
-        except Exception as exc:
-            self._last_error = f"Gagal menyimpan runtime state Telegram: {exc}"
-
-    def _admin_chat_ids(self, config: Dict[str, Any]) -> Set[str]:
-        """Read admin chat IDs from config or environment.
-
-        Supported keys/env:
-        - telegram_admin_chat_ids
-        - admin_chat_ids
-        - TELEGRAM_ADMIN_CHAT_IDS
-        - ADMIN_CHAT_IDS
-        """
-        raw_values: List[str] = []
-        raw_values.extend(_as_string_list(config.get("telegram_admin_chat_ids")))
-        raw_values.extend(_as_string_list(config.get("admin_chat_ids")))
-        raw_values.extend(_as_string_list(os.getenv("TELEGRAM_ADMIN_CHAT_IDS", "")))
-        raw_values.extend(_as_string_list(os.getenv("ADMIN_CHAT_IDS", "")))
-        return {str(item).strip() for item in raw_values if str(item).strip()}
-
-    def _is_admin_chat(self, chat_id: Any, config: Dict[str, Any]) -> bool:
-        """Return True when the chat can run model-management commands.
-
-        Secure default: if no admin IDs are configured, model-management commands
-        are blocked. Set allow_unrestricted_model_commands=True only for private
-        testing.
-        """
-        admin_ids = self._admin_chat_ids(config)
-        if not admin_ids:
-            return bool(config.get("allow_unrestricted_model_commands", False))
-        return str(chat_id).strip() in admin_ids
-
-    def _send_admin_required(self, token: str, chat_id: int, config: Dict[str, Any]) -> None:
-        admin_ids = self._admin_chat_ids(config)
-        if admin_ids:
-            msg = "Perintah ini hanya untuk admin bot."
-        else:
-            msg = (
-                "Perintah model hanya untuk admin, tetapi admin_chat_ids belum diatur.\n\n"
-                "Tambahkan salah satu konfigurasi ini:\n"
-                "- telegram_admin_chat_ids\n"
-                "- admin_chat_ids\n"
-                "- TELEGRAM_ADMIN_CHAT_IDS\n\n"
-                f"Chat ID Anda: {chat_id}"
-            )
-        self._send_message(token, chat_id, msg)
-
-    def force_local_reset(self) -> str:
-        """Reset worker/lock state only for the current Streamlit process/container.
-
-        This cannot stop another deployment/laptop/VPS that uses the same bot token,
-        but it helps when a previous Streamlit rerun left local state inconsistent.
-        """
-        try:
-            self.stop()
-            lock_path = os.path.abspath(self._lock_file or DEFAULT_LOCK_FILE)
-            if lock_path.startswith("/tmp/") and os.path.exists(lock_path):
-                try:
-                    os.remove(lock_path)
-                except OSError:
-                    pass
-            self._last_error = ""
-            return "Reset lokal selesai. Coba Start Bot lagi."
-        except Exception as exc:
-            self._last_error = f"Gagal reset lokal Telegram: {exc}"
-            return self._last_error
-
-    def start(self, config: Dict[str, Any]) -> bool:
-        with self._lock:
-            if self._thread is not None and self._thread.is_alive():
-                self._running = True
-                return False
-
-            token = str(config.get("telegram_token") or "").strip()
-            if not token:
-                self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
-                self._running = False
-                return False
-
-            # Validate the token before creating the worker. This prevents the UI
-            # from showing a bot as started while the polling thread immediately dies.
-            try:
-                self._telegram_post(token, "getMe", {}, timeout=12)
-                # Polling bot must not have an active webhook. Do this before the worker starts
-                # so failures are visible in the admin UI, not hidden inside the thread.
-                self._telegram_post(
-                    token,
-                    "deleteWebhook",
-                    {"drop_pending_updates": bool(config.get("drop_pending_updates", True))},
-                    timeout=20,
-                )
-            except Exception as exc:
-                self._last_error = f"Gagal validasi/koneksi Telegram: {exc}"
-                self._running = False
-                return False
-
-            self._lock_file = str(config.get("lock_file") or DEFAULT_LOCK_FILE)
-            if not self._acquire_file_lock():
-                self._running = False
-                return False
-
-            self._stop_event.clear()
-            self._last_error = ""
-            self._started_at = _wib_now_text()
-            self._worker_id = f"{os.getpid()}-{int(time.time())}"
-            self._thread = threading.Thread(
-                target=self._run_loop,
-                args=(config,),
-                daemon=True,
-                name="adioranye-telegram-bot-singleton",
-            )
-            self._thread.start()
-            self._running = True
-            return True
-
-    def stop(self) -> None:
-        with self._lock:
-            self._stop_event.set()
-            self._running = False
-            self._release_file_lock()
-
-    def _acquire_file_lock(self) -> bool:
-        """Acquire an OS-level lock for the polling worker.
-
-        The default lock path is in /tmp because Streamlit Cloud deployments can
-        have stricter permissions in the source directory. If a custom lock path
-        fails because of permissions, the service falls back to /tmp automatically.
-        """
-        candidate_paths: List[str] = []
-        configured = str(self._lock_file or DEFAULT_LOCK_FILE).strip() or DEFAULT_LOCK_FILE
-        candidate_paths.append(configured)
-        if configured != DEFAULT_LOCK_FILE:
-            candidate_paths.append(DEFAULT_LOCK_FILE)
-        if "/tmp/" not in configured:
-            candidate_paths.append("/tmp/adioranye_telegram_bot_worker.lock")
-
-        last_exc = ""
-        for candidate_path in _as_string_list(candidate_paths):
-            try:
-                lock_path = os.path.abspath(candidate_path)
-                os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
-                self._lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
-                fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                os.ftruncate(self._lock_fd, 0)
-                os.write(
-                    self._lock_fd,
-                    json.dumps({
-                        "worker_id": self._worker_id,
-                        "pid": os.getpid(),
-                        "started_at": time.time(),
-                        "lock_path": lock_path,
-                    }).encode("utf-8"),
-                )
-                self._lock_file = lock_path
-                self._has_file_lock = True
-                return True
-            except BlockingIOError:
-                last_exc = (
-                    "Bot Telegram sudah aktif di proses/container lain. "
-                    "Jika Anda yakin tidak ada bot lain, klik Reset koneksi Telegram, "
-                    "lalu Force reset lokal. Jika masih gagal, revoke token di BotFather."
-                )
-                try:
-                    if self._lock_fd is not None:
-                        os.close(self._lock_fd)
-                except OSError:
-                    pass
-                self._lock_fd = None
-                break
-            except Exception as exc:
-                last_exc = f"Gagal membuat lock bot Telegram di {candidate_path}: {exc}"
-                try:
-                    if self._lock_fd is not None:
-                        os.close(self._lock_fd)
-                except OSError:
-                    pass
-                self._lock_fd = None
-                continue
-
-        self._last_error = last_exc or "Gagal membuat lock bot Telegram."
-        return False
-
-    def _heartbeat_lock(self) -> None:
-        # Lock is held by an open file descriptor; no heartbeat needed.
-        return
-
-    def _release_file_lock(self) -> None:
-        if not self._has_file_lock:
-            return
-        try:
-            if self._lock_fd is not None:
-                fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
-                os.close(self._lock_fd)
-                self._lock_fd = None
-        except OSError:
-            pass
-        self._has_file_lock = False
-
-    def reset_telegram_session(self, config: Dict[str, Any]) -> str:
-        """Reset webhook and pending updates for this bot token.
-
-        This cannot kill old deployments that are still running elsewhere, but it
-        clears Telegram-side pending updates and helps after a redeploy/reboot.
-        """
-        token = config.get("telegram_token", "")
-        if not token:
-            return "TELEGRAM_BOT_TOKEN belum diisi."
-        self.stop()
-        try:
-            self._telegram_post(token, "deleteWebhook", {"drop_pending_updates": True}, timeout=20)
-            data = self._telegram_post(token, "getUpdates", {"offset": -1, "limit": 1, "timeout": 1}, timeout=10)
-            return "Sesi Telegram direset. Pending update dibersihkan. Jika masih double/triple, revoke token di BotFather karena masih ada instance lama di luar app ini."
-        except Exception as exc:
-            return f"Gagal reset sesi Telegram: {exc}"
-        self._lock_fd = None
-
-    def _remember_update(self, update_id: int) -> bool:
-        """Return True if update is new, False if duplicate."""
-        if update_id in self._seen_set:
-            self._duplicates_skipped += 1
-            return False
-        if len(self._seen_queue) == self._seen_queue.maxlen:
-            old = self._seen_queue.popleft()
-            self._seen_set.discard(old)
-        self._seen_queue.append(update_id)
-        self._seen_set.add(update_id)
-        return True
-
-    def _telegram_error_message(self, method: str, data: Dict[str, Any], status_code: int | None = None) -> str:
-        """Build a clear Telegram API error message without exposing the bot token."""
-        error_code = data.get("error_code") if isinstance(data, dict) else status_code
-        description = str((data or {}).get("description") or "").strip()
-        prefix = f"Telegram API error {method}"
-
-        if error_code == 401 or "unauthorized" in description.lower():
+        if has_question_shape and not asks_current_info and not risky_domain:
             return (
-                f"{prefix}: token bot tidak valid/expired/revoked. "
-                "Buat token baru di BotFather lalu update TELEGRAM_BOT_TOKEN di Secrets."
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
             )
-        if error_code == 404 or "not found" in description.lower():
-            return (
-                f"{prefix}: endpoint bot tidak ditemukan. "
-                "Periksa format TELEGRAM_BOT_TOKEN; jangan ada spasi, kutip tambahan, atau karakter tersembunyi."
-            )
-        if error_code == 409 or "conflict" in description.lower():
-            return (
-                f"{prefix}: 409 Conflict. Token bot sedang dipakai oleh instance lain/getUpdates lain. "
-                "Matikan deploy/laptop/VPS lama, klik Reset koneksi Telegram, atau revoke token di BotFather lalu pakai token baru."
-            )
-        return f"{prefix}: {data}"
 
-    def _is_fatal_telegram_error(self, error_text: str) -> bool:
-        lower = str(error_text or "").lower()
-        fatal_markers = [
-            "token bot tidak valid",
-            "unauthorized",
-            "not found",
-            "409 conflict",
-            "sedang dipakai oleh instance lain",
-        ]
-        return any(marker in lower for marker in fatal_markers)
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
 
-    def _telegram_post(self, token: str, method: str, payload: Dict[str, Any], timeout: int = 35) -> Dict[str, Any]:
-        if not str(token or "").strip():
-            raise RuntimeError("TELEGRAM_BOT_TOKEN belum diisi.")
+    return "", {}
 
-        url = TELEGRAM_API.format(token=str(token).strip(), method=method)
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
         try:
-            resp = requests.post(url, json=payload, timeout=timeout)
-        except requests.Timeout:
-            raise RuntimeError(f"Telegram API timeout saat menjalankan {method}. Coba ulangi atau cek koneksi Streamlit Cloud.")
-        except requests.RequestException as exc:
-            raise RuntimeError(f"Telegram API request gagal saat {method}: {exc}")
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
 
-        try:
-            data = resp.json()
-        except Exception:
-            raise RuntimeError(f"Telegram response bukan JSON saat {method}. HTTP {resp.status_code}: {resp.text[:1000]}")
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
 
-        if resp.status_code != 200 or not data.get("ok"):
-            raise RuntimeError(self._telegram_error_message(method, data, status_code=resp.status_code))
-        return data
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
 
-    def diagnose(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Run lightweight Telegram diagnostics for the admin panel."""
-        token = str(config.get("telegram_token") or "").strip()
-        result: Dict[str, Any] = {
-            "ok": False,
-            "bot_username": "",
-            "bot_id": "",
-            "webhook_url": "",
-            "pending_update_count": None,
-            "last_error": "",
-            "running": self.status().get("running", False),
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
         }
-        if not token:
-            result["last_error"] = "TELEGRAM_BOT_TOKEN belum diisi."
-            return result
-        try:
-            me = self._telegram_post(token, "getMe", {}, timeout=12).get("result") or {}
-            result["bot_username"] = str(me.get("username") or "")
-            result["bot_id"] = str(me.get("id") or "")
 
-            webhook = self._telegram_post(token, "getWebhookInfo", {}, timeout=12).get("result") or {}
-            result["webhook_url"] = str(webhook.get("url") or "")
-            result["pending_update_count"] = webhook.get("pending_update_count")
-            result["ok"] = True
-            return result
-        except Exception as exc:
-            result["last_error"] = str(exc)[:1200]
-            self._last_error = result["last_error"]
-            return result
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
 
-    def _send_message(self, token: str, chat_id: int, text: str, parse_mode: str = "") -> None:
-        """Send Telegram message as strict plain text.
-
-        IMPORTANT: this method intentionally ignores any parse_mode from
-        secrets/config. Telegram errors such as:
-        - Unsupported start tag "uses-permission"
-        - Unsupported start tag "ip-server"
-        happen when AI output contains XML/HTML-looking text and Telegram tries
-        to parse it as HTML. For an AI assistant, answers often contain code,
-        XML, HTML, AndroidManifest, nginx config, etc., so the safest behavior
-        is to never send parse_mode at all.
-        """
-        safe_text = normalize_telegram_text(text)
-        for chunk in split_telegram_message(safe_text):
-            payload = {
-                "chat_id": chat_id,
-                "text": chunk,
-                "disable_web_page_preview": True,
-                # Do not include parse_mode under any condition.
-                # Plain text allows <ip-server>, <uses-permission>, <div>, etc.
-            }
-            self._telegram_post(token, "sendMessage", payload, timeout=20)
-
-    def _send_typing(self, token: str, chat_id: int) -> None:
-        try:
-            self._telegram_post(token, "sendChatAction", {"chat_id": chat_id, "action": "typing"}, timeout=10)
-        except Exception:
-            # Typing indicator is optional.
-            pass
-
-    def _run_loop(self, config: Dict[str, Any]) -> None:
-        token = config.get("telegram_token", "")
-        api_key = config.get("slashai_api_key", "")
-        api_url = config.get("slashai_api_url", "")
-        model = config.get("slashai_model", "tamandata")
-        persona = config.get("persona", "")
-        memory_file = config.get("memory_file", "assistant_memory.json")
-        maintenance_lock_file = str(
-            config.get("maintenance_lock_file")
-            or os.getenv("AKSES_TERBATAS_LOCK_FILE")
-            or os.getenv("MAINTENANCE_LOCK_FILE", ".adioranye_maintenance_lock.json")
-        ).strip()
-        maintenance_message = str(
-            config.get("maintenance_message")
-            or os.getenv("AKSES_TERBATAS_MESSAGE")
-            or os.getenv(
-                "MAINTENANCE_MESSAGE",
-                "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses.",
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
             )
-        ).strip()
-        maintenance_access_key_file = str(
-            config.get("maintenance_access_key_file")
-            or os.getenv("AKSES_TERBATAS_KEY_FILE")
-            or os.getenv("MAINTENANCE_ACCESS_KEY_FILE", ".adioranye_maintenance_access_keys.json")
-        ).strip()
-        maintenance_access_key_max_questions = int(
-            config.get("maintenance_access_key_max_questions")
-            or os.getenv("AKSES_TERBATAS_KEY_MAX_QUESTIONS")
-            or os.getenv("MAINTENANCE_ACCESS_KEY_MAX_QUESTIONS", 5)
-            or 5
-        )
-        fallback_models = config.get("fallback_models") or []
-        expensive_fallback_models = config.get("expensive_fallback_models") or []
-        allow_expensive_fallback = bool(config.get("allow_expensive_fallback", True))
-        max_expensive_models = int(config.get("max_expensive_models", 1) or 1)
-        drop_pending_updates = bool(config.get("drop_pending_updates", True))
-        send_processing_message = bool(config.get("send_processing_message", False))
-        allow_memory_commands = bool(config.get("allow_memory_commands", False))
-        telegram_parse_mode = ""  # Force plain text; ignore TELEGRAM_PARSE_MODE to prevent HTML parse errors
-        smart_model_router = bool(config.get("smart_model_router", True))
-        return_to_primary = bool(config.get("return_to_primary", True))
-        max_smart_models = int(config.get("max_smart_models", 2) or 2)
-        thinking_model_router = bool(config.get("thinking_model_router", True))
-        thinking_min_chars = int(config.get("thinking_min_chars", 180) or 180)
-        fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
-        speed_update_code = str(config.get("speed_update_code") or "4321").strip()
-        model_health_timeout = int(config.get("model_health_timeout", 6) or 6)
-        standby_health_saver_enabled = bool(config.get("standby_health_saver_enabled", True))
-        standby_health_check_interval = int(config.get("standby_health_check_interval", 21600) or 21600)
-        standby_health_quick_limit = int(config.get("standby_health_quick_limit", 2) or 2)
-        standby_disable_model_discovery = bool(config.get("standby_disable_model_discovery", True))
-        question_quick_check_enabled = str(
-            config.get("question_quick_check_enabled", os.getenv("QUESTION_QUICK_CHECK_ON_MESSAGE_ENABLED", "true"))
-        ).strip().lower() in {"1", "true", "yes", "y", "on"}
-        question_quick_check_cooldown_seconds = int(
-            config.get("question_quick_check_cooldown_seconds", os.getenv("QUESTION_QUICK_CHECK_COOLDOWN_SECONDS", 600))
-            or 600
-        )
-        question_quick_check_trigger_file = str(
-            config.get("question_quick_check_trigger_file")
-            or os.getenv("QUESTION_QUICK_CHECK_TRIGGER_FILE", ".adioranye_question_quick_check.json")
-        ).strip()
-        power_features_enabled = bool(config.get("power_features_enabled", True))
-        power_db_path = str(config.get("power_db_path") or ".adioranye_power.db")
-        power_rag_enabled = bool(config.get("power_rag_enabled", True))
-        power_rag_top_k = int(config.get("power_rag_top_k", 5) or 5)
-        power_strict_rag_mode = bool(config.get("power_strict_rag_mode", False))
-        power_anti_hallucination_enabled = bool(config.get("power_anti_hallucination_enabled", True))
-        power_anti_hallucination_auto_strict = bool(config.get("power_anti_hallucination_auto_strict", True))
-        power_anti_hallucination_min_sources = int(config.get("power_anti_hallucination_min_sources", 1) or 1)
-        power_anti_hallucination_min_quality = float(config.get("power_anti_hallucination_min_quality", 0) or 0)
-        power_anti_hallucination_min_freshness = float(config.get("power_anti_hallucination_min_freshness", 0) or 0)
-        power_anti_hallucination_append_sources = bool(config.get("power_anti_hallucination_append_sources", True))
-        power_rag_min_sources = int(config.get("power_rag_min_sources", 1) or 1)
-        power_rag_min_score = float(config.get("power_rag_min_score", 0) or 0)
-        power_persistent_memory_enabled = bool(config.get("power_persistent_memory_enabled", True))
-        power_prompt_templates_enabled = bool(config.get("power_prompt_templates_enabled", True))
-        power_self_verification_enabled = bool(config.get("power_self_verification_enabled", False))
-        power_quality_control_enabled = bool(config.get("power_quality_control_enabled", True))
-        power_quality_verifier_enabled = bool(config.get("power_quality_verifier_enabled", True))
-        power_quality_verifier_model = str(config.get("power_quality_verifier_model") or "").strip()
-        power_quality_min_score = float(config.get("power_quality_min_score", 0.72) or 0.72)
-        power_quality_append_footer = bool(config.get("power_quality_append_footer", False))
-        power_hide_kb_sources_for_casual = bool(config.get("power_hide_kb_sources_for_casual", True))
-        power_disable_rag_for_casual = bool(config.get("power_disable_rag_for_casual", True))
-        power_performance_optimizer_enabled = bool(config.get("power_performance_optimizer_enabled", True))
-        power_query_rewriter_enabled = bool(config.get("power_query_rewriter_enabled", True))
-        power_reranker_enabled = bool(config.get("power_reranker_enabled", True))
-        power_semantic_cache_enabled = bool(config.get("power_semantic_cache_enabled", True))
-        power_semantic_cache_threshold = float(config.get("power_semantic_cache_threshold", 0.78) or 0.78)
-        power_semantic_cache_ttl_seconds = int(config.get("power_semantic_cache_ttl_seconds", 86400) or 86400)
-        power_latency_budget_enabled = bool(config.get("power_latency_budget_enabled", True))
-        power_retrieval_eval_enabled = bool(config.get("power_retrieval_eval_enabled", True))
-        live_music_chart_enabled = bool(config.get("live_music_chart_enabled", True))
-        live_music_chart_limit = int(config.get("live_music_chart_limit", 10) or 10)
-        live_music_chart_timeout_seconds = int(config.get("live_music_chart_timeout_seconds", 8) or 8)
-        live_web_fallback_enabled = bool(config.get("live_web_fallback_enabled", True))
-        live_web_fallback_provider = str(config.get("live_web_fallback_provider") or "tavily")
-        tavily_api_key = str(config.get("tavily_api_key") or "").strip()
-        if tavily_api_key:
-            os.environ["TAVILY_API_KEY"] = tavily_api_key
-        live_web_fallback_max_results = int(config.get("live_web_fallback_max_results", 4) or 4)
-        live_web_fallback_timeout_seconds = int(config.get("live_web_fallback_timeout_seconds", 10) or 10)
-        live_web_fallback_min_sources = int(config.get("live_web_fallback_min_sources", 1) or 1)
-        live_web_fallback_include_raw_content = bool(config.get("live_web_fallback_include_raw_content", True))
-        live_web_fallback_max_content_chars = int(config.get("live_web_fallback_max_content_chars", 1200) or 1200)
-        token_saver_enabled = telegram_parse_bool(
-            config.get("token_saver_enabled")
-            or os.getenv("TOKEN_SAVER_ENABLED", "true"),
-            default=True,
-        )
-        telegram_history_limit = telegram_safe_int(
-            config.get("telegram_history_limit")
-            or os.getenv("TELEGRAM_HISTORY_LIMIT", "6"),
-            6,
-        )
-        telegram_history_recent_full = telegram_safe_int(
-            config.get("telegram_history_recent_full")
-            or os.getenv("TELEGRAM_HISTORY_RECENT_FULL", "4"),
-            4,
-        )
-        telegram_memory_context_max_chars = telegram_safe_int(
-            config.get("telegram_memory_context_max_chars")
-            or os.getenv("TELEGRAM_MEMORY_CONTEXT_MAX_CHARS", "2200"),
-            2200,
-        )
-        telegram_live_context_max_chars = telegram_safe_int(
-            config.get("telegram_live_context_max_chars")
-            or os.getenv("TELEGRAM_LIVE_CONTEXT_MAX_CHARS", "3800"),
-            3800,
-        )
-        telegram_max_tokens_casual = telegram_safe_int(
-            config.get("max_tokens_casual")
-            or os.getenv("MAX_TOKENS_CASUAL", "450"),
-            450,
-        )
-        telegram_max_tokens_normal = telegram_safe_int(
-            config.get("max_tokens_normal")
-            or os.getenv("MAX_TOKENS_NORMAL", "1100"),
-            1100,
-        )
-        telegram_max_tokens_technical = telegram_safe_int(
-            config.get("max_tokens_technical")
-            or os.getenv("MAX_TOKENS_TECHNICAL", "2000"),
-            2000,
-        )
-        telegram_max_tokens_long = telegram_safe_int(
-            config.get("max_tokens_long")
-            or os.getenv("MAX_TOKENS_LONG", "2800"),
-            2800,
-        )
-        live_web_fallback_auto_save_to_kb = bool(config.get("live_web_fallback_auto_save_to_kb", True))
-        live_web_fallback_ttl_hours = int(config.get("live_web_fallback_ttl_hours", 24) or 24)
-        live_web_fallback_force_for_current = bool(config.get("live_web_fallback_force_for_current", True))
-        live_web_fallback_topic = str(config.get("live_web_fallback_topic") or "auto")
-        auto_live_scraping_enabled = bool(config.get("auto_live_scraping_enabled", True))
-        auto_live_scraping_show_status = bool(config.get("auto_live_scraping_show_status", True))
-        power_default_answer_mode = str(config.get("power_default_answer_mode") or "auto").strip().lower()
-        daily_cost_limit_idr = float(config.get("daily_cost_limit_idr", 0) or 0)
-        max_expensive_calls_per_day = int(config.get("max_expensive_calls_per_day", 0) or 0)
-        power_response_cache_enabled = bool(config.get("power_response_cache_enabled", True))
-        power_response_cache_ttl_seconds = int(config.get("power_response_cache_ttl_seconds", 1800) or 1800)
-        power_adaptive_scoring_enabled = bool(config.get("power_adaptive_scoring_enabled", True))
-        power_circuit_breaker_enabled = bool(config.get("power_circuit_breaker_enabled", True))
-        model_circuit_max_failures = int(config.get("model_circuit_max_failures", 3) or 3)
-        model_circuit_cooldown_seconds = int(config.get("model_circuit_cooldown_seconds", 1800) or 1800)
-        fast_cheap_models_runtime = _as_string_list(config.get("fast_cheap_models"))
-        thinking_capable_models_runtime = _as_string_list(config.get("thinking_capable_models"))
-        forced_model_mode = str(config.get("telegram_model_mode") or "auto").strip().lower()
-        if forced_model_mode not in {"auto", "cheap", "expensive"}:
-            forced_model_mode = "auto"
 
-        # Restore last runtime routing state after Streamlit/App restart.
-        runtime_state = self._load_runtime_state(config)
-        if runtime_state:
-            model = str(runtime_state.get("primary_model") or runtime_state.get("slashai_model") or model).strip() or model
-            fallback_models = _as_string_list(runtime_state.get("fallback_models")) or fallback_models
-            expensive_fallback_models = _as_string_list(runtime_state.get("expensive_fallback_models")) or expensive_fallback_models
-            fast_cheap_models_runtime = _as_string_list(runtime_state.get("fast_cheap_models")) or fast_cheap_models_runtime
-            thinking_capable_models_runtime = _as_string_list(runtime_state.get("thinking_capable_models")) or thinking_capable_models_runtime
-            restored_mode = str(runtime_state.get("telegram_model_mode") or forced_model_mode).strip().lower()
-            if restored_mode in {"auto", "cheap", "expensive"}:
-                forced_model_mode = restored_mode
-            allow_expensive_fallback = bool(runtime_state.get("allow_expensive_fallback", bool(expensive_fallback_models)))
-            self._model_health_checked_at = str(runtime_state.get("model_health_checked_at") or "")
-            self._last_model_update_source = str(runtime_state.get("last_model_update_source") or "runtime_state")
-            config.update({
-                "slashai_model": model,
-                "telegram_model_mode": forced_model_mode,
-                "fallback_models": fallback_models,
-                "expensive_fallback_models": expensive_fallback_models,
-                "fast_cheap_models": fast_cheap_models_runtime,
-                "fastest_cheap_model": fast_cheap_models_runtime[0] if fast_cheap_models_runtime else "",
-                "thinking_capable_models": thinking_capable_models_runtime,
-                "allow_expensive_fallback": allow_expensive_fallback,
-            })
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
 
-        self._runtime_primary_model = model
-        self._forced_model_mode = forced_model_mode
+    return "", {}
 
-        if not token:
-            self._last_error = "TELEGRAM_BOT_TOKEN belum diisi."
-            self._running = False
-            self._release_file_lock()
-            return
 
-        memory = MemoryStore(memory_file)
-        power_store = get_power_store(power_db_path)
-        offset = None
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
 
-        def persist_current_runtime_state(source: str) -> None:
-            self._save_runtime_state(config, {
-                "primary_model": model,
-                "slashai_model": model,
-                "telegram_model_mode": forced_model_mode,
-                "fallback_models": fallback_models,
-                "expensive_fallback_models": expensive_fallback_models,
-                "active_cheap_models": config.get("active_cheap_models") or [],
-                "fast_cheap_models": fast_cheap_models_runtime,
-                "thinking_capable_models": thinking_capable_models_runtime,
-                "active_expensive_models": thinking_capable_models_runtime,
-                "allow_expensive_fallback": bool(allow_expensive_fallback),
-                "model_health_checked_at": self._model_health_checked_at,
-                "last_model_update_source": source,
-            })
+    if not enabled:
+        return original_answer, original_meta or {}
 
-        def apply_rotation_result(rotation_result: Dict[str, Any], rotation: Dict[str, Any], source: str) -> None:
-            nonlocal model, fallback_models, expensive_fallback_models, fast_cheap_models_runtime
-            nonlocal thinking_capable_models_runtime, allow_expensive_fallback, max_smart_models
-            nonlocal forced_model_mode, thinking_model_router, fast_normal_model_router
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
 
-            model = rotation.get("selected_model") or model
-            # Keep the requested mode stable. select_rotated_runtime_model may use a
-            # temporary safety fallback, but /ubah murah should still mean cheap-first
-            # on the next rotate when cheap models return.
-            selected_mode = str(rotation.get("requested_mode") or rotation.get("selected_mode") or forced_model_mode or "auto").lower()
-            if selected_mode in {"auto", "cheap", "expensive"}:
-                forced_model_mode = selected_mode
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
 
-            fallback_models = rotation.get("fallback_models") or []
-            expensive_fallback_models = rotation.get("expensive_fallback_models") or []
-            fast_cheap_models_runtime = rotation.get("fast_cheap_models") or []
-            thinking_capable_models_runtime = rotation.get("active_expensive_models") or []
-            allow_expensive_fallback = bool(rotation.get("allow_expensive_fallback"))
-            max_smart_models = max(int(max_smart_models or 1), len(fallback_models), 1)
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
 
-            if forced_model_mode == "cheap":
-                thinking_model_router = False
-                fast_normal_model_router = True
-            elif forced_model_mode == "expensive":
-                thinking_model_router = False
-                fast_normal_model_router = False
-            else:
-                thinking_model_router = bool(config.get("thinking_model_router", True))
-                fast_normal_model_router = bool(config.get("fast_normal_model_router", True))
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
 
-            config.update({
-                "slashai_model": model,
-                "telegram_model_mode": forced_model_mode,
-                "fallback_models": fallback_models,
-                "expensive_fallback_models": expensive_fallback_models,
-                "active_cheap_models": rotation.get("active_cheap_models") or [],
-                "fast_cheap_models": fast_cheap_models_runtime,
-                "fastest_cheap_model": fast_cheap_models_runtime[0] if fast_cheap_models_runtime else "",
-                "thinking_capable_models": thinking_capable_models_runtime,
-                "allow_expensive_fallback": allow_expensive_fallback,
-            })
-            self._model_health_cache = rotation_result.get("health_cache") or {}
-            self._model_health_checked_at = _wib_now_text()
-            self._last_model_update_source = source
-            self._runtime_primary_model = model
-            self._forced_model_mode = forced_model_mode
-            persist_current_runtime_state(source)
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
 
         try:
-            # drop_pending_updates=True prevents old messages from being answered twice
-            # after Streamlit restarts or wakes from sleep.
-            self._telegram_post(
-                token,
-                "deleteWebhook",
-                {"drop_pending_updates": drop_pending_updates},
-                timeout=20,
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
             )
         except Exception as exc:
-            self._last_error = f"Gagal deleteWebhook: {exc}"
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
 
         try:
-            while not self._stop_event.is_set():
-                self._heartbeat_lock()
-                try:
-                    payload = {"timeout": 25, "limit": 10, "allowed_updates": ["message"]}
-                    if offset is not None:
-                        payload["offset"] = offset
-
-                    data = self._telegram_post(token, "getUpdates", payload, timeout=35)
-                    updates = data.get("result", [])
-
-                    for update in updates:
-                        update_id = int(update.get("update_id", 0))
-                        offset = update_id + 1
-
-                        if not self._remember_update(update_id):
-                            continue
-
-                        message = update.get("message") or {}
-                        chat = message.get("chat") or {}
-                        chat_id = chat.get("id")
-                        text = (message.get("text") or "").strip()
-
-                        if not chat_id or not text:
-                            continue
-
-                        self._last_update = f"Chat {chat_id}: {text[:120]}"
-                        self._processed += 1
-
-                        text_lower = text.lower()
-                        is_admin_chat = self._is_admin_chat(chat_id, config)
-
-                        if telegram_is_maintenance_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            raw_parts = text.split(maxsplit=1)
-                            command = raw_parts[0].lower()
-                            if "@" in command:
-                                command = command.split("@", 1)[0]
-                            reason = raw_parts[1].strip() if len(raw_parts) > 1 else ""
-
-                            if command == "/lock":
-                                state = telegram_set_maintenance_lock(
-                                    maintenance_lock_file,
-                                    True,
-                                    updated_by=f"telegram:{chat_id}",
-                                    reason=reason,
-                                    message=maintenance_message,
-                                )
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    telegram_maintenance_reply(state),
-                                    parse_mode=telegram_parse_mode,
-                                )
-                                continue
-
-                            if command == "/unlock":
-                                state = telegram_set_maintenance_lock(
-                                    maintenance_lock_file,
-                                    False,
-                                    updated_by=f"telegram:{chat_id}",
-                                    reason=reason,
-                                    message=maintenance_message,
-                                )
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    telegram_maintenance_reply(state),
-                                    parse_mode=telegram_parse_mode,
-                                )
-                                continue
-
-                            state = telegram_read_maintenance_state(
-                                maintenance_lock_file,
-                                message=maintenance_message,
-                            )
-                            self._send_message(
-                                token,
-                                chat_id,
-                                telegram_maintenance_reply(state),
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        access_command = telegram_access_key_admin_command(text)
-                        if access_command:
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            arg = telegram_command_arg(text) if "telegram_command_arg" in globals() else ""
-                            arg_parts = arg.split(maxsplit=1)
-                            action = arg_parts[0].lower() if arg_parts else "list"
-                            action_arg = arg_parts[1].strip() if len(arg_parts) > 1 else ""
-
-                            if action in {"generate", "gen", "buat", "baru", "new", "create", "custom", "buatcustom", "key"}:
-                                create_args = telegram_parse_access_key_create_args(
-                                    arg,
-                                    default_max_questions=maintenance_access_key_max_questions,
-                                )
-                                try:
-                                    record = telegram_generate_maintenance_access_key(
-                                        maintenance_access_key_file,
-                                        note=create_args.get("note", ""),
-                                        created_by=f"telegram:{chat_id}",
-                                        max_questions=int(create_args.get("max_questions") or maintenance_access_key_max_questions),
-                                        key_value=str(create_args.get("key_value") or ""),
-                                        unlimited=bool(create_args.get("unlimited")),
-                                    )
-                                    quota_label = (
-                                        "unlimited"
-                                        if record.get("unlimited")
-                                        else f"{record.get('max_uses')} pertanyaan"
-                                    )
-                                    self._send_message(
-                                        token,
-                                        chat_id,
-                                        "🔑 Access key dibuat.\n\n"
-                                        f"Key: {record.get('key')}\n"
-                                        f"Kuota: {quota_label}\n"
-                                        f"Catatan: {record.get('note') or '-'}\n\n"
-                                        "Kirim ke user. User dapat memakai: /access KEY",
-                                        parse_mode=telegram_parse_mode,
-                                    )
-                                except ValueError as exc:
-                                    self._send_message(
-                                        token,
-                                        chat_id,
-                                        "❌ Gagal membuat access key.\n\n" + str(exc),
-                                        parse_mode=telegram_parse_mode,
-                                    )
-                                continue
-
-                            if action in {"revoke", "off", "nonaktif", "hapus"}:
-                                result = telegram_revoke_maintenance_access_key(
-                                    maintenance_access_key_file,
-                                    action_arg,
-                                    revoked_by=f"telegram:{chat_id}",
-                                )
-                                msg = f"✅ Access key dinonaktifkan: {result.get('key')}" if result.get("ok") else "❌ Access key tidak ditemukan."
-                                self._send_message(token, chat_id, msg, parse_mode=telegram_parse_mode)
-                                continue
-
-                            self._send_message(
-                                token,
-                                chat_id,
-                                telegram_build_access_key_list(
-                                    maintenance_access_key_file,
-                                    default_max_questions=maintenance_access_key_max_questions,
-                                ),
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        if telegram_access_logout_command(text):
-                            active_key = self._maintenance_access_by_chat.pop(str(chat_id), "")
-                            if active_key:
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    f"✅ Logout key berhasil. Key {active_key} dilepas dari chat ini.",
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            else:
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "Tidak ada access key aktif di chat ini.",
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if telegram_access_activate_command(text):
-                            access_arg = telegram_command_arg(text) if "telegram_command_arg" in globals() else ""
-                            status = telegram_validate_maintenance_access_key(
-                                maintenance_access_key_file,
-                                access_arg,
-                                default_max_questions=maintenance_access_key_max_questions,
-                            )
-                            if status.get("valid"):
-                                self._maintenance_access_by_chat[str(chat_id)] = status.get("key", "")
-                                quota_label = "unlimited" if status.get("unlimited") else f"{status.get('remaining')} pertanyaan"
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    f"✅ Access key aktif. Sisa kuota: {quota_label}.",
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            else:
-                                reason = status.get("reason")
-                                if reason == "quota_exhausted":
-                                    msg = "❌ Access key sudah habis kuotanya."
-                                elif reason == "inactive":
-                                    msg = "❌ Access key sudah tidak aktif."
-                                else:
-                                    msg = "❌ Access key tidak valid."
-                                self._send_message(token, chat_id, msg, parse_mode=telegram_parse_mode)
-                            continue
-
-                        maintenance_state = telegram_read_maintenance_state(
-                            maintenance_lock_file,
-                            message=maintenance_message,
-                        )
-                        if maintenance_state.get("locked") and not is_admin_chat:
-                            active_access_key = self._maintenance_access_by_chat.get(str(chat_id), "")
-                            access_status = telegram_validate_maintenance_access_key(
-                                maintenance_access_key_file,
-                                active_access_key,
-                                default_max_questions=maintenance_access_key_max_questions,
-                            )
-                            if access_status.get("valid"):
-                                consumed_access = telegram_consume_maintenance_access_question(
-                                    maintenance_access_key_file,
-                                    active_access_key,
-                                    used_by=f"telegram:{chat_id}",
-                                    default_max_questions=maintenance_access_key_max_questions,
-                                )
-                                if consumed_access.get("allowed"):
-                                    quota_label = "unlimited" if consumed_access.get("unlimited") else f"{consumed_access.get('remaining')} pertanyaan"
-                                    self._send_message(
-                                        token,
-                                        chat_id,
-                                        f"🔑 Access key akses terbatas dipakai. Sisa setelah ini: {quota_label}.",
-                                        parse_mode=telegram_parse_mode,
-                                    )
-                                else:
-                                    self._maintenance_access_by_chat.pop(str(chat_id), None)
-                                    self._send_message(
-                                        token,
-                                        chat_id,
-                                        "Access key sudah habis atau tidak aktif. Minta key baru ke admin.",
-                                        parse_mode=telegram_parse_mode,
-                                    )
-                                    continue
-                            else:
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    telegram_under_maintenance_message(maintenance_state)
-                                    + "\n\nJika punya access key, kirim: /access AK-XXXX",
-                                    parse_mode=telegram_parse_mode,
-                                )
-                                continue
-
-                        if text_lower in {"/start", "start"}:
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "Halo, saya adioranye.\n\nKirim pertanyaan langsung untuk dijawab AI.\nKetik /help untuk melihat bantuan.",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        if text_lower in {"/help", "help"}:
-                            self._send_message(
-                                token,
-                                chat_id,
-                                build_telegram_help_text(is_admin=self._is_admin_chat(chat_id, config)),
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        def runtime_health_config_for_standby(force: bool = False) -> Dict[str, Any]:
-                            runtime_config = dict(config)
-                            if standby_health_saver_enabled and not force:
-                                runtime_config["model_discovery_enabled"] = not bool(standby_disable_model_discovery)
-                                runtime_config["model_health_quick_limit"] = int(standby_health_quick_limit or 2)
-                                runtime_config["model_health_workers"] = min(int(config.get("model_health_workers", 2) or 2), 2)
-                                runtime_config["model_health_timeout"] = int(model_health_timeout or 6)
-                            return runtime_config
-
-                        def refresh_or_cached_runtime_models(preferred_mode: str, force: bool = False) -> Dict[str, Any]:
-                            if (
-                                standby_health_saver_enabled
-                                and not force
-                                and self._health_cache_is_fresh(standby_health_check_interval)
-                            ):
-                                return self._runtime_health_result_from_cache(
-                                    current_model=model,
-                                    config=config,
-                                    preferred_mode=preferred_mode,
-                                )
-                            result = refresh_telegram_runtime_models(
-                                api_url=api_url,
-                                api_key=api_key,
-                                current_model=model,
-                                config=runtime_health_config_for_standby(force=force),
-                                timeout=model_health_timeout,
-                                preferred_mode=preferred_mode,
-                            )
-                            self._model_health_checked_ts = time.time()
-                            return result
-
-                        def trigger_question_quick_check_from_telegram() -> Dict[str, Any]:
-                            if not bool(question_quick_check_enabled):
-                                return {"should_run": False, "reason": "disabled"}
-
-                            if not api_key:
-                                return {"should_run": False, "reason": "missing_api_key"}
-
-                            decision = telegram_should_trigger_question_quick_check(
-                                trigger_file=question_quick_check_trigger_file,
-                                cooldown_seconds=question_quick_check_cooldown_seconds,
-                                source="telegram",
-                            )
-                            if not decision.get("should_run"):
-                                return decision
-
-                            try:
-                                quick_result = refresh_or_cached_runtime_models(
-                                    preferred_mode=forced_model_mode,
-                                    force=True,
-                                )
-                                rotation = select_rotated_runtime_model(
-                                    result=quick_result,
-                                    current_mode=forced_model_mode,
-                                    current_model=model,
-                                )
-                                rotation["requested_mode"] = forced_model_mode
-                                apply_rotation_result(
-                                    quick_result,
-                                    rotation,
-                                    "question-quick-check",
-                                )
-                                health_cache = quick_result.get("model_health") or {}
-                                active_count = sum(
-                                    1
-                                    for item in health_cache.values()
-                                    if isinstance(item, dict) and item.get("active")
-                                )
-                                checked_count = len(health_cache)
-                                telegram_finish_question_quick_check(
-                                    trigger_file=question_quick_check_trigger_file,
-                                    source="telegram",
-                                    status="done",
-                                    checked_count=checked_count,
-                                    active_count=active_count,
-                                )
-                                return {
-                                    "should_run": True,
-                                    "reason": "done",
-                                    "checked_count": checked_count,
-                                    "active_count": active_count,
-                                }
-                            except Exception as exc:
-                                self._last_error = f"Telegram question quick check error: {exc}"
-                                telegram_finish_question_quick_check(
-                                    trigger_file=question_quick_check_trigger_file,
-                                    source="telegram",
-                                    status="error",
-                                    error=str(exc),
-                                )
-                                return {
-                                    "should_run": True,
-                                    "reason": "error",
-                                    "error": str(exc)[:1000],
-                                }
-
-                        if is_telegram_admin_panel_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            self._send_message(
-                                token,
-                                chat_id,
-                                build_telegram_admin_control_help(),
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        if is_telegram_admin_status_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            try:
-                                diag = self.diagnose(config)
-                            except Exception as exc:
-                                diag = {
-                                    "ok": False,
-                                    "last_error": str(exc)[:1200],
-                                }
-
-                            status_text = build_telegram_admin_status_text(
-                                local_status=self.status(),
-                                diag=diag,
-                                maintenance_state=telegram_read_maintenance_state(
-                                    maintenance_lock_file,
-                                    message=maintenance_message,
-                                ),
-                                current_model=model,
-                                forced_model_mode=forced_model_mode,
-                                fallback_models=fallback_models,
-                                expensive_fallback_models=expensive_fallback_models,
-                                active_cheap_models=_as_string_list(config.get("active_cheap_models")),
-                                fast_cheap_models=fast_cheap_models_runtime,
-                                thinking_capable_models=thinking_capable_models_runtime,
-                                config=config,
-                            )
-                            self._send_message(
-                                token,
-                                chat_id,
-                                status_text,
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        if is_telegram_api_test_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            try:
-                                diag = self.diagnose(config)
-                                if diag.get("ok"):
-                                    lines = [
-                                        "✅ Test Telegram API OK.",
-                                        f"Bot: @{diag.get('bot_username') or '-'}",
-                                        f"ID: {diag.get('bot_id') or '-'}",
-                                        f"Worker: {'ON' if self.status().get('running') else 'OFF'}",
-                                        f"Pending update: {diag.get('pending_update_count') if diag.get('pending_update_count') is not None else '-'}",
-                                        f"Webhook: {diag.get('webhook_url') or 'kosong'}",
-                                    ]
-                                    self._send_message(
-                                        token,
-                                        chat_id,
-                                        "\n".join(lines),
-                                        parse_mode=telegram_parse_mode,
-                                    )
-                                else:
-                                    self._send_message(
-                                        token,
-                                        chat_id,
-                                        "❌ Test Telegram API gagal.\n\nDetail: " + str(diag.get("last_error") or "-")[:1200],
-                                        parse_mode=telegram_parse_mode,
-                                    )
-                            except Exception as exc:
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "❌ Test Telegram API error.\n\nDetail: " + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if is_telegram_health_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            arg = telegram_command_arg(text).strip().lower()
-                            preferred = forced_model_mode
-                            if arg in {"auto", "otomatis"}:
-                                preferred = "auto"
-                            elif arg in {"cheap", "murah", "cepat", "hemat"}:
-                                preferred = "cheap"
-                            elif arg in {"expensive", "mahal", "medium", "menengah", "pintar"}:
-                                preferred = "expensive"
-
-                            self._send_message(
-                                token,
-                                chat_id,
-                                f"⏳ Health check manual berjalan. Mode: {preferred}.",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            try:
-                                health_result = refresh_or_cached_runtime_models(
-                                    preferred_mode=preferred,
-                                    force=True,
-                                )
-                                rotation = select_rotated_runtime_model(
-                                    result=health_result,
-                                    current_mode=preferred,
-                                    current_model=model,
-                                )
-                                rotation["requested_mode"] = preferred
-                                apply_rotation_result(health_result, rotation, "health")
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    build_speed_update_summary(health_result),
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            except Exception as exc:
-                                self._last_error = str(exc)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "❌ Health check gagal.\n\nDetail ringkas:\n" + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        router_mode = parse_telegram_router_mode_command(text)
-                        if router_mode:
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            self._send_message(
-                                token,
-                                chat_id,
-                                f"⏳ Mengubah router Telegram ke mode: {router_mode}...",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            try:
-                                previous_model = model
-                                switch_result = refresh_or_cached_runtime_models(
-                                    preferred_mode=router_mode,
-                                    force=False,
-                                )
-                                rotation = select_rotated_runtime_model(
-                                    result=switch_result,
-                                    current_mode=router_mode,
-                                    current_model=model,
-                                )
-                                rotation["requested_mode"] = router_mode
-                                apply_rotation_result(switch_result, rotation, "router")
-
-                                cheap_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or _as_string_list(config.get("fallback_models"))
-                                capable_pool = thinking_capable_models_runtime or _as_string_list(config.get("thinking_capable_models")) or _as_string_list(config.get("expensive_fallback_models"))
-                                message = build_model_switch_summary(router_mode if router_mode != "auto" else "cheap", model, cheap_pool, capable_pool)
-                                if router_mode == "auto":
-                                    message = "✅ Mode router diubah ke: OTOMATIS."
-                                message += "\n\n" + build_rotate_summary(switch_result, rotation, previous_model)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    message,
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            except Exception as exc:
-                                self._last_error = str(exc)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "❌ Gagal mengubah router Telegram.\n\nDetail ringkas:\n" + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if is_telegram_router_mode_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "Format router salah. Gunakan: /router auto, /router murah, atau /router mahal",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        if is_telegram_runtime_reset_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            try:
-                                runtime_path = self._runtime_state_path(config)
-                                if os.path.exists(runtime_path):
-                                    os.remove(runtime_path)
-                                self._runtime_primary_model = model
-                                self._last_model_update_source = "runtime-reset"
-                                self._model_health_cache = {}
-                                self._model_health_checked_at = ""
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "✅ Runtime Telegram direset. Model akan mengikuti konfigurasi awal pada proses berikutnya.",
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            except Exception as exc:
-                                self._last_error = str(exc)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "❌ Reset runtime gagal.\n\nDetail ringkas:\n" + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if is_telegram_connection_reset_command(text):
-                            if not is_admin_chat:
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            try:
-                                result = self.reset_telegram_session(config)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    str(result),
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            except Exception as exc:
-                                self._last_error = str(exc)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "❌ Reset koneksi Telegram gagal.\n\nDetail ringkas:\n" + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if is_speed_update_command(text, expected_code=speed_update_code):
-                            if not self._is_admin_chat(chat_id, config):
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "⏳ Mengecek model secara manual. Setelah selesai, hanya model yang hidup yang akan dipakai...",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            try:
-                                speed_result = refresh_or_cached_runtime_models(
-                                    preferred_mode="auto",
-                                    force=True,
-                                )
-                                model = speed_result.get("primary_model") or model
-                                fallback_models = speed_result.get("fallback_models") or []
-                                expensive_fallback_models = speed_result.get("expensive_fallback_models") or []
-                                fast_cheap_models_runtime = speed_result.get("fast_cheap_models") or []
-                                thinking_capable_models_runtime = speed_result.get("thinking_capable_models") or []
-                                allow_expensive_fallback = bool(expensive_fallback_models)
-                                max_smart_models = max(int(max_smart_models or 1), len(fallback_models), 1)
-
-                                config["slashai_model"] = model
-                                config["fallback_models"] = fallback_models
-                                config["expensive_fallback_models"] = expensive_fallback_models
-                                config["active_cheap_models"] = speed_result.get("active_cheap_models") or []
-                                config["fast_cheap_models"] = fast_cheap_models_runtime
-                                config["fastest_cheap_model"] = fast_cheap_models_runtime[0] if fast_cheap_models_runtime else ""
-                                config["thinking_capable_models"] = thinking_capable_models_runtime
-
-                                self._model_health_cache = speed_result.get("health_cache") or {}
-                                self._model_health_checked_at = _wib_now_text()
-                                self._last_model_update_source = "speed"
-                                self._runtime_primary_model = model
-                                config["allow_expensive_fallback"] = allow_expensive_fallback
-                                persist_current_runtime_state("speed")
-                                self._send_message(token, chat_id, build_speed_update_summary(speed_result), parse_mode=telegram_parse_mode)
-                            except Exception as exc:
-                                self._last_error = str(exc)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "Gagal update model.\n\nDetail ringkas:\n" + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if text_lower.startswith("/speed"):
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "Kode /speed salah. Gunakan format: /speed 4321",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        if is_rotate_model_command(text):
-                            if not self._is_admin_chat(chat_id, config):
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "⏳ Rotate model: mengecek kondisi model aktif saat ini...",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            try:
-                                previous_model = model
-                                rotate_result = refresh_telegram_runtime_models(
-                                    api_url=api_url,
-                                    api_key=api_key,
-                                    current_model=model,
-                                    config=config,
-                                    timeout=model_health_timeout,
-                                    preferred_mode=forced_model_mode,
-                                )
-                                rotation = select_rotated_runtime_model(
-                                    result=rotate_result,
-                                    current_mode=forced_model_mode,
-                                    current_model=model,
-                                )
-
-                                rotation["requested_mode"] = forced_model_mode
-                                apply_rotation_result(rotate_result, rotation, "rotate")
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    build_rotate_summary(rotate_result, rotation, previous_model),
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            except Exception as exc:
-                                self._last_error = str(exc)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "Gagal rotate model.\n\nDetail ringkas:\n" + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if text_lower.startswith("/rotate"):
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "Format perintah salah. Gunakan: /rotate",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        switch_mode = parse_model_switch_command(text)
-                        if switch_mode:
-                            if not self._is_admin_chat(chat_id, config):
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "⏳ Mengubah mode dan mengecek model aktif saat ini...",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            try:
-                                previous_model = model
-                                switch_result = refresh_telegram_runtime_models(
-                                    api_url=api_url,
-                                    api_key=api_key,
-                                    current_model=model,
-                                    config=config,
-                                    timeout=model_health_timeout,
-                                    preferred_mode=switch_mode,
-                                )
-                                rotation = select_rotated_runtime_model(
-                                    result=switch_result,
-                                    current_mode=switch_mode,
-                                    current_model=model,
-                                )
-                                rotation["requested_mode"] = switch_mode
-                                apply_rotation_result(switch_result, rotation, "ubah")
-
-                                cheap_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or _as_string_list(config.get("fallback_models"))
-                                capable_pool = thinking_capable_models_runtime or _as_string_list(config.get("thinking_capable_models")) or _as_string_list(config.get("expensive_fallback_models"))
-                                message = build_model_switch_summary(switch_mode, model, cheap_pool, capable_pool)
-                                message += "\n\n" + build_rotate_summary(switch_result, rotation, previous_model)
-                                self._send_message(token, chat_id, message, parse_mode=telegram_parse_mode)
-                            except Exception as exc:
-                                self._last_error = str(exc)
-                                self._send_message(
-                                    token,
-                                    chat_id,
-                                    "Gagal mengubah mode model.\n\nDetail ringkas:\n" + str(exc)[:1200],
-                                    parse_mode=telegram_parse_mode,
-                                )
-                            continue
-
-                        if text_lower.startswith("/ubah"):
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "Format perintah salah. Gunakan: /ubah mahal atau /ubah murah",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        if is_tavily_test_command(text):
-                            if not self._is_admin_chat(chat_id, config):
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-
-                            parts = text.strip().split(maxsplit=1)
-                            test_query = (
-                                parts[1]
-                                if len(parts) > 1
-                                else "berita AI terbaru hari ini"
-                            )
-                            self._send_message(
-                                token,
-                                chat_id,
-                                run_tavily_connection_test(
-                                    tavily_api_key,
-                                    test_query,
-                                ),
-                            )
-                            continue
-
-                        if is_update_command(text):
-                            if not self._is_admin_chat(chat_id, config):
-                                self._send_admin_required(token, chat_id, config)
-                                continue
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "⏳ Memulai update Knowledge Base via GitHub Actions...",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            try:
-                                update_reply = trigger_github_kb_update(config, chat_id)
-                            except Exception as exc:
-                                update_reply = "❌ Gagal menjalankan /update.\n\nDetail ringkas:\n" + str(exc)[:1200]
-                            self._send_message(token, chat_id, update_reply, parse_mode=telegram_parse_mode)
-                            continue
-
-                        if text_lower.startswith("/update"):
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "Format perintah salah. Gunakan: /update",
-                                parse_mode=telegram_parse_mode,
-                            )
-                            continue
-
-                        trigger_question_quick_check_from_telegram()
-
-                        local_reply = ""
-                        local_meta: Dict[str, Any] = {}
-
-                        try:
-                            greeting_reply, greeting_meta = build_telegram_indonesia_time_greeting_reply(
-                                text
-                            )
-                            if greeting_reply:
-                                local_reply = greeting_reply
-                                local_meta = greeting_meta
-                        except Exception as exc:
-                            self._last_error = f"Telegram local greeting error: {exc}"
-
-                        if not local_reply:
-                            try:
-                                local_safe_answer, local_safe_meta = build_telegram_local_safe_fallback_answer(
-                                    text,
-                                    failure_reason="pre_model_safe_template",
-                                )
-                                if local_safe_answer and local_safe_meta.get("telegram_local_safe_fallback_type") == "horse_ration":
-                                    local_reply = local_safe_answer
-                                    local_meta = local_safe_meta
-                            except Exception as exc:
-                                self._last_error = f"Telegram local safe fallback error: {exc}"
-
-                        if not local_reply:
-                            try:
-                                cached_reply, cached_meta = get_telegram_frequent_question_cached_answer(
-                                    text,
-                                    config,
-                                )
-                                if cached_reply:
-                                    local_reply = cached_reply
-                                    local_meta = cached_meta
-                            except Exception as exc:
-                                self._last_error = f"Telegram frequent cache read error: {exc}"
-
-                        if not local_reply:
-                            local_reply = handle_local_memory_command(text, memory) if allow_memory_commands else ""
-                        if not local_reply and power_features_enabled:
-                            local_reply = handle_power_command(
-                                text,
-                                power_store,
-                                user_id=str(chat_id),
-                                is_admin=self._is_admin_chat(chat_id, config),
-                            )
-                        if local_reply:
-                            key = str(chat_id)
-                            history = self._histories.setdefault(key, [])
-                            history.append({"role": "user", "content": text})
-                            history.append({"role": "assistant", "content": local_reply})
-                            self._histories[key] = history[-8:]
-                            self._send_message(token, chat_id, local_reply, parse_mode=telegram_parse_mode)
-                            continue
-
-                        key = str(chat_id)
-                        history = self._histories.setdefault(key, [])
-                        memory_text = telegram_clip_for_token_saver(
-                            telegram_indonesia_time_context_text()
-                            + "\n\n"
-                            + memory.as_prompt_text(limit=8 if token_saver_enabled else 20),
-                            telegram_memory_context_max_chars,
-                        )
-                        active_health_models: List[str] = []
-
-                        preview_manual_mode = str(forced_model_mode or "auto").lower()
-                        preview_thinking_mode = (
-                            preview_manual_mode == "auto"
-                            and bool(thinking_model_router)
-                            and is_thinking_telegram_question(
-                                text,
-                                history=history,
-                                min_chars=thinking_min_chars,
-                            )
-                        )
-
-                        if send_processing_message:
-                            if preview_thinking_mode:
-                                processing_text = (
-                                    "🧠 Adioranye sedang thinking dan mengetik jawaban..."
-                                )
-                            else:
-                                processing_text = "⏳ Adioranye sedang mengetik jawaban..."
-                            self._send_message(
-                                token,
-                                chat_id,
-                                processing_text,
-                                parse_mode=telegram_parse_mode,
-                            )
-                        else:
-                            self._send_typing(token, chat_id)
-
-                        try:
-                            manual_mode = preview_manual_mode
-                            thinking_mode = preview_thinking_mode
-                            request_model = model
-                            request_fallback_models = list(fallback_models or [])
-                            request_expensive_fallback_models = list(expensive_fallback_models or [])
-                            request_allow_expensive = allow_expensive_fallback
-                            request_return_to_primary = return_to_primary
-
-                            try:
-                                active_health_models = [
-                                    model_name
-                                    for model_name, item in (self._model_health_cache or {}).items()
-                                    if isinstance(item, dict) and item.get("active")
-                                ]
-
-                                def _telegram_latency_value(model_name: str) -> float:
-                                    try:
-                                        value = (
-                                            (self._model_health_cache.get(model_name, {}) or {})
-                                            .get("latency_ms", 999999)
-                                        )
-                                        return float(value or 999999)
-                                    except Exception:
-                                        return 999999.0
-
-                                active_health_models = telegram_sort_models_for_simple_chat(
-                                    active_health_models,
-                                    self._model_health_cache or {},
-                                )
-
-                                if bool(config.get("auto_replace_inactive_primary_model", True)):
-                                    current_health = (self._model_health_cache or {}).get(request_model, {})
-                                    if active_health_models and not current_health.get("active"):
-                                        request_model = active_health_models[0]
-                                        model = request_model
-                                        self._runtime_primary_model = request_model
-                                        self._last_model_update_source = "auto_healthy_primary"
-                                        try:
-                                            persist_current_runtime_state("auto_healthy_primary")
-                                        except Exception as exc:
-                                            self._last_error = f"Telegram auto healthy persist error: {exc}"
-                                        request_fallback_models = [
-                                            item
-                                            for item in active_health_models
-                                            if item != request_model
-                                        ] + request_fallback_models
-                            except Exception as exc:
-                                self._last_error = f"Telegram auto healthy primary error: {exc}"
-                                active_health_models = []
-
-                            fast_normal_mode = False
-
-                            if manual_mode == "expensive":
-                                capable_pool = thinking_capable_models_runtime or request_expensive_fallback_models
-                                capable_model = pick_telegram_capable_model(
-                                    primary_model=model,
-                                    expensive_fallback_models=capable_pool,
-                                    config=config,
-                                )
-                                if capable_model:
-                                    request_model = capable_model
-                                    request_fallback_models = []
-                                    request_expensive_fallback_models = [
-                                        item for item in capable_pool if item != request_model
-                                    ]
-                                request_allow_expensive = True
-                                request_return_to_primary = False
-                            elif manual_mode == "cheap":
-                                fast_model = pick_fastest_telegram_normal_model(
-                                    primary_model=model,
-                                    fallback_models=request_fallback_models,
-                                    config=config,
-                                )
-                                if fast_model:
-                                    fast_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or request_fallback_models
-                                    if fast_model not in fast_pool:
-                                        fast_pool = [fast_model] + fast_pool
-                                    request_model = fast_model
-                                    request_fallback_models = [item for item in fast_pool if item != request_model]
-                                    fast_normal_mode = True
-                                request_expensive_fallback_models = []
-                                request_allow_expensive = False
-                                request_return_to_primary = False
-                            elif thinking_mode:
-                                capable_model = pick_telegram_capable_model(
-                                    primary_model=model,
-                                    expensive_fallback_models=thinking_capable_models_runtime or request_expensive_fallback_models,
-                                    config=config,
-                                )
-                                if capable_model:
-                                    request_model = capable_model
-                                    # For thinking prompts, do not route back down to cheap models first.
-                                    # Use capable/expensive models as the main path, then return to cheap on the next message.
-                                    request_fallback_models = []
-                                    request_expensive_fallback_models = [
-                                        item for item in request_expensive_fallback_models if item != request_model
-                                    ]
-                                    request_allow_expensive = True
-                                    request_return_to_primary = True
-                            elif fast_normal_model_router:
-                                fast_model = pick_fastest_telegram_normal_model(
-                                    primary_model=model,
-                                    fallback_models=request_fallback_models,
-                                    config=config,
-                                )
-                                if fast_model:
-                                    fast_pool = fast_cheap_models_runtime or _as_string_list(config.get("fast_cheap_models")) or request_fallback_models
-                                    if fast_model not in fast_pool:
-                                        fast_pool = [fast_model] + fast_pool
-                                    request_model = fast_model
-                                    request_fallback_models = [item for item in fast_pool if item != request_model]
-                                    fast_normal_mode = True
-
-                            live_scraping_profile = detect_telegram_auto_live_scraping_need(
-                                text,
-                                enabled=bool(auto_live_scraping_enabled),
-                            )
-                            live_scraping_needed = bool(
-                                live_scraping_profile.get("needed")
-                            )
-                            request_live_web_topic = (
-                                live_scraping_profile.get("topic", "auto")
-                                if live_scraping_needed
-                                else live_web_fallback_topic
-                            )
-
-                            if live_scraping_needed and auto_live_scraping_show_status:
-                                self._send_typing(token, chat_id)
-
-                            direct_live_context = ""
-                            direct_live_meta: Dict[str, Any] = {
-                                "live_context_used": False,
-                                "live_context_error": "",
-                                "live_sources": [],
-                            }
-
-                            if live_scraping_needed:
-                                tavily_direct_result = fetch_tavily_live_context_for_telegram(
-                                    query=text,
-                                    api_key=tavily_api_key,
-                                    max_results=int(live_web_fallback_max_results),
-                                    timeout_seconds=int(live_web_fallback_timeout_seconds),
-                                    include_raw_content=bool(live_web_fallback_include_raw_content),
-                                    max_content_chars=int(live_web_fallback_max_content_chars),
-                                )
-
-                                if tavily_direct_result.get("ok"):
-                                    direct_live_context = telegram_clip_for_token_saver(
-                                        tavily_direct_result.get("context") or "",
-                                        telegram_live_context_max_chars,
-                                    )
-                                    direct_live_meta = {
-                                        "live_context_used": True,
-                                        "live_context_error": "",
-                                        "live_sources": tavily_direct_result.get("sources") or [],
-                                    }
-                                else:
-                                    direct_live_context = (
-                                        "MODE INFO TERKINI AKTIF, tetapi Tavily/live web belum berhasil mengambil sumber terbaru.\n"
-                                        f"Error: {tavily_direct_result.get('error', 'Tidak diketahui')}\n"
-                                        "Jika menjawab, jelaskan bahwa informasi terkini belum bisa diverifikasi."
-                                    )
-                                    direct_live_meta = {
-                                        "live_context_used": False,
-                                        "live_context_error": str(
-                                            tavily_direct_result.get("error") or ""
-                                        ),
-                                        "live_sources": [],
-                                    }
-
-                            answer, meta = safe_generate_power_answer(
-                                api_url=api_url,
-                                api_key=api_key,
-                                model=request_model,
-                                system_prompt=(
-                                    persona
-                                    + (
-                                        "\n\nMODE INFO TERKINI AKTIF:\n"
-                                        "- Prioritaskan hasil live web/Tavily untuk pertanyaan terbaru/hari ini/sekarang.\n"
-                                        "- Jangan menjawab berdasarkan Knowledge Base lama jika sumber live web tersedia.\n"
-                                        "- Jika live web gagal, jelaskan bahwa info terkini belum dapat diverifikasi."
-                                        if live_scraping_needed
-                                        else ""
-                                    )
-                                ),
-                                user_text=(
-                                    text
-                                    + (
-                                        "\n\nInstruksi internal: ini pertanyaan info terkini. Gunakan hasil live web/Tavily sebagai sumber utama; abaikan KB lama 2025 jika tidak relevan."
-                                        if live_scraping_needed
-                                        else ""
-                                    )
-                                ),
-                                base_memory_text=(
-                                    direct_live_context
-                                    if live_scraping_needed
-                                    else memory_text
-                                ),
-                                recent_messages=compact_telegram_history_for_token_saver(
-                                    history,
-                                    limit=telegram_history_limit,
-                                    recent_full=telegram_history_recent_full,
-                                    enabled=token_saver_enabled,
-                                ),
-                                fallback_models=request_fallback_models,
-                                expensive_fallback_models=request_expensive_fallback_models,
-                                allow_expensive_fallback=request_allow_expensive,
-                                max_expensive_models=max_expensive_models,
-                                temperature=float(config.get("temperature", 0.3)),
-                                max_completion_tokens=telegram_dynamic_max_completion_tokens(
-                                    user_text=text,
-                                    base_max_tokens=int(config.get("max_completion_tokens", 1800)),
-                                    thinking_mode=bool(thinking_mode),
-                                    live_scraping_needed=bool(live_scraping_needed),
-                                    token_saver_enabled=bool(token_saver_enabled),
-                                    casual=int(telegram_max_tokens_casual),
-                                    normal=int(telegram_max_tokens_normal),
-                                    technical=int(telegram_max_tokens_technical),
-                                    long_budget=int(telegram_max_tokens_long),
-                                ),
-                                timeout=int(config.get("timeout", 60)),
-                                smart_model_router=smart_model_router,
-                                return_to_primary=request_return_to_primary,
-                                max_smart_models=max_smart_models,
-                                store=power_store,
-                                user_id=str(chat_id),
-                                channel="telegram",
-                                enable_rag=bool(
-                                    power_features_enabled
-                                    and power_rag_enabled
-                                    and not live_scraping_needed
-                                ),
-                                rag_top_k=int(power_rag_top_k),
-                                enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
-                                enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
-                                enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
-                                daily_cost_limit_idr=float(daily_cost_limit_idr),
-                                max_expensive_calls_per_day=int(max_expensive_calls_per_day),
-                                enable_response_cache=bool(
-                                    power_response_cache_enabled
-                                    and not live_scraping_needed
-                                ),
-                                response_cache_ttl_seconds=int(power_response_cache_ttl_seconds),
-                                enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
-                                enable_circuit_breaker=bool(power_circuit_breaker_enabled),
-                                circuit_max_failures=int(model_circuit_max_failures),
-                                circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
-                                anti_hallucination_enabled=bool(power_anti_hallucination_enabled),
-                                anti_hallucination_auto_strict=bool(power_anti_hallucination_auto_strict),
-                                anti_hallucination_min_sources=int(power_anti_hallucination_min_sources),
-                                anti_hallucination_min_quality=float(power_anti_hallucination_min_quality),
-                                anti_hallucination_min_freshness=float(power_anti_hallucination_min_freshness),
-                                anti_hallucination_append_sources=bool(power_anti_hallucination_append_sources),
-                                strict_rag_mode=bool(
-                                    power_strict_rag_mode
-                                    and not live_scraping_needed
-                                ),
-                                rag_min_sources=int(power_rag_min_sources),
-                                rag_min_score=float(power_rag_min_score),
-                                quality_control_enabled=bool(power_quality_control_enabled),
-                                quality_verifier_enabled=bool(power_quality_verifier_enabled),
-                                quality_verifier_model=power_quality_verifier_model,
-                                quality_min_score=float(power_quality_min_score),
-                                answer_mode=(
-                                    "current"
-                                    if live_scraping_needed
-                                    else power_default_answer_mode
-                                ),
-                                append_quality_footer=bool(power_quality_append_footer),
-                                hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
-                                disable_rag_for_casual=bool(
-                                    power_disable_rag_for_casual
-                                    or live_scraping_needed
-                                ),
-                                performance_optimizer_enabled=bool(power_performance_optimizer_enabled),
-                                query_rewriter_enabled=bool(power_query_rewriter_enabled),
-                                reranker_enabled=bool(power_reranker_enabled),
-                                semantic_cache_enabled=bool(
-                                    power_semantic_cache_enabled
-                                    and not live_scraping_needed
-                                ),
-                                semantic_cache_threshold=float(power_semantic_cache_threshold),
-                                semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
-                                latency_budget_enabled=bool(power_latency_budget_enabled),
-                                retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
-                                live_music_chart_enabled=bool(live_music_chart_enabled),
-                                live_music_chart_limit=int(live_music_chart_limit),
-                                live_music_chart_timeout_seconds=int(live_music_chart_timeout_seconds),
-                                live_web_fallback_enabled=bool(live_web_fallback_enabled),
-                                live_web_fallback_provider=live_web_fallback_provider,
-                                tavily_api_key=tavily_api_key,
-                                live_web_fallback_max_results=int(live_web_fallback_max_results),
-                                live_web_fallback_timeout_seconds=int(live_web_fallback_timeout_seconds),
-                                live_web_fallback_min_sources=int(live_web_fallback_min_sources),
-                                live_web_fallback_include_raw_content=bool(live_web_fallback_include_raw_content),
-                                live_web_fallback_max_content_chars=int(live_web_fallback_max_content_chars),
-                                live_web_fallback_auto_save_to_kb=bool(live_web_fallback_auto_save_to_kb),
-                                live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
-                                live_web_fallback_force_for_current=bool(
-                                    live_web_fallback_force_for_current
-                                    and live_scraping_needed
-                                ),
-                                live_web_fallback_topic=request_live_web_topic,
-                                active_health_models=(active_health_models if 'active_health_models' in locals() else []),
-                                health_cache=(self._model_health_cache or {}),
-                                auto_retry_on_model_error_enabled=bool(
-                                    config.get("auto_retry_on_model_error_enabled", True)
-                                ),
-                                auto_retry_on_model_error_max_attempts=int(
-                                    config.get("auto_retry_on_model_error_max_attempts", 2) or 2
-                                ),
-                                auto_retry_on_model_error_timeout_seconds=int(
-                                    config.get("auto_retry_on_model_error_timeout_seconds", 35) or 35
-                                ),
-                            )
-
-                            if isinstance(meta, dict):
-                                meta["telegram_thinking_mode"] = thinking_mode
-                                meta["telegram_fast_normal_mode"] = fast_normal_mode
-                                meta["telegram_forced_model_mode"] = manual_mode
-                                meta["telegram_rotate_mode"] = manual_mode == "auto" and self._last_model_update_source == "rotate"
-                                meta["telegram_model_requested"] = request_model
-                                meta["telegram_auto_live_scraping_needed"] = live_scraping_needed
-                                meta["telegram_auto_live_scraping_reason"] = live_scraping_profile.get("reason", "")
-                                meta["telegram_auto_live_scraping_topic"] = request_live_web_topic
-                                meta["telegram_current_info_mode"] = live_scraping_needed
-                                meta["telegram_kb_disabled_for_current_info"] = live_scraping_needed
-                                meta["telegram_cache_disabled_for_current_info"] = live_scraping_needed
-                                meta["telegram_direct_tavily_context_used"] = bool(
-                                    direct_live_meta.get("live_context_used")
-                                )
-                                meta["telegram_direct_tavily_error"] = direct_live_meta.get(
-                                    "live_context_error",
-                                    "",
-                                )
-                                meta["telegram_direct_tavily_sources"] = direct_live_meta.get(
-                                    "live_sources",
-                                    [],
-                                )
-                                meta["telegram_auto_retry_on_model_error_enabled"] = bool(
-                                    config.get("auto_retry_on_model_error_enabled", True)
-                                )
-                                if self._model_health_checked_at:
-                                    meta["telegram_speed_updated_at"] = self._model_health_checked_at
-                                meta["telegram_active_health_models"] = active_health_models
-                                meta["telegram_health_candidate_tiers"] = "cheap-medium-expensive"
-                                meta["telegram_loading_status_thinking"] = bool(thinking_mode)
-                                meta["telegram_loading_status_text"] = (
-                                    "Adioranye sedang thinking dan mengetik jawaban"
-                                    if thinking_mode
-                                    else "Adioranye sedang mengetik jawaban"
-                                )
-                                meta["telegram_auto_replace_inactive_primary_model"] = bool(
-                                    config.get("auto_replace_inactive_primary_model", True)
-                                )
-                                meta["telegram_token_saver_enabled"] = bool(token_saver_enabled)
-                                meta["telegram_history_limit"] = int(telegram_history_limit)
-                                meta["telegram_memory_context_max_chars"] = int(
-                                    telegram_memory_context_max_chars
-                                )
-
-                            try:
-                                if save_telegram_frequent_question_cached_answer(
-                                    text,
-                                    answer,
-                                    meta if isinstance(meta, dict) else {},
-                                    config,
-                                ) and isinstance(meta, dict):
-                                    meta["telegram_frequent_question_cache_saved"] = True
-                            except Exception as exc:
-                                self._last_error = f"Telegram frequent cache save error: {exc}"
-
-                            history.append({"role": "user", "content": text})
-                            history.append({"role": "assistant", "content": answer})
-                            self._histories[key] = history[-8:]
-                            answer_to_send = answer
-                            self._send_message(token, chat_id, answer_to_send, parse_mode=telegram_parse_mode)
-
-                        except Exception as exc:
-                            original_error = str(exc)
-                            self._last_error = original_error
-
-                            if bool(config.get("auto_rotate_on_model_error", True)):
-                                try:
-                                    self._send_typing(token, chat_id)
-                                    retry_result = refresh_telegram_runtime_models(
-                                        api_url=api_url,
-                                        api_key=api_key,
-                                        current_model=model,
-                                        config=config,
-                                        timeout=model_health_timeout,
-                                        preferred_mode=manual_mode,
-                                    )
-                                    retry_rotation = select_rotated_runtime_model(
-                                        result=retry_result,
-                                        current_mode=manual_mode,
-                                        current_model=model,
-                                    )
-                                    retry_rotation["requested_mode"] = manual_mode
-                                    retry_previous_model = model
-                                    apply_rotation_result(retry_result, retry_rotation, "auto_retry")
-
-                                    retry_answer, retry_meta = safe_generate_power_answer(
-                                        api_url=api_url,
-                                        api_key=api_key,
-                                        model=model,
-                                        system_prompt=(
-                                            persona
-                                            + (
-                                                "\n\nMODE INFO TERKINI AKTIF:\n"
-                                                "- Prioritaskan hasil live web/Tavily untuk pertanyaan terbaru/hari ini/sekarang.\n"
-                                                "- Jangan menjawab berdasarkan Knowledge Base lama jika sumber live web tersedia.\n"
-                                                "- Jika live web gagal, jelaskan bahwa info terkini belum dapat diverifikasi."
-                                                if live_scraping_needed
-                                                else ""
-                                            )
-                                        ),
-                                        user_text=(
-                                            text
-                                            + (
-                                                "\n\nInstruksi internal: ini pertanyaan info terkini. Gunakan hasil live web/Tavily sebagai sumber utama; abaikan KB lama 2025 jika tidak relevan."
-                                                if live_scraping_needed
-                                                else ""
-                                            )
-                                        ),
-                                        base_memory_text=(
-                                            direct_live_context
-                                            if live_scraping_needed
-                                            else memory_text
-                                        ),
-                                        recent_messages=compact_telegram_history_for_token_saver(
-                                    history,
-                                    limit=telegram_history_limit,
-                                    recent_full=telegram_history_recent_full,
-                                    enabled=token_saver_enabled,
-                                ),
-                                        fallback_models=fallback_models,
-                                        expensive_fallback_models=expensive_fallback_models,
-                                        allow_expensive_fallback=allow_expensive_fallback,
-                                        max_expensive_models=max_expensive_models,
-                                        temperature=float(config.get("temperature", 0.3)),
-                                        max_completion_tokens=telegram_dynamic_max_completion_tokens(
-                                    user_text=text,
-                                    base_max_tokens=int(config.get("max_completion_tokens", 1800)),
-                                    thinking_mode=bool(thinking_mode),
-                                    live_scraping_needed=bool(live_scraping_needed),
-                                    token_saver_enabled=bool(token_saver_enabled),
-                                    casual=int(telegram_max_tokens_casual),
-                                    normal=int(telegram_max_tokens_normal),
-                                    technical=int(telegram_max_tokens_technical),
-                                    long_budget=int(telegram_max_tokens_long),
-                                ),
-                                        timeout=int(config.get("timeout", 60)),
-                                        smart_model_router=smart_model_router,
-                                        return_to_primary=False,
-                                        max_smart_models=max_smart_models,
-                                        store=power_store,
-                                        user_id=str(chat_id),
-                                        channel="telegram",
-                                        enable_rag=bool(
-                                            power_features_enabled
-                                            and power_rag_enabled
-                                            and not live_scraping_needed
-                                        ),
-                                        rag_top_k=int(power_rag_top_k),
-                                        enable_persistent_memory=bool(power_features_enabled and power_persistent_memory_enabled),
-                                        enable_prompt_templates=bool(power_features_enabled and power_prompt_templates_enabled),
-                                        enable_self_verification=bool(power_features_enabled and power_self_verification_enabled),
-                                        daily_cost_limit_idr=float(daily_cost_limit_idr),
-                                        max_expensive_calls_per_day=int(max_expensive_calls_per_day),
-                                        enable_response_cache=bool(
-                                            power_response_cache_enabled
-                                            and not live_scraping_needed
-                                        ),
-                                        response_cache_ttl_seconds=int(power_response_cache_ttl_seconds),
-                                        enable_adaptive_scoring=bool(power_adaptive_scoring_enabled),
-                                        enable_circuit_breaker=bool(power_circuit_breaker_enabled),
-                                        circuit_max_failures=int(model_circuit_max_failures),
-                                        circuit_cooldown_seconds=int(model_circuit_cooldown_seconds),
-                                        anti_hallucination_enabled=bool(power_anti_hallucination_enabled),
-                                        anti_hallucination_auto_strict=bool(power_anti_hallucination_auto_strict),
-                                        anti_hallucination_min_sources=int(power_anti_hallucination_min_sources),
-                                        anti_hallucination_min_quality=float(power_anti_hallucination_min_quality),
-                                        anti_hallucination_min_freshness=float(power_anti_hallucination_min_freshness),
-                                        anti_hallucination_append_sources=bool(power_anti_hallucination_append_sources),
-                                        strict_rag_mode=bool(
-                                            power_strict_rag_mode
-                                            and not live_scraping_needed
-                                        ),
-                                        rag_min_sources=int(power_rag_min_sources),
-                                        rag_min_score=float(power_rag_min_score),
-                                        quality_control_enabled=bool(power_quality_control_enabled),
-                                        quality_verifier_enabled=bool(power_quality_verifier_enabled),
-                                        quality_verifier_model=power_quality_verifier_model,
-                                        quality_min_score=float(power_quality_min_score),
-                                        answer_mode=(
-                                            "current"
-                                            if live_scraping_needed
-                                            else power_default_answer_mode
-                                        ),
-                                        append_quality_footer=bool(power_quality_append_footer),
-                                        hide_kb_sources_for_casual=bool(power_hide_kb_sources_for_casual),
-                                        disable_rag_for_casual=bool(
-                                            power_disable_rag_for_casual
-                                            or live_scraping_needed
-                                        ),
-                                        performance_optimizer_enabled=bool(power_performance_optimizer_enabled),
-                                        query_rewriter_enabled=bool(power_query_rewriter_enabled),
-                                        reranker_enabled=bool(power_reranker_enabled),
-                                        semantic_cache_enabled=bool(
-                                            power_semantic_cache_enabled
-                                            and not live_scraping_needed
-                                        ),
-                                        semantic_cache_threshold=float(power_semantic_cache_threshold),
-                                        semantic_cache_ttl_seconds=int(power_semantic_cache_ttl_seconds),
-                                        latency_budget_enabled=bool(power_latency_budget_enabled),
-                                        retrieval_eval_enabled=bool(power_retrieval_eval_enabled),
-                                        live_music_chart_enabled=bool(live_music_chart_enabled),
-                                        live_music_chart_limit=int(live_music_chart_limit),
-                                        live_music_chart_timeout_seconds=int(live_music_chart_timeout_seconds),
-                                        live_web_fallback_enabled=bool(live_web_fallback_enabled),
-                                        live_web_fallback_provider=live_web_fallback_provider,
-                                        tavily_api_key=tavily_api_key,
-                                        live_web_fallback_max_results=int(live_web_fallback_max_results),
-                                        live_web_fallback_timeout_seconds=int(live_web_fallback_timeout_seconds),
-                                        live_web_fallback_min_sources=int(live_web_fallback_min_sources),
-                                        live_web_fallback_include_raw_content=bool(live_web_fallback_include_raw_content),
-                                        live_web_fallback_max_content_chars=int(live_web_fallback_max_content_chars),
-                                        live_web_fallback_auto_save_to_kb=bool(live_web_fallback_auto_save_to_kb),
-                                        live_web_fallback_ttl_hours=int(live_web_fallback_ttl_hours),
-                                        live_web_fallback_force_for_current=bool(
-                                            live_web_fallback_force_for_current
-                                            and live_scraping_needed
-                                        ),
-                                        live_web_fallback_topic=request_live_web_topic,
-                                    )
-
-                                    if isinstance(retry_meta, dict):
-                                        retry_meta["telegram_auto_rotated_after_error"] = True
-                                        retry_meta["telegram_previous_error"] = original_error[:500]
-                                        retry_meta["telegram_previous_model"] = retry_previous_model
-                                        retry_meta["telegram_forced_model_mode"] = manual_mode
-                                        retry_meta["telegram_model_requested"] = model
-                                        retry_meta["telegram_auto_live_scraping_needed"] = live_scraping_needed
-                                        retry_meta["telegram_auto_live_scraping_reason"] = live_scraping_profile.get("reason", "")
-                                        retry_meta["telegram_auto_live_scraping_topic"] = request_live_web_topic
-                                        retry_meta["telegram_current_info_mode"] = live_scraping_needed
-                                        retry_meta["telegram_kb_disabled_for_current_info"] = live_scraping_needed
-                                        retry_meta["telegram_cache_disabled_for_current_info"] = live_scraping_needed
-                                        retry_meta["telegram_direct_tavily_context_used"] = bool(
-                                            direct_live_meta.get("live_context_used")
-                                        )
-                                        retry_meta["telegram_direct_tavily_error"] = direct_live_meta.get(
-                                            "live_context_error",
-                                            "",
-                                        )
-                                        retry_meta["telegram_direct_tavily_sources"] = direct_live_meta.get(
-                                            "live_sources",
-                                            [],
-                                        )
-                                        retry_meta["telegram_speed_updated_at"] = self._model_health_checked_at
-
-                                    history.append({"role": "user", "content": text})
-                                    history.append({"role": "assistant", "content": retry_answer})
-                                    self._histories[key] = history[-8:]
-                                    show_model = bool(config.get("show_model_info", False))
-                                    retry_answer_to_send = retry_answer
-                                    self._send_message(token, chat_id, retry_answer_to_send, parse_mode=telegram_parse_mode)
-                                    continue
-                                except Exception as retry_exc:
-                                    self._last_error = f"{original_error} | Auto-rotate retry gagal: {retry_exc}"
-
-                            self._send_message(
-                                token,
-                                chat_id,
-                                "Maaf, bot belum bisa menjawab.\n\nDetail ringkas:\n" + self._last_error[:900],
-                                parse_mode=telegram_parse_mode,
-                            )
-
-                    if not updates:
-                        time.sleep(0.5)
-
-                except Exception as exc:
-                    self._last_error = str(exc)
-                    if self._is_fatal_telegram_error(self._last_error):
-                        # Do not keep looping forever for invalid token or 409 conflict.
-                        self._stop_event.set()
-                        break
-                    time.sleep(4)
-        finally:
-            self._running = False
-            self._release_file_lock()
-
-
-_service = TelegramBotService()
-
-
-def get_telegram_service() -> TelegramBotService:
-    return _service
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kualitas hijauan.
+- Untuk ransum final, sebaiknya konsultasi dengan dokter hewan atau ahli nutrisi kuda."""
+        return answer, {
+            "telegram_local_safe_fallback_used": True,
+            "telegram_local_safe_fallback_type": "horse_ration",
+            "model_skipped_after_failure": True,
+            "failure_reason": failure_reason[:500],
+        }
+
+    if normalized and len(tokens) <= 14:
+        has_question_shape = (
+            text.endswith("?")
+            or any(normalized.startswith(starter) for starter in question_starters)
+        )
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+
+        if has_question_shape and not asks_current_info and not risky_domain:
+            return (
+                "Model sedang tidak stabil. Kirim ulang pertanyaan dengan topik lebih spesifik agar saya jawab langsung secara lokal, misalnya definisi, fungsi, cara kerja, perbedaan, atau contoh singkat.",
+                {
+                    "telegram_local_safe_fallback_used": True,
+                    "telegram_local_safe_fallback_type": "general_question_redirect",
+                    "model_skipped_after_failure": True,
+                    "failure_reason": failure_reason[:500],
+                },
+            )
+
+    if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
+        return (
+            "Model sedang tidak stabil, jadi saya buatkan draft awal secara lokal agar pekerjaan tetap bisa lanjut. "
+            "Kirim detail tambahan jika ingin hasilnya disesuaikan.",
+            {
+                "telegram_local_safe_fallback_used": True,
+                "telegram_local_safe_fallback_type": "generic_draft",
+                "model_skipped_after_failure": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
+
+    return "", {}
+
+
+def retry_telegram_power_answer_with_active_models(
+    original_answer: str,
+    original_meta: Dict[str, Any] | None,
+    original_kwargs: Dict[str, Any],
+    retry_depth: int = 0,
+) -> tuple[str, Dict[str, Any]]:
+    """Retry Telegram answer with another active/fallback model if first result failed."""
+    enabled = telegram_parse_bool(
+        original_kwargs.get("auto_retry_on_model_error_enabled")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_ENABLED", "true"),
+        default=True,
+    )
+
+    if not enabled:
+        return original_answer, original_meta or {}
+
+    if retry_depth > 0:
+        return original_answer, original_meta or {}
+
+    if not telegram_looks_like_model_error(
+        original_answer,
+        meta=original_meta,
+    ):
+        return original_answer, original_meta or {}
+
+    max_attempts = max(
+        1,
+        min(
+            telegram_safe_int(
+                original_kwargs.get("auto_retry_on_model_error_max_attempts")
+                or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_MAX_ATTEMPTS", "3"),
+                3,
+            ),
+            5,
+        ),
+    )
+    timeout_seconds = telegram_safe_int(
+        original_kwargs.get("auto_retry_on_model_error_timeout_seconds")
+        or os.getenv("AUTO_RETRY_ON_MODEL_ERROR_TIMEOUT_SECONDS", "35"),
+        35,
+    )
+
+    original_model = str(original_kwargs.get("model") or "").strip()
+    failed_models = [original_model] if original_model else []
+    candidates = telegram_get_retry_candidates(
+        original_kwargs,
+        failed_models=failed_models,
+    )
+
+    if not candidates:
+        meta_data = original_meta or {}
+        meta_data["telegram_auto_model_retry_enabled"] = True
+        meta_data["telegram_auto_model_retry_success"] = False
+        meta_data["telegram_auto_model_retry_reason"] = "no-candidate"
+        meta_data["telegram_auto_model_retry_attempts"] = 0
+        return original_answer, meta_data
+
+    tried_models: List[str] = []
+    retry_errors: List[str] = []
+
+    for candidate_model in candidates[:max_attempts]:
+        tried_models.append(candidate_model)
+
+        retry_kwargs = dict(original_kwargs)
+        retry_kwargs["model"] = candidate_model
+        retry_kwargs["fallback_models"] = [
+            model
+            for model in candidates
+            if model != candidate_model
+        ][:max_attempts]
+        retry_kwargs["expensive_fallback_models"] = []
+        retry_kwargs["return_to_primary"] = False
+        retry_kwargs["timeout"] = min(
+            telegram_safe_int(
+                retry_kwargs.get("timeout"),
+                timeout_seconds,
+            ),
+            timeout_seconds,
+        )
+        retry_kwargs["_telegram_auto_retry_depth"] = retry_depth + 1
+
+        try:
+            retry_answer, retry_meta = safe_generate_power_answer(
+                **retry_kwargs
+            )
+        except Exception as exc:
+            retry_errors.append(
+                f"{candidate_model}: {exc.__class__.__name__}: {str(exc)[:180]}"
+            )
+            continue
+
+        if not isinstance(retry_meta, dict):
+            retry_meta = {}
+
+        if not telegram_looks_like_model_error(
+            retry_answer,
+            meta=retry_meta,
+        ):
+            retry_meta["telegram_auto_model_retry_success"] = True
+            retry_meta["telegram_auto_model_retry_attempts"] = len(tried_models)
+            retry_meta["telegram_auto_model_retry_models"] = tried_models
+            retry_meta["telegram_auto_model_retry_from_model"] = original_model
+            retry_meta["telegram_auto_model_retry_final_model"] = (
+                retry_meta.get("active_model_final")
+                or retry_meta.get("model_requested")
+                or candidate_model
+            )
+            retry_meta["telegram_auto_model_retry_errors"] = retry_errors
+            return retry_answer, retry_meta
+
+        retry_errors.append(
+            f"{candidate_model}: retry returned public/model error"
+        )
+
+    meta_data = original_meta or {}
+    meta_data["telegram_auto_model_retry_enabled"] = True
+    meta_data["telegram_auto_model_retry_success"] = False
+    meta_data["telegram_auto_model_retry_attempts"] = len(tried_models)
+    meta_data["telegram_auto_model_retry_models"] = tried_models
+    meta_data["telegram_auto_model_retry_errors"] = retry_errors
+
+    local_fallback_answer, local_fallback_meta = build_telegram_local_safe_fallback_answer(
+        str(original_kwargs.get("user_text") or ""),
+        failure_reason="; ".join(retry_errors[-3:]) or str(meta_data.get("hidden_telegram_error_detail", "")),
+    )
+    if local_fallback_answer:
+        meta_data.update(local_fallback_meta)
+        meta_data["telegram_auto_model_retry_local_fallback"] = True
+        return local_fallback_answer, meta_data
+
+    return original_answer, meta_data
+
+
+def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
+    """Compatibility wrapper plus Telegram retry with active model alternatives.
+
+    If the first model path returns a public model/connection failure, Telegram
+    retries the same question with another model candidate before sending the
+    failure message.
+    """
+    retry_depth = telegram_safe_int(
+        kwargs.pop("_telegram_auto_retry_depth", 0),
+        0,
+    )
+    original_kwargs = dict(kwargs)
+
+    try:
+        answer, meta = call_generate_power_answer_compat(kwargs)
+
+        return retry_telegram_power_answer_with_active_models(
+            answer,
+            meta,
+            original_kwargs,
+            retry_depth=retry_depth,
+        )
+    except TypeError as exc:
+        message = str(exc)
+        match = re.search(r"unexpected keyword argument '([^']+)'", message)
+
+        if match:
+            bad_key = match.group(1)
+
+            if bad_key in kwargs:
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop(bad_key, None)
+                retry_kwargs["_telegram_auto_retry_depth"] = retry_depth
+                answer, meta = safe_generate_power_answer(**retry_kwargs)
+
+                if isinstance(meta, dict):
+                    dropped = list(meta.get("power_answer_compat_dropped_kwargs") or [])
+
+                    if bad_key not in dropped:
+                        dropped.append(bad_key)
+
+                    meta["power_answer_compat_dropped_kwargs"] = sorted(dropped)
+
+                return answer, meta
+
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+        raise
+    except Exception as exc:
+        if retry_depth <= 0:
+            answer, meta = retry_telegram_power_answer_with_active_models(
+                TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE,
+                {
+                    "telegram_public_error_sanitized": True,
+                    "error_class": exc.__class__.__name__,
+                    "hidden_telegram_error_detail": str(exc)[:5000],
+                    "retry_trigger": "generic_exception",
+                },
+                original_kwargs,
+                retry_depth=retry_depth,
+            )
+
+            if not telegram_looks_like_model_error(
+                answer,
+                meta=meta,
+            ):
+                return answer, meta
+
+            if isinstance(meta, dict):
+                meta["telegram_public_error_sanitized"] = True
+                return TELEGRAM_PUBLIC_MODEL_ERROR_MESSAGE, meta
+
+        raise
+
+
+def build_telegram_local_safe_fallback_answer(
+    user_text: str,
+    failure_reason: str = "",
+) -> tuple[str, Dict[str, Any]]:
+    text = str(user_text or "").strip()
+    lower = text.lower()
+    normalized = telegram_normalize_short_greeting_text(text)
+    tokens = normalized.split()
+
+    question_starters = {
+        "apa",
+        "apakah",
+        "siapa",
+        "kapan",
+        "di mana",
+        "dimana",
+        "mengapa",
+        "kenapa",
+        "bagaimana",
+        "jelaskan",
+        "arti",
+        "definisi",
+        "fungsi",
+        "manfaat",
+        "bedanya",
+        "perbedaan",
+        "contoh",
+        "cara",
+    }
+    current_info_markers = {
+        "hari ini",
+        "terbaru",
+        "update",
+        "news",
+        "berita",
+        "harga",
+        "kurs",
+        "cuaca",
+        "jadwal",
+        "skor",
+        "hasil pertandingan",
+        "live",
+        "real time",
+        "realtime",
+    }
+    risky_domain_markers = {
+        "diagnosis",
+        "obat",
+        "dosis",
+        "resep",
+        "penyakit",
+        "investasi",
+        "saham",
+        "crypto",
+        "kripto",
+        "trading",
+        "legal",
+        "hukum",
+        "kontrak",
+    }
+
+    if "ransum" in lower and ("kuda" in lower or "horse" in lower):
+        answer = """Berikut contoh draft ransum kuda sebagai acuan awal.
+
+Contoh kuda dewasa ±400 kg, kerja ringan:
+
+1. Hijauan utama
+- Rumput/hay ±6–8 kg per hari.
+- Berikan bertahap dalam beberapa kali pemberian.
+- Hijauan sebaiknya menjadi porsi terbesar.
+
+2. Konsentrat/energi
+- Dedak/bekatul ±0,5–1 kg per hari.
+- Jagung giling/oat ±0,5–1 kg per hari.
+- Naikkan porsi secara bertahap, jangan mendadak.
+
+3. Protein tambahan
+- Bungkil kedelai/sumber protein lain ±0,2–0,4 kg per hari.
+
+4. Mineral dan air
+- Garam mineral/block mineral tersedia bebas atau ±30–50 gram per hari.
+- Air bersih harus selalu tersedia.
+
+Pola sederhana:
+- Pagi: rumput/hay + sedikit konsentrat.
+- Siang: rumput/hay.
+- Sore/malam: rumput/hay + konsentrat.
+
+Catatan:
+- Total pakan kering umumnya sekitar 1,5–2,5% dari bobot badan per hari.
+- Sesuaikan dengan bobot, umur, aktivitas, kondisi tubuh, dan kual

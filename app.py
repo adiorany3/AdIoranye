@@ -14980,7 +14980,7 @@ def render_power_features_admin_panel() -> None:
                                 "Belum ada sumber. Buat file kb_sources.json di root repo. Contohnya sudah tersedia di paket ZIP."
                             )
 
-                        col_auto1, col_auto2, col_auto3 = st.columns(3)
+                        col_auto1, col_auto2, col_auto3, col_auto4 = st.columns(4)
                         with col_auto1:
                             auto_max_items = st.number_input(
                                 "Max item/sumber",
@@ -14991,12 +14991,41 @@ def render_power_features_admin_panel() -> None:
                                 key="kb_auto_max_items",
                             )
                         with col_auto2:
+                            auto_source_limit = st.number_input(
+                                "Max sumber/run",
+                                min_value=0,
+                                max_value=max(0, len(scraper_sources)),
+                                value=min(10, len(scraper_sources)) if scraper_sources else 0,
+                                step=1,
+                                key="kb_auto_source_limit",
+                                help="0 = proses semua sumber. Isi kecil untuk jalur lokal hemat risiko.",
+                            )
+                        with col_auto3:
                             auto_dry_run = st.checkbox(
                                 "Dry run saja", value=False, key="kb_auto_dry_run"
                             )
-                        with col_auto3:
+                        with col_auto4:
                             auto_force = st.checkbox(
                                 "Force ingest ulang", value=False, key="kb_auto_force"
+                            )
+
+                        col_auto5, col_auto6 = st.columns(2)
+                        with col_auto5:
+                            auto_time_budget = st.number_input(
+                                "Batas waktu (detik)",
+                                min_value=0,
+                                max_value=3600,
+                                value=180,
+                                step=30,
+                                key="kb_auto_time_budget",
+                                help="0 = tanpa batas internal.",
+                            )
+                        with col_auto6:
+                            auto_no_rotation = st.checkbox(
+                                "Matikan rotasi sumber",
+                                value=False,
+                                key="kb_auto_no_rotation",
+                                help="Aktifkan hanya jika ingin selalu mulai dari sumber awal/state manual.",
                             )
 
                         if st.button(
@@ -15013,12 +15042,21 @@ def render_power_features_admin_panel() -> None:
                                     timeout=int(kb_scraper_timeout or 20),
                                     dry_run=bool(auto_dry_run),
                                     force=bool(auto_force),
+                                    time_budget_seconds=int(auto_time_budget or 0),
+                                    source_limit=int(auto_source_limit or 0),
+                                    auto_rotate_sources=not bool(auto_no_rotation),
                                 )
                                 st.success(
                                     f"Selesai. Dokumen baru: {report.get('added_documents', 0)}, "
                                     f"chunks baru: {report.get('added_chunks', 0)}, "
                                     f"skip existing: {report.get('skipped_existing', 0)}, "
                                     f"error: {report.get('errors', 0)}"
+                                )
+                                st.caption(
+                                    f"Sumber dipilih: {report.get('sources_selected', 0)}/{report.get('sources_enabled', 0)} | "
+                                    f"offset: {report.get('source_offset', 0)} | "
+                                    f"cursor berikutnya: {report.get('source_cursor_next', 0)} | "
+                                    f"stop reason: {report.get('stop_reason', '-') or '-'}"
                                 )
                                 items = report.get("items") or []
                                 if items:

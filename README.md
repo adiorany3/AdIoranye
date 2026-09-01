@@ -13,7 +13,28 @@ Update KB manual:
 python daily_kb_scraper.py --db .adioranye_power.db --sources kb_sources.json --max-items 5
 ```
 
-Panduan lengkap ada di `README_KB_AUTO_UPDATE.md`.
+Atau pakai runner lokal tanpa GitHub Actions:
+
+```bash
+bash scripts/run_kb_update_local.sh
+```
+
+Env penting untuk update lokal:
+- `KB_SCRAPER_SOURCES_FILE`
+- `KB_SCRAPER_STATE_FILE`
+- `KB_SCRAPER_MAX_ITEMS_PER_SOURCE`
+- `KB_SCRAPER_TIMEOUT`
+- `KB_UPDATE_TIME_BUDGET_SECONDS`
+- `KB_SCRAPER_SOURCE_LIMIT`
+- `KB_SCRAPER_SOURCE_OFFSET`
+- `KB_SCRAPER_NO_SOURCE_ROTATION=1`
+- `KB_SCRAPER_REPORT_FILE=adioranye_kb_update_report.json`
+- `KB_SCRAPER_FORCE=1`
+- `KB_SCRAPER_DRY_RUN=1`
+
+Contoh jalur lokal hemat risiko:
+- `KB_SCRAPER_SOURCE_LIMIT=10 KB_UPDATE_TIME_BUDGET_SECONDS=180 bash scripts/run_kb_update_local.sh`
+- `KB_SCRAPER_DRY_RUN=1 KB_SCRAPER_SOURCE_LIMIT=5 bash scripts/run_kb_update_local.sh`
 
 ## Update: Quality Control & Verifier System
 
