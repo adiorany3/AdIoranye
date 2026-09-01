@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import re
+import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -1411,6 +1412,52 @@ def check_optional_dependency(module_name: str) -> bool:
         return True
     except Exception:
         return False
+
+def run_local_kb_publish(
+    *,
+    run_update_first: bool,
+    source_limit: int,
+    max_items_per_source: int,
+    time_budget_seconds: int,
+    dry_run: bool,
+    force: bool,
+    no_source_rotation: bool,
+) -> Dict[str, Any]:
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    script_path = os.path.join(root_dir, "scripts", "publish_kb_update.sh")
+    env = os.environ.copy()
+    env.update(
+        {
+            "RUN_KB_UPDATE_FIRST": "1" if run_update_first else "0",
+            "KB_SCRAPER_SOURCE_LIMIT": str(max(0, int(source_limit or 0))),
+            "KB_SCRAPER_MAX_ITEMS_PER_SOURCE": str(max(1, int(max_items_per_source or 1))),
+            "KB_UPDATE_TIME_BUDGET_SECONDS": str(max(0, int(time_budget_seconds or 0))),
+            "KB_SCRAPER_DRY_RUN": "1" if dry_run else "0",
+            "KB_SCRAPER_FORCE": "1" if force else "0",
+        }
+    )
+    if no_source_rotation:
+        env["KB_SCRAPER_NO_SOURCE_ROTATION"] = "1"
+    else:
+        env.pop("KB_SCRAPER_NO_SOURCE_ROTATION", None)
+
+    completed = subprocess.run(
+        ["bash", script_path],
+        cwd=root_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=max(60, int(time_budget_seconds or 0) + 120),
+    )
+    output_text = "\n".join(
+        part.strip() for part in [completed.stdout, completed.stderr] if str(part or "").strip()
+    ).strip()
+    return {
+        "ok": completed.returncode == 0,
+        "returncode": completed.returncode,
+        "command": f"bash {script_path}",
+        "output": output_text[:12000],
+    }
 
 
 def file_size_label(path: str) -> str:
@@ -15028,43 +15075,74 @@ def render_power_features_admin_panel() -> None:
                                 help="Aktifkan hanya jika ingin selalu mulai dari sumber awal/state manual.",
                             )
 
-                        if st.button(
-                            "🌐 Update Knowledge Base dari sumber online sekarang",
-                            use_container_width=True,
-                            key="kb_auto_update_now",
-                        ):
-                            try:
-                                report = run_daily_kb_update(
-                                    db_path=power_db_path,
-                                    sources_path=kb_scraper_sources_file,
-                                    state_path=kb_scraper_state_file,
-                                    max_items_per_source=int(auto_max_items),
-                                    timeout=int(kb_scraper_timeout or 20),
-                                    dry_run=bool(auto_dry_run),
-                                    force=bool(auto_force),
-                                    time_budget_seconds=int(auto_time_budget or 0),
-                                    source_limit=int(auto_source_limit or 0),
-                                    auto_rotate_sources=not bool(auto_no_rotation),
-                                )
-                                st.success(
-                                    f"Selesai. Dokumen baru: {report.get('added_documents', 0)}, "
-                                    f"chunks baru: {report.get('added_chunks', 0)}, "
-                                    f"skip existing: {report.get('skipped_existing', 0)}, "
-                                    f"error: {report.get('errors', 0)}"
-                                )
-                                st.caption(
-                                    f"Sumber dipilih: {report.get('sources_selected', 0)}/{report.get('sources_enabled', 0)} | "
-                                    f"offset: {report.get('source_offset', 0)} | "
-                                    f"cursor berikutnya: {report.get('source_cursor_next', 0)} | "
-                                    f"stop reason: {report.get('stop_reason', '-') or '-'}"
-                                )
-                                items = report.get("items") or []
-                                if items:
-                                    st.dataframe(
-                                        items, use_container_width=True, hide_index=True
+                        col_kb_action1, col_kb_action2 = st.columns(2)
+                        with col_kb_action1:
+                            if st.button(
+                                "🌐 Update Knowledge Base dari sumber online sekarang",
+                                use_container_width=True,
+                                key="kb_auto_update_now",
+                            ):
+                                try:
+                                    report = run_daily_kb_update(
+                                        db_path=power_db_path,
+                                        sources_path=kb_scraper_sources_file,
+                                        state_path=kb_scraper_state_file,
+                                        max_items_per_source=int(auto_max_items),
+                                        timeout=int(kb_scraper_timeout or 20),
+                                        dry_run=bool(auto_dry_run),
+                                        force=bool(auto_force),
+                                        time_budget_seconds=int(auto_time_budget or 0),
+                                        source_limit=int(auto_source_limit or 0),
+                                        auto_rotate_sources=not bool(auto_no_rotation),
                                     )
-                            except Exception as exc:
-                                st.error(f"Auto update gagal: {exc}")
+                                    st.success(
+                                        f"Selesai. Dokumen baru: {report.get('added_documents', 0)}, "
+                                        f"chunks baru: {report.get('added_chunks', 0)}, "
+                                        f"skip existing: {report.get('skipped_existing', 0)}, "
+                                        f"error: {report.get('errors', 0)}"
+                                    )
+                                    st.caption(
+                                        f"Sumber dipilih: {report.get('sources_selected', 0)}/{report.get('sources_enabled', 0)} | "
+                                        f"offset: {report.get('source_offset', 0)} | "
+                                        f"cursor berikutnya: {report.get('source_cursor_next', 0)} | "
+                                        f"stop reason: {report.get('stop_reason', '-') or '-'}"
+                                    )
+                                    items = report.get("items") or []
+                                    if items:
+                                        st.dataframe(
+                                            items, use_container_width=True, hide_index=True
+                                        )
+                                except Exception as exc:
+                                    st.error(f"Auto update gagal: {exc}")
+                        with col_kb_action2:
+                            if st.button(
+                                "📤 Update lokal lalu publish GitHub",
+                                use_container_width=True,
+                                key="kb_local_publish_now",
+                            ):
+                                try:
+                                    with st.spinner("Menjalankan update lokal dan publish GitHub..."):
+                                        publish_result = run_local_kb_publish(
+                                            run_update_first=True,
+                                            source_limit=int(auto_source_limit or 0),
+                                            max_items_per_source=int(auto_max_items),
+                                            time_budget_seconds=int(auto_time_budget or 0),
+                                            dry_run=bool(auto_dry_run),
+                                            force=bool(auto_force),
+                                            no_source_rotation=bool(auto_no_rotation),
+                                        )
+                                    if publish_result.get("ok"):
+                                        st.success("Update lokal lalu publish GitHub selesai.")
+                                    else:
+                                        st.error(
+                                            f"Publish GitHub gagal. Exit code: {publish_result.get('returncode', 1)}"
+                                        )
+                                    if publish_result.get("output"):
+                                        st.code(str(publish_result.get("output") or ""), language="bash")
+                                except subprocess.TimeoutExpired:
+                                    st.error("Publish GitHub timeout. Kecilkan sumber atau batas waktu.")
+                                except Exception as exc:
+                                    st.error(f"Publish GitHub gagal: {exc}")
 
                         if st.button(
                             "🧠 Incremental update v2: hash + summary + mirror ke KB",
