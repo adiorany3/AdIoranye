@@ -4,7 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-python daily_kb_scraper.py \
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="$(command -v python3)"
+else
+  PYTHON_BIN="$(command -v python)"
+fi
+
+"$PYTHON_BIN" -m pip install --quiet "requests>=2.31" >/dev/null 2>&1 || true
+
+"$PYTHON_BIN" daily_kb_scraper.py \
   --db "${POWER_DB_PATH:-.adioranye_power.db}" \
   --sources "${KB_SCRAPER_SOURCES_FILE:-kb_sources.json}" \
   --state "${KB_SCRAPER_STATE_FILE:-.adioranye_kb_scrape_state.json}" \
