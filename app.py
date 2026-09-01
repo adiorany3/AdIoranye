@@ -33,7 +33,6 @@ from ai_core import (
     model_price_label,
 )
 from memory_store import MemoryStore, handle_local_memory_command
-from telegram_service import get_telegram_service
 from power_features import (
     get_power_store,
     handle_power_command,
@@ -47,6 +46,14 @@ from db_guard import (
     default_backup_dir,
     default_max_backups,
 )
+
+try:
+    from telegram_service import get_telegram_service
+except Exception:
+    def get_telegram_service(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError(
+            "telegram_service import failed. Check streamlit logs for root cause."
+        )
 
 from daily_kb_scraper import (
     DEFAULT_SOURCES_FILE as KB_DEFAULT_SOURCES_FILE,
