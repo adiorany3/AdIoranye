@@ -1,8 +1,8 @@
 {
-  "created_at": "2026-09-01T03:57:10+00:00",
-  "created_at_wib": "2026-09-01 10:57:10 WIB",
+  "created_at": "2026-09-01T04:16:25+00:00",
+  "created_at_wib": "2026-09-01 11:16:25 WIB",
   "effective_sources_file": "kb_sources_effective.json",
-  "enabled_candidates": 9,
+  "enabled_candidates": 28,
   "max_items": 2,
   "profile": "auto",
   "quota": {
@@ -12,60 +12,60 @@
   },
   "selected": [
     {
+      "name": "MarketWatch Markets",
+      "quality": 55.0,
+      "score": 94.757,
+      "tier": "hot",
+      "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"
+    },
+    {
+      "name": "AP World News",
+      "quality": 55.0,
+      "score": 94.394,
+      "tier": "hot",
+      "url": "https://apnews.com/hub/world-news"
+    },
+    {
+      "name": "AP Technology",
+      "quality": 55.0,
+      "score": 94.048,
+      "tier": "hot",
+      "url": "https://apnews.com/hub/technology"
+    },
+    {
+      "name": "ANTARA Terkini",
+      "quality": 76.0,
+      "score": 90.521,
+      "tier": "hot",
+      "url": "https://www.antaranews.com/rss/terkini.xml"
+    },
+    {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 104.389,
+      "score": 86.41,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
-      "name": "Meta AI Blog",
-      "quality": 55.0,
-      "score": 69.743,
-      "tier": "hot",
-      "url": "https://ai.meta.com/blog/"
-    },
-    {
-      "name": "Google AI",
-      "quality": 55.0,
-      "score": 69.419,
-      "tier": "hot",
-      "url": "https://blog.google/innovation-and-ai/technology/ai/"
-    },
-    {
-      "name": "Hugging Face Blog",
-      "quality": 55.0,
-      "score": 69.146,
-      "tier": "hot",
-      "url": "https://huggingface.co/blog"
-    },
-    {
-      "name": "Google DeepMind News",
-      "quality": 55.0,
-      "score": 59.926,
+      "name": "WHO News",
+      "quality": 92.0,
+      "score": 92.058,
       "tier": "warm",
-      "url": "https://deepmind.google/blog/"
+      "url": "https://www.who.int/rss-feeds/news-english.xml"
     },
     {
-      "name": "arXiv cs.CL Recent",
-      "quality": 55.0,
-      "score": 59.914,
+      "name": "NASA Breaking News",
+      "quality": 92.0,
+      "score": 91.45,
       "tier": "warm",
-      "url": "https://arxiv.org/list/cs.CL/recent"
+      "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss"
     },
     {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 49.948,
+      "score": 31.969,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
-    },
-    {
-      "name": "arXiv cs.AI Recent",
-      "quality": 55.0,
-      "score": 59.86,
-      "tier": "warm",
-      "url": "https://arxiv.org/list/cs.AI/recent"
     }
   ],
   "selected_sources": 8,
@@ -74,13 +74,13 @@
   "source_limit": 8,
   "tier_counts_all": {
     "cold": 1,
-    "hot": 4,
-    "warm": 4
+    "hot": 16,
+    "warm": 11
   },
   "tier_counts_selected": {
     "cold": 1,
-    "hot": 4,
-    "warm": 3
+    "hot": 5,
+    "warm": 2
   },
-  "total_sources": 9
+  "total_sources": 28
 }

@@ -1,5 +1,97 @@
 [
   {
+    "claim_max_items": 6,
+    "collection": "Ekonomi Terkini",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "marketwatch_markets",
+    "max_items": 2,
+    "min_chars": 220,
+    "name": "MarketWatch Markets",
+    "pinned": true,
+    "source_type": "mainstream-media",
+    "summary_sentences": 4,
+    "tags": [
+      "marketwatch",
+      "economy",
+      "business",
+      "current"
+    ],
+    "type": "rss",
+    "update_profile": "hot",
+    "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"
+  },
+  {
+    "claim_max_items": 6,
+    "collection": "Berita Dunia Terkini",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "ap_world",
+    "max_items": 2,
+    "min_chars": 220,
+    "name": "AP World News",
+    "pinned": true,
+    "source_type": "mainstream-media",
+    "summary_sentences": 4,
+    "tags": [
+      "ap",
+      "world",
+      "news",
+      "current"
+    ],
+    "type": "html",
+    "update_profile": "hot",
+    "url": "https://apnews.com/hub/world-news"
+  },
+  {
+    "claim_max_items": 6,
+    "collection": "Teknologi Terkini",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "ap_technology",
+    "max_items": 2,
+    "min_chars": 220,
+    "name": "AP Technology",
+    "pinned": true,
+    "source_type": "mainstream-media",
+    "summary_sentences": 4,
+    "tags": [
+      "ap",
+      "technology",
+      "ai",
+      "current"
+    ],
+    "type": "html",
+    "update_profile": "hot",
+    "url": "https://apnews.com/hub/technology"
+  },
+  {
+    "claim_max_items": 6,
+    "collection": "Indonesia Terkini",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "antara_terkini",
+    "max_items": 2,
+    "min_chars": 220,
+    "name": "ANTARA Terkini",
+    "pinned": true,
+    "source_type": "mainstream-media",
+    "summary_sentences": 4,
+    "tags": [
+      "antara",
+      "indonesia",
+      "news",
+      "current"
+    ],
+    "type": "rss",
+    "update_profile": "hot",
+    "url": "https://www.antaranews.com/rss/terkini.xml"
+  },
+  {
     "collection": "AI Official Updates",
     "confidence": "high",
     "enabled": true,
@@ -20,96 +112,50 @@
     "url": "https://openai.com/news/rss.xml"
   },
   {
-    "collection": "AI Official Updates",
+    "claim_max_items": 6,
+    "collection": "Kesehatan Global Terkini",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "meta_ai_blog",
+    "id": "who_news",
     "max_items": 2,
-    "name": "Meta AI Blog",
-    "source_type": "official",
+    "min_chars": 220,
+    "name": "WHO News",
+    "pinned": true,
+    "source_type": "official-health",
+    "summary_sentences": 4,
     "tags": [
-      "meta",
-      "ai",
-      "official"
+      "who",
+      "health",
+      "official",
+      "current"
     ],
-    "type": "html",
-    "update_profile": "hot",
-    "url": "https://ai.meta.com/blog/"
-  },
-  {
-    "collection": "AI Official Updates",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "google_ai",
-    "max_items": 2,
-    "name": "Google AI",
-    "source_type": "official",
-    "tags": [
-      "google",
-      "ai",
-      "official"
-    ],
-    "type": "html",
-    "update_profile": "hot",
-    "url": "https://blog.google/innovation-and-ai/technology/ai/"
-  },
-  {
-    "collection": "Open Source AI",
-    "confidence": "medium",
-    "enabled": true,
-    "freshness": "current",
-    "id": "huggingface_blog",
-    "max_items": 2,
-    "name": "Hugging Face Blog",
-    "source_type": "community-platform",
-    "tags": [
-      "huggingface",
-      "open-source",
-      "ai"
-    ],
-    "type": "html",
-    "update_profile": "hot",
-    "url": "https://huggingface.co/blog"
-  },
-  {
-    "collection": "AI Research Updates",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "google_deepmind",
-    "max_items": 2,
-    "name": "Google DeepMind News",
-    "source_type": "official",
-    "tags": [
-      "deepmind",
-      "ai",
-      "research",
-      "official"
-    ],
-    "type": "html",
+    "type": "rss",
     "update_profile": "warm",
-    "url": "https://deepmind.google/blog/"
+    "url": "https://www.who.int/rss-feeds/news-english.xml"
   },
   {
-    "collection": "NLP Research Papers",
-    "confidence": "medium",
+    "claim_max_items": 6,
+    "collection": "Sains dan Antariksa Terkini",
+    "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "arxiv_cs_cl",
+    "id": "nasa_breaking",
     "max_items": 2,
-    "name": "arXiv cs.CL Recent",
-    "source_type": "research",
+    "min_chars": 220,
+    "name": "NASA Breaking News",
+    "pinned": true,
+    "source_type": "official-science",
+    "summary_sentences": 4,
     "tags": [
-      "arxiv",
-      "research",
-      "nlp",
-      "llm"
+      "nasa",
+      "science",
+      "space",
+      "official"
     ],
-    "type": "html",
+    "type": "rss",
     "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.CL/recent"
+    "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss"
   },
   {
     "collection": "Adioranye Tech Stack",
@@ -128,24 +174,5 @@
     "type": "html",
     "update_profile": "cold",
     "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
-  },
-  {
-    "collection": "AI Research Papers",
-    "confidence": "medium",
-    "enabled": true,
-    "freshness": "current",
-    "id": "arxiv_cs_ai",
-    "max_items": 2,
-    "name": "arXiv cs.AI Recent",
-    "source_type": "research",
-    "tags": [
-      "arxiv",
-      "research",
-      "ai",
-      "papers"
-    ],
-    "type": "html",
-    "update_profile": "warm",
-    "url": "https://arxiv.org/list/cs.AI/recent"
   }
 ]

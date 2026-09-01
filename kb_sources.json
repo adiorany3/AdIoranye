@@ -157,6 +157,420 @@
       "source_type": "official-docs",
       "confidence": "high",
       "freshness": "current"
+    },
+    {
+      "id": "ap_world",
+      "name": "AP World News",
+      "type": "html",
+      "url": "https://apnews.com/hub/world-news",
+      "enabled": true,
+      "collection": "Berita Dunia Terkini",
+      "tags": [
+        "ap",
+        "world",
+        "news",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "mainstream-media",
+      "confidence": "high",
+      "freshness": "current",
+      "pinned": true,
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "ap_technology",
+      "name": "AP Technology",
+      "type": "html",
+      "url": "https://apnews.com/hub/technology",
+      "enabled": true,
+      "collection": "Teknologi Terkini",
+      "tags": [
+        "ap",
+        "technology",
+        "ai",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "mainstream-media",
+      "confidence": "high",
+      "freshness": "current",
+      "pinned": true,
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "bbc_world",
+      "name": "BBC World",
+      "type": "rss",
+      "url": "http://feeds.bbci.co.uk/news/world/rss.xml",
+      "enabled": true,
+      "collection": "Berita Dunia Terkini",
+      "tags": [
+        "bbc",
+        "world",
+        "news",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "mainstream-media",
+      "confidence": "high",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "bbc_technology",
+      "name": "BBC Technology",
+      "type": "rss",
+      "url": "http://feeds.bbci.co.uk/news/technology/rss.xml",
+      "enabled": true,
+      "collection": "Teknologi Terkini",
+      "tags": [
+        "bbc",
+        "technology",
+        "ai",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "mainstream-media",
+      "confidence": "high",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "antara_terkini",
+      "name": "ANTARA Terkini",
+      "type": "rss",
+      "url": "https://www.antaranews.com/rss/terkini.xml",
+      "enabled": true,
+      "collection": "Indonesia Terkini",
+      "tags": [
+        "antara",
+        "indonesia",
+        "news",
+        "current"
+      ],
+      "max_items": 4,
+      "source_type": "mainstream-media",
+      "confidence": "high",
+      "freshness": "current",
+      "pinned": true,
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "antara_tekno",
+      "name": "ANTARA Tekno",
+      "type": "rss",
+      "url": "https://www.antaranews.com/rss/tekno.xml",
+      "enabled": true,
+      "collection": "Teknologi Indonesia Terkini",
+      "tags": [
+        "antara",
+        "indonesia",
+        "technology",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "mainstream-media",
+      "confidence": "high",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "who_news",
+      "name": "WHO News",
+      "type": "rss",
+      "url": "https://www.who.int/rss-feeds/news-english.xml",
+      "enabled": true,
+      "collection": "Kesehatan Global Terkini",
+      "tags": [
+        "who",
+        "health",
+        "official",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "official-health",
+      "confidence": "high",
+      "freshness": "current",
+      "pinned": true,
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "fao_newsroom",
+      "name": "FAO Newsroom",
+      "type": "rss",
+      "url": "https://www.fao.org/newsroom/rss/en/",
+      "enabled": true,
+      "collection": "Pangan dan Pertanian Terkini",
+      "tags": [
+        "fao",
+        "agriculture",
+        "food",
+        "official"
+      ],
+      "max_items": 3,
+      "source_type": "official-agriculture",
+      "confidence": "high",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "kemkes_rilis",
+      "name": "Kemenkes RI Rilis",
+      "type": "html_index",
+      "url": "https://sehatnegeriku.kemkes.go.id/category/rilis-media/",
+      "enabled": true,
+      "collection": "Kesehatan Indonesia Terkini",
+      "tags": [
+        "kemkes",
+        "indonesia",
+        "health",
+        "official"
+      ],
+      "max_items": 3,
+      "source_type": "government",
+      "confidence": "high",
+      "freshness": "current",
+      "include_patterns": [
+        "rilis-media",
+        "sehatnegeriku"
+      ],
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 260
+    },
+    {
+      "id": "pertanian_berita",
+      "name": "Kementan Berita",
+      "type": "html_index",
+      "url": "https://pertanian.go.id/home/?show=page&act=view&id=61",
+      "enabled": true,
+      "collection": "Pertanian Indonesia Terkini",
+      "tags": [
+        "kementan",
+        "indonesia",
+        "agriculture",
+        "official"
+      ],
+      "max_items": 3,
+      "source_type": "government",
+      "confidence": "high",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 260
+    },
+    {
+      "id": "marketwatch_markets",
+      "name": "MarketWatch Markets",
+      "type": "rss",
+      "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse",
+      "enabled": true,
+      "collection": "Ekonomi Terkini",
+      "tags": [
+        "marketwatch",
+        "economy",
+        "business",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "mainstream-media",
+      "confidence": "high",
+      "freshness": "current",
+      "pinned": true,
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "cnbc_markets",
+      "name": "CNBC Markets",
+      "type": "rss",
+      "url": "https://www.cnbc.com/id/19746125/device/rss/rss.html",
+      "enabled": true,
+      "collection": "Pasar Terkini",
+      "tags": [
+        "cnbc",
+        "markets",
+        "stocks",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "mainstream-media",
+      "confidence": "medium",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "marketwatch_top",
+      "name": "MarketWatch Top Stories",
+      "type": "rss",
+      "url": "http://feeds.marketwatch.com/marketwatch/topstories/",
+      "enabled": true,
+      "collection": "Pasar Terkini",
+      "tags": [
+        "marketwatch",
+        "markets",
+        "investing",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "financial-media",
+      "confidence": "medium",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "nasa_breaking",
+      "name": "NASA Breaking News",
+      "type": "rss",
+      "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss",
+      "enabled": true,
+      "collection": "Sains dan Antariksa Terkini",
+      "tags": [
+        "nasa",
+        "science",
+        "space",
+        "official"
+      ],
+      "max_items": 3,
+      "source_type": "official-science",
+      "confidence": "high",
+      "freshness": "current",
+      "pinned": true,
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "physorg_science",
+      "name": "Phys.org Latest Science News",
+      "type": "rss",
+      "url": "https://phys.org/rss-feed/",
+      "enabled": true,
+      "collection": "Sains Terkini",
+      "tags": [
+        "science",
+        "research",
+        "physorg",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "science-media",
+      "confidence": "medium",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "usgs_earthquakes",
+      "name": "USGS Significant Earthquakes",
+      "type": "rss",
+      "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom",
+      "enabled": true,
+      "collection": "Bencana Terkini",
+      "tags": [
+        "usgs",
+        "earthquake",
+        "disaster",
+        "official"
+      ],
+      "max_items": 4,
+      "source_type": "official-disaster",
+      "confidence": "high",
+      "freshness": "current",
+      "pinned": true,
+      "summary_sentences": 3,
+      "claim_max_items": 6,
+      "min_chars": 180
+    },
+    {
+      "id": "reliefweb_updates",
+      "name": "ReliefWeb Updates",
+      "type": "rss",
+      "url": "https://reliefweb.int/updates/rss.xml",
+      "enabled": true,
+      "collection": "Bencana dan Krisis Terkini",
+      "tags": [
+        "reliefweb",
+        "humanitarian",
+        "disaster",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "humanitarian",
+      "confidence": "high",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
+    },
+    {
+      "id": "iea_news",
+      "name": "IEA News",
+      "type": "html_index",
+      "url": "https://www.iea.org/news",
+      "enabled": true,
+      "collection": "Energi Global Terkini",
+      "tags": [
+        "iea",
+        "energy",
+        "official",
+        "current"
+      ],
+      "max_items": 3,
+      "source_type": "official-energy",
+      "confidence": "high",
+      "freshness": "current",
+      "include_patterns": [
+        "/news/",
+        "iea.org"
+      ],
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 260
+    },
+    {
+      "id": "energygov_news",
+      "name": "Energy.gov News",
+      "type": "rss",
+      "url": "https://www.energy.gov/rss.xml",
+      "enabled": true,
+      "collection": "Energi dan Inovasi Terkini",
+      "tags": [
+        "energy",
+        "government",
+        "innovation",
+        "official"
+      ],
+      "max_items": 3,
+      "source_type": "government-energy",
+      "confidence": "high",
+      "freshness": "current",
+      "summary_sentences": 4,
+      "claim_max_items": 6,
+      "min_chars": 220
     }
   ]
 }
