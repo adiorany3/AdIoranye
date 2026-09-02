@@ -2075,6 +2075,8 @@ def init_state() -> None:
         st.session_state.reply_target_index = None
     if "reply_target_preview" not in st.session_state:
         st.session_state.reply_target_preview = ""
+    if "reply_composer_prefill" not in st.session_state:
+        st.session_state.reply_composer_prefill = ""
     if "session_memory" not in st.session_state:
         st.session_state.session_memory = []
     if "session_memory_updated_at" not in st.session_state:
@@ -14079,6 +14081,7 @@ def render_public_page() -> None:
             st.session_state.pending_prompt = ""
             st.session_state.reply_target_index = None
             st.session_state.reply_target_preview = ""
+            st.session_state.reply_composer_prefill = ""
             st.rerun()
     with col_info:
         st.caption(f"💬 {len(st.session_state.chat_messages)} pesan")
@@ -14098,6 +14101,7 @@ def render_public_page() -> None:
         if st.button("Batal reply", use_container_width=True, key="cancel_reply_target"):
             st.session_state.reply_target_index = None
             st.session_state.reply_target_preview = ""
+            st.session_state.reply_composer_prefill = ""
             st.rerun()
 
     if st.session_state.chat_messages:
@@ -14128,10 +14132,17 @@ def render_public_page() -> None:
                 key=f"reply_history_{idx}",
                 use_container_width=False,
             ):
-                st.session_state.reply_target_index = idx
-                st.session_state.reply_target_preview = _compact_text_for_context(
-                    str(msg.get("content") or ""),
+                reply_source_text = str(msg.get("content") or "").strip()
+                reply_preview = _compact_text_for_context(
+                    reply_source_text,
                     max_chars=220,
+                )
+                draft_text = str(st.session_state.get("chat_input", "") or "").strip()
+                quote_block = f"> {reply_preview.replace(chr(10), chr(10) + '> ')}"
+                st.session_state.reply_target_index = idx
+                st.session_state.reply_target_preview = reply_preview
+                st.session_state.reply_composer_prefill = (
+                    f"{quote_block}\n\n{draft_text}" if draft_text else f"{quote_block}\n\n"
                 )
                 st.rerun()
             if msg.get("role") == "assistant":
@@ -14152,9 +14163,14 @@ def render_public_page() -> None:
                     key_prefix=f"history_feedback_{idx}",
                 )
 
+    if st.session_state.reply_composer_prefill:
+        st.session_state.chat_input = st.session_state.reply_composer_prefill
+        st.session_state.reply_composer_prefill = ""
+
     # Spacer is rendered at the very end so it also protects newly generated messages.
     typed_input = st.chat_input(
-        "Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode..."
+        "Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode...",
+        key="chat_input",
     )
     user_input = st.session_state.pending_prompt or typed_input
     if st.session_state.pending_prompt:
@@ -14913,6 +14929,7 @@ def render_public_page() -> None:
         )
         st.session_state.reply_target_index = None
         st.session_state.reply_target_preview = ""
+        st.session_state.reply_composer_prefill = ""
 
         if (
             meta
