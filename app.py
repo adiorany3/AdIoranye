@@ -123,7 +123,7 @@ st.set_page_config(
     page_title="Adioranye AI by Galuh Adi Insani",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 
@@ -14100,7 +14100,7 @@ def render_public_sidebar() -> None:
             '<div class="chat-sidebar-brand"><span class="chat-sidebar-mark">AI</span><span>Adioranye AI</span></div>',
             unsafe_allow_html=True,
         )
-        if st.button("＋ Chat baru", use_container_width=True, key="sidebar_new_chat"):
+        if st.button("＋ New chat", use_container_width=True, key="sidebar_new_chat"):
             st.session_state.chat_messages = []
             st.session_state.pending_prompt = ""
             st.session_state.reply_target_index = None
