@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-09-01T04:16:26+00:00",
-  "started_at_wib": "2026-09-01 11:16:26 WIB",
+  "started_at": "2026-09-02T03:45:52+00:00",
+  "started_at_wib": "2026-09-02 10:45:52 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources_effective.json",
   "dry_run": false,
@@ -14,11 +14,37 @@
   "time_budget_seconds": 0,
   "stopped_by_time_budget": false,
   "added_documents": 5,
-  "added_chunks": 30,
-  "skipped_existing": 2,
-  "skipped_short": 4,
+  "added_chunks": 28,
+  "skipped_existing": 1,
+  "skipped_short": 5,
   "errors": 2,
   "items": [
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Dukung penerbangan hijau, Pertamina Patra Niaga perluas layanan SAF - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5721904/dukung-penerbangan-hijau-pertamina-patra-niaga-perluas-layanan-saf",
+      "doc_id": 2198,
+      "chunks": 1,
+      "chars": 1013,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Kemenpar perkuat penetrasi pasar India melalui ITB India 2026 - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5721900/kemenpar-perkuat-penetrasi-pasar-india-melalui-itb-india-2026",
+      "doc_id": 2199,
+      "chunks": 1,
+      "chars": 995,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
     {
       "source": "MarketWatch Markets",
       "status": "skipped_short",
@@ -34,11 +60,32 @@
       "chars": 196
     },
     {
-      "source": "AP World News",
-      "status": "error_source",
-      "title": "AP World News",
-      "url": "https://apnews.com/hub/world-news",
-      "message": "403 Client Error: Forbidden for url: https://apnews.com/hub/world-news"
+      "source": "OpenAI News",
+      "status": "added",
+      "title": "OpenAI News — How AI-native companies turn workflows into operating capability | OpenAI",
+      "url": "https://openai.com/index/ai-native-company-workflows",
+      "doc_id": 2200,
+      "chunks": 10,
+      "chars": 12330,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 8
+    },
+    {
+      "source": "OpenAI News",
+      "status": "skipped_low_quality",
+      "title": "Path to Astra: critical capabilities and frontier safeguards | OpenAI",
+      "url": "https://openai.com/index/path-to-astra",
+      "chars": 15812,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 181,
+        "unique_words": 739,
+        "char_count": 15812
+      }
     },
     {
       "source": "AP Technology",
@@ -48,74 +95,34 @@
       "message": "403 Client Error: Forbidden for url: https://apnews.com/hub/technology"
     },
     {
-      "source": "ANTARA Terkini",
+      "source": "AP World News",
+      "status": "error_source",
+      "title": "AP World News",
+      "url": "https://apnews.com/hub/world-news",
+      "message": "403 Client Error: Forbidden for url: https://apnews.com/hub/world-news"
+    },
+    {
+      "source": "USGS Significant Earthquakes",
+      "status": "skipped_short",
+      "title": "M 5.2 Landslide - 55 km NW of Kodāri̇̄, Nepal",
+      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000tbwb",
+      "chars": 157
+    },
+    {
+      "source": "USGS Significant Earthquakes",
+      "status": "skipped_short",
+      "title": "M 4.9 - 4 km NNE of Jalālābād, Afghanistan",
+      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tna9",
+      "chars": 157
+    },
+    {
+      "source": "NASA Breaking News",
       "status": "added",
-      "title": "ANTARA Terkini — Karhutla 2026: Menyelamatkan satwa, menjaga rumahnya - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5720023/karhutla-2026-menyelamatkan-satwa-menjaga-rumahnya",
-      "doc_id": 2193,
-      "chunks": 1,
-      "chars": 979,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — WSJ: Dan Driscoll mundur usai berselisih dengan Menteri Perang - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5720019/wsj-dan-driscoll-mundur-usai-berselisih-dengan-menteri-perang",
-      "doc_id": 2194,
-      "chunks": 1,
-      "chars": 1003,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "OpenAI News",
-      "status": "skipped_existing",
-      "title": "Polimill builds Japan's next-generation public AI infrastructure | OpenAI",
-      "url": "https://openai.com/index/polimill",
-      "chars": 10938
-    },
-    {
-      "source": "OpenAI News",
-      "status": "skipped_low_quality",
-      "title": "A milestone in expanding access to AI | OpenAI",
-      "url": "https://openai.com/index/expanding-access-to-ai-with-chatgpt-ads",
-      "chars": 6803,
-      "content_quality_score": 76.0,
-      "content_quality_flags": {
-        "thin_content": false,
-        "boilerplate_heavy": true,
-        "sentence_count": 122,
-        "unique_words": 411,
-        "char_count": 6803
-      }
-    },
-    {
-      "source": "WHO News",
-      "status": "added",
-      "title": "WHO News — WHO Director-General visits Jordan to recognize strong collaboration on health system delivery, emergency relief and advancing mental health",
-      "url": "https://www.who.int/news/item/25-02-2026-who-director-general-visits-jordan-to-recognize-strong-collaboration-on-health-system-delivery--emergency-relief-and-advancing-mental-health",
-      "doc_id": 2195,
-      "chunks": 10,
-      "chars": 11201,
-      "source_quality": 92.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
-    },
-    {
-      "source": "WHO News",
-      "status": "added",
-      "title": "WHO News — WHO statement on notification of withdrawal of the United States",
-      "url": "https://www.who.int/news/item/24-01-2026-who-statement-on-notification-of-withdrawal-of-the-united-states",
-      "doc_id": 2196,
-      "chunks": 9,
-      "chars": 10061,
+      "title": "NASA Breaking News — NASA Selects Blue Origin as Mars Telecommunications Network Provider - NASA",
+      "url": "https://www.nasa.gov/news-release/nasa-selects-blue-origin-as-mars-telecommunications-network-provider/",
+      "doc_id": 2201,
+      "chunks": 8,
+      "chars": 10046,
       "source_quality": 92.0,
       "freshness_score": 100.0,
       "criticality_score": 34,
@@ -124,30 +131,15 @@
     {
       "source": "NASA Breaking News",
       "status": "added",
-      "title": "NASA Breaking News — NASA Welcomes Türkiye as Newest Artemis Accords Signatory   - NASA",
-      "url": "https://www.nasa.gov/organizations/oiir/artemis-accords/nasa-welcomes-turkiye-as-newest-artemis-accords-signatory/",
-      "doc_id": 2197,
-      "chunks": 9,
-      "chars": 11312,
+      "title": "NASA Breaking News — What’s Up: September 2026 Skywatching Tips from NASA",
+      "url": "https://science.nasa.gov/solar-system/skywatching/whats-up-september-2026-skywatching-tips-from-nasa/",
+      "doc_id": 2202,
+      "chunks": 8,
+      "chars": 10679,
       "source_quality": 92.0,
       "freshness_score": 100.0,
       "criticality_score": 34,
       "claims": 6
-    },
-    {
-      "source": "NASA Breaking News",
-      "status": "skipped_low_quality",
-      "title": "September 2026 Satellite Puzzler - NASA Science",
-      "url": "https://science.nasa.gov/earth/earth-observatory/september-2026-satellite-puzzler/",
-      "chars": 6833,
-      "content_quality_score": 76.0,
-      "content_quality_flags": {
-        "thin_content": false,
-        "boilerplate_heavy": true,
-        "sentence_count": 233,
-        "unique_words": 467,
-        "char_count": 6833
-      }
     },
     {
       "source": "Streamlit Release Notes",
@@ -159,7 +151,7 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 18,
+  "critical_claims_added": 20,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -174,11 +166,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260901_111626_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_104552_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260901_083618_pre-update.db"
+          ".db_backups/adioranye_power.db_20260901_083801_pre-update.db"
         ]
       }
     },
@@ -214,11 +206,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260901_111645_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_104609_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260901_083637_post-update.db"
+          ".db_backups/adioranye_power.db_20260901_083807_post-update.db"
         ]
       }
     }
@@ -819,8 +811,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-09-01T04:16:45+00:00",
-  "finished_at_wib": "2026-09-01 11:16:45 WIB",
-  "elapsed_seconds": 19.19,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-01 11:16:45 WIB\nDokumen baru: 5 | Chunk baru: 30 | Error: 2\n\nTop update penting:\n1. WHO News — WHO Director-General visits Jordan to recognize strong collaboration on health system delivery, emergency relief and advancing mental health\n   Sumber: WHO News | kualitas: 92.0 | freshness: 100.0\n2. WHO News — WHO statement on notification of withdrawal of the United States\n   Sumber: WHO News | kualitas: 92.0 | freshness: 100.0\n3. NASA Breaking News — NASA Welcomes Türkiye as Newest Artemis Accords Signatory   - NASA\n   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0\n4. ANTARA Terkini — Karhutla 2026: Menyelamatkan satwa, menjaga rumahnya - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — WSJ: Dan Driscoll mundur usai berselisih dengan Menteri Perang - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-09-02T03:46:09+00:00",
+  "finished_at_wib": "2026-09-02 10:46:09 WIB",
+  "elapsed_seconds": 17.01,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-02 10:46:09 WIB\nDokumen baru: 5 | Chunk baru: 28 | Error: 2\n\nTop update penting:\n1. NASA Breaking News — NASA Selects Blue Origin as Mars Telecommunications Network Provider - NASA\n   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0\n2. NASA Breaking News — What’s Up: September 2026 Skywatching Tips from NASA\n   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0\n3. ANTARA Terkini — Dukung penerbangan hijau, Pertamina Patra Niaga perluas layanan SAF - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n4. ANTARA Terkini — Kemenpar perkuat penetrasi pasar India melalui ITB India 2026 - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. OpenAI News — How AI-native companies turn workflows into operating capability | OpenAI\n   Sumber: OpenAI News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
