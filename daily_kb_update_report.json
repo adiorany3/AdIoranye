@@ -1,9 +1,9 @@
 {
-  "started_at": "2026-09-02T14:13:11+00:00",
-  "started_at_wib": "2026-09-02 21:13:11 WIB",
+  "started_at": "2026-09-02T14:16:05+00:00",
+  "started_at_wib": "2026-09-02 21:16:05 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources.json",
-  "dry_run": true,
+  "dry_run": false,
   "force": false,
   "sources_total": 29,
   "sources_enabled": 29,
@@ -13,8 +13,8 @@
   "source_cursor_next": 3,
   "time_budget_seconds": 0,
   "stopped_by_time_budget": false,
-  "added_documents": 0,
-  "added_chunks": 0,
+  "added_documents": 8,
+  "added_chunks": 15,
   "skipped_existing": 47,
   "skipped_short": 34,
   "errors": 4,
@@ -144,7 +144,7 @@
       "status": "skipped_existing",
       "title": "Rosenberg: Putin's veiled threat to UK part of Russia's campaign against West - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c62j50n131mo?at_medium=RSS&at_campaign=rss",
-      "chars": 6977
+      "chars": 6991
     },
     {
       "source": "BBC World",
@@ -158,7 +158,7 @@
       "status": "skipped_existing",
       "title": "Zelensky says airlines should avoid Russian airspace as Ukraine escalates drone operations - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c9v9yydy2wvo?at_medium=RSS&at_campaign=rss",
-      "chars": 8994
+      "chars": 9036
     },
     {
       "source": "BBC World",
@@ -172,43 +172,69 @@
       "status": "skipped_existing",
       "title": "Criminals publish data of 8.7m people after Manchester Airports Group hack - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c74k39g3ee5o?at_medium=RSS&at_campaign=rss",
-      "chars": 6231
+      "chars": 6454
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "Which? says fake 10 Downing Street listing exposes 'unfit' Booking.com checks - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cly4e0wn452o?at_medium=RSS&at_campaign=rss",
-      "chars": 7733
+      "chars": 7775
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "Autonomous aircraft: Pilot-free crop dusters lead the way - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c1l123mmrg7o?at_medium=RSS&at_campaign=rss",
-      "chars": 12138
+      "chars": 12180
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "AI could cause global economic downturn, Andrew Bailey warns G20 - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c99dym3prl1o?at_medium=RSS&at_campaign=rss",
-      "chars": 5892
+      "chars": 5934
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "Amazon rigged $20bn worth of ads, US FTC lawsuit alleges - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cvgy91nvy27o?at_medium=RSS&at_campaign=rss",
-      "chars": 5883
+      "chars": 5925
     },
     {
       "source": "ANTARA Terkini",
-      "status": "dry_run",
+      "status": "added",
+      "title": "ANTARA Terkini — KLH lakukan penegakan hukum terhadap 21 perusahaan terkait karhutla - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723224/klh-lakukan-penegakan-hukum-terhadap-21-perusahaan-terkait-karhutla",
+      "doc_id": 2251,
+      "chunks": 1,
+      "chars": 1011,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Kemendikdasmen: ISPU jadi indikator sekolah di daerah karhutla - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723220/kemendikdasmen-ispu-jadi-indikator-sekolah-di-daerah-karhutla",
+      "doc_id": 2252,
+      "chunks": 1,
+      "chars": 1002,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
       "title": "ANTARA Terkini — Sabar/Reza redam pertahanan ganda Korsel untuk melaju di China Masters - ANTARA News",
       "url": "https://www.antaranews.com/berita/5723219/sabar-reza-redam-pertahanan-ganda-korsel-untuk-melaju-di-china-masters",
-      "doc_id": 0,
-      "chunks": 0,
+      "doc_id": 2253,
+      "chunks": 1,
       "chars": 1016,
       "source_quality": 76.0,
       "freshness_score": 100.0,
@@ -217,11 +243,11 @@
     },
     {
       "source": "ANTARA Terkini",
-      "status": "dry_run",
+      "status": "added",
       "title": "ANTARA Terkini — KADIN perkuat daya saing ekspor lewat pelatihan dan akses pasar - ANTARA News",
       "url": "https://www.antaranews.com/berita/5723216/kadin-perkuat-daya-saing-ekspor-lewat-pelatihan-dan-akses-pasar",
-      "doc_id": 0,
-      "chunks": 0,
+      "doc_id": 2254,
+      "chunks": 1,
       "chars": 1000,
       "source_quality": 76.0,
       "freshness_score": 100.0,
@@ -230,38 +256,12 @@
     },
     {
       "source": "ANTARA Terkini",
-      "status": "dry_run",
+      "status": "added",
       "title": "ANTARA Terkini — Serangan Israel di Gaza tewaskan dua anak dan seorang perempuan - ANTARA News",
       "url": "https://www.antaranews.com/video/5723201/serangan-israel-di-gaza-tewaskan-dua-anak-dan-seorang-perempuan",
-      "doc_id": 0,
-      "chunks": 0,
+      "doc_id": 2255,
+      "chunks": 1,
       "chars": 1001,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "dry_run",
-      "title": "ANTARA Terkini — Persija pinjamkan Van Basty Sousa ke sesama klub Super League - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5723211/persija-pinjamkan-van-basty-sousa-ke-sesama-klub-super-league",
-      "doc_id": 0,
-      "chunks": 0,
-      "chars": 986,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "dry_run",
-      "title": "ANTARA Terkini — CFX ikut dukung kontingen RI di Asian Games Aichi-Nagoya 2026 - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5723207/cfx-ikut-dukung-kontingen-ri-di-asian-games-aichi-nagoya-2026",
-      "doc_id": 0,
-      "chunks": 0,
-      "chars": 1003,
       "source_quality": 76.0,
       "freshness_score": 100.0,
       "criticality_score": 100,
@@ -608,66 +608,66 @@
     },
     {
       "source": "Phys.org Latest Science News",
-      "status": "skipped_low_quality",
-      "title": "Hawai'i high school students name image of glittering galaxy pair",
+      "status": "added",
+      "title": "Phys.org Latest Science News — Hawai'i high school students name image of glittering galaxy pair",
       "url": "https://phys.org/news/2026-09-hawaii-high-school-students-image.html",
-      "chars": 300,
+      "doc_id": 2256,
+      "chunks": 2,
+      "chars": 1531,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 3
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "skipped_low_quality",
+      "title": "Bio-based plastic turns into fertilizer after use",
+      "url": "https://phys.org/news/2026-09-bio-based-plastic-fertilizer.html",
+      "chars": 356,
       "content_quality_score": 42.0,
       "content_quality_flags": {
         "thin_content": true,
         "boilerplate_heavy": false,
         "sentence_count": 2,
-        "unique_words": 40,
-        "char_count": 300
+        "unique_words": 41,
+        "char_count": 356
       }
     },
     {
       "source": "Phys.org Latest Science News",
-      "status": "dry_run",
-      "title": "Phys.org Latest Science News — Bio-based plastic turns into fertilizer after use",
-      "url": "https://phys.org/news/2026-09-bio-based-plastic-fertilizer.html",
-      "doc_id": 0,
-      "chunks": 0,
-      "chars": 1678,
+      "status": "added",
+      "title": "Phys.org Latest Science News — DNA testing shows what's really in Western Australian fish and chip shop 'shark' filets",
+      "url": "https://phys.org/news/2026-08-dna-western-australian-fish-chip.html",
+      "doc_id": 2257,
+      "chunks": 1,
+      "chars": 1315,
       "source_quality": 55.0,
       "freshness_score": 100.0,
       "criticality_score": 68,
-      "claims": 3
+      "claims": 2
     },
     {
       "source": "Phys.org Latest Science News",
       "status": "skipped_low_quality",
-      "title": "DNA testing shows what's really in Western Australian fish and chip shop 'shark' filets",
-      "url": "https://phys.org/news/2026-08-dna-western-australian-fish-chip.html",
-      "chars": 222,
+      "title": "A 13-meter rocket hit the Moon: Tasmanian researchers helped track it there",
+      "url": "https://phys.org/news/2026-09-meter-rocket-moon-tasmanian-track.html",
+      "chars": 327,
       "content_quality_score": 42.0,
       "content_quality_flags": {
         "thin_content": true,
         "boilerplate_heavy": false,
-        "sentence_count": 1,
-        "unique_words": 36,
-        "char_count": 222
+        "sentence_count": 2,
+        "unique_words": 43,
+        "char_count": 327
       }
-    },
-    {
-      "source": "Phys.org Latest Science News",
-      "status": "dry_run",
-      "title": "Phys.org Latest Science News — A 13-meter rocket hit the Moon: Tasmanian researchers helped track it there",
-      "url": "https://phys.org/news/2026-09-meter-rocket-moon-tasmanian-track.html",
-      "doc_id": 0,
-      "chunks": 0,
-      "chars": 1622,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 68,
-      "claims": 3
     },
     {
       "source": "Phys.org Latest Science News",
       "status": "skipped_existing",
       "title": "Physicists test the weak equivalence principle in an orbiting space station",
       "url": "https://phys.org/news/2026-09-physicists-weak-equivalence-principle-orbiting.html",
-      "chars": 383
+      "chars": 527
     },
     {
       "source": "USGS Significant Earthquakes",
@@ -713,11 +713,11 @@
     },
     {
       "source": "ReliefWeb Updates",
-      "status": "dry_run",
+      "status": "added",
       "title": "ReliefWeb Updates — Présence opérationnelle des partenaires national MVE-BVD au 31 août 2026 - Democratic Republic of the Congo | ReliefWeb",
       "url": "https://reliefweb.int/report/democratic-republic-congo/presence-operationnelle-des-partenaires-national-mve-bvd-au-31-aout-2026",
-      "doc_id": 0,
-      "chunks": 0,
+      "doc_id": 2258,
+      "chunks": 7,
       "chars": 4705,
       "source_quality": 55.0,
       "freshness_score": 100.0,
@@ -865,9 +865,69 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 12,
+  "critical_claims_added": 11,
   "db_guard": {
-    "enabled": false
+    "enabled": true,
+    "precheck": {
+      "ok": true,
+      "action": "healthy",
+      "db_path": ".adioranye_power.db",
+      "backup_path": "",
+      "message": "Database sehat.",
+      "details": {}
+    },
+    "pre_update_backup": {
+      "ok": true,
+      "action": "backup_created",
+      "db_path": ".adioranye_power.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_211605_pre-update.db",
+      "message": "Backup database berhasil dibuat.",
+      "details": {
+        "removed": [
+          ".db_backups/adioranye_power.db_20260901_110612_pre-update.db"
+        ]
+      }
+    },
+    "checkpoint_after_update": {
+      "ok": true,
+      "action": "checkpoint",
+      "db_path": ".adioranye_power.db",
+      "backup_path": "",
+      "message": "WAL checkpoint selesai.",
+      "details": {
+        "rows": [
+          [
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    "final_integrity_check": {
+      "ok": true,
+      "action": "quick_check",
+      "db_path": ".adioranye_power.db",
+      "backup_path": "",
+      "message": "ok",
+      "details": {
+        "rows": [
+          "ok"
+        ]
+      }
+    },
+    "post_update_backup": {
+      "ok": true,
+      "action": "backup_created",
+      "db_path": ".adioranye_power.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_211815_post-update.db",
+      "message": "Backup database berhasil dibuat.",
+      "details": {
+        "removed": [
+          ".db_backups/adioranye_power.db_20260901_110624_post-update.db"
+        ]
+      }
+    }
   },
   "watchlist": [
     {
@@ -1465,8 +1525,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-09-02T14:15:40+00:00",
-  "finished_at_wib": "2026-09-02 21:15:40 WIB",
-  "elapsed_seconds": 148.92,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-02 21:15:40 WIB\nDokumen baru: 0 | Chunk baru: 0 | Error: 4\n\nTop update penting:\n1. ANTARA Terkini — Sabar/Reza redam pertahanan ganda Korsel untuk melaju di China Masters - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n2. ANTARA Terkini — KADIN perkuat daya saing ekspor lewat pelatihan dan akses pasar - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n3. ANTARA Terkini — Serangan Israel di Gaza tewaskan dua anak dan seorang perempuan - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n4. ANTARA Terkini — Persija pinjamkan Van Basty Sousa ke sesama klub Super League - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — CFX ikut dukung kontingen RI di Asian Games Aichi-Nagoya 2026 - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n6. Phys.org Latest Science News — Bio-based plastic turns into fertilizer after use\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n7. Phys.org Latest Science News — A 13-meter rocket hit the Moon: Tasmanian researchers helped track it there\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n8. ReliefWeb Updates — Présence opérationnelle des partenaires national MVE-BVD au 31 août 2026 - Democratic Republic of the Congo | ReliefWeb\n   Sumber: ReliefWeb Updates | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-09-02T14:18:15+00:00",
+  "finished_at_wib": "2026-09-02 21:18:15 WIB",
+  "elapsed_seconds": 130.59,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-02 21:18:15 WIB\nDokumen baru: 8 | Chunk baru: 15 | Error: 4\n\nTop update penting:\n1. ANTARA Terkini — KLH lakukan penegakan hukum terhadap 21 perusahaan terkait karhutla - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n2. ANTARA Terkini — Kemendikdasmen: ISPU jadi indikator sekolah di daerah karhutla - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n3. ANTARA Terkini — Sabar/Reza redam pertahanan ganda Korsel untuk melaju di China Masters - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n4. ANTARA Terkini — KADIN perkuat daya saing ekspor lewat pelatihan dan akses pasar - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — Serangan Israel di Gaza tewaskan dua anak dan seorang perempuan - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n6. ReliefWeb Updates — Présence opérationnelle des partenaires national MVE-BVD au 31 août 2026 - Democratic Republic of the Congo | ReliefWeb\n   Sumber: ReliefWeb Updates | kualitas: 55.0 | freshness: 100.0\n7. Phys.org Latest Science News — Hawai'i high school students name image of glittering galaxy pair\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n8. Phys.org Latest Science News — DNA testing shows what's really in Western Australian fish and chip shop 'shark' filets\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
