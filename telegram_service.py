@@ -33,6 +33,7 @@ from memory_store import MemoryStore, handle_local_memory_command
 from power_features import get_power_store, handle_power_command, generate_power_answer
 from daily_kb_scraper import run_daily_kb_update
 from reminder_skill import ReminderStore, parse_reminder_command
+from telegram_formatting import format_telegram_message
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
@@ -762,7 +763,7 @@ class TelegramService:
         )
 
     def _send_text(self, chat_id: Any, text: str, reply_to: Any = None) -> None:
-        payload = {"chat_id": chat_id, "text": str(text)[:4000]}
+        payload = {"chat_id": chat_id, "text": format_telegram_message(text)}
         if reply_to:
             payload["reply_to_message_id"] = reply_to
         self._telegram_request(
@@ -781,15 +782,24 @@ class TelegramService:
                 return str(parsed["error"])
             reminder_id = self._reminders.add(chat_id, str(parsed["due_at"]), str(parsed["text"]))
             due = datetime.fromisoformat(str(parsed["due_at"])).astimezone(WIB_TZ)
-            return f"Pengingat #{reminder_id} dibuat: {due:%Y-%m-%d %H:%M WIB} — {parsed['text']}"
+            return (
+                "PENGINGAT DIBUAT\n\n"
+                f"ID: #{reminder_id}\n"
+                f"Waktu: {due:%d-%m-%Y, %H:%M WIB}\n"
+                f"Isi: {parsed['text']}"
+            )
         if command == "/daftaringat":
             items = self._reminders.list(chat_id)
             if not items:
                 return "Belum ada pengingat aktif."
-            lines = ["Pengingat aktif:"]
+            lines = ["PENGINGAT AKTIF"]
             for item in items:
                 due = datetime.fromisoformat(str(item["due_at"])).astimezone(WIB_TZ)
-                lines.append(f"#{item['id']} — {due:%Y-%m-%d %H:%M WIB} — {item['text']}")
+                lines.append(
+                    f"\n#{item['id']}\n"
+                    f"Waktu: {due:%d-%m-%Y, %H:%M WIB}\n"
+                    f"Isi: {item['text']}"
+                )
             return "\n".join(lines)
         if command == "/hapusingat":
             parts = str(text or "").split()
@@ -801,7 +811,10 @@ class TelegramService:
     def _deliver_due_reminders(self) -> None:
         for item in self._reminders.due():
             try:
-                self._send_text(item["chat_id"], f"Pengingat #{item['id']}: {item['text']}")
+                self._send_text(
+                    item["chat_id"],
+                    f"PENGINGAT #{item['id']}\n\n{item['text']}",
+                )
             except Exception as exc:
                 with self._lock:
                     self._last_error = str(exc)[:1200]
@@ -839,15 +852,7 @@ class TelegramService:
         admin_reply = self._handle_admin_command(chat_id, text)
         if admin_reply is not None:
             try:
-                self._telegram_request(
-                    "sendMessage",
-                    {
-                        "chat_id": chat_id,
-                        "text": admin_reply[:4000],
-                        "reply_to_message_id": source_message_id,
-                    },
-                    timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
-                )
+                self._send_text(chat_id, admin_reply, source_message_id)
                 with self._lock:
                     self._processed += 1
                     self._last_error = ""
@@ -863,15 +868,7 @@ class TelegramService:
             answer, _meta = self._build_answer(text, recent_messages=recent_messages)
             if not answer:
                 answer, _meta = build_telegram_local_safe_fallback_answer(text, failure_reason="empty_answer")
-            self._telegram_request(
-                "sendMessage",
-                {
-                    "chat_id": chat_id,
-                    "text": answer[:4000],
-                    "reply_to_message_id": source_message_id,
-                },
-                timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
-            )
+            self._send_text(chat_id, answer, source_message_id)
             with self._lock:
                 chat_history = self._chat_recent_messages.setdefault(chat_key, deque(maxlen=12))
                 chat_history.append({"role": "user", "content": text})
@@ -880,15 +877,7 @@ class TelegramService:
         except Exception as exc:
             fallback_answer, _ = build_telegram_local_safe_fallback_answer(text, failure_reason=str(exc))
             try:
-                self._telegram_request(
-                    "sendMessage",
-                    {
-                        "chat_id": chat_id,
-                        "text": fallback_answer[:4000],
-                        "reply_to_message_id": source_message_id,
-                    },
-                    timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
-                )
+                self._send_text(chat_id, fallback_answer, source_message_id)
             except Exception as send_exc:
                 with self._lock:
                     self._last_error = str(send_exc)[:1200]
