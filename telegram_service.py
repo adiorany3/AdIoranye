@@ -677,13 +677,17 @@ class TelegramService:
         return state
 
     def _handle_admin_command(self, chat_id: Any, text: str) -> Optional[str]:
-        raw_command = str(text or "").strip().split(maxsplit=1)[0]
+        raw_text = str(text or "").strip()
+        if not raw_text.startswith("/"):
+            return None
+
+        raw_command = raw_text.split(maxsplit=1)[0]
         command = raw_command.lower()
         if "@" in command:
             command = command.split("@", 1)[0]
 
         if command not in {"/helpadmin", "/webstatus", "/lockweb", "/unlockweb"}:
-            return None
+            return "Command admin tidak dikenal. Pakai /helpadmin untuk daftar command."
 
         if not self._is_admin_chat(chat_id):
             return "Perintah admin ditolak. Chat ID ini tidak terdaftar sebagai admin Telegram."
@@ -772,6 +776,7 @@ class TelegramService:
                 )
                 with self._lock:
                     self._processed += 1
+                    self._last_error = ""
             except Exception as exc:
                 with self._lock:
                     self._last_error = str(exc)[:1200]
