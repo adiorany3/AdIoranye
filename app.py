@@ -1420,6 +1420,17 @@ def safe_generate_power_answer(**kwargs: Any) -> Tuple[str, Dict[str, Any]]:
             ):
                 return retry_answer, retry_meta
 
+            local_fallback_answer, local_fallback_meta = build_local_safe_fallback_answer(
+                str(original_kwargs.get("user_text") or ""),
+                failure_reason=str(exc)[:500],
+            )
+            if local_fallback_answer:
+                merged_meta = retry_meta if isinstance(retry_meta, dict) else {}
+                merged_meta.update(local_fallback_meta)
+                merged_meta["public_error_sanitized"] = True
+                merged_meta["generic_exception_local_fallback"] = True
+                return local_fallback_answer, merged_meta
+
             if isinstance(retry_meta, dict):
                 retry_meta["public_error_sanitized"] = True
                 return make_public_ai_error_message(), retry_meta

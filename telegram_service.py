@@ -504,11 +504,11 @@ Catatan:
         )
 
     return (
-        "Maaf, Adioranye sedang mengalami gangguan koneksi/model. Silakan coba lagi beberapa saat lagi.",
+        "Model sedang tidak stabil. Kirim ulang permintaan dengan topik lebih spesifik atau pecah jadi beberapa pesan, nanti saya bantu dari bagian paling penting dulu.",
         {
             "public_safe_message": True,
             "telegram_public_error_sanitized": True,
-            "fallback_reason": "default_public_fallback",
+            "fallback_reason": "generic_safe_redirect",
             "hidden_telegram_error_detail": hidden_detail,
         },
     )
