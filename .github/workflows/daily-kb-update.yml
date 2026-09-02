@@ -48,10 +48,7 @@ on:
           - "false"
           - "true"
           
-  schedule:
-    # 00:17, 06:17, 12:17, 18:17 WIB.
-    # Menit 17 dipilih agar tidak menumpuk di awal jam GitHub Actions.
-    - cron: "17 17,23,5,11 * * *"
+
           
 permissions:
   contents: write

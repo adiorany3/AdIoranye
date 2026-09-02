@@ -19,11 +19,12 @@ OPTIMIZER_HEALTH_FILE="${KB_SOURCE_HEALTH_FILE:-.adioranye_kb_source_health.json
 OPTIMIZER_REPORT_FILE="${KB_RUNTIME_OPTIMIZER_REPORT_FILE:-kb_runtime_optimizer_prepare.json}"
 SCRAPER_SOURCES_FILE="${KB_SCRAPER_SOURCES_FILE:-kb_sources.json}"
 SCRAPER_REPORT_FILE="${KB_SCRAPER_REPORT_FILE:-daily_kb_update_report.json}"
-UPDATE_PROFILE="${KB_UPDATE_PROFILE:-auto}"
-UPDATE_SOURCE_LIMIT="${KB_UPDATE_SOURCE_LIMIT:-${KB_SCRAPER_SOURCE_LIMIT:-8}}"
-UPDATE_MAX_ITEMS="${KB_UPDATE_MAX_ITEMS:-${KB_SCRAPER_MAX_ITEMS_PER_SOURCE:-2}}"
+UPDATE_PROFILE="${KB_UPDATE_PROFILE:-all}"
+UPDATE_SOURCE_LIMIT="${KB_UPDATE_SOURCE_LIMIT:-${KB_SCRAPER_SOURCE_LIMIT:-0}}"
+UPDATE_MAX_ITEMS="${KB_UPDATE_MAX_ITEMS:-${KB_SCRAPER_MAX_ITEMS_PER_SOURCE:-5}}"
 
-if [[ "${KB_USE_RUNTIME_OPTIMIZER:-1}" == "1" ]]; then
+# Default full local KB. Optimizer remains optional for deliberately limited runs.
+if [[ "${KB_USE_RUNTIME_OPTIMIZER:-0}" == "1" ]]; then
   "$PYTHON_BIN" kb_runtime_optimizer.py prepare \
     --sources "$SCRAPER_SOURCES_FILE" \
     --health "$OPTIMIZER_HEALTH_FILE" \
@@ -57,7 +58,7 @@ set +e
 SCRAPER_EXIT_CODE=$?
 set -e
 
-if [[ "${KB_USE_RUNTIME_OPTIMIZER:-1}" == "1" ]]; then
+if [[ "${KB_USE_RUNTIME_OPTIMIZER:-0}" == "1" ]]; then
   "$PYTHON_BIN" kb_runtime_optimizer.py update-health \
     --health "$OPTIMIZER_HEALTH_FILE" \
     --effective-sources "$EFFECTIVE_SOURCES_FILE" \

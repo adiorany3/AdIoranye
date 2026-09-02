@@ -15733,10 +15733,10 @@ def render_power_features_admin_panel() -> None:
                                 "Max sumber/run",
                                 min_value=0,
                                 max_value=max(0, len(scraper_sources)),
-                                value=min(10, len(scraper_sources)) if scraper_sources else 0,
+                                value=len(scraper_sources) if scraper_sources else 0,
                                 step=1,
                                 key="kb_auto_source_limit",
-                                help="0 = proses semua sumber. Isi kecil untuk jalur lokal hemat risiko.",
+                                help="Default memproses semua sumber lokal untuk akurasi maksimal. Kecilkan hanya jika perlu membatasi waktu.",
                             )
                         with col_auto3:
                             auto_dry_run = st.checkbox(
@@ -15753,10 +15753,10 @@ def render_power_features_admin_panel() -> None:
                                 "Batas waktu (detik)",
                                 min_value=0,
                                 max_value=3600,
-                                value=180,
+                                value=0,
                                 step=30,
                                 key="kb_auto_time_budget",
-                                help="0 = tanpa batas internal.",
+                                help="0 = tanpa batas internal; cocok untuk update manual semua sumber.",
                             )
                         with col_auto6:
                             auto_no_rotation = st.checkbox(

@@ -1,4 +1,4 @@
-# Adioranye AI + Daily Knowledge Base Auto Update
+# Adioranye AI + Local Knowledge Base
 
 Jalankan:
 
@@ -39,10 +39,11 @@ Untuk Streamlit online tanpa GitHub Actions:
 - centang `Publish saja tanpa update ulang` bila ingin upload snapshot KB terakhir tanpa scrape ulang
 
 Env penting untuk update lokal:
-- `KB_USE_RUNTIME_OPTIMIZER=1`
-- `KB_UPDATE_PROFILE=auto|hot|warm|cold|all`
-- `KB_UPDATE_SOURCE_LIMIT=8`
-- `KB_UPDATE_MAX_ITEMS=2`
+- `KB_USE_RUNTIME_OPTIMIZER=0` — default: jangan pangkas sumber.
+- `KB_UPDATE_PROFILE=all` — proses semua tier sumber.
+- `KB_UPDATE_SOURCE_LIMIT=0` — proses semua sumber aktif.
+- `KB_UPDATE_MAX_ITEMS=5` — item maksimal per sumber.
+- `KB_UPDATE_TIME_BUDGET_SECONDS=0` — tanpa batas waktu internal.
 - `KB_SCRAPER_SOURCES_FILE`
 - `KB_SCRAPER_STATE_FILE`
 - `KB_SCRAPER_MAX_ITEMS_PER_SOURCE`
@@ -56,10 +57,12 @@ Env penting untuk update lokal:
 - `KB_SCRAPER_DRY_RUN=1`
 
 Alur update sekarang:
-1. `kb_runtime_optimizer.py prepare` pilih sumber terbaik, terbaru, dan sehat.
-2. hasil ditulis ke `kb_sources_effective.json`.
-3. `daily_kb_scraper.py` scrape file efektif itu, bukan semua sumber mentah.
-4. `kb_runtime_optimizer.py update-health` catat sumber mana sukses/gagal agar run berikut makin pintar.
+1. Update KB dijalankan manual, bukan otomatis oleh GitHub Actions.
+2. Runner lokal membaca seluruh sumber aktif dari `kb_sources.json`.
+3. `daily_kb_scraper.py` memasukkan seluruh hasil baru ke `.adioranye_power.db`.
+4. Optimizer hanya dipakai jika sengaja diaktifkan dengan `KB_USE_RUNTIME_OPTIMIZER=1`.
+
+Untuk akurasi maksimal, jalankan update manual dengan semua sumber dan tanpa batas waktu internal.
 
 Contoh jalur lokal hemat risiko:
 - `KB_SCRAPER_SOURCE_LIMIT=10 KB_UPDATE_TIME_BUDGET_SECONDS=180 bash scripts/run_kb_update_local.sh`
