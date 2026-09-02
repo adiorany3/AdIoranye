@@ -7,6 +7,7 @@ import os
 import shutil
 import re
 import subprocess
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -262,6 +263,23 @@ def read_maintenance_lock_state() -> Dict[str, Any]:
         if isinstance(data, dict):
             state.update(data)
         state["locked"] = bool(state.get("locked"))
+        try:
+            unlock_until_ts = float(state.get("unlocked_until_ts") or 0)
+        except (TypeError, ValueError):
+            unlock_until_ts = 0
+        if not state["locked"] and unlock_until_ts and time.time() >= unlock_until_ts:
+            state.update(
+                {
+                    "locked": True,
+                    "status": "locked",
+                    "reason": "automatic_web_chat_relock",
+                    "updated_at": _maintenance_now_text(),
+                    "updated_by": "system-auto-relock",
+                    "channel": "maintenance-timer",
+                    "unlocked_until_ts": None,
+                }
+            )
+            write_maintenance_lock_state(state)
         state["status"] = "locked" if state.get("locked") else "unlocked"
         return state
     except Exception:
@@ -280,6 +298,27 @@ def write_maintenance_lock_state(state: Dict[str, Any]) -> None:
     except Exception:
         pass
 
+
+def _auto_relock_when_due(expected_until_ts: float) -> None:
+    state = read_maintenance_lock_state()
+    try:
+        current_until_ts = float(state.get("unlocked_until_ts") or 0)
+    except (TypeError, ValueError):
+        current_until_ts = 0
+    if state.get("locked") or current_until_ts != expected_until_ts or time.time() < expected_until_ts:
+        return
+    write_maintenance_lock_state(
+        {
+            **state,
+            "locked": True,
+            "status": "locked",
+            "reason": "automatic_web_chat_relock",
+            "updated_at": _maintenance_now_text(),
+            "updated_by": "system-auto-relock",
+            "channel": "maintenance-timer",
+            "unlocked_until_ts": None,
+        }
+    )
 
 def set_maintenance_lock(
     locked: bool,
@@ -315,6 +354,14 @@ def set_maintenance_lock(
         state.pop(legacy_key, None)
 
     write_maintenance_lock_state(state)
+    if state.get("unlocked_until_ts"):
+        timer = threading.Timer(
+            max(0, float(state["unlocked_until_ts"]) - time.time()),
+            _auto_relock_when_due,
+            args=(float(state["unlocked_until_ts"]),),
+        )
+        timer.daemon = True
+        timer.start()
     return state
 
 
