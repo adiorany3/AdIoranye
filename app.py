@@ -6229,7 +6229,7 @@ def _question_profile_from_text(
         profile = "deep"
     elif word_count <= 18 and casual_hits and not code_hits:
         profile = "fast"
-    elif word_count <= 35 and not deep_hits and not code_hits:
+    elif word_count <= 60 and not deep_hits and not code_hits:
         profile = "fast"
     else:
         profile = "balanced"
@@ -6275,27 +6275,24 @@ def choose_dynamic_runtime_options(
     if profile == "fast":
         max_completion_tokens = min(
             base_tokens,
-            int(max_tokens_casual),
+            max(220, int(max_tokens_casual)),
         )
         timeout = min(
             int(request_timeout_seconds or 45),
-            28,
+            18,
         )
-        rag_top_k = 2
-        enable_rag = bool(
-            power_rag_enabled
-            and not bool(power_disable_rag_for_casual)
-        )
+        rag_top_k = 1
+        enable_rag = False
         enable_self_verification = False
         quality_verifier_enabled = False
         query_rewriter_enabled = False
         reranker_enabled = False
         semantic_cache_enabled = True
         response_cache_ttl_seconds = max(
-            600,
+            900,
             min(
                 int(power_response_cache_ttl_seconds or 1800),
-                3600,
+                7200,
             ),
         )
         strategy_label = "fast"
@@ -10886,7 +10883,7 @@ def render_answer_typewriter_display(
     placeholder: Any,
     answer_text: str,
     chunk_size: int = 22,
-    delay_seconds: float = 0.012,
+    delay_seconds: float = 0.0,
     is_error: bool = False,
 ) -> None:
     """Tampilkan jawaban dengan mode aman.
@@ -13928,6 +13925,66 @@ st.markdown(
         background: var(--mac-green-soft);
     }
 
+    .chat-toolbar-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        width: 100%;
+        margin: 0.2rem 0 0.7rem;
+        padding: 0.62rem 0.74rem;
+        border: 1px solid var(--mac-border);
+        border-radius: 18px;
+        background: var(--mac-panel-soft);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+    }
+
+    .chat-toolbar-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 0.18rem;
+        min-width: 0;
+    }
+
+    .chat-toolbar-title {
+        color: var(--mac-text) !important;
+        font-size: 0.92rem;
+        font-weight: 820;
+        line-height: 1.25;
+    }
+
+    .chat-toolbar-subtitle {
+        color: var(--mac-muted) !important;
+        font-size: 0.74rem;
+        line-height: 1.4;
+    }
+
+    .reply-hint-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.26rem;
+        width: 100%;
+        margin: 0.2rem 0 0.7rem;
+        padding: 0.58rem 0.72rem;
+        border-left: 4px solid rgba(59, 130, 246, 0.85);
+        border-radius: 14px;
+        background: rgba(59, 130, 246, 0.08);
+    }
+
+    .reply-hint-title {
+        color: var(--mac-text) !important;
+        font-size: 0.75rem;
+        font-weight: 820;
+        line-height: 1.25;
+    }
+
+    .reply-hint-quote {
+        color: var(--mac-muted) !important;
+        font-size: 0.75rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+    }
+
     .mini-toggle-wrap {
         display: flex;
         align-items: center;
@@ -14068,32 +14125,34 @@ def render_public_page() -> None:
         )
 
     st.title("Adioranye AI")
-    st.caption("Chat AI sederhana untuk tanya jawab, ringkasan, analisis, dan bantuan harian.")
+    st.caption("Chat AI cepat untuk tanya jawab, ringkasan, analisis, dan bantuan harian.")
     st.markdown(
-        f'<div class="production-status-card"><span class="production-pill ok">Status</span><span>{_html_escape(public_status_label)}</span><span>{_html_escape(public_status_subtitle)}</span></div>',
+        (
+            '<div class="chat-toolbar-card">'
+            '<div class="chat-toolbar-copy">'
+            '<div class="chat-toolbar-title">Tanya langsung. Balas pesan lama jika perlu konteks.</div>'
+            f'<div class="chat-toolbar-subtitle">Status: {_html_escape(public_status_label)} · {_html_escape(public_status_subtitle)} · {len(st.session_state.chat_messages)} pesan</div>'
+            '</div>'
+            '</div>'
+        ),
         unsafe_allow_html=True,
     )
 
-    col_new_chat, col_info = st.columns([1, 1])
-    with col_new_chat:
-        if st.button("🧹 Chat baru", use_container_width=True, key="auto_btn_3209"):
-            st.session_state.chat_messages = []
-            st.session_state.pending_prompt = ""
-            st.session_state.reply_target_index = None
-            st.session_state.reply_target_preview = ""
-            st.session_state.reply_composer_prefill = ""
-            st.rerun()
-    with col_info:
-        st.caption(f"💬 {len(st.session_state.chat_messages)} pesan")
+    if st.button("🧹 Chat baru", use_container_width=True, key="auto_btn_3209"):
+        st.session_state.chat_messages = []
+        st.session_state.pending_prompt = ""
+        st.session_state.reply_target_index = None
+        st.session_state.reply_target_preview = ""
+        st.session_state.reply_composer_prefill = ""
+        st.rerun()
 
     if st.session_state.reply_target_preview:
         reply_preview_text = _html_escape(str(st.session_state.reply_target_preview or ""))
         st.markdown(
             f'''
-            <div class="production-status-card">
-                <span class="production-pill ok">Reply</span>
-                <span>Membalas pesan sebelumnya</span>
-                <span>{reply_preview_text}</span>
+            <div class="reply-hint-card">
+                <div class="reply-hint-title">Sedang membalas pesan ini</div>
+                <div class="reply-hint-quote">{reply_preview_text}</div>
             </div>
             ''',
             unsafe_allow_html=True,
@@ -14436,8 +14495,8 @@ def render_public_page() -> None:
                         base_memory_text=current_info_memory_text,
                         recent_messages=compact_recent_messages_for_token_saver(
                             st.session_state.chat_messages[:-1],
-                            limit=web_history_limit,
-                            recent_full=web_history_recent_full,
+                            limit=(3 if str(runtime_options.get("profile") or "") == "fast" else web_history_limit),
+                            recent_full=(2 if str(runtime_options.get("profile") or "") == "fast" else web_history_recent_full),
                         ),
                         fallback_models=route["cheap_fallback_models"],
                         expensive_fallback_models=route["expensive_fallback_models"],
