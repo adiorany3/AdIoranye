@@ -3776,6 +3776,14 @@
       "title": "CNA.id - Dunia — Prabowo jajaki pengiriman warga Indonesia ke program kosmonot Rusia",
       "url": "https://www.cna.id/dunia/program-kosmonot-rusia-indonesia-kerja-sama-antariksa-46526"
     },
+    "3dde41886f934548554e8348afac9b149bf5dc4cc067fc1cdf447dec096b325e": {
+      "chunks": 1,
+      "created_at": "2026-09-02T14:19:04+00:00",
+      "doc_id": 2259,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — ANTARA dorong pelaku UMKM naik kelas lewat pelatihan pemasaran digital - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723225/antara-dorong-pelaku-umkm-naik-kelas-lewat-pelatihan-pemasaran-digital"
+    },
     "3df5c57d760e0dd36c4734074c093a1acec7ebbe5396f2e637da9992c0545afd": {
       "chunks": 5,
       "created_at": "2026-05-24T07:15:29+00:00",
@@ -4055,6 +4063,14 @@
       "source": "Google News Global Tech - Space Technology Global",
       "title": "Google News Global Tech - Space Technology Global — Japan wants to join the European mission to study the asteroid Apophis - Universe Space Tech",
       "url": "https://news.google.com/rss/articles/CBMipgFBVV95cUxQUHFCbTV4SFhmd0QyREJnOTFUNDI2QVI4SXZ3VHllLXhlR3JkdDVPb2s5YjdTenRMZi14UV8wWl9vdFJyT1hZelJJUXBtYlgxdm5ZeXROOFdOblB3NVVYNGYzX1IxbzhPcXYySGM3ODA2ZWV4ZEw3UzJhSmdaelNYakVqUWt3d3lRZ3VWVkE3dzdkVmVMSzVyalVEUkJsdl83bHdpcWZn?oc=5"
+    },
+    "41314bfba85a88fed64ed1af71e29738d044c2aa700e751dac3c60e7b3714ff2": {
+      "chunks": 2,
+      "created_at": "2026-09-02T14:20:29+00:00",
+      "doc_id": 2260,
+      "source": "Phys.org Latest Science News",
+      "title": "Phys.org Latest Science News — Bio-based plastic turns into fertilizer after use",
+      "url": "https://phys.org/news/2026-09-bio-based-plastic-fertilizer.html"
     },
     "416b92b4f72c33ccc0b6ede106ad27f5b7d625afbf49b2ab9bc148390563383f": {
       "chunks": 1,
@@ -15919,13 +15935,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-21T18:39:37+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-22T00:06:19+00:00"
     },
     {
@@ -16333,6 +16342,13 @@
       "dry_run": false,
       "errors": 4,
       "finished_at": "2026-09-02T14:18:15+00:00"
+    },
+    {
+      "added_chunks": 3,
+      "added_documents": 2,
+      "dry_run": false,
+      "errors": 4,
+      "finished_at": "2026-09-02T14:21:03+00:00"
     }
   ],
   "source_cursor": 3,
