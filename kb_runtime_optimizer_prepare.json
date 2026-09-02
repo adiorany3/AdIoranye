@@ -1,8 +1,8 @@
 {
-  "created_at": "2026-09-02T03:45:51+00:00",
-  "created_at_wib": "2026-09-02 10:45:51 WIB",
+  "created_at": "2026-09-02T05:16:26+00:00",
+  "created_at_wib": "2026-09-02 12:16:26 WIB",
   "effective_sources_file": "kb_sources_effective.json",
-  "enabled_candidates": 28,
+  "enabled_candidates": 26,
   "max_items": 2,
   "profile": "auto",
   "quota": {
@@ -14,67 +14,80 @@
     {
       "name": "ANTARA Terkini",
       "quality": 76.0,
-      "score": 94.071,
+      "score": 91.323,
       "tier": "hot",
       "url": "https://www.antaranews.com/rss/terkini.xml"
     },
     {
       "name": "MarketWatch Markets",
       "quality": 55.0,
-      "score": 89.886,
+      "score": 87.138,
       "tier": "hot",
       "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"
     },
     {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 89.551,
+      "score": 86.803,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
-      "name": "AP Technology",
-      "quality": 55.0,
-      "score": 86.289,
+      "name": "BBC World",
+      "quality": 76.0,
+      "score": 64.104,
       "tier": "hot",
-      "url": "https://apnews.com/hub/technology"
+      "url": "http://feeds.bbci.co.uk/news/world/rss.xml"
     },
     {
-      "name": "AP World News",
-      "quality": 55.0,
-      "score": 86.282,
+      "name": "BBC Technology",
+      "quality": 76.0,
+      "score": 63.786,
       "tier": "hot",
-      "url": "https://apnews.com/hub/world-news"
+      "url": "http://feeds.bbci.co.uk/news/technology/rss.xml"
+    },
+    {
+      "name": "WHO News",
+      "quality": 92.0,
+      "score": 86.916,
+      "tier": "warm",
+      "url": "https://www.who.int/rss-feeds/news-english.xml"
     },
     {
       "name": "USGS Significant Earthquakes",
       "quality": 92.0,
-      "score": 87.33,
+      "score": 84.561,
       "tier": "warm",
       "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom"
     },
     {
-      "name": "NASA Breaking News",
-      "quality": 92.0,
-      "score": 86.801,
-      "tier": "warm",
-      "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss"
-    },
-    {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 34.244,
+      "score": 31.496,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     }
   ],
   "selected_sources": 8,
-  "skipped": [],
-  "skipped_cooldown": 0,
+  "skipped": [
+    {
+      "cooldown_until": "2026-09-02T07:46:09+00:00",
+      "name": "AP World News",
+      "reason": "cooldown",
+      "url": "https://apnews.com/hub/world-news"
+    },
+    {
+      "cooldown_until": "2026-09-02T07:46:09+00:00",
+      "name": "AP Technology",
+      "reason": "cooldown",
+      "url": "https://apnews.com/hub/technology"
+    }
+  ],
+  "skipped_cooldown": 2,
   "source_limit": 8,
   "tier_counts_all": {
     "cold": 1,
-    "hot": 16,
+    "hot": 14,
     "warm": 11
   },
   "tier_counts_selected": {

@@ -131,6 +131,11 @@ except Exception:  # keep older deployments alive if performance layer is absent
 
 
 try:
+    from ration_formulation_skill import RATION_FORMULATION_SKILL
+except Exception:  # keep app alive if ration skill is absent
+    RATION_FORMULATION_SKILL = ""
+
+try:
     from music_chart_tools import (
         build_music_chart_context,
         build_music_chart_fallback_answer,
@@ -2909,6 +2914,8 @@ def classify_intent_text(text: str) -> str:
         return "admin_command"
     if is_music_chart_query(t):
         return "music_chart"
+    if any(x in t for x in ["peternakan", "ternak", "unggas", "sapi", "kambing", "pakan", "ransum", "nutrisi ternak", "pmk", "rabies", "flu burung", "veteriner", "hewan"]):
+        return "livestock"
     if any(x in t for x in ["```", "def ", "class ", "traceback", "error", "bug", "streamlit", "api", "vercel", "github", "kode", "coding", "python", "javascript", "patch"]):
         return "coding"
     try:
@@ -2917,7 +2924,7 @@ def classify_intent_text(text: str) -> str:
             return "critical_current"
     except Exception:
         pass
-    if any(x in t for x in ["peternakan", "ternak", "unggas", "sapi", "kambing", "pakan", "pmk", "rabies", "flu burung", "veteriner", "hewan"]):
+    if any(x in t for x in ["peternakan", "ternak", "unggas", "sapi", "kambing", "pakan", "ransum", "nutrisi ternak", "pmk", "rabies", "flu burung", "veteriner", "hewan"]):
         return "livestock"
     if any(x in t for x in ["kesehatan", "medis", "penyakit", "obat", "gejala", "diagnosis", "terapi", "klinis", "rumah sakit"]):
         return "health"
@@ -2946,7 +2953,7 @@ PROMPT_TEMPLATES: Dict[str, str] = {
     "research": "Pisahkan fakta, asumsi, dan langkah verifikasi. Jangan mengarang data terbaru.",
     "creative": "Berikan output kreatif yang siap pakai, ringkas, dan sesuai konteks komersial/branding.",
     "deep_reasoning": "Analisis masalah secara bertahap, prioritaskan solusi praktis, dan berikan rekomendasi akhir yang jelas.",
-    "livestock": "Jawab sebagai asisten pengetahuan peternakan. Prioritaskan sumber resmi, jurnal, kesehatan hewan, pakan, manajemen ternak, dan beri catatan kehati-hatian bila data belum pasti.",
+    "livestock": "Jawab sebagai asisten pengetahuan peternakan. Prioritaskan sumber resmi, jurnal, kesehatan hewan, pakan, manajemen ternak, dan beri catatan kehati-hatian bila data belum pasti.\n\n" + RATION_FORMULATION_SKILL,
     "health": "Jawab dengan kehati-hatian kesehatan: edukatif, tidak menggantikan tenaga medis, prioritaskan sumber resmi, dan sarankan pemeriksaan profesional untuk kondisi serius.",
     "critical_current": "Jawab sebagai analis isu terkini. Utamakan data terbaru, kualitas sumber, perbedaan klaim, batas kepastian, dan rekomendasi verifikasi.",
     "music_chart": "Jawab ringkas sebagai asisten hiburan/musik. Untuk tangga lagu, gunakan konteks chart yang tersedia, sebutkan bahwa peringkat bersifat snapshot dan bisa berubah. Jangan mengarang judul/artis di luar konteks.",

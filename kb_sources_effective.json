@@ -67,49 +67,70 @@
   },
   {
     "claim_max_items": 6,
-    "collection": "Teknologi Terkini",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "ap_technology",
-    "max_items": 2,
-    "min_chars": 220,
-    "name": "AP Technology",
-    "pinned": true,
-    "source_type": "mainstream-media",
-    "summary_sentences": 4,
-    "tags": [
-      "ap",
-      "technology",
-      "ai",
-      "current"
-    ],
-    "type": "html",
-    "update_profile": "hot",
-    "url": "https://apnews.com/hub/technology"
-  },
-  {
-    "claim_max_items": 6,
     "collection": "Berita Dunia Terkini",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "ap_world",
+    "id": "bbc_world",
     "max_items": 2,
     "min_chars": 220,
-    "name": "AP World News",
-    "pinned": true,
+    "name": "BBC World",
     "source_type": "mainstream-media",
     "summary_sentences": 4,
     "tags": [
-      "ap",
+      "bbc",
       "world",
       "news",
       "current"
     ],
-    "type": "html",
+    "type": "rss",
     "update_profile": "hot",
-    "url": "https://apnews.com/hub/world-news"
+    "url": "http://feeds.bbci.co.uk/news/world/rss.xml"
+  },
+  {
+    "claim_max_items": 6,
+    "collection": "Teknologi Terkini",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "bbc_technology",
+    "max_items": 2,
+    "min_chars": 220,
+    "name": "BBC Technology",
+    "source_type": "mainstream-media",
+    "summary_sentences": 4,
+    "tags": [
+      "bbc",
+      "technology",
+      "ai",
+      "current"
+    ],
+    "type": "rss",
+    "update_profile": "hot",
+    "url": "http://feeds.bbci.co.uk/news/technology/rss.xml"
+  },
+  {
+    "claim_max_items": 6,
+    "collection": "Kesehatan Global Terkini",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "who_news",
+    "max_items": 2,
+    "min_chars": 220,
+    "name": "WHO News",
+    "pinned": true,
+    "source_type": "official-health",
+    "summary_sentences": 4,
+    "tags": [
+      "who",
+      "health",
+      "official",
+      "current"
+    ],
+    "type": "rss",
+    "update_profile": "warm",
+    "url": "https://www.who.int/rss-feeds/news-english.xml"
   },
   {
     "claim_max_items": 6,
@@ -133,29 +154,6 @@
     "type": "rss",
     "update_profile": "warm",
     "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom"
-  },
-  {
-    "claim_max_items": 6,
-    "collection": "Sains dan Antariksa Terkini",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "nasa_breaking",
-    "max_items": 2,
-    "min_chars": 220,
-    "name": "NASA Breaking News",
-    "pinned": true,
-    "source_type": "official-science",
-    "summary_sentences": 4,
-    "tags": [
-      "nasa",
-      "science",
-      "space",
-      "official"
-    ],
-    "type": "rss",
-    "update_profile": "warm",
-    "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss"
   },
   {
     "collection": "Adioranye Tech Stack",

@@ -683,6 +683,46 @@ def scrape_static(session: requests.Session, source: SourceConfig) -> List[Dict[
 
 
 
+def build_prayer_regions_content(payload: Dict[str, Any]) -> str:
+    """Build compact KB guidance and complete Indonesian prayer-region index."""
+    rows = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("Respons direktori wilayah jadwal sholat tidak valid.")
+    regions = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        region_id = str(row.get("id") or "").strip()
+        location = clean_spaces(row.get("lokasi") or "")
+        if region_id and location:
+            regions.append((region_id, location))
+    if not regions:
+        raise ValueError("Direktori wilayah jadwal sholat kosong.")
+    region_lines = "\n".join(f"- {region_id}: {location}" for region_id, location in regions)
+    return (
+        "JADWAL SHOLAT INDONESIA — INDEKS SELURUH WILAYAH\n\n"
+        "Data waktu bersifat dinamis. Jangan mengarang atau memakai jadwal tanpa tanggal. "
+        "Ambil jadwal harian terbaru dengan pola endpoint "
+        "https://api.myquran.com/v2/sholat/jadwal/{ID_WILAYAH}/{YYYY-MM-DD}. "
+        "Respons menyediakan imsak, subuh, terbit, dhuha, dzuhur, ashar, maghrib, dan isya. "
+        "Sebutkan lokasi, tanggal, sumber, dan waktu pengambilan dalam jawaban. "
+        "Waktu iqamah masjid setempat dapat berbeda; konfirmasi ke masjid lokal.\n\n"
+        f"Jumlah wilayah tersedia: {len(regions)}\n\n{region_lines}"
+    )
+
+def scrape_prayer_regions(session: requests.Session, source: SourceConfig) -> List[Dict[str, str]]:
+    timeout = int(getattr(session, "request_timeout", 20) or 20)
+    response = session.get(source.url, timeout=timeout)
+    response.raise_for_status()
+    content = build_prayer_regions_content(response.json())
+    return [{
+        "title": source.static_title or "Jadwal Sholat Seluruh Wilayah Indonesia",
+        "url": source.url,
+        "published": now_wib_text(),
+        "summary": "Indeks ID kabupaten/kota Indonesia dan panduan mengambil jadwal sholat harian berdasarkan tanggal.",
+        "content": content,
+    }]
+
 def _openalex_abstract_from_inverted_index(index: Any) -> str:
     """Convert OpenAlex abstract_inverted_index into readable abstract text."""
     if not isinstance(index, dict) or not index:
@@ -779,6 +819,8 @@ def scrape_source(session: requests.Session, source: SourceConfig, max_items_ove
         return scrape_sitemap(session, source, limit=limit)
     if source.type in {"static", "note", "curated"}:
         return scrape_static(session, source)[:limit]
+    if source.type in {"prayer_regions", "sholat_regions"}:
+        return scrape_prayer_regions(session, source)[:limit]
     if source.type in {"openalex", "openalex_works", "scholarly_works"}:
         return scrape_openalex_works(session, source, limit=limit)
     raise ValueError(f"Tipe sumber tidak dikenali: {source.type}")

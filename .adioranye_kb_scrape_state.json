@@ -9488,6 +9488,14 @@
       "title": "Google News Top Headlines - Myanmar — RFK Jr. announces 'the largest autism fraud bust in American history' and it’s in Minnesota - Politico",
       "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxNcjRPbmNyRlZGbHBRWmtBc1dXSVNNTl8tNFppT2xBYmd1WjhxS1BBQ19pRnNpX2VsM0syYm5PX0FZbG4zUzlQRGpXd3Bmbl9McFdET0l2NEttNVQxYXJlTC16YUNLeXVpNm5TZjZoLUJVQ1VVZTY5Rnd0emcxeHN1a2Vmd2d2cTFTaWpN?oc=5"
     },
+    "98fe6486c2edfbb2df2f9f91a8118e8893debcd65b40a0cfcf5f46b16d206874": {
+      "chunks": 13,
+      "created_at": "2026-09-02T05:20:49+00:00",
+      "doc_id": 2209,
+      "source": "MyQuran Jadwal Sholat Indonesia",
+      "title": "MyQuran Jadwal Sholat Indonesia — Indeks Jadwal Sholat Seluruh Wilayah Indonesia",
+      "url": "https://api.myquran.com/v2/sholat/kota/semua"
+    },
     "992a8c49a1a37a8a793c817ed4fde463d807bef0826f5053bdfe54c201fcb1c1": {
       "chunks": 1,
       "created_at": "2026-05-22T02:40:38+00:00",
@@ -15519,13 +15527,6 @@
       "added_documents": 0,
       "dry_run": false,
       "errors": 0,
-      "finished_at": "2026-07-21T00:08:14+00:00"
-    },
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
       "finished_at": "2026-07-21T07:42:16+00:00"
     },
     {
@@ -15933,6 +15934,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-09-02T05:16:51+00:00"
+    },
+    {
+      "added_chunks": 13,
+      "added_documents": 1,
+      "dry_run": false,
+      "errors": 0,
+      "finished_at": "2026-09-02T05:20:49+00:00"
     }
   ],
   "source_cursor": 3,

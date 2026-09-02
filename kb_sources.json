@@ -571,6 +571,25 @@
       "summary_sentences": 4,
       "claim_max_items": 6,
       "min_chars": 220
+    },
+    {
+      "id": "myquran_jadwal_sholat_indonesia",
+      "name": "MyQuran Jadwal Sholat Indonesia",
+      "type": "prayer_regions",
+      "url": "https://api.myquran.com/v2/sholat/kota/semua",
+      "enabled": true,
+      "collection": "Jadwal Sholat Indonesia",
+      "tags": "jadwal sholat, waktu sholat, imsak, subuh, dzuhur, ashar, maghrib, isya, kabupaten, kota, indonesia",
+      "max_items": 1,
+      "source_type": "public-api",
+      "confidence": "high",
+      "freshness": "daily",
+      "pinned": true,
+      "static_title": "Indeks Jadwal Sholat Seluruh Wilayah Indonesia",
+      "summary_sentences": 4,
+      "claim_max_items": 8,
+      "min_chars": 300,
+      "max_chars": 50000
     }
   ]
 }
