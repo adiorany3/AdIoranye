@@ -761,9 +761,15 @@ class TelegramService:
         chat_id = chat.get("id")
         text = str(message.get("text") or "").strip()
         update_id = message.get("update_id")
+        source_message_id = message.get("message_id")
+        replied_message = message.get("reply_to_message") or {}
+        replied_text = str(replied_message.get("text") or "").strip()
 
         if not chat_id or not text:
             return
+
+        if replied_text:
+            text = f"Pertanyaan sebelumnya yang kamu balas:\n{replied_text}\n\nPertanyaan baru:\n{text}"
 
         with self._lock:
             self._last_update = f"update_id={update_id} chat_id={chat_id} text={text[:120]}"
@@ -776,6 +782,7 @@ class TelegramService:
                     {
                         "chat_id": chat_id,
                         "text": admin_reply[:4000],
+                        "reply_to_message_id": source_message_id,
                     },
                     timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
                 )
@@ -799,6 +806,7 @@ class TelegramService:
                 {
                     "chat_id": chat_id,
                     "text": answer[:4000],
+                    "reply_to_message_id": source_message_id,
                 },
                 timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
             )
@@ -815,6 +823,7 @@ class TelegramService:
                     {
                         "chat_id": chat_id,
                         "text": fallback_answer[:4000],
+                        "reply_to_message_id": source_message_id,
                     },
                     timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
                 )
