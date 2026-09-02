@@ -1028,6 +1028,21 @@ Jika datanya tersedia, ransum bisa dihitung lebih tepat berdasarkan:
                 "failure_reason": failure_reason[:500],
             }
 
+    if normalized and len(tokens) <= 24:
+        asks_current_info = any(marker in lower for marker in current_info_markers)
+        risky_domain = any(marker in lower for marker in risky_domain_markers)
+        if not asks_current_info and not risky_domain:
+            answer = (
+                "Model sedang tidak stabil. Kirim ulang permintaan dalam bentuk lebih spesifik, dan jika perlu tempel data, teks, atau format output yang diinginkan."
+            )
+            return answer, {
+                "local_safe_fallback_used": True,
+                "local_safe_fallback_type": "general_request_redirect",
+                "model_skipped_after_failure": True,
+                "public_safe_message": True,
+                "failure_reason": failure_reason[:500],
+            }
+
     # Fallback umum untuk permintaan "buatkan" yang tidak membutuhkan info terkini.
     if any(marker in lower for marker in ["buatkan", "buat ", "susun", "rancang", "contoh"]):
         answer = (
