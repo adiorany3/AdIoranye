@@ -14087,7 +14087,37 @@ st.markdown(
 # =========================
 # Page Router
 # =========================
-def render_public_page() -> None:
+def render_public_sidebar() -> None:
+    """Render static sidebar outside chat refresh fragment."""
+    route_preview = build_model_routing_plan(user_text="halo")
+    readiness = get_model_readiness_state(route_preview)
+    status_label = sanitize_model_readiness_text(
+        readiness.get("label") or "Perlu cek model"
+    )
+
+    with st.sidebar:
+        st.markdown(
+            '<div class="chat-sidebar-brand"><span class="chat-sidebar-mark">AI</span><span>Adioranye AI</span></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("＋ Chat baru", use_container_width=True, key="sidebar_new_chat"):
+            st.session_state.chat_messages = []
+            st.session_state.pending_prompt = ""
+            st.session_state.reply_target_index = None
+            st.session_state.reply_target_preview = ""
+            st.session_state.reply_composer_prefill = ""
+            st.session_state.chat_input = ""
+            st.rerun()
+        st.markdown('<div class="chat-sidebar-section">Tentang</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="chat-sidebar-note">Tanya, minta ringkasan, analisis, atau lanjutkan percakapan dengan reply.</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div class="chat-sidebar-section">Status</div>', unsafe_allow_html=True)
+        st.caption(f"{status_label} · {len(st.session_state.chat_messages)} pesan")
+
+
+def render_public_chat() -> None:
     # =========================
     # Public Chat UI
     # =========================
@@ -14187,27 +14217,6 @@ def render_public_page() -> None:
         st.warning(
             "API key belum diisi atau konfigurasi provider masih memakai placeholder. Isi SLASHAI_API_KEY dan SLASHAI_API_URL di secrets/env agar chat dapat berjalan."
         )
-
-    with st.sidebar:
-        st.markdown(
-            '<div class="chat-sidebar-brand"><span class="chat-sidebar-mark">AI</span><span>Adioranye AI</span></div>',
-            unsafe_allow_html=True,
-        )
-        if st.button("＋ Chat baru", use_container_width=True, key="sidebar_new_chat"):
-            st.session_state.chat_messages = []
-            st.session_state.pending_prompt = ""
-            st.session_state.reply_target_index = None
-            st.session_state.reply_target_preview = ""
-            st.session_state.reply_composer_prefill = ""
-            st.session_state.chat_input = ""
-            st.rerun()
-        st.markdown('<div class="chat-sidebar-section">Tentang</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="chat-sidebar-note">Tanya, minta ringkasan, analisis, atau lanjutkan percakapan dengan reply.</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown('<div class="chat-sidebar-section">Status</div>', unsafe_allow_html=True)
-        st.caption(f"{public_status_label} · {len(st.session_state.chat_messages)} pesan")
 
     st.title("Adioranye AI")
     st.caption("Chat AI cepat untuk tanya jawab, ringkasan, analisis, dan bantuan harian.")
@@ -15103,7 +15112,12 @@ def render_public_page() -> None:
 
 # Poll lock state so public sessions react without manual browser reload.
 if hasattr(st, "fragment"):
-    render_public_page = st.fragment(render_public_page, run_every="2s")
+    render_public_chat = st.fragment(render_public_chat, run_every="2s")
+
+
+def render_public_page() -> None:
+    render_public_sidebar()
+    render_public_chat()
 
 
 def render_power_features_admin_panel() -> None:
