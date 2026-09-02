@@ -15101,6 +15101,11 @@ def render_public_page() -> None:
     time.sleep(0.03)
 
 
+# Poll lock state so public sessions react without manual browser reload.
+if hasattr(st, "fragment"):
+    render_public_page = st.fragment(render_public_page, run_every="2s")
+
+
 def render_power_features_admin_panel() -> None:
     # =========================
     # Power Features Admin Panel
