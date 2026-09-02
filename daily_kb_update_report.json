@@ -1,23 +1,23 @@
 {
-  "started_at": "2026-09-02T14:16:05+00:00",
-  "started_at_wib": "2026-09-02 21:16:05 WIB",
+  "started_at": "2026-09-02T14:30:07+00:00",
+  "started_at_wib": "2026-09-02 21:30:07 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources.json",
   "dry_run": false,
   "force": false,
-  "sources_total": 29,
-  "sources_enabled": 29,
-  "sources_selected": 29,
+  "sources_total": 37,
+  "sources_enabled": 37,
+  "sources_selected": 37,
   "source_limit": 0,
   "source_offset": 0,
   "source_cursor_next": 3,
   "time_budget_seconds": 0,
   "stopped_by_time_budget": false,
-  "added_documents": 8,
-  "added_chunks": 15,
-  "skipped_existing": 47,
-  "skipped_short": 34,
-  "errors": 4,
+  "added_documents": 9,
+  "added_chunks": 41,
+  "skipped_existing": 51,
+  "skipped_short": 46,
+  "errors": 7,
   "items": [
     {
       "source": "OpenAI News",
@@ -88,7 +88,7 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 4820
+      "chars": 4828
     },
     {
       "source": "arXiv cs.AI Recent",
@@ -137,77 +137,103 @@
       "status": "skipped_existing",
       "title": "EU and Nato vow to step up pressure on Russia after 'new escalation' in Leipzig - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/ce9e810pg7ko?at_medium=RSS&at_campaign=rss",
-      "chars": 8953
+      "chars": 8945
     },
     {
       "source": "BBC World",
       "status": "skipped_existing",
       "title": "Rosenberg: Putin's veiled threat to UK part of Russia's campaign against West - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c62j50n131mo?at_medium=RSS&at_campaign=rss",
-      "chars": 6991
+      "chars": 7007
     },
     {
       "source": "BBC World",
       "status": "skipped_existing",
       "title": "USS Abraham Lincoln: US sailors arrive in Thailand's Pattaya after record 250 days at sea - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cg7k09z4lj9o?at_medium=RSS&at_campaign=rss",
-      "chars": 8304
+      "chars": 8334
     },
     {
       "source": "BBC World",
       "status": "skipped_existing",
       "title": "Zelensky says airlines should avoid Russian airspace as Ukraine escalates drone operations - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c9v9yydy2wvo?at_medium=RSS&at_campaign=rss",
-      "chars": 9036
+      "chars": 9062
     },
     {
       "source": "BBC World",
       "status": "skipped_existing",
       "title": "More than 900 killed in Gaza this year despite ceasefire, Hamas-run health ministry says - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c7708dy33pdo?at_medium=RSS&at_campaign=rss",
-      "chars": 11154
+      "chars": 11184
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "Criminals publish data of 8.7m people after Manchester Airports Group hack - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c74k39g3ee5o?at_medium=RSS&at_campaign=rss",
-      "chars": 6454
+      "chars": 6464
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "Which? says fake 10 Downing Street listing exposes 'unfit' Booking.com checks - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cly4e0wn452o?at_medium=RSS&at_campaign=rss",
-      "chars": 7775
+      "chars": 7805
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "Autonomous aircraft: Pilot-free crop dusters lead the way - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c1l123mmrg7o?at_medium=RSS&at_campaign=rss",
-      "chars": 12180
+      "chars": 12210
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "AI could cause global economic downturn, Andrew Bailey warns G20 - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c99dym3prl1o?at_medium=RSS&at_campaign=rss",
-      "chars": 5934
+      "chars": 5944
     },
     {
       "source": "BBC Technology",
       "status": "skipped_existing",
       "title": "Amazon rigged $20bn worth of ads, US FTC lawsuit alleges - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cvgy91nvy27o?at_medium=RSS&at_campaign=rss",
-      "chars": 5925
+      "chars": 5955
     },
     {
       "source": "ANTARA Terkini",
       "status": "added",
-      "title": "ANTARA Terkini — KLH lakukan penegakan hukum terhadap 21 perusahaan terkait karhutla - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5723224/klh-lakukan-penegakan-hukum-terhadap-21-perusahaan-terkait-karhutla",
-      "doc_id": 2251,
+      "title": "ANTARA Terkini — Pemkot Jakbar akan bongkar jembatan bambu di Tegal Alur - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723235/pemkot-jakbar-akan-bongkar-jembatan-bambu-di-tegal-alur",
+      "doc_id": 2261,
+      "chunks": 1,
+      "chars": 991,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Kamar dagang Indonesia-Singapura perkuat kerja sama digitalisasi UMKM - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723233/kamar-dagang-indonesia-singapura-perkuat-kerja-sama-digitalisasi-umkm",
+      "doc_id": 2262,
+      "chunks": 1,
+      "chars": 1015,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Menkeu harap KSSK makin jeli nilai ekonomi usai BI punya Gubernur baru - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723228/menkeu-harap-kssk-makin-jeli-nilai-ekonomi-usai-bi-punya-gubernur-baru",
+      "doc_id": 2263,
       "chunks": 1,
       "chars": 1011,
       "source_quality": 76.0,
@@ -217,55 +243,17 @@
     },
     {
       "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Kemendikdasmen: ISPU jadi indikator sekolah di daerah karhutla - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5723220/kemendikdasmen-ispu-jadi-indikator-sekolah-di-daerah-karhutla",
-      "doc_id": 2252,
-      "chunks": 1,
-      "chars": 1002,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "status": "skipped_existing",
+      "title": "ANTARA dorong pelaku UMKM naik kelas lewat pelatihan pemasaran digital - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723225/antara-dorong-pelaku-umkm-naik-kelas-lewat-pelatihan-pemasaran-digital",
+      "chars": 549
     },
     {
       "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Sabar/Reza redam pertahanan ganda Korsel untuk melaju di China Masters - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5723219/sabar-reza-redam-pertahanan-ganda-korsel-untuk-melaju-di-china-masters",
-      "doc_id": 2253,
-      "chunks": 1,
-      "chars": 1016,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — KADIN perkuat daya saing ekspor lewat pelatihan dan akses pasar - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5723216/kadin-perkuat-daya-saing-ekspor-lewat-pelatihan-dan-akses-pasar",
-      "doc_id": 2254,
-      "chunks": 1,
-      "chars": 1000,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Serangan Israel di Gaza tewaskan dua anak dan seorang perempuan - ANTARA News",
-      "url": "https://www.antaranews.com/video/5723201/serangan-israel-di-gaza-tewaskan-dua-anak-dan-seorang-perempuan",
-      "doc_id": 2255,
-      "chunks": 1,
-      "chars": 1001,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "status": "skipped_existing",
+      "title": "KLH lakukan penegakan hukum terhadap 21 perusahaan terkait karhutla - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723224/klh-lakukan-penegakan-hukum-terhadap-21-perusahaan-terkait-karhutla",
+      "chars": 549
     },
     {
       "source": "ANTARA Tekno",
@@ -502,14 +490,14 @@
       "status": "skipped_low_quality",
       "title": "Private payrolls rose by 38,000 in August, than expected, ADP reports",
       "url": "https://www.cnbc.com/2026/09/02/private-payrolls-rose-by-38000-in-august-fewer-than-expected-adp-reports.html",
-      "chars": 4840,
+      "chars": 4836,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 164,
         "unique_words": 350,
-        "char_count": 4840
+        "char_count": 4836
       }
     },
     {
@@ -608,66 +596,52 @@
     },
     {
       "source": "Phys.org Latest Science News",
-      "status": "added",
-      "title": "Phys.org Latest Science News — Hawai'i high school students name image of glittering galaxy pair",
-      "url": "https://phys.org/news/2026-09-hawaii-high-school-students-image.html",
-      "doc_id": 2256,
-      "chunks": 2,
-      "chars": 1531,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 68,
-      "claims": 3
-    },
-    {
-      "source": "Phys.org Latest Science News",
       "status": "skipped_low_quality",
-      "title": "Bio-based plastic turns into fertilizer after use",
-      "url": "https://phys.org/news/2026-09-bio-based-plastic-fertilizer.html",
-      "chars": 356,
+      "title": "Young people often try to help in gun-related crises—but they need better tools",
+      "url": "https://phys.org/news/2026-09-young-people-gun-crises-tools.html",
+      "chars": 323,
       "content_quality_score": 42.0,
       "content_quality_flags": {
         "thin_content": true,
         "boilerplate_heavy": false,
-        "sentence_count": 2,
-        "unique_words": 41,
-        "char_count": 356
-      }
-    },
-    {
-      "source": "Phys.org Latest Science News",
-      "status": "added",
-      "title": "Phys.org Latest Science News — DNA testing shows what's really in Western Australian fish and chip shop 'shark' filets",
-      "url": "https://phys.org/news/2026-08-dna-western-australian-fish-chip.html",
-      "doc_id": 2257,
-      "chunks": 1,
-      "chars": 1315,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 68,
-      "claims": 2
-    },
-    {
-      "source": "Phys.org Latest Science News",
-      "status": "skipped_low_quality",
-      "title": "A 13-meter rocket hit the Moon: Tasmanian researchers helped track it there",
-      "url": "https://phys.org/news/2026-09-meter-rocket-moon-tasmanian-track.html",
-      "chars": 327,
-      "content_quality_score": 42.0,
-      "content_quality_flags": {
-        "thin_content": true,
-        "boilerplate_heavy": false,
-        "sentence_count": 2,
+        "sentence_count": 1,
         "unique_words": 43,
-        "char_count": 327
+        "char_count": 323
       }
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "added",
+      "title": "Phys.org Latest Science News — Chemists design extra-sticky adhesives that degrade on command",
+      "url": "https://phys.org/news/2026-09-chemists-extra-sticky-adhesives-degrade.html",
+      "doc_id": 2264,
+      "chunks": 2,
+      "chars": 1462,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 5
     },
     {
       "source": "Phys.org Latest Science News",
       "status": "skipped_existing",
-      "title": "Physicists test the weak equivalence principle in an orbiting space station",
-      "url": "https://phys.org/news/2026-09-physicists-weak-equivalence-principle-orbiting.html",
-      "chars": 527
+      "title": "Hawai'i high school students name image of glittering galaxy pair",
+      "url": "https://phys.org/news/2026-09-hawaii-high-school-students-image.html",
+      "chars": 300
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "skipped_existing",
+      "title": "Bio-based plastic turns into fertilizer after use",
+      "url": "https://phys.org/news/2026-09-bio-based-plastic-fertilizer.html",
+      "chars": 500
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "skipped_existing",
+      "title": "DNA testing shows what's really in Western Australian fish and chip shop 'shark' filets",
+      "url": "https://phys.org/news/2026-08-dna-western-australian-fish-chip.html",
+      "chars": 222
     },
     {
       "source": "USGS Significant Earthquakes",
@@ -714,14 +688,14 @@
     {
       "source": "ReliefWeb Updates",
       "status": "added",
-      "title": "ReliefWeb Updates — Présence opérationnelle des partenaires national MVE-BVD au 31 août 2026 - Democratic Republic of the Congo | ReliefWeb",
-      "url": "https://reliefweb.int/report/democratic-republic-congo/presence-operationnelle-des-partenaires-national-mve-bvd-au-31-aout-2026",
-      "doc_id": 2258,
+      "title": "ReliefWeb Updates — Présence opérationnelle des partenaires nationale MVE-BVD au 31 août 2026 - Democratic Republic of the Congo | ReliefWeb",
+      "url": "https://reliefweb.int/report/democratic-republic-congo/presence-operationnelle-des-partenaires-nationale-mve-bvd-au-31-aout-2026",
+      "doc_id": 2265,
       "chunks": 7,
-      "chars": 4705,
+      "chars": 5419,
       "source_quality": 55.0,
       "freshness_score": 100.0,
-      "criticality_score": 38,
+      "criticality_score": 42,
       "claims": 6
     },
     {
@@ -856,6 +830,194 @@
       }
     },
     {
+      "source": "BMKG Gempa Bumi Terkini",
+      "status": "skipped_low_quality",
+      "title": "BMKG - Badan Meteorologi, Klimatologi, dan Geofisika",
+      "url": "https://www.bmkg.go.id/",
+      "chars": 6792,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 197,
+        "unique_words": 418,
+        "char_count": 6792
+      }
+    },
+    {
+      "source": "BMKG Gempa Bumi Terkini",
+      "status": "added",
+      "title": "BMKG Gempa Bumi Terkini — Contact Center 196 - BMKG",
+      "url": "https://www.bmkg.go.id/kontak",
+      "doc_id": 2266,
+      "chunks": 4,
+      "chars": 4692,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 8
+    },
+    {
+      "source": "BMKG Gempa Bumi Terkini",
+      "status": "added",
+      "title": "BMKG Gempa Bumi Terkini — Tentang BMKG - BMKG",
+      "url": "https://www.bmkg.go.id/profil",
+      "doc_id": 2267,
+      "chunks": 15,
+      "chars": 16776,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 8
+    },
+    {
+      "source": "BMKG Gempa Bumi Terkini",
+      "status": "added",
+      "title": "BMKG Gempa Bumi Terkini — Struktur Organisasi - Profil - BMKG",
+      "url": "https://www.bmkg.go.id/profil/organisasi",
+      "doc_id": 2268,
+      "chunks": 4,
+      "chars": 4736,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 8
+    },
+    {
+      "source": "BMKG Gempa Bumi Terkini",
+      "status": "added",
+      "title": "BMKG Gempa Bumi Terkini — Pejabat Eselon - Profil - BMKG",
+      "url": "https://www.bmkg.go.id/profil/pejabat",
+      "doc_id": 2269,
+      "chunks": 6,
+      "chars": 6984,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 68,
+      "claims": 8
+    },
+    {
+      "source": "BNPB Berita dan Informasi Bencana",
+      "status": "error_source",
+      "title": "BNPB Berita dan Informasi Bencana",
+      "url": "https://bnpb.go.id/berita",
+      "message": "403 Client Error: Forbidden for url: https://bnpb.go.id/berita"
+    },
+    {
+      "source": "BPS Statistik Indonesia",
+      "status": "error_source",
+      "title": "BPS Statistik Indonesia",
+      "url": "https://www.bps.go.id/id/pressrelease.html",
+      "message": "404 Client Error: Not Found for url: https://www.bps.go.id/id/pressrelease.html"
+    },
+    {
+      "source": "Bank Indonesia Siaran Pers",
+      "status": "skipped_short",
+      "title": "404",
+      "url": "https://www.bi.go.id/id/publikasi/ruang-media/news/Pages/default.aspx",
+      "chars": 0
+    },
+    {
+      "source": "Bank Indonesia Siaran Pers",
+      "status": "skipped_short",
+      "title": "404",
+      "url": "https://www.bi.go.id/id/publikasi/ruang-media/news/_catalogs/masterpage/",
+      "chars": 0
+    },
+    {
+      "source": "Bank Indonesia Siaran Pers",
+      "status": "skipped_short",
+      "title": "Bank Indonesia",
+      "url": "https://www.bi.go.id/default.aspx",
+      "chars": 0
+    },
+    {
+      "source": "Bank Indonesia Siaran Pers",
+      "status": "skipped_short",
+      "title": "Bank Indonesia",
+      "url": "https://www.bi.go.id/id",
+      "chars": 0
+    },
+    {
+      "source": "Bank Indonesia Siaran Pers",
+      "status": "skipped_short",
+      "title": "Karier",
+      "url": "https://www.bi.go.id/id/karier",
+      "chars": 0
+    },
+    {
+      "source": "OJK Siaran Pers",
+      "status": "error_source",
+      "title": "OJK Siaran Pers",
+      "url": "https://ojk.go.id/id/berita-dan-kegiatan/siaran-pers/Pages/default.aspx",
+      "message": "404 Client Error: Not Found for url: https://ojk.go.id/id/berita-dan-kegiatan/siaran-pers/Pages/default.aspx"
+    },
+    {
+      "source": "BRIN Berita Riset",
+      "status": "skipped_low_quality",
+      "title": "BRIN - Badan Riset dan Inovasi Nasional",
+      "url": "https://www.brin.go.id/",
+      "chars": 413,
+      "content_quality_score": 60.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 25,
+        "unique_words": 39,
+        "char_count": 413
+      }
+    },
+    {
+      "source": "BRIN Berita Riset",
+      "status": "skipped_low_quality",
+      "title": "BRIN - Badan Riset dan Inovasi Nasional",
+      "url": "https://www.brin.go.id/news",
+      "chars": 298,
+      "content_quality_score": 60.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 19,
+        "unique_words": 29,
+        "char_count": 298
+      }
+    },
+    {
+      "source": "BPOM Berita dan Informasi",
+      "status": "skipped_short",
+      "title": "Beranda | Badan Pengawas Obat dan Makanan",
+      "url": "https://www.pom.go.id",
+      "chars": 185
+    },
+    {
+      "source": "BPOM Berita dan Informasi",
+      "status": "skipped_short",
+      "title": "Profil BPOM | Badan Pengawas Obat dan Makanan",
+      "url": "https://www.pom.go.id/profil",
+      "chars": 185
+    },
+    {
+      "source": "BPOM Berita dan Informasi",
+      "status": "skipped_short",
+      "title": "Layanan Publik | Badan Pengawas Obat dan Makanan",
+      "url": "https://www.pom.go.id/layanan",
+      "chars": 185
+    },
+    {
+      "source": "BPOM Berita dan Informasi",
+      "status": "skipped_short",
+      "title": "Kinerja BPOM | Badan Pengawas Obat dan Makanan",
+      "url": "https://www.pom.go.id/kinerja",
+      "chars": 185
+    },
+    {
+      "source": "BPOM Berita dan Informasi",
+      "status": "skipped_short",
+      "title": "Berita Aktual | Badan Pengawas Obat dan Makanan",
+      "url": "https://www.pom.go.id/berita",
+      "chars": 185
+    },
+    {
       "source": "MyQuran Jadwal Sholat Indonesia",
       "status": "skipped_existing",
       "title": "Indeks Jadwal Sholat Seluruh Wilayah Indonesia",
@@ -865,7 +1027,7 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 11,
+  "critical_claims_added": 43,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -880,11 +1042,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260902_211605_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_213007_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260901_110612_pre-update.db"
+          ".db_backups/adioranye_power.db_20260902_104552_pre-update.db"
         ]
       }
     },
@@ -920,11 +1082,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260902_211815_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_213349_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260901_110624_post-update.db"
+          ".db_backups/adioranye_power.db_20260902_104609_post-update.db"
         ]
       }
     }
@@ -1525,8 +1687,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-09-02T14:18:15+00:00",
-  "finished_at_wib": "2026-09-02 21:18:15 WIB",
-  "elapsed_seconds": 130.59,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-02 21:18:15 WIB\nDokumen baru: 8 | Chunk baru: 15 | Error: 4\n\nTop update penting:\n1. ANTARA Terkini — KLH lakukan penegakan hukum terhadap 21 perusahaan terkait karhutla - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n2. ANTARA Terkini — Kemendikdasmen: ISPU jadi indikator sekolah di daerah karhutla - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n3. ANTARA Terkini — Sabar/Reza redam pertahanan ganda Korsel untuk melaju di China Masters - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n4. ANTARA Terkini — KADIN perkuat daya saing ekspor lewat pelatihan dan akses pasar - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — Serangan Israel di Gaza tewaskan dua anak dan seorang perempuan - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n6. ReliefWeb Updates — Présence opérationnelle des partenaires national MVE-BVD au 31 août 2026 - Democratic Republic of the Congo | ReliefWeb\n   Sumber: ReliefWeb Updates | kualitas: 55.0 | freshness: 100.0\n7. Phys.org Latest Science News — Hawai'i high school students name image of glittering galaxy pair\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n8. Phys.org Latest Science News — DNA testing shows what's really in Western Australian fish and chip shop 'shark' filets\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-09-02T14:33:49+00:00",
+  "finished_at_wib": "2026-09-02 21:33:49 WIB",
+  "elapsed_seconds": 221.96,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-02 21:33:49 WIB\nDokumen baru: 9 | Chunk baru: 41 | Error: 7\n\nTop update penting:\n1. BMKG Gempa Bumi Terkini — Tentang BMKG - BMKG\n   Sumber: BMKG Gempa Bumi Terkini | kualitas: 92.0 | freshness: 100.0\n2. BMKG Gempa Bumi Terkini — Pejabat Eselon - Profil - BMKG\n   Sumber: BMKG Gempa Bumi Terkini | kualitas: 92.0 | freshness: 100.0\n3. BMKG Gempa Bumi Terkini — Contact Center 196 - BMKG\n   Sumber: BMKG Gempa Bumi Terkini | kualitas: 92.0 | freshness: 100.0\n4. BMKG Gempa Bumi Terkini — Struktur Organisasi - Profil - BMKG\n   Sumber: BMKG Gempa Bumi Terkini | kualitas: 92.0 | freshness: 100.0\n5. ANTARA Terkini — Pemkot Jakbar akan bongkar jembatan bambu di Tegal Alur - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n6. ANTARA Terkini — Kamar dagang Indonesia-Singapura perkuat kerja sama digitalisasi UMKM - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n7. ANTARA Terkini — Menkeu harap KSSK makin jeli nilai ekonomi usai BI punya Gubernur baru - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n8. ReliefWeb Updates — Présence opérationnelle des partenaires nationale MVE-BVD au 31 août 2026 - Democratic Republic of the Congo | ReliefWeb\n   Sumber: ReliefWeb Updates | kualitas: 55.0 | freshness: 100.0\n9. Phys.org Latest Science News — Chemists design extra-sticky adhesives that degrade on command\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
