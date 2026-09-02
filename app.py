@@ -2077,6 +2077,8 @@ def init_state() -> None:
         st.session_state.reply_target_preview = ""
     if "reply_composer_prefill" not in st.session_state:
         st.session_state.reply_composer_prefill = ""
+    if "chat_input" not in st.session_state:
+        st.session_state.chat_input = ""
     if "session_memory" not in st.session_state:
         st.session_state.session_memory = []
     if "session_memory_updated_at" not in st.session_state:
@@ -14144,6 +14146,7 @@ def render_public_page() -> None:
         st.session_state.reply_target_index = None
         st.session_state.reply_target_preview = ""
         st.session_state.reply_composer_prefill = ""
+        st.session_state.chat_input = ""
         st.rerun()
 
     if st.session_state.reply_target_preview:
@@ -14226,11 +14229,26 @@ def render_public_page() -> None:
         st.session_state.chat_input = st.session_state.reply_composer_prefill
         st.session_state.reply_composer_prefill = ""
 
-    # Spacer is rendered at the very end so it also protects newly generated messages.
-    typed_input = st.chat_input(
-        "Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode...",
+    composer_label = "Tulis pertanyaan panjang, tambahkan konteks, atau lanjutkan reply di sini"
+    st.text_area(
+        composer_label,
         key="chat_input",
+        height=180,
+        placeholder="Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode...",
+        label_visibility="collapsed",
     )
+    send_col, info_col = st.columns([1, 2])
+    with send_col:
+        send_clicked = st.button("Kirim", use_container_width=True, key="send_public_chat")
+    with info_col:
+        st.caption("Bisa tulis panjang. Cocok untuk reply dengan quote dan konteks lengkap.")
+
+    typed_input = ""
+    if send_clicked:
+        typed_input = str(st.session_state.get("chat_input", "") or "").strip()
+        if typed_input:
+            st.session_state.chat_input = ""
+
     user_input = st.session_state.pending_prompt or typed_input
     if st.session_state.pending_prompt:
         st.session_state.pending_prompt = ""
