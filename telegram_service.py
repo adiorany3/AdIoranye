@@ -98,6 +98,17 @@ def telegram_safe_int(value: Any, default: int) -> int:
         return int(default)
 
 
+def telegram_parse_admin_chat_ids(value: Any) -> Set[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return set()
+
+    return {
+        token.strip()
+        for token in re.split(r"[,\s]+", raw)
+        if token.strip()
+    }
+
 def telegram_unique_models(models: List[str]) -> List[str]:
     seen = set()
     result: List[str] = []
@@ -593,6 +604,119 @@ class TelegramService:
         )
         return str(answer or "").strip(), meta if isinstance(meta, dict) else {}
 
+    def _admin_chat_ids(self) -> Set[str]:
+        return telegram_parse_admin_chat_ids(
+            self._config.get("telegram_admin_chat_ids")
+            or self._config.get("admin_chat_ids")
+            or os.getenv("TELEGRAM_ADMIN_CHAT_IDS")
+            or ""
+        )
+
+    def _is_admin_chat(self, chat_id: Any) -> bool:
+        return str(chat_id or "").strip() in self._admin_chat_ids()
+
+    def _maintenance_lock_file(self) -> str:
+        path = str(
+            self._config.get("maintenance_lock_file")
+            or ".adioranye_maintenance_lock.json"
+        ).strip()
+        return path or ".adioranye_maintenance_lock.json"
+
+    def _maintenance_default_message(self) -> str:
+        message = str(
+            self._config.get("maintenance_message")
+            or "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses."
+        ).strip()
+        return message or "Adioranye sedang dalam mode akses terbatas. Silakan coba lagi setelah admin membuka akses."
+
+    def _read_maintenance_state(self) -> Dict[str, Any]:
+        state = {
+            "locked": False,
+            "status": "unlocked",
+            "message": self._maintenance_default_message(),
+            "reason": "",
+            "updated_at": "",
+            "updated_by": "",
+            "channel": "",
+        }
+        path = self._maintenance_lock_file()
+
+        try:
+            if not os.path.exists(path):
+                return state
+            with open(path, "r", encoding="utf-8") as file:
+                data = json.load(file)
+            if isinstance(data, dict):
+                state.update(data)
+        except Exception as exc:
+            with self._lock:
+                self._last_error = str(exc)[:1200]
+
+        state["locked"] = bool(state.get("locked"))
+        state["status"] = "locked" if state.get("locked") else "unlocked"
+        state["message"] = str(state.get("message") or self._maintenance_default_message()).strip()
+        return state
+
+    def _write_maintenance_state(self, locked: bool, updated_by: str, reason: str) -> Dict[str, Any]:
+        state = self._read_maintenance_state()
+        state.update(
+            {
+                "locked": bool(locked),
+                "status": "locked" if locked else "unlocked",
+                "message": self._maintenance_default_message(),
+                "reason": str(reason or "").strip(),
+                "updated_at": datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB"),
+                "updated_by": str(updated_by or "telegram-admin"),
+                "channel": "telegram-admin",
+            }
+        )
+
+        with open(self._maintenance_lock_file(), "w", encoding="utf-8") as file:
+            json.dump(state, file, ensure_ascii=False, indent=2)
+
+        return state
+
+    def _handle_admin_command(self, chat_id: Any, text: str) -> Optional[str]:
+        command = str(text or "").strip().lower()
+
+        if command not in {"/webstatus", "/lockweb", "/unlockweb"}:
+            return None
+
+        if not self._is_admin_chat(chat_id):
+            return "Perintah admin ditolak. Chat ID ini tidak terdaftar sebagai admin Telegram."
+
+        if command == "/webstatus":
+            state = self._read_maintenance_state()
+            return (
+                f"Web chat: {'LOCKED' if state.get('locked') else 'UNLOCKED'}\n"
+                f"Updated: {state.get('updated_at') or '-'}\n"
+                f"By: {state.get('updated_by') or '-'}\n"
+                f"Reason: {state.get('reason') or '-'}"
+            )
+
+        if command == "/lockweb":
+            state = self._write_maintenance_state(
+                True,
+                updated_by="telegram-admin",
+                reason="manual_web_chat_lock",
+            )
+            return (
+                "Web chat dikunci.\n"
+                f"Status: {'LOCKED' if state.get('locked') else 'UNLOCKED'}\n"
+                f"Updated: {state.get('updated_at') or '-'}"
+            )
+
+        state = self._write_maintenance_state(
+            False,
+            updated_by="telegram-admin",
+            reason="manual_web_chat_unlock",
+        )
+        return (
+            "Web chat dibuka lagi.\n"
+            f"Status: {'LOCKED' if state.get('locked') else 'UNLOCKED'}\n"
+            f"Updated: {state.get('updated_at') or '-'}"
+        )
+
     def _handle_message(self, message: Dict[str, Any]) -> None:
         chat = message.get("chat") or {}
         chat_id = chat.get("id")
@@ -604,6 +728,24 @@ class TelegramService:
 
         with self._lock:
             self._last_update = f"update_id={update_id} chat_id={chat_id} text={text[:120]}"
+
+        admin_reply = self._handle_admin_command(chat_id, text)
+        if admin_reply is not None:
+            try:
+                self._telegram_request(
+                    "sendMessage",
+                    {
+                        "chat_id": chat_id,
+                        "text": admin_reply[:4000],
+                    },
+                    timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
+                )
+                with self._lock:
+                    self._processed += 1
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = str(exc)[:1200]
+            return
 
         try:
             answer, _meta = self._build_answer(text)
