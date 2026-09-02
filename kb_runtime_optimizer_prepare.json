@@ -1,6 +1,6 @@
 {
-  "created_at": "2026-09-01T04:16:25+00:00",
-  "created_at_wib": "2026-09-01 11:16:25 WIB",
+  "created_at": "2026-09-02T03:45:51+00:00",
+  "created_at_wib": "2026-09-02 10:45:51 WIB",
   "effective_sources_file": "kb_sources_effective.json",
   "enabled_candidates": 28,
   "max_items": 2,
@@ -12,58 +12,58 @@
   },
   "selected": [
     {
-      "name": "MarketWatch Markets",
-      "quality": 55.0,
-      "score": 94.757,
-      "tier": "hot",
-      "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"
-    },
-    {
-      "name": "AP World News",
-      "quality": 55.0,
-      "score": 94.394,
-      "tier": "hot",
-      "url": "https://apnews.com/hub/world-news"
-    },
-    {
-      "name": "AP Technology",
-      "quality": 55.0,
-      "score": 94.048,
-      "tier": "hot",
-      "url": "https://apnews.com/hub/technology"
-    },
-    {
       "name": "ANTARA Terkini",
       "quality": 76.0,
-      "score": 90.521,
+      "score": 94.071,
       "tier": "hot",
       "url": "https://www.antaranews.com/rss/terkini.xml"
     },
     {
+      "name": "MarketWatch Markets",
+      "quality": 55.0,
+      "score": 89.886,
+      "tier": "hot",
+      "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"
+    },
+    {
       "name": "OpenAI News",
       "quality": 55.0,
-      "score": 86.41,
+      "score": 89.551,
       "tier": "hot",
       "url": "https://openai.com/news/rss.xml"
     },
     {
-      "name": "WHO News",
+      "name": "AP Technology",
+      "quality": 55.0,
+      "score": 86.289,
+      "tier": "hot",
+      "url": "https://apnews.com/hub/technology"
+    },
+    {
+      "name": "AP World News",
+      "quality": 55.0,
+      "score": 86.282,
+      "tier": "hot",
+      "url": "https://apnews.com/hub/world-news"
+    },
+    {
+      "name": "USGS Significant Earthquakes",
       "quality": 92.0,
-      "score": 92.058,
+      "score": 87.33,
       "tier": "warm",
-      "url": "https://www.who.int/rss-feeds/news-english.xml"
+      "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom"
     },
     {
       "name": "NASA Breaking News",
       "quality": 92.0,
-      "score": 91.45,
+      "score": 86.801,
       "tier": "warm",
       "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss"
     },
     {
       "name": "Streamlit Release Notes",
       "quality": 55.0,
-      "score": 31.969,
+      "score": 34.244,
       "tier": "cold",
       "url": "https://docs.streamlit.io/develop/quick-reference/release-notes"
     }

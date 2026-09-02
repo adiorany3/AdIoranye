@@ -1,6 +1,29 @@
 [
   {
     "claim_max_items": 6,
+    "collection": "Indonesia Terkini",
+    "confidence": "high",
+    "enabled": true,
+    "freshness": "current",
+    "id": "antara_terkini",
+    "max_items": 2,
+    "min_chars": 220,
+    "name": "ANTARA Terkini",
+    "pinned": true,
+    "source_type": "mainstream-media",
+    "summary_sentences": 4,
+    "tags": [
+      "antara",
+      "indonesia",
+      "news",
+      "current"
+    ],
+    "type": "rss",
+    "update_profile": "hot",
+    "url": "https://www.antaranews.com/rss/terkini.xml"
+  },
+  {
+    "claim_max_items": 6,
     "collection": "Ekonomi Terkini",
     "confidence": "high",
     "enabled": true,
@@ -23,27 +46,24 @@
     "url": "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"
   },
   {
-    "claim_max_items": 6,
-    "collection": "Berita Dunia Terkini",
+    "collection": "AI Official Updates",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "ap_world",
+    "id": "openai_news",
     "max_items": 2,
-    "min_chars": 220,
-    "name": "AP World News",
+    "name": "OpenAI News",
     "pinned": true,
-    "source_type": "mainstream-media",
-    "summary_sentences": 4,
+    "source_type": "official",
     "tags": [
-      "ap",
-      "world",
-      "news",
-      "current"
+      "openai",
+      "ai",
+      "official",
+      "news"
     ],
-    "type": "html",
+    "type": "rss",
     "update_profile": "hot",
-    "url": "https://apnews.com/hub/world-news"
+    "url": "https://openai.com/news/rss.xml"
   },
   {
     "claim_max_items": 6,
@@ -70,69 +90,49 @@
   },
   {
     "claim_max_items": 6,
-    "collection": "Indonesia Terkini",
+    "collection": "Berita Dunia Terkini",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "antara_terkini",
+    "id": "ap_world",
     "max_items": 2,
     "min_chars": 220,
-    "name": "ANTARA Terkini",
+    "name": "AP World News",
     "pinned": true,
     "source_type": "mainstream-media",
     "summary_sentences": 4,
     "tags": [
-      "antara",
-      "indonesia",
+      "ap",
+      "world",
       "news",
       "current"
     ],
-    "type": "rss",
+    "type": "html",
     "update_profile": "hot",
-    "url": "https://www.antaranews.com/rss/terkini.xml"
-  },
-  {
-    "collection": "AI Official Updates",
-    "confidence": "high",
-    "enabled": true,
-    "freshness": "current",
-    "id": "openai_news",
-    "max_items": 2,
-    "name": "OpenAI News",
-    "pinned": true,
-    "source_type": "official",
-    "tags": [
-      "openai",
-      "ai",
-      "official",
-      "news"
-    ],
-    "type": "rss",
-    "update_profile": "hot",
-    "url": "https://openai.com/news/rss.xml"
+    "url": "https://apnews.com/hub/world-news"
   },
   {
     "claim_max_items": 6,
-    "collection": "Kesehatan Global Terkini",
+    "collection": "Bencana Terkini",
     "confidence": "high",
     "enabled": true,
     "freshness": "current",
-    "id": "who_news",
+    "id": "usgs_earthquakes",
     "max_items": 2,
-    "min_chars": 220,
-    "name": "WHO News",
+    "min_chars": 180,
+    "name": "USGS Significant Earthquakes",
     "pinned": true,
-    "source_type": "official-health",
-    "summary_sentences": 4,
+    "source_type": "official-disaster",
+    "summary_sentences": 3,
     "tags": [
-      "who",
-      "health",
-      "official",
-      "current"
+      "usgs",
+      "earthquake",
+      "disaster",
+      "official"
     ],
     "type": "rss",
     "update_profile": "warm",
-    "url": "https://www.who.int/rss-feeds/news-english.xml"
+    "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom"
   },
   {
     "claim_max_items": 6,
