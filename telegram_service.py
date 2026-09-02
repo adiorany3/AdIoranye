@@ -661,11 +661,30 @@ class TelegramService:
                 self._last_error = str(exc)[:1200]
 
         state["locked"] = bool(state.get("locked"))
+        if (
+            not state["locked"]
+            and state.get("unlocked_until_ts")
+            and time.time() >= float(state["unlocked_until_ts"])
+        ):
+            state.update({
+                "locked": True,
+                "status": "locked",
+                "reason": "automatic_web_chat_relock",
+                "updated_at": datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB"),
+                "updated_by": "system-auto-relock",
+                "channel": "maintenance-timer",
+                "unlocked_until_ts": None,
+            })
+            self._write_maintenance_state_payload(state)
         state["status"] = "locked" if state.get("locked") else "unlocked"
         state["message"] = str(state.get("message") or self._maintenance_default_message()).strip()
         return state
 
-    def _write_maintenance_state(self, locked: bool, updated_by: str, reason: str) -> Dict[str, Any]:
+    def _write_maintenance_state_payload(self, state: Dict[str, Any]) -> None:
+        with open(self._maintenance_lock_file(), "w", encoding="utf-8") as file:
+            json.dump(state, file, ensure_ascii=False, indent=2)
+
+    def _write_maintenance_state(self, locked: bool, updated_by: str, reason: str, unlock_minutes: int | None = None) -> Dict[str, Any]:
         state = self._read_maintenance_state()
         state.update(
             {
@@ -676,11 +695,15 @@ class TelegramService:
                 "updated_at": datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB"),
                 "updated_by": str(updated_by or "telegram-admin"),
                 "channel": "telegram-admin",
+                "unlocked_until_ts": (
+                    time.time() + int(unlock_minutes) * 60
+                    if not locked and unlock_minutes and int(unlock_minutes) > 0
+                    else None
+                ),
             }
         )
 
-        with open(self._maintenance_lock_file(), "w", encoding="utf-8") as file:
-            json.dump(state, file, ensure_ascii=False, indent=2)
+        self._write_maintenance_state_payload(state)
 
         return state
 
@@ -706,7 +729,8 @@ class TelegramService:
                 "/helpadmin - daftar command admin\n"
                 "/webstatus - lihat status web chat\n"
                 "/lockweb - kunci web chat\n"
-                "/unlockweb - buka web chat lagi\n"
+                "/unlockweb MENIT - buka web chat sementara\n"
+                "Contoh: /unlockweb 30\n"
                 "/ingat YYYY-MM-DD_HH:MM isi - buat pengingat (WIB)\n"
                 "/daftaringat - lihat pengingat\n"
                 "/hapusingat ID - hapus pengingat"
@@ -727,9 +751,14 @@ class TelegramService:
                 or "-"
             ).strip() or "-"
             active_count = int(service_status.get("model_health_active_count") or 0)
+            until_ts = state.get("unlocked_until_ts")
+            until_text = "-"
+            if until_ts and not state.get("locked"):
+                until_text = datetime.fromtimestamp(float(until_ts), WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
             return (
                 "Status Adioranye:\n"
                 f"Web chat: {'LOCKED' if state.get('locked') else 'UNLOCKED'}\n"
+                f"Unlock sampai: {until_text}\n"
                 f"Updated: {state.get('updated_at') or '-'}\n"
                 f"By: {state.get('updated_by') or '-'}\n"
                 f"Reason: {state.get('reason') or '-'}\n"
@@ -751,15 +780,20 @@ class TelegramService:
                 f"Updated: {state.get('updated_at') or '-'}"
             )
 
+        parts = raw_text.split()
+        if len(parts) != 2 or not parts[1].isdigit() or not 1 <= int(parts[1]) <= 1440:
+            return "Format salah. Pakai: /unlockweb MENIT (1-1440)"
+        minutes = int(parts[1])
         state = self._write_maintenance_state(
             False,
             updated_by="telegram-admin",
-            reason="manual_web_chat_unlock",
+            reason="timed_web_chat_unlock",
+            unlock_minutes=minutes,
         )
+        until = datetime.fromtimestamp(float(state["unlocked_until_ts"]), WIB_TZ)
         return (
-            "Web chat dibuka lagi.\n"
-            f"Status: {'LOCKED' if state.get('locked') else 'UNLOCKED'}\n"
-            f"Updated: {state.get('updated_at') or '-'}"
+            f"Web chat dibuka selama {minutes} menit.\n"
+            f"Terkunci otomatis: {until:%Y-%m-%d %H:%M:%S WIB}"
         )
 
     def _send_text(self, chat_id: Any, text: str, reply_to: Any = None) -> None:

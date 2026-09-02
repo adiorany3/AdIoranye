@@ -286,6 +286,7 @@ def set_maintenance_lock(
     updated_by: str = "admin",
     channel: str = "web-admin",
     reason: str = "",
+    unlock_minutes: int | None = None,
 ) -> Dict[str, Any]:
     state = read_maintenance_lock_state()
     state.update(
@@ -297,6 +298,11 @@ def set_maintenance_lock(
             "updated_at": _maintenance_now_text(),
             "updated_by": str(updated_by or "admin"),
             "channel": str(channel or "web-admin"),
+            "unlocked_until_ts": (
+                time.time() + (int(unlock_minutes) * 60)
+                if not locked and unlock_minutes and int(unlock_minutes) > 0
+                else None
+            ),
         }
     )
 
@@ -11414,8 +11420,15 @@ def render_admin_status() -> None:
         st.info(
             "Kontrol ini hanya mengunci chat publik di web. Telegram tetap berjalan normal."
         )
+        unlock_until = current_state.get("unlocked_until_ts")
+        unlock_until_text = "-"
+        if unlock_until and not is_locked:
+            try:
+                unlock_until_text = datetime.fromtimestamp(float(unlock_until)).strftime("%Y-%m-%d %H:%M:%S")
+            except (TypeError, ValueError, OverflowError):
+                unlock_until_text = "-"
         st.caption(
-            f"Status sekarang: {'LOCKED' if is_locked else 'UNLOCKED'} | updated: {current_state.get('updated_at') or '-'} | by: {current_state.get('updated_by') or '-'}"
+            f"Status sekarang: {'LOCKED' if is_locked else 'UNLOCKED'} | unlock sampai: {unlock_until_text} | updated: {current_state.get('updated_at') or '-'} | by: {current_state.get('updated_by') or '-'}"
         )
         col_lock_web, col_unlock_web = st.columns(2)
         with col_lock_web:
@@ -11434,6 +11447,10 @@ def render_admin_status() -> None:
                 st.warning("Chat web dikunci. Telegram tetap aktif.")
                 st.rerun()
         with col_unlock_web:
+            unlock_minutes = st.number_input(
+                "Durasi unlock (menit)", min_value=1, max_value=1440, value=30,
+                step=1, key="admin_unlock_web_minutes",
+            )
             if st.button(
                 "🔓 Unlock chat web",
                 use_container_width=True,
@@ -11444,9 +11461,10 @@ def render_admin_status() -> None:
                     False,
                     updated_by="admin-web",
                     channel="web-admin",
-                    reason="manual_web_chat_unlock",
+                    reason="timed_web_chat_unlock",
+                    unlock_minutes=int(unlock_minutes),
                 )
-                st.success("Chat web dibuka lagi. Telegram tetap aktif.")
+                st.success(f"Chat web dibuka selama {int(unlock_minutes)} menit. Setelah itu terkunci otomatis.")
                 st.rerun()
         st.caption("User web akan melihat pesan akses terbatas saat lock aktif.")
 
