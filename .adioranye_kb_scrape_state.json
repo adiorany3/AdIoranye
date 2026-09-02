@@ -1040,6 +1040,14 @@
       "title": "BleepingComputer - Security News — Max severity Cisco Secure Workload flaw gives Site Admin privileges",
       "url": "https://www.bleepingcomputer.com/news/security/cisco-max-severity-secure-workload-flaw-gives-hackers-site-admin-privileges/"
     },
+    "0ef6bd51f15dd0c41517fad106cad86af08b051ad339f535c4900a41d18c2c33": {
+      "chunks": 10,
+      "created_at": "2026-09-02T13:55:15+00:00",
+      "doc_id": 2211,
+      "source": "OpenAI News",
+      "title": "OpenAI News — How law firm Gilbert + Tobin governs and scales AI with OpenAI | OpenAI",
+      "url": "https://openai.com/index/gilbert-tobin"
+    },
     "0ef6f46b1eb86b724b1c83ba47c2d050b701290c50d998ce9464bb28fbae2287": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:04+00:00",
@@ -1496,6 +1504,14 @@
       "title": "OpenAI News — OpenAI named a Leader in enterprise coding agents by Gartner | OpenAI",
       "url": "https://openai.com/index/gartner-2026-agentic-coding-leader"
     },
+    "168540051166797f95f9b88aee8be9829ef3b4c67b09cf35f7ad6d6eb3ec3ea2": {
+      "chunks": 8,
+      "created_at": "2026-09-02T13:55:15+00:00",
+      "doc_id": 2212,
+      "source": "OpenAI News",
+      "title": "OpenAI News — OpenAI supports California’s bill to advance youth AI safety | OpenAI",
+      "url": "https://openai.com/index/supporting-california-bill-advance-ai-youth-safety"
+    },
     "1695f84484143db7da99104f7fe4c6535b77d21a93bda45ffe41196841dfeed7": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:53+00:00",
@@ -1655,6 +1671,14 @@
       "source": "Google News Asia - Vietnam Terkini",
       "title": "Google News Asia - Vietnam Terkini — Acting Minister of Industry and Trade Le Manh Hung attends a roundtable with the US-ASEAN Business ... - moit.gov.vn",
       "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxPWnJJSDc2VW9rZWo5MVBxQWJwNlRWajNXMTdmWTJ4TVNZT1hfVGlsbmI1TG43aEc3b1dPOXpDUFZWY1VGX0J2UHE2Q0ZLXzlCN3JJdlc5Rlp0R3NvUXZpN3BUNURJcTZwZGJUUl96c3ktYkxLOGRkSkstQXMyWnRWYm0tTE1OYzdacHRENkVMVnZvaUdnLXJGMnE2Y1lseEE?oc=5"
+    },
+    "1b2bf407b3d76a4e1eea4cb832e0da04aa5fc06a14ffa6d8e88458aa2b75a9b9": {
+      "chunks": 3,
+      "created_at": "2026-09-02T13:57:11+00:00",
+      "doc_id": 2249,
+      "source": "IEA News",
+      "title": "IEA News — Events - IEA",
+      "url": "https://www.iea.org/events"
     },
     "1ba3226e7334c00be538e9d6493daae7c7c9fd3683011a90f48205712014b595": {
       "chunks": 1,
@@ -2272,6 +2296,14 @@
       "title": "arXiv cs.HC Human Computer Interaction — GrandGuard: Taxonomy, Benchmark, and Safeguards for Elderly-Chatbot Interaction Safety",
       "url": "https://arxiv.org/abs/2605.20203"
     },
+    "2306d474fda903d7f08b3239c65af31dadc717f821519f8a35e88302059897b8": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:41+00:00",
+      "doc_id": 2223,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Indonesia masuk Grup F Ronde 2 Prakualifikasi Piala Asia 2029 - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723184/indonesia-masuk-grup-f-ronde-2-prakualifikasi-piala-asia-2029"
+    },
     "23182401272c756f299370fda7a90cfba52865fc3df361bdea37f59e2700ec14": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:02+00:00",
@@ -2816,6 +2848,14 @@
       "title": "Google News Asia - Hong Kong Terkini — Indonesia hails ‘strong’ ties as Hong Kong’s CY Leung lauds ‘steady hands’ - South China Morning Post",
       "url": "https://news.google.com/rss/articles/CBMivgFBVV95cUxPZk9rZ013cG5rQjR0ZjZMTmIxbEp4OTRoYU1Fcngxcnp6Vkp2eUhhRGYxbGxGX0dlT2tkdGRuMjhxOUY2elM3UEJwNEQyNEFoeWFvNldXUTU0c28tZU5uZ0lRNDBxcUZ1eTl3cWxYSWpkREMwNmUxNlFMWk1laU8zRHhhaF9MZmVWZkh4MUpfYmEtMmNLNE5MQmlvNDVRQW43YU51azE0ZUY5bWlwSjYtbERWVFhLcEhZZm9oVmpR0gG-AUFVX3lxTE55OXoyNGFKVFAzTUpWMUdoS01wVXNTR0NaMW5HMm5Fejcxcld3ZHI3OTN3UGh2b1J3eHBkWVQ1Zk9xcHJpdGVtcFZkbngtY3NIYWNlOWhOaTB0MU9oeHd5SWJuVWRIRzZHc242X1FSR2dQWm5LUEM0YWt2QXlSQndHUkNZX3dIeUNEVWk4VUJfakxwSWt2OGxFMEVaYllEdlBubWZPeTFrMXZ6clgwTGZOUHRUVTl5aGtQNk5WeUE?oc=5"
     },
+    "2c7e44bc0ab09bb698a90cc0861622781d0e9ad098798ddbbfa08cccd042178a": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:41+00:00",
+      "doc_id": 2221,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Brantas Abipraya rampungkan pembangunan Sekolah Indonesia Kuala Lumpur - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723189/brantas-abipraya-rampungkan-pembangunan-sekolah-indonesia-kuala-lumpur"
+    },
     "2c9fdb6b7cb2b8f2ee1b3244e477d20fd3dda68ed268b87412fb4382ff9132cd": {
       "chunks": 1,
       "created_at": "2026-05-22T01:59:57+00:00",
@@ -2952,6 +2992,14 @@
       "title": "ScienceDaily AI News — New quantum algorithm solves “impossible” materials problem in seconds",
       "url": "https://www.sciencedaily.com/releases/2026/05/260512202355.htm"
     },
+    "2fabc6a2e5d28ef88bcaae96b9b1bbca67e64b8f4a655159def8510d2cada690": {
+      "chunks": 3,
+      "created_at": "2026-09-02T13:57:11+00:00",
+      "doc_id": 2246,
+      "source": "IEA News",
+      "title": "IEA News — IEA – International Energy Agency",
+      "url": "https://www.iea.org"
+    },
     "2fefc928ee0dbf7487566dc2d420e0b6e744d8fcef227259840b27848315256a": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:37+00:00",
@@ -3015,6 +3063,14 @@
       "source": "Google News Indonesia Tech - Satelit Internet Indonesia",
       "title": "Google News Indonesia Tech - Satelit Internet Indonesia — Satria-1 & Starlink Dikerahkan Pulihkan Komunikasi Banjir Aceh–Sumatera - Teknologi.id",
       "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxOdDVlZU52VUl0Y3J1Q3JKekRQUl9URHpyUFpGUmZzZWhia09zUWJPcF9CRHRONi1VZF9ZMGJQTTdjeW5DZ0VVNnMzaDl0b1VUTnowRlFSMHFCVG1CRGxvbTF4QU1vajJVRHFTdWlBOE4zRFp1YjllTGFEVnVrN2ZGa0tKVDgzc2xPZjlNb2FNc2w5aXJkdnJpTjR4YnpXYXBnTUV6Qi1Bb3E?oc=5"
+    },
+    "316e65b90a175b4a103cf5814b335420f456a0e3cf16b93658a0b113ffeb4cb2": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:46+00:00",
+      "doc_id": 2226,
+      "source": "ANTARA Tekno",
+      "title": "ANTARA Tekno — Huawei MatePad Air: Spesifikasi, fitur, dan harga di Indonesia - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5721767/huawei-matepad-air-spesifikasi-fitur-dan-harga-di-indonesia"
     },
     "316eba8cb4dcb92478cdb0b0ddf13c20c4f5509ba7efaa5a51e0b2380cb36c91": {
       "chunks": 2,
@@ -3736,6 +3792,14 @@
       "title": "Google News Global Tech - Autonomous Vehicle Global — Waymo’s Robotaxi Problem Just Got Worse as Nearly 3,800 Self-Driving Cars Are Recalled Over Flood Risk - Yahoo Autos",
       "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxNRTB6ZV9ucV9MZDhtTWQ1RV9PTzVkRjVSTTVPcjhyMy1PdGhFcXFkcFVVc0ZTTW82cG91Y04teXd5ZV9oZm5udkZQUm9CalFSWG9TVzhIeXpZQUZXbWJGeHFiTERLakhnZDg2NldYYkZrRGZFQ2ZUNTBfbjh6Nk9CV1UwWC1jd21RMFpIdVEybGNHMUMxQVhudWZ2U1dSUmM?oc=5"
     },
+    "3e2c27c85c8e703196300a436a9c77731afd3ee9e03ed29a20401e690951916e": {
+      "chunks": 13,
+      "created_at": "2026-09-02T13:57:02+00:00",
+      "doc_id": 2243,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — WHO and Federal Ministry of Health step up Sudan’s preparedness for potential Ebola outbreak - Sudan | ReliefWeb",
+      "url": "https://reliefweb.int/report/sudan/who-and-federal-ministry-health-step-sudans-preparedness-potential-ebola-outbreak"
+    },
     "3e3e8245ffe54b19e28cf1e6b07dacc3dfd1f25de8c7fcfccc6461eb2c9f812d": {
       "chunks": 6,
       "created_at": "2026-05-22T02:43:51+00:00",
@@ -3895,6 +3959,14 @@
       "source": "Google News Top Headlines - Mongolia",
       "title": "Google News Top Headlines - Mongolia — RFK Jr. announces 'the largest autism fraud bust in American history' and it’s in Minnesota - Politico",
       "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxNcjRPbmNyRlZGbHBRWmtBc1dXSVNNTl8tNFppT2xBYmd1WjhxS1BBQ19pRnNpX2VsM0syYm5PX0FZbG4zUzlQRGpXd3Bmbl9McFdET0l2NEttNVQxYXJlTC16YUNLeXVpNm5TZjZoLUJVQ1VVZTY5Rnd0emcxeHN1a2Vmd2d2cTFTaWpN?oc=5"
+    },
+    "3fd2ef6a7550379be7152330df398ea55aee439b28d655a96a95e1b1956d3895": {
+      "chunks": 7,
+      "created_at": "2026-09-02T13:57:02+00:00",
+      "doc_id": 2242,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — Gender Alert #1: Critical Protection Needs of Women and Girls Following the Flores Earthquake Indonesia - Indonesia | ReliefWeb",
+      "url": "https://reliefweb.int/report/indonesia/gender-alert-1-critical-protection-needs-women-and-girls-following-flores-earthquake-indonesia"
     },
     "3fe76d7c92b083f8c9190bff7c88fb0fcb4136228bd74f9dae7b66b33aa5d09d": {
       "chunks": 1,
@@ -4079,6 +4151,14 @@
       "source": "Google News Indonesia - Bisnis & Investasi",
       "title": "Google News Indonesia - Bisnis & Investasi — Tumbuh 5,17%, Industri Manufaktur Jadi Motor Utama Pertumbuhan Ekonomi RI - Liputan6.com",
       "url": "https://news.google.com/rss/articles/CBMitgFBVV95cUxOLU9yc0FkTm9kV2ZJUTBZT0w5N2ZTY29laEZfcnJzcmZJMnhmN2RKZkg0YUVwT0ZBV3ZPSlk1eGRnbFB4VE03VWtvVWptTkhMa0QtaDVHcGEwbEt1Y01zQWhwck84UVNLQXhMLVlsUi1STzlQbnMtbWIzcG1tSjFGZ1drYTY1am9OYzZwTWtWTUR1R1VILWJEMlNMdTAybmtTVGd3QlBxZC04VEYyOTRjeThQb3NOUQ?oc=5"
+    },
+    "43158b76c27f2aee3f3db0a03ce341b42e7fa5f40ccbde6a6f96e23ccbc84cda": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:46+00:00",
+      "doc_id": 2230,
+      "source": "ANTARA Tekno",
+      "title": "ANTARA Tekno — Cara menyembunyikan aplikasi di iPhone dengan Face ID - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5717857/cara-menyembunyikan-aplikasi-di-iphone-dengan-face-id"
     },
     "436dacaa9f7ce54b06e5af9ef7a3afdf4eba563d8e3641297cbf2d3288359d1c": {
       "chunks": 2,
@@ -4408,6 +4488,14 @@
       "title": "Google News Global Tech - Space Technology Global — Is it possible to generate energy from space? - Moeve Global",
       "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxPUV9KaEc0R1IxVzRYSmlrWVkyUEtpOFRXdDZablR0VmZuRTNSTjRzdGpHcmZzZ2M1UG5oZTEwbUcxMHhyYmd2SnhfZE9QQ1BwWDFNWmYyUWN1YXNlQzgwZ3BGQ1YyZkEwd0ZkMVNCVVI0MGNEUm5NQk5WUXA3b21KcTc2M0FZcFM5ZENOTlI3elJtNU91c093ZjRQLUFUODlaSGc?oc=5"
     },
+    "4712e59e8b54387e80d0f5267c3faf1e580c7d398672345926694fa9bcd239ad": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:41+00:00",
+      "doc_id": 2222,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Kemendes PDT verifikasi kerusakan desa terdampak gempa NTT - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723187/kemendes-pdt-verifikasi-kerusakan-desa-terdampak-gempa-ntt"
+    },
     "4739ce3c135e57bf13dedc466770988259e6283ab695df60fc720b3218f63c06": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:22+00:00",
@@ -4551,6 +4639,14 @@
       "source": "ANTARA News - Humaniora",
       "title": "ANTARA News - Humaniora — Cara atasi kesalahan data peserta saat daftar akun SNPMB 2026",
       "url": "https://www.antaranews.com/berita/5353521/cara-atasi-kesalahan-data-peserta-saat-daftar-akun-snpmb-2026"
+    },
+    "499d906755815a0c85a1dc7c6541438f4118ed7095e79f6f0e27a759c4cb9770": {
+      "chunks": 8,
+      "created_at": "2026-09-02T13:55:54+00:00",
+      "doc_id": 2231,
+      "source": "WHO News",
+      "title": "WHO News — Paying tribute to David Nabarro",
+      "url": "https://www.who.int/news/item/30-07-2025-paying-tribute-to-david-nabarro"
     },
     "49af928d1c84b2f08b0739852d2b7e3cfdafa1fc452014da00a183688d6e7df2": {
       "chunks": 1,
@@ -5199,6 +5295,14 @@
       "source": "Google News Asia - Laut China Selatan",
       "title": "Google News Asia - Laut China Selatan — Indonesia, Philippines, Vietnam forging maritime security triangle - Indo-Pacific Defense FORUM",
       "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxQb204bHRMSTN1N0lvSmNDMXBSeldCNFNMTm9QRFNLQnpPVlU2LUxzeFF3TTZQaW9vNDNQbENRZDRQTHBqc3VyakVnY0pSVnJKNW5NVGh3MlFrMndONjlUQmxxQXRKY2RZMUZKMUZ3TnlpRDJGdTh2b3RfbnNaTXEtUWJ5aEU2ckgwVkFOdnBycE9md09iay1pUjJpbkNyZHBmNmc?oc=5"
+    },
+    "51f136c3b3d2907c4005a84be041214bb3fb3d36b75b73b464fb751d5bcffc45": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:46+00:00",
+      "doc_id": 2229,
+      "source": "ANTARA Tekno",
+      "title": "ANTARA Tekno — 8 HP tahan air terbaik 2026 dengan sertifikasi IP67 hingga IP69 - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5717871/8-hp-tahan-air-terbaik-2026-dengan-sertifikasi-ip67-hingga-ip69"
     },
     "5200c1604cab6034412278d9a6e006abfd67dd5421aeb9d9ec219d14bb818d8d": {
       "chunks": 20,
@@ -6080,6 +6184,14 @@
       "title": "Google News Indonesia - Bisnis & Investasi — IIES dan INDOMAEX 2026 Dorong Kolaborasi Industri, Teknologi, dan Investasi di Indonesia - Jawa Pos",
       "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxOdGRfNll6Wm9Ja2tfMG1MM0lQQmdMS2F5bkN6SFZKOGFMSFNOa0prdTU4emZYOHpfU3FDSzd4aTk5eFFjUTg1UWlqSEtvQmNKUHhLVk9fMFJIc09LRllGTUpDR2xSNVY0QjV0M3o2YWdhWXp3bnBQc1dCeUR1bkVxUXBfM3dZQTFuZnJ6RU8wbTZuM2VWaFU4NzlzWTgwSjI1a0RRTmotTXFkUi1PVTZEeGJXRVlCSVZCWmNuWmFYQkE3dm1SQTFYS2RXUkxsYi1wcHNnR0R2NA?oc=5"
     },
+    "60c156f66cbea25f68598467d58c8597b0c51bc296e51d1611c21c47942f9482": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:41+00:00",
+      "doc_id": 2225,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — LKPP masih matangkan konsep Badan Pengadaan Pemerintah - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723179/lkpp-masih-matangkan-konsep-badan-pengadaan-pemerintah"
+    },
     "6100483e3f0e198e11c58dad9098a31c7a0e42505437531ed5d2d2257987497a": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:42+00:00",
@@ -6431,6 +6543,14 @@
       "source": "ANTARA News - Dunia",
       "title": "ANTARA News - Dunia — Mengenal Jembatan Hongqi di China yang ambruk dan viral di medsos",
       "url": "https://www.antaranews.com/berita/5240449/mengenal-jembatan-hongqi-di-china-yang-ambruk-dan-viral-di-medsos"
+    },
+    "6771a01ce3eb832b3d61ed891028a828dcd2e232c25eb50f227d4b945c8c901f": {
+      "chunks": 3,
+      "created_at": "2026-09-02T13:57:11+00:00",
+      "doc_id": 2247,
+      "source": "IEA News",
+      "title": "IEA News — About - IEA",
+      "url": "https://www.iea.org/about"
     },
     "6775a17fd56f61a072d0ef533cb3226fd0e2537bb32b1e2c0413ac35e43a4dc5": {
       "chunks": 1,
@@ -7880,6 +8000,22 @@
       "title": "Google News Global Tech - Robotics Humanoid Global — China Makes AI-powered Robots Core of National Strategy - International Federation of Robotics",
       "url": "https://news.google.com/rss/articles/CBMimwFBVV95cUxNeGQ3TDVtc1hnTHZqWElEcUZoM3F3aF9ndEs0eXlYQ05MaFRwS2RwWkk5bGxqcmEyY1FRNUYycWIzVFVZU0lKNVZEODdsYWZ0cExCemJDS29sV05HS0JsSWpkVXlUSjdaNEFOMlM5WVdpSVByRGw4dDhwODJpbm42c29TdGU1bWZKb1ExbkNlbzE4ZktCYVlydEJNNA?oc=5"
     },
+    "80933a1c9f964c318e35c21921c87ce7c725ec9b9126d5053762b2191650fe65": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:46+00:00",
+      "doc_id": 2227,
+      "source": "ANTARA Tekno",
+      "title": "ANTARA Tekno — Hisense A10 Pro dan Ultra resmi dirilis, ini spesifikasi dan harganya - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5719804/hisense-a10-pro-dan-ultra-resmi-dirilis-ini-spesifikasi-dan-harganya"
+    },
+    "809656fac00e8c9773d84ee755b8fa0f376d2c3adbaff9daf290d11fb5873e82": {
+      "chunks": 8,
+      "created_at": "2026-09-02T13:55:29+00:00",
+      "doc_id": 2216,
+      "source": "BBC World",
+      "title": "BBC World — Zelensky says airlines should avoid Russian airspace as Ukraine escalates drone operations - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c9v9yydy2wvo?at_medium=RSS&at_campaign=rss"
+    },
     "80a1a79e89cbc070104ab822f1ab167b378ae60034c19a701d6d5d9e5d0e33ef": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:53+00:00",
@@ -7959,6 +8095,14 @@
       "source": "ANTARA News - Bisnis",
       "title": "ANTARA News - Bisnis — Pertamina Patra Niaga kenalkan bisnis hilir energi kepada mahasiswa",
       "url": "https://www.antaranews.com/berita/5579964/pertamina-patra-niaga-kenalkan-bisnis-hilir-energi-kepada-mahasiswa"
+    },
+    "820512e475b7a8a845c32b43257e71243109194df6c2995fc30fddea479e3f7a": {
+      "chunks": 10,
+      "created_at": "2026-09-02T13:55:15+00:00",
+      "doc_id": 2210,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Healthcare organizations can now connect EHR and additional industry data to ChatGPT | OpenAI",
+      "url": "https://openai.com/index/chatgpt-connects-health-records-and-healthcare-sources"
     },
     "8221a6625c8a88625a84a1091ddb06233e22f2f317a00ea638c3596d933a37c8": {
       "chunks": 1,
@@ -8360,6 +8504,14 @@
       "title": "OpenAlex Blockchain Fintech Indonesia — Assessing the influence of financial technology adoption on the performance of commercial bank in the UAE",
       "url": "https://doi.org/10.1108/fdar-10-2025-0040"
     },
+    "87e40e2b95e94619fde18d682f24614edee983a1a4f2975f29d0f3129814fba2": {
+      "chunks": 3,
+      "created_at": "2026-09-02T13:57:02+00:00",
+      "doc_id": 2245,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — IRC Italy Protection Monitoring Report: April - June 2026 - Italy | ReliefWeb",
+      "url": "https://reliefweb.int/report/italy/irc-italy-protection-monitoring-report-april-june-2026"
+    },
     "87eac45816e81c2a50c75d9bce87ed0ad981b149e493f71dd1dd48f040aa5edd": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:12+00:00",
@@ -8712,6 +8864,14 @@
       "title": "Catatan Kurasi - Agro Lingkungan Hukum Budaya Dampak Sosial Global — Panduan membaca update agro, peternakan, teknik pertanian/biosistem, lingkungan, akuakultur, hukum, budaya, teknologi, dan dampak sosial global",
       "url": ""
     },
+    "8db66936c15bd93d49221e7189c3d0af6c1f969b2412727f49efb404d1e57e46": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:56:27+00:00",
+      "doc_id": 2234,
+      "source": "MarketWatch Top Stories",
+      "title": "MarketWatch Top Stories — ‘I feel shoehorned’: My father funded my $800,000 Roth IRA. Does that give him the right to say how I invest it?",
+      "url": "https://www.marketwatch.com/story/i-feel-shoehorned-my-father-funded-my-800-000-roth-ira-does-that-give-him-the-right-to-say-how-i-invest-it-7b1e3ab3?mod=mw_rss_topstories"
+    },
     "8dfd9eb6e20e17c0827eb54f9936a942c29cdce5cdd623aa1122872c4d6404be": {
       "chunks": 3,
       "created_at": "2026-05-22T02:43:45+00:00",
@@ -8735,6 +8895,14 @@
       "source": "Google News Top Headlines - Thailand",
       "title": "Google News Top Headlines - Thailand — Trump's towering arch clears another federal hurdle, despite public pushback - NPR",
       "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1odUJkSWdzNWc5dnY1bFdaRGN1UVUtQWswQXVzYnJNYzYxR01sR2FVRFhhLW9PZV9aSUxCeG94dlhWMVRRWWJyNDFKc3V0dFhEX09EZ3otUXJJQjM5d3pVNnpFQnc3MnMwT2FZeHlaOUEzN21teFhxUlRmcTZ0MWM?oc=5"
+    },
+    "8e598687c771f99df71e586e73a1401976f63c68673092b0f89c6d011209e063": {
+      "chunks": 6,
+      "created_at": "2026-09-02T13:55:36+00:00",
+      "doc_id": 2220,
+      "source": "BBC Technology",
+      "title": "BBC Technology — Amazon rigged $20bn worth of ads, US FTC lawsuit alleges - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cvgy91nvy27o?at_medium=RSS&at_campaign=rss"
     },
     "8e5dbc90d13df2f783cdbd71916141653f6f1ff8301911f6d37179c342922a0f": {
       "chunks": 1,
@@ -8839,6 +9007,14 @@
       "source": "CNA.id - Dunia",
       "title": "CNA.id - Dunia — Prajurit Indonesia gugur dalam serangan Israel di Lebanon, Kemlu serukan investigasi",
       "url": "https://www.cna.id/dunia/prajurit-tni-unifil-gugur-serangan-artileri-lebanon-45686"
+    },
+    "8f6d00d3336edee4900563a378c47c8d96c40af3c532cf06fcc50be547d4a25a": {
+      "chunks": 8,
+      "created_at": "2026-09-02T13:55:29+00:00",
+      "doc_id": 2215,
+      "source": "BBC World",
+      "title": "BBC World — USS Abraham Lincoln: US sailors arrive in Thailand's Pattaya after record 250 days at sea - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cg7k09z4lj9o?at_medium=RSS&at_campaign=rss"
     },
     "8f846c7fd89a1fbae88fb89ea585c0c8678afe81848b2c6f2e1fdfcefcf1f8c6": {
       "chunks": 1,
@@ -9175,6 +9351,14 @@
       "source": "GitHub Blog Releases and Security",
       "title": "GitHub Blog Releases and Security — Updates to available models in Copilot on web - GitHub Changelog",
       "url": "https://github.blog/changelog/2026-05-20-updates-to-available-models-in-copilot-on-web"
+    },
+    "93dd995f1e64b02558993ab7717653ddc2634ddb6076a5b99e3a642e19e44f5f": {
+      "chunks": 2,
+      "created_at": "2026-09-02T13:56:46+00:00",
+      "doc_id": 2239,
+      "source": "Phys.org Latest Science News",
+      "title": "Phys.org Latest Science News — Physicists test the weak equivalence principle in an orbiting space station",
+      "url": "https://phys.org/news/2026-09-physicists-weak-equivalence-principle-orbiting.html"
     },
     "9421cab8078bd6733dfab2675d9f858abb74e786304fb2648c160ef47695b739": {
       "chunks": 6,
@@ -9759,6 +9943,14 @@
       "source": "Google News Indonesia - Pakan dan Nutrisi Ternak",
       "title": "Google News Indonesia - Pakan dan Nutrisi Ternak — Emiten-emiten pakan ternak catat perbaikan kinerja keuangan di kuartal I-2026 - avinews.com",
       "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxPclc3M21IU2lRUVEzdDltQl96dWh3ZllZeE44ZUNKZUROMHFYTnlYcy16Zm1zVEEyZk41NTBlcUxPc1l2dXRudW1QS3NVR3Q0a1YxY0d6VTVuZFdEbF9pLUhVQVpqWVdxalVXX1JtNURTQ2hfczJtdWdEeHB2NXA2TnFmQU5DNnE4ZF8zVmhheEtwWWpGOU1YaWQ5QnhyOE13bTFF?oc=5"
+    },
+    "9cff29b54f42c0c7b3aeefb9f1bf8c4369206bd817a826ca6714626e86b94380": {
+      "chunks": 9,
+      "created_at": "2026-09-02T13:55:29+00:00",
+      "doc_id": 2213,
+      "source": "BBC World",
+      "title": "BBC World — EU and Nato vow to step up pressure on Russia after 'new escalation' in Leipzig - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/ce9e810pg7ko?at_medium=RSS&at_campaign=rss"
     },
     "9d02ab10f7f6e280915921ebf2569fa38cfa81448a11f943f343719caa05716a": {
       "chunks": 1,
@@ -11384,6 +11576,14 @@
       "title": "Google News Indonesia Tech - Riset Pangan Indonesia — Open Graph Title - BRIN - Badan Riset dan Inovasi Nasional",
       "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxPUGhjMjdjV0ptNUF2RmJROUpidzBaSzh6QzVBVGoxY3VsQ25rdDRTaHdrekY4LUg5ZndmdS1aSUJKcmRpeEo0bTdHaUxDZV8xUlhRSVlURmdoZURfREV5bVRSNFhnYXVHazBqZ0VHOGl4WTM5SkMyd25CdjdWMEpfNV9oT1hCS084ZGZCV3pDanppdUJUSTdwZmpKWEpGaVRBTVZ5ekVmWHhlS0R3OWZzUHVCUTFYb1p1YXd2YUdTb1dNdHdNR25j?oc=5"
     },
+    "b6e16659d4efbe8cd29510f76a48d717d022241b8283e02f88beb6f6aa6824e3": {
+      "chunks": 6,
+      "created_at": "2026-09-02T13:55:36+00:00",
+      "doc_id": 2219,
+      "source": "BBC Technology",
+      "title": "BBC Technology — AI could cause global economic downturn, Andrew Bailey warns G20 - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c99dym3prl1o?at_medium=RSS&at_campaign=rss"
+    },
     "b725b025462002633389ad4c84ce2072115a0c32c7927ef900be3e4cc59f75f7": {
       "chunks": 6,
       "created_at": "2026-05-22T02:43:58+00:00",
@@ -11423,6 +11623,22 @@
       "source": "Google News Top Headlines - China",
       "title": "Google News Top Headlines - China — Senate GOP, frustrated with Trump’s $1.8B payout fund, delays vote on ICE money - The Washington Post",
       "url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxOZ3dZT0ppTUFmUUVyYmh1UVVBbm0zc2p3dUpHeEVLd0dtWjFqVEJYX041RWZXeHUtYWpQaEVyajlkWjR4RklCMXZGUjBGVG8tRWZVM2VXVExVT0ZaaElMNVdTaG9hV2xNbmt6VWRiZFZrTW5tRWRiZzJUR0xnRzl6SXpzQlRtNm9vNWFWNEZ3SGdwYkx4RGc?oc=5"
+    },
+    "b7d6a3a8861b134cda7c16dc8e6b70523f199f4bfdbd3c0009d7f9b01dd88a89": {
+      "chunks": 14,
+      "created_at": "2026-09-02T13:55:54+00:00",
+      "doc_id": 2232,
+      "source": "WHO News",
+      "title": "WHO News — Timor-Leste certified malaria-free by WHO",
+      "url": "https://www.who.int/news/item/24-07-2025-timor-leste-certified-malaria-free-by-who"
+    },
+    "b81f287b1fa99e46661c393cb3e3a82fb8528ff2f4f6cce16c17ff40faa617ca": {
+      "chunks": 6,
+      "created_at": "2026-09-02T13:55:36+00:00",
+      "doc_id": 2218,
+      "source": "BBC Technology",
+      "title": "BBC Technology — Criminals publish data of 8.7m people after Manchester Airports Group hack - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c74k39g3ee5o?at_medium=RSS&at_campaign=rss"
     },
     "b83b58d620c67ec451ae6281762156a41d760697aee7ec199fc77138b6308da8": {
       "chunks": 1,
@@ -12064,6 +12280,14 @@
       "title": "Google News Global Tech - AR VR XR Global — Essential books that shape how we understand spatial computing and XR - haptic.al",
       "url": "https://news.google.com/rss/articles/CBMiogFBVV95cUxQdmpITEFOZ3p1Y0UyX0dXd3FUVkxCTHJFN0liTkdZcS1rX1lkWW41M2wtR0VIRWRUdzYzcGNLZnhPVGZVdUV5VkZTeE1SQlIxaHU2cmpwM3FrTWxEd29sSWhJcTlfWUw3OUxWTnpmNlRhMjNGSEs3S2lVSHA2WWNESzhFN25wdUJGZURrdUxYN3Vaak9TMG1UWDlzcERqTHViT0E?oc=5"
     },
+    "c313587bf1149e6f4104ab04b7b661c806f5779e71b3adfab47a41d6f2ef0be3": {
+      "chunks": 12,
+      "created_at": "2026-09-02T13:55:54+00:00",
+      "doc_id": 2233,
+      "source": "WHO News",
+      "title": "WHO News — African Union and World Health Organization renew strategic partnership to drive impact and strengthen health systems in Africa",
+      "url": "https://www.who.int/news/item/24-05-2025-world-health-organization-and-african-union-renew-strategic-partnership-to-drive-impact-and-strengthen-health-systems-in-africa"
+    },
     "c33b4720426451b1a8cd6830c5dc0a64d49033d2c6f45f42e7a41d808000bfbf": {
       "chunks": 9,
       "created_at": "2026-09-01T01:36:30+00:00",
@@ -12199,6 +12423,22 @@
       "source": "Google News Indonesia - Keamanan Siber",
       "title": "Google News Indonesia - Keamanan Siber — Hacker Brain Cipher Minta Indonesia Sadar \"Cybersecurity\", Seberapa Lemah Keamanan Siber Indonesia? - Kompas.com",
       "url": "https://news.google.com/rss/articles/CBMiyAFBVV95cUxPTm9ZRDB2MllBVW5jQ2NWVkhEb0U3MGljS0x2NGk3NkNWdURQbXlQc0hfYURCVkVuSUhKcWNIalpteFBZTDFjakVQV0RWMnJ4X0hUd2NfU3Q3aUt2TkFCamdzNDc1QUhHOE1rVzlSVDVWWkZoSWZoLVlBNWV3b0VGTzRwTVM2Nlp2bHBQVlhrTkN0MkUyOGk5V3hVWkJrNU9Ob2FSTFo4XzhLQVVmdTc3ZENkTWFtSEhHMXRLa2huZy1ockpyYjliLQ?oc=5"
+    },
+    "c680381fdf786f91f3d18edd90dac590b25db47a668009d8924e4d6c73ed5473": {
+      "chunks": 2,
+      "created_at": "2026-09-02T13:56:46+00:00",
+      "doc_id": 2240,
+      "source": "Phys.org Latest Science News",
+      "title": "Phys.org Latest Science News — A summer odyssey: Female dotterels seek multiple mates across Northern Europe",
+      "url": "https://phys.org/news/2026-09-summer-odyssey-female-dotterels-multiple.html"
+    },
+    "c6a527aa69892887ac745fdc61b8248206f75bab2aa47fa170c433ab6c836566": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:41+00:00",
+      "doc_id": 2224,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — BNPB: 15 KK-15 rumah terdampak oleh gempa M5,5 di Halmahera Tengah - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723180/bnpb-15-kk-15-rumah-terdampak-oleh-gempa-m55-di-halmahera-tengah"
     },
     "c6bd7b1c03bd667f962b98fe9cab08c887434ca85abd044c02336ece11a6fc77": {
       "chunks": 1,
@@ -12383,6 +12623,14 @@
       "source": "Google News Indonesia Tech - Open Data Indonesia",
       "title": "Google News Indonesia Tech - Open Data Indonesia — 'Open Source' Jadi Senjata BUMN dan Pemerintah Jaga Kedaulatan Data - InvestorTrust",
       "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxObHdOME9tR05OcGY1MVFvZnA2Umdkc2RaUkYxR1J5Nzhsc25MNDRYS0FxZDU1RDdwaDZQbC1uNDFsdFQ2Rzd1SDJmcV9WTEtuNUJzMlBIOGZhVF9OeURnX1hIT0hPd0w2emFONjR3ckg5Z0RDcG9RRG8tS0hJMFlfZEtJRXNWZW5ZTmhQX0JXT3pWSlJIRzJVZzBqR2g3MVNiZHlaXzZ1WDRxUQ?oc=5"
+    },
+    "c9396e47538ea4058c49db0506881046cd613eb7581405c2f0785ccc4d1b906a": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:56:27+00:00",
+      "doc_id": 2236,
+      "source": "MarketWatch Top Stories",
+      "title": "MarketWatch Top Stories — Which workers are using AI surprisingly often? Dry cleaners and construction workers.",
+      "url": "https://www.marketwatch.com/story/which-workers-are-using-ai-surprisingly-often-dry-cleaners-and-construction-workers-b0ea5655?mod=mw_rss_topstories"
     },
     "c94f477d5065adc894275cef00d8e0b3a37832e0f288136b9d9715937e134fd3": {
       "chunks": 1,
@@ -12696,6 +12944,14 @@
       "title": "Google News Top Headlines - Asia Pacific General — Penny Wong condemns Israeli minister over ‘shocking and unacceptable’ treatment of flotilla activists - The Guardian",
       "url": "https://news.google.com/rss/articles/CBMi5wFBVV95cUxNd2VFZTd0ZGVhekI5UlJGZGJjOXV5dHktUUp6QTB5X0NOUExWZnhTYW16QTl1NGlQcUdNbEU5bERYNXdHOUxyTVJnNE95VTk1LU5lbjItOWpUaWN3ZGxhTFBCS25NRHdCeUVFaG45TXRaamQzU2kwOVpUdE9OY083ejRQNFhZbklUdkVmR0V4aGFicEtqSEZEWktBbkJaLWFIQmFreGttaVVVRlg0dTdrcXYwQVdYVGd3d28tbUZkdERxa0Y5TWsyNVhYRGtEUU4wZG9PcnNDeWliRkV0UU9uUXNkQmNSVTQ?oc=5"
     },
+    "cdb3f495e06d5987f1590e2e9f2094d648a82274f763b5ac3d77ac674d7535db": {
+      "chunks": 3,
+      "created_at": "2026-09-02T13:57:11+00:00",
+      "doc_id": 2248,
+      "source": "IEA News",
+      "title": "IEA News — News - IEA",
+      "url": "https://www.iea.org/news"
+    },
     "cdcedd26b5409a292229d6214d090201a26b2e52d646809fc14d76a49db09c12": {
       "chunks": 1,
       "created_at": "2026-05-22T02:44:06+00:00",
@@ -12775,6 +13031,14 @@
       "source": "ANTARA News - Bursa",
       "title": "ANTARA News - Bursa — IHSG Kamis dibuka menguat 47,99 poin",
       "url": "https://www.antaranews.com/berita/5575967/ihsg-kamis-dibuka-menguat-4799-poin"
+    },
+    "d00eee87667fb4665490e41b322aa2ed8dc3a56cde32b3e07ef8a0526d3493f0": {
+      "chunks": 6,
+      "created_at": "2026-09-02T13:56:34+00:00",
+      "doc_id": 2237,
+      "source": "NASA Breaking News",
+      "title": "NASA Breaking News — Historic Engines Take Their Place on Artemis III - NASA",
+      "url": "https://www.nasa.gov/image-article/historic-engines-take-their-place-on-artemis-iii/"
     },
     "d0121e0415751fe8bedc4e244fe1ef3bb7ddbd66ec1a8cae42cbf2e59a94a03a": {
       "chunks": 2,
@@ -13272,6 +13536,14 @@
       "title": "Google News Indonesia - Hukum & Kriminal — Tiga Pilar Penegak Hukum Bersatu Berantas Korupsi: Ini Pembagian Perannya - Jurnal Patroli News",
       "url": "https://news.google.com/rss/articles/CBMimgFBVV95cUxOUUxrekptY21xYldELVdERFhvZWFueEVnTDVsWGFRcFFib3hTOTJ5S1ZvaEtJZTFvNVBiZVNVWUFIb01iRXRveFdBN0t6amh2R21pRGpwbDR3TmNpU0paejNiamFTLW9wdDdDa0gwa1liSEM0WVVvZmhzUzh0RnFuazlUWVZSbl9nRGVGeWZSVmVlWFUxd25Wanln?oc=5"
     },
+    "d9ddfecd4af6543d738a40c017539e0a542b98f0352f95acb2306a67af12e3ec": {
+      "chunks": 6,
+      "created_at": "2026-09-02T13:55:29+00:00",
+      "doc_id": 2214,
+      "source": "BBC World",
+      "title": "BBC World — Rosenberg: Putin's veiled threat to UK part of Russia's campaign against West - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c62j50n131mo?at_medium=RSS&at_campaign=rss"
+    },
     "d9f7833a80c26dbdc1f8843aaf8c4faadb840b8ebe843305528198476faea783": {
       "chunks": 7,
       "created_at": "2026-05-22T02:43:45+00:00",
@@ -13407,6 +13679,14 @@
       "source": "Google News Indonesia - Isu Sosial Viral",
       "title": "Google News Indonesia - Isu Sosial Viral — Kontroversi Dangdut Academy 7 Indosiar Usai Video Viral Diduga Lecehkan Tauhid - Mistar.id",
       "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxNU1YzV1AzTU8xNVViUW9JMFhNckxqb1AxYUszOXdJclpOMzhSN2U3Tm1HeWU2MlRFRjZGZWZ2Sm8ycE53WVlOQlFQbVh1OFBKMFI1X0VpSHlvbUUzYjY2TDNaOXE5OFVIbzZHdVFhc3ZNVEE2dnQycGJIb1NtOWx5ZjZOeWhLZVZWekRKLXZZbmFKS21TNVAxU0JhcnBqUWloSmJMS0EtREJka19aYkE?oc=5"
+    },
+    "dc8518e67700008af58f9ff55c955c10db86bdaffc1de19dad425113764960d1": {
+      "chunks": 6,
+      "created_at": "2026-09-02T13:56:34+00:00",
+      "doc_id": 2238,
+      "source": "NASA Breaking News",
+      "title": "NASA Breaking News — APOD: 2026 September 1 - A Plane Lunar Eclipse - NASA Science",
+      "url": "https://science.nasa.gov/image-article/apod-2026-september-1-a-plane-lunar-eclipse/"
     },
     "dc88c1962a10a9f5402bef288931e8f285f47aa2c8eaee4a7160dd2abe5fb268": {
       "chunks": 1,
@@ -13727,6 +14007,14 @@
       "source": "Google News Top Headlines - India",
       "title": "Google News Top Headlines - India — Calcutta High Court asks Bengal government to decide on exemption in animal slaughter rules for Eid ul-Adha - The Hindu",
       "url": "https://news.google.com/rss/articles/CBMiigJBVV95cUxQQTBlSkRUNllLbDlTYU9kaGpVVVRUOElTbFgwOXljYXdEel9IMy1PcHFOZG5oRjNTSXN2elJZUDV1QnhXNHFrN0o3MFdZTEYzME9jOTVpMWQyY1ZJZ2xNVDVBUVFsX01YNnFxMGx6bFctRWRFTExxVVppSEFPbDFHNXgyQ0lyc3VhN1E1S1F5UU52WVVTVmxqbEZWWk1ObHM0Y3A0d3JZOUtrdi1saWVpOUFwUFAyenFxQTctX3Q5TklYU3FUUVRhRzBGekVSb1ppVGFIc0hSa3VabXJOX1lNeG15d2lMd0JtTGxXV2VldDRLQVJVOGZWcHQ2WllXVG5jMjBqLV9XNTBSQdIBkAJBVV95cUxPYkpJYXJMNC1YWXVNdkM0eDhBT0JzdUd2d29pVHNTNmhKNElfaXE5NUxEeFN5dm1GWHRfdE4zdkVKMnJuNXJQN0RXODZVRFA5bzBPUlltQjdDbHlUcVdsclJsQ2dZeW40QlNUc1duTkpDazVCeEREa0NIaHJJX1c5alJzb2lRaFJmcmFpUVlrd0owQmgtQVY1Rzg5ZXd5bExkeDZ1OUlhOW41VTNjaWJFREs1TFJrcXduaW5EbUk0bU1mRWdMZVpLYUNiUkpyeXhheDJaMjVTNk1JU29FWlJ3UHpfTEotVHhCNkhPWEhSN2E0b0hzUDFMRWVza3g3MEpjQVc3Z29GY01CWVdwQVpMSg?oc=5"
+    },
+    "e293a29a2c7da82c5d0dad1e125e6f768390a3a64076a42db5129c8e50c94205": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:55:46+00:00",
+      "doc_id": 2228,
+      "source": "ANTARA Tekno",
+      "title": "ANTARA Tekno — Cara membuat Poket Rupiah di myBCA untuk mengatur keuangan - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5717876/cara-membuat-poket-rupiah-di-mybca-untuk-mengatur-keuangan"
     },
     "e2e0e0cdd0486c0c25f89b0f2f49fbaf97e3deb24926202bba490f06e5295501": {
       "chunks": 1,
@@ -14448,6 +14736,14 @@
       "title": "Google News Top Headlines - Vietnam — RFK Jr. announces 'the largest autism fraud bust in American history' and it’s in Minnesota - Politico",
       "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxNcjRPbmNyRlZGbHBRWmtBc1dXSVNNTl8tNFppT2xBYmd1WjhxS1BBQ19pRnNpX2VsM0syYm5PX0FZbG4zUzlQRGpXd3Bmbl9McFdET0l2NEttNVQxYXJlTC16YUNLeXVpNm5TZjZoLUJVQ1VVZTY5Rnd0emcxeHN1a2Vmd2d2cTFTaWpN?oc=5"
     },
+    "ecbb0058a81885370511057440ce7949d07e43ad6087c4790334c7a32e073acb": {
+      "chunks": 8,
+      "created_at": "2026-09-02T13:57:02+00:00",
+      "doc_id": 2244,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — EU provides €12 million to WHO to sustain essential health services and support recovery across Syria - Syrian Arab Republic | ReliefWeb",
+      "url": "https://reliefweb.int/report/syrian-arab-republic/eu-provides-eur12-million-who-sustain-essential-health-services-and-support-recovery-across-syria"
+    },
     "ecc67e0374ebee1b8a687c9d2e46e1e325b269a655edf982136dd07d1ed3e72e": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:15+00:00",
@@ -14511,6 +14807,14 @@
       "source": "Google News Indonesia - Energi & Tambang",
       "title": "Google News Indonesia - Energi & Tambang — Lama Mandek, China Hidupkan Lagi Megaproyek Gasifikasi Batu Bara - Energi - Bloomberg Technoz",
       "url": "https://news.google.com/rss/articles/CBMiuAFBVV95cUxQdElZaF94TWRFeGY1cGVyeU1kYmpha0d3RVkxc3hCa1NoZ2J2bDgyWERmejN3VzFFcE5zbXo3SEg3cFVZakdNamxxNWV3OTlWUFJ6UUVJUHd3ZURraUYxUU1oRDhfR0NNaVNJa0s0SS16Q0kyUzBxNWFyT2w2OFZLOFR0a3FmdnQ0ZHAxUi0xSm1WTkhobkI1N3BWSkxfVXNQNE5LNlQ4Zi1pUEw0SUpGaXJKMEN3c0lz?oc=5"
+    },
+    "ede203ed87a75f4a99d8841abf6828a3a31d75ced9fd56c72a75a558ab674476": {
+      "chunks": 1,
+      "created_at": "2026-09-02T13:56:27+00:00",
+      "doc_id": 2235,
+      "source": "MarketWatch Top Stories",
+      "title": "MarketWatch Top Stories — America’s renter generation is trying to build wealth by investing in stocks instead of owning a house",
+      "url": "https://www.marketwatch.com/story/americas-renter-generation-is-trying-to-build-wealth-by-investing-in-stocks-instead-of-owning-a-house-c2f91799?mod=mw_rss_topstories"
     },
     "ee018ab7d145ea92d5166383ea7fbc5915c690f102fcbfab0390bfb90acfc3b0": {
       "chunks": 1,
@@ -14888,6 +15192,14 @@
       "title": "ANTARA Terkini — BNPB: Petugas padamkan api karhutla yang kembali menyala di Kaltara - ANTARA News",
       "url": "https://www.antaranews.com/berita/5722051/bnpb-petugas-padamkan-api-karhutla-yang-kembali-menyala-di-kaltara"
     },
+    "f39f13eb5922301d1d7e7db8f5b92b1eecbb9b2357eacb783118a39ca57e4b88": {
+      "chunks": 14,
+      "created_at": "2026-09-02T13:57:02+00:00",
+      "doc_id": 2241,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — Why continuity of care matters at Al-Bab Primary Health Care Centre - Syrian Arab Republic | ReliefWeb",
+      "url": "https://reliefweb.int/report/syrian-arab-republic/why-continuity-care-matters-al-bab-primary-health-care-centre"
+    },
     "f3a03ddca89192408d799fcef22b41285c6263bdb69c71f5b56bb03c6e44f4a7": {
       "chunks": 1,
       "created_at": "2026-05-22T02:42:14+00:00",
@@ -14895,6 +15207,14 @@
       "source": "Google News Indonesia Tech - E-commerce Indonesia",
       "title": "Google News Indonesia Tech - E-commerce Indonesia — Blaize dan Datacomm Bidik Penguatan Ekonomi Digital RI lewat Layanan AI Inference - Medcom.id",
       "url": "https://news.google.com/rss/articles/CBMi0gFBVV95cUxNU1k1S3pZTnpfLU50eVlzTlJZamltdm1hY0JxQnZ0eDBCUHdyVS1sTE54NWxmam8zN3h0UnFXYk5sZ1ZkcEIzaV83ZFVlNTRPdmRNQTNHaFdDS0FzV3NQcEw1WTFaRlVLbmpZWFBzLWh6YkxPVS01QVJWSXRYVUs4VWY2LS1Oc2hhQUZJT19Ddmw3Y0pyai1XLXBTcERNeEoyZTJQVlNfYVVEd05JMkV2NGF5ckFhaWI1TUw1ZEZ4WGQteVFRbG96NEdYcU9RNnhqY1E?oc=5"
+    },
+    "f3b4b079167c148471d8a701a9bf2e8736e63b5855eb3dc177adf83fa0561d28": {
+      "chunks": 3,
+      "created_at": "2026-09-02T13:57:11+00:00",
+      "doc_id": 2250,
+      "source": "IEA News",
+      "title": "IEA News — Programmes – Analysis - IEA",
+      "url": "https://www.iea.org/programmes"
     },
     "f3b93267352f1252378e62032d8bd318af280230c4c3c957a6be9246d89e5bf3": {
       "chunks": 2,
@@ -15264,6 +15584,14 @@
       "title": "ANTARA News - Politik — Profil Sari Yuliati pengganti Mukhtarudin sebagai sekretaris F-Golkar di DPR",
       "url": "https://www.antaranews.com/berita/5240457/profil-sari-yuliati-pengganti-mukhtarudin-sebagai-sekretaris-f-golkar-di-dpr"
     },
+    "fac46ccc334d33c546e0a53806a1b2ef229f197164fbbe9c2a4c9addd247a50c": {
+      "chunks": 10,
+      "created_at": "2026-09-02T13:55:29+00:00",
+      "doc_id": 2217,
+      "source": "BBC World",
+      "title": "BBC World — More than 900 killed in Gaza this year despite ceasefire, Hamas-run health ministry says - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c7708dy33pdo?at_medium=RSS&at_campaign=rss"
+    },
     "faededd78981bd161c70b54f7a7ebb4d175b74cb2bd1e30e5309fc6ea4511a26": {
       "chunks": 3,
       "created_at": "2026-05-22T02:01:20+00:00",
@@ -15522,13 +15850,6 @@
     }
   },
   "runs": [
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-07-21T07:42:16+00:00"
-    },
     {
       "added_chunks": 0,
       "added_documents": 0,
@@ -15941,6 +16262,13 @@
       "dry_run": false,
       "errors": 0,
       "finished_at": "2026-09-02T05:20:49+00:00"
+    },
+    {
+      "added_chunks": 210,
+      "added_documents": 41,
+      "dry_run": false,
+      "errors": 4,
+      "finished_at": "2026-09-02T13:57:24+00:00"
     }
   ],
   "source_cursor": 3,

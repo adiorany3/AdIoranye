@@ -1,64 +1,24 @@
 {
-  "started_at": "2026-09-02T05:16:27+00:00",
-  "started_at_wib": "2026-09-02 12:16:27 WIB",
+  "started_at": "2026-09-02T13:55:05+00:00",
+  "started_at_wib": "2026-09-02 20:55:05 WIB",
   "db_path": ".adioranye_power.db",
-  "sources_path": "kb_sources_effective.json",
+  "sources_path": "kb_sources.json",
   "dry_run": false,
   "force": false,
-  "sources_total": 8,
-  "sources_enabled": 8,
-  "sources_selected": 8,
-  "source_limit": 8,
+  "sources_total": 29,
+  "sources_enabled": 29,
+  "sources_selected": 29,
+  "source_limit": 0,
   "source_offset": 0,
   "source_cursor_next": 3,
   "time_budget_seconds": 0,
   "stopped_by_time_budget": false,
-  "added_documents": 6,
-  "added_chunks": 34,
-  "skipped_existing": 4,
-  "skipped_short": 5,
-  "errors": 0,
+  "added_documents": 41,
+  "added_chunks": 210,
+  "skipped_existing": 14,
+  "skipped_short": 34,
+  "errors": 4,
   "items": [
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — X akui banyak akun pengguna ditargetkan peretas usai X Money dirilis - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5722052/x-akui-banyak-akun-pengguna-ditargetkan-peretas-usai-x-money-dirilis",
-      "doc_id": 2203,
-      "chunks": 1,
-      "chars": 1014,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — BNPB: Petugas padamkan api karhutla yang kembali menyala di Kaltara - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5722051/bnpb-petugas-padamkan-api-karhutla-yang-kembali-menyala-di-kaltara",
-      "doc_id": 2204,
-      "chunks": 1,
-      "chars": 1012,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "MarketWatch Markets",
-      "status": "skipped_short",
-      "title": "Jobless claims fall to lowest level since mid-May",
-      "url": "https://www.marketwatch.com/story/jobless-claims-fall-to-lowest-level-since-mid-may-bda58e3b?mod=mw_rss_marketpulse",
-      "chars": 207
-    },
-    {
-      "source": "MarketWatch Markets",
-      "status": "skipped_short",
-      "title": "Jobless claims stay low in latest week",
-      "url": "https://www.marketwatch.com/story/jobless-claims-stay-low-in-latest-week-27b4b50b?mod=mw_rss_marketpulse",
-      "chars": 196
-    },
     {
       "source": "OpenAI News",
       "status": "skipped_existing",
@@ -82,13 +42,148 @@
       }
     },
     {
+      "source": "OpenAI News",
+      "status": "added",
+      "title": "OpenAI News — Healthcare organizations can now connect EHR and additional industry data to ChatGPT | OpenAI",
+      "url": "https://openai.com/index/chatgpt-connects-health-records-and-healthcare-sources",
+      "doc_id": 2210,
+      "chunks": 10,
+      "chars": 12122,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 8
+    },
+    {
+      "source": "OpenAI News",
+      "status": "added",
+      "title": "OpenAI News — How law firm Gilbert + Tobin governs and scales AI with OpenAI | OpenAI",
+      "url": "https://openai.com/index/gilbert-tobin",
+      "doc_id": 2211,
+      "chunks": 10,
+      "chars": 11969,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 8
+    },
+    {
+      "source": "OpenAI News",
+      "status": "added",
+      "title": "OpenAI News — OpenAI supports California’s bill to advance youth AI safety | OpenAI",
+      "url": "https://openai.com/index/supporting-california-bill-advance-ai-youth-safety",
+      "doc_id": 2212,
+      "chunks": 8,
+      "chars": 8952,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 8
+    },
+    {
+      "source": "Google AI",
+      "status": "skipped_existing",
+      "title": "Official Google AI news and updates | Google Blog",
+      "url": "https://blog.google/innovation-and-ai/technology/ai/",
+      "chars": 2123
+    },
+    {
+      "source": "Google DeepMind News",
+      "status": "skipped_existing",
+      "title": "News â Google DeepMind",
+      "url": "https://deepmind.google/blog/",
+      "chars": 4998
+    },
+    {
+      "source": "Meta AI Blog",
+      "status": "skipped_existing",
+      "title": "AI at Meta Blog",
+      "url": "https://ai.meta.com/blog/",
+      "chars": 926
+    },
+    {
+      "source": "Hugging Face Blog",
+      "status": "skipped_existing",
+      "title": "Hugging Face – Blog",
+      "url": "https://huggingface.co/blog",
+      "chars": 4818
+    },
+    {
+      "source": "arXiv cs.AI Recent",
+      "status": "skipped_short",
+      "title": "Artificial Intelligence",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "chars": 48
+    },
+    {
+      "source": "arXiv cs.CL Recent",
+      "status": "skipped_short",
+      "title": "Computation and Language",
+      "url": "https://arxiv.org/list/cs.CL/recent",
+      "chars": 48
+    },
+    {
+      "source": "Streamlit Release Notes",
+      "status": "skipped_existing",
+      "title": "Release notes - Streamlit Docs",
+      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
+      "chars": 6454
+    },
+    {
+      "source": "Vercel Changelog",
+      "status": "skipped_existing",
+      "title": "Changelog - Vercel",
+      "url": "https://vercel.com/changelog",
+      "chars": 3440
+    },
+    {
+      "source": "AP World News",
+      "status": "error_source",
+      "title": "AP World News",
+      "url": "https://apnews.com/hub/world-news",
+      "message": "403 Client Error: Forbidden for url: https://apnews.com/hub/world-news"
+    },
+    {
+      "source": "AP Technology",
+      "status": "error_source",
+      "title": "AP Technology",
+      "url": "https://apnews.com/hub/technology",
+      "message": "403 Client Error: Forbidden for url: https://apnews.com/hub/technology"
+    },
+    {
       "source": "BBC World",
       "status": "added",
-      "title": "BBC World — Iran attacks US bases in Middle East after reports US strike killed five at wedding party - BBC News",
-      "url": "https://www.bbc.co.uk/news/articles/cj06q4ynpmjo?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2205,
-      "chunks": 7,
-      "chars": 8953,
+      "title": "BBC World — EU and Nato vow to step up pressure on Russia after 'new escalation' in Leipzig - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/ce9e810pg7ko?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2213,
+      "chunks": 9,
+      "chars": 10657,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "BBC World",
+      "status": "added",
+      "title": "BBC World — Rosenberg: Putin's veiled threat to UK part of Russia's campaign against West - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c62j50n131mo?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2214,
+      "chunks": 6,
+      "chars": 8138,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "BBC World",
+      "status": "added",
+      "title": "BBC World — USS Abraham Lincoln: US sailors arrive in Thailand's Pattaya after record 250 days at sea - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cg7k09z4lj9o?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2215,
+      "chunks": 8,
+      "chars": 9627,
       "source_quality": 76.0,
       "freshness_score": 100.0,
       "criticality_score": 50,
@@ -97,41 +192,211 @@
     {
       "source": "BBC World",
       "status": "added",
-      "title": "BBC World — Charlie Kirk murder suspect Tyler Robinson pleads not guilty as judge clears way for death penalty trial - BBC News",
-      "url": "https://www.bbc.co.uk/news/articles/cj4jn9q7evpo?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2206,
-      "chunks": 7,
-      "chars": 9267,
+      "title": "BBC World — Zelensky says airlines should avoid Russian airspace as Ukraine escalates drone operations - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c9v9yydy2wvo?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2216,
+      "chunks": 8,
+      "chars": 10541,
       "source_quality": 76.0,
       "freshness_score": 100.0,
       "criticality_score": 50,
+      "claims": 6
+    },
+    {
+      "source": "BBC World",
+      "status": "added",
+      "title": "BBC World — More than 900 killed in Gaza this year despite ceasefire, Hamas-run health ministry says - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c7708dy33pdo?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2217,
+      "chunks": 10,
+      "chars": 12780,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
       "claims": 6
     },
     {
       "source": "BBC Technology",
       "status": "added",
-      "title": "BBC Technology — Which? says fake 10 Downing Street listing exposes 'unfit' Booking.com checks - BBC News",
+      "title": "BBC Technology — Criminals publish data of 8.7m people after Manchester Airports Group hack - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c74k39g3ee5o?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2218,
+      "chunks": 6,
+      "chars": 7369,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "BBC Technology",
+      "status": "skipped_existing",
+      "title": "Which? says fake 10 Downing Street listing exposes 'unfit' Booking.com checks - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cly4e0wn452o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2207,
-      "chunks": 7,
-      "chars": 9290,
+      "chars": 7752
+    },
+    {
+      "source": "BBC Technology",
+      "status": "skipped_existing",
+      "title": "Autonomous aircraft: Pilot-free crop dusters lead the way - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c1l123mmrg7o?at_medium=RSS&at_campaign=rss",
+      "chars": 12157
+    },
+    {
+      "source": "BBC Technology",
+      "status": "added",
+      "title": "BBC Technology — AI could cause global economic downturn, Andrew Bailey warns G20 - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c99dym3prl1o?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2219,
+      "chunks": 6,
+      "chars": 7505,
       "source_quality": 76.0,
       "freshness_score": 100.0,
-      "criticality_score": 54,
+      "criticality_score": 50,
       "claims": 6
     },
     {
       "source": "BBC Technology",
       "status": "added",
-      "title": "BBC Technology — Autonomous aircraft: Pilot-free crop dusters lead the way - BBC News",
-      "url": "https://www.bbc.co.uk/news/articles/c1l123mmrg7o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2208,
-      "chunks": 11,
-      "chars": 14014,
+      "title": "BBC Technology — Amazon rigged $20bn worth of ads, US FTC lawsuit alleges - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cvgy91nvy27o?at_medium=RSS&at_campaign=rss",
+      "doc_id": 2220,
+      "chunks": 6,
+      "chars": 7297,
       "source_quality": 76.0,
       "freshness_score": 100.0,
-      "criticality_score": 38,
+      "criticality_score": 34,
       "claims": 6
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Brantas Abipraya rampungkan pembangunan Sekolah Indonesia Kuala Lumpur - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723189/brantas-abipraya-rampungkan-pembangunan-sekolah-indonesia-kuala-lumpur",
+      "doc_id": 2221,
+      "chunks": 1,
+      "chars": 1015,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Kemendes PDT verifikasi kerusakan desa terdampak gempa NTT - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723187/kemendes-pdt-verifikasi-kerusakan-desa-terdampak-gempa-ntt",
+      "doc_id": 2222,
+      "chunks": 1,
+      "chars": 996,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — Indonesia masuk Grup F Ronde 2 Prakualifikasi Piala Asia 2029 - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723184/indonesia-masuk-grup-f-ronde-2-prakualifikasi-piala-asia-2029",
+      "doc_id": 2223,
+      "chunks": 1,
+      "chars": 1003,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — BNPB: 15 KK-15 rumah terdampak oleh gempa M5,5 di Halmahera Tengah - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723180/bnpb-15-kk-15-rumah-terdampak-oleh-gempa-m55-di-halmahera-tengah",
+      "doc_id": 2224,
+      "chunks": 1,
+      "chars": 1007,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — LKPP masih matangkan konsep Badan Pengadaan Pemerintah - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5723179/lkpp-masih-matangkan-konsep-badan-pengadaan-pemerintah",
+      "doc_id": 2225,
+      "chunks": 1,
+      "chars": 986,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Tekno",
+      "status": "added",
+      "title": "ANTARA Tekno — Huawei MatePad Air: Spesifikasi, fitur, dan harga di Indonesia - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5721767/huawei-matepad-air-spesifikasi-fitur-dan-harga-di-indonesia",
+      "doc_id": 2226,
+      "chunks": 1,
+      "chars": 993,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Tekno",
+      "status": "added",
+      "title": "ANTARA Tekno — Hisense A10 Pro dan Ultra resmi dirilis, ini spesifikasi dan harganya - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5719804/hisense-a10-pro-dan-ultra-resmi-dirilis-ini-spesifikasi-dan-harganya",
+      "doc_id": 2227,
+      "chunks": 1,
+      "chars": 1012,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Tekno",
+      "status": "added",
+      "title": "ANTARA Tekno — Cara membuat Poket Rupiah di myBCA untuk mengatur keuangan - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5717876/cara-membuat-poket-rupiah-di-mybca-untuk-mengatur-keuangan",
+      "doc_id": 2228,
+      "chunks": 1,
+      "chars": 988,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Tekno",
+      "status": "added",
+      "title": "ANTARA Tekno — 8 HP tahan air terbaik 2026 dengan sertifikasi IP67 hingga IP69 - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5717871/8-hp-tahan-air-terbaik-2026-dengan-sertifikasi-ip67-hingga-ip69",
+      "doc_id": 2229,
+      "chunks": 1,
+      "chars": 1004,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Tekno",
+      "status": "added",
+      "title": "ANTARA Tekno — Cara menyembunyikan aplikasi di iPhone dengan Face ID - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5717857/cara-menyembunyikan-aplikasi-di-iphone-dengan-face-id",
+      "doc_id": 2230,
+      "chunks": 1,
+      "chars": 978,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
     },
     {
       "source": "WHO News",
@@ -148,6 +413,407 @@
       "chars": 7667
     },
     {
+      "source": "WHO News",
+      "status": "added",
+      "title": "WHO News — Paying tribute to David Nabarro",
+      "url": "https://www.who.int/news/item/30-07-2025-paying-tribute-to-david-nabarro",
+      "doc_id": 2231,
+      "chunks": 8,
+      "chars": 8982,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "WHO News",
+      "status": "added",
+      "title": "WHO News — Timor-Leste certified malaria-free by WHO",
+      "url": "https://www.who.int/news/item/24-07-2025-timor-leste-certified-malaria-free-by-who",
+      "doc_id": 2232,
+      "chunks": 14,
+      "chars": 14962,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "WHO News",
+      "status": "added",
+      "title": "WHO News — African Union and World Health Organization renew strategic partnership to drive impact and strengthen health systems in Africa",
+      "url": "https://www.who.int/news/item/24-05-2025-world-health-organization-and-african-union-renew-strategic-partnership-to-drive-impact-and-strengthen-health-systems-in-africa",
+      "doc_id": 2233,
+      "chunks": 12,
+      "chars": 14188,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "FAO Newsroom",
+      "status": "error_source",
+      "title": "FAO Newsroom",
+      "url": "https://www.fao.org/newsroom/rss/en/",
+      "message": "404 Client Error: Not Found for url: https://www.fao.org/newsroom/rss/en/"
+    },
+    {
+      "source": "Kemenkes RI Rilis",
+      "status": "error_source",
+      "title": "Kemenkes RI Rilis",
+      "url": "https://sehatnegeriku.kemkes.go.id/category/rilis-media/",
+      "message": "HTTPSConnectionPool(host='sehatnegeriku.kemkes.go.id', port=443): Max retries exceeded with url: /category/rilis-media/ (Caused by NameResolutionError(\"HTTPSConnection(host='sehatnegeriku.kemkes.go.id', port=443): Failed to resolve 'sehatnegeriku.kemkes.go.id' ([Errno 8] nodename nor servname provided, or not known)\"))"
+    },
+    {
+      "source": "Kementan Berita",
+      "status": "skipped_short",
+      "title": "Kementerian Pertanian Republik Indonesia",
+      "url": "https://pertanian.go.id/home/?lang=id",
+      "chars": 41
+    },
+    {
+      "source": "Kementan Berita",
+      "status": "skipped_short",
+      "title": "Kementerian Pertanian Republik Indonesia",
+      "url": "https://pertanian.go.id/home/?lang=eng",
+      "chars": 41
+    },
+    {
+      "source": "Kementan Berita",
+      "status": "skipped_short",
+      "title": "Kementerian Pertanian Republik Indonesia",
+      "url": "https://pertanian.go.id/home/?show=page&act=view&id=61",
+      "chars": 41
+    },
+    {
+      "source": "Kementan Berita",
+      "status": "skipped_short",
+      "title": "Kementerian Pertanian Republik Indonesia",
+      "url": "https://pertanian.go.id/",
+      "chars": 41
+    },
+    {
+      "source": "Kementan Berita",
+      "status": "skipped_short",
+      "title": "Kementerian Pertanian Republik Indonesia",
+      "url": "https://pertanian.go.id/home/?show=page&act=view&id=4",
+      "chars": 41
+    },
+    {
+      "source": "MarketWatch Markets",
+      "status": "skipped_short",
+      "title": "Jobless claims fall to lowest level since mid-May",
+      "url": "https://www.marketwatch.com/story/jobless-claims-fall-to-lowest-level-since-mid-may-bda58e3b?mod=mw_rss_marketpulse",
+      "chars": 207
+    },
+    {
+      "source": "MarketWatch Markets",
+      "status": "skipped_short",
+      "title": "Jobless claims stay low in latest week",
+      "url": "https://www.marketwatch.com/story/jobless-claims-stay-low-in-latest-week-27b4b50b?mod=mw_rss_marketpulse",
+      "chars": 196
+    },
+    {
+      "source": "MarketWatch Markets",
+      "status": "skipped_short",
+      "title": "Consumer credit growth soars in December",
+      "url": "https://www.marketwatch.com/story/consumer-credit-growth-soars-in-december-d405d18e?mod=mw_rss_marketpulse",
+      "chars": 198
+    },
+    {
+      "source": "MarketWatch Markets",
+      "status": "skipped_low_quality",
+      "title": "U.S. productivity slows down in fourth quarter while unit labor costs accelerate",
+      "url": "https://www.marketwatch.com/story/u-s-productivity-slows-down-in-fourth-quarter-while-unit-labor-costs-accelerate-3c2b9092?mod=mw_rss_marketpulse",
+      "chars": 237,
+      "content_quality_score": 42.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 1,
+        "unique_words": 31,
+        "char_count": 237
+      }
+    },
+    {
+      "source": "MarketWatch Markets",
+      "status": "skipped_low_quality",
+      "title": "Beyond to buy rights to Buy Buy Baby brand and reunite it with Bed Bath & Beyond",
+      "url": "https://www.marketwatch.com/story/beyond-to-buy-rights-to-buy-buy-baby-brand-and-reunite-it-with-bed-bath-beyond-4383c6be?mod=mw_rss_marketpulse",
+      "chars": 236,
+      "content_quality_score": 42.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 1,
+        "unique_words": 31,
+        "char_count": 236
+      }
+    },
+    {
+      "source": "CNBC Markets",
+      "status": "skipped_low_quality",
+      "title": "New York Fed's Williams says yield surge due to strong economic prospects",
+      "url": "https://www.cnbc.com/2026/09/02/new-york-feds-williams-says-yield-surge-due-to-strong-economic-prospects.html",
+      "chars": 4985,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 166,
+        "unique_words": 355,
+        "char_count": 4985
+      }
+    },
+    {
+      "source": "CNBC Markets",
+      "status": "skipped_low_quality",
+      "title": "Uber to cut 10% of workforce in bid to move 'simpler and faster'",
+      "url": "https://www.cnbc.com/2026/09/02/uber-to-cut-10percent-of-workforce-in-bid-to-move-simpler-and-faster.html",
+      "chars": 4515,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 161,
+        "unique_words": 349,
+        "char_count": 4515
+      }
+    },
+    {
+      "source": "CNBC Markets",
+      "status": "skipped_low_quality",
+      "title": "There is 'a lot more pushback' on data center construction, Berkshire CEO Greg Abel tells CNBC",
+      "url": "https://www.cnbc.com/2026/09/02/there-is-a-lot-more-pushback-on-data-center-construction-berkshire-ceo-greg-abel-tells-cnbc.html",
+      "chars": 4483,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 164,
+        "unique_words": 334,
+        "char_count": 4483
+      }
+    },
+    {
+      "source": "CNBC Markets",
+      "status": "skipped_low_quality",
+      "title": "Private payrolls rose by 38,000 in August, than expected, ADP reports",
+      "url": "https://www.cnbc.com/2026/09/02/private-payrolls-rose-by-38000-in-august-fewer-than-expected-adp-reports.html",
+      "chars": 4840,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 164,
+        "unique_words": 350,
+        "char_count": 4840
+      }
+    },
+    {
+      "source": "CNBC Markets",
+      "status": "skipped_low_quality",
+      "title": "Apple shares are doing something they haven't done in 20 years. Here’s what’s happening",
+      "url": "https://www.cnbc.com/2026/09/02/apple-shares-are-doing-something-they-havent-done-in-20-years-heres-whats-happening.html",
+      "chars": 5115,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 174,
+        "unique_words": 410,
+        "char_count": 5115
+      }
+    },
+    {
+      "source": "MarketWatch Top Stories",
+      "status": "skipped_low_quality",
+      "title": "U.S. businesses created the fewest new jobs in 7 months, ADP says. Hiring slowed in the summer.",
+      "url": "https://www.marketwatch.com/story/adp-says-businesses-create-the-fewest-new-jobs-in-7-months-hiring-slowed-in-the-summer-59291cd9?mod=mw_rss_topstories",
+      "chars": 398,
+      "content_quality_score": 60.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 3,
+        "unique_words": 44,
+        "char_count": 398
+      }
+    },
+    {
+      "source": "MarketWatch Top Stories",
+      "status": "skipped_low_quality",
+      "title": "We’re in our 60s. My wife and I have $345,000 in annual pensions and $1 million in 403(b)s. Is it too late for Roth conversions?",
+      "url": "https://www.marketwatch.com/story/were-in-our-60s-my-wife-and-i-have-345-000-in-annual-pensions-and-1-million-in-403-b-s-is-it-too-late-for-roth-conversions-5df35d42?mod=mw_rss_topstories",
+      "chars": 350,
+      "content_quality_score": 42.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 2,
+        "unique_words": 43,
+        "char_count": 350
+      }
+    },
+    {
+      "source": "MarketWatch Top Stories",
+      "status": "added",
+      "title": "MarketWatch Top Stories — ‘I feel shoehorned’: My father funded my $800,000 Roth IRA. Does that give him the right to say how I invest it?",
+      "url": "https://www.marketwatch.com/story/i-feel-shoehorned-my-father-funded-my-800-000-roth-ira-does-that-give-him-the-right-to-say-how-i-invest-it-7b1e3ab3?mod=mw_rss_topstories",
+      "doc_id": 2234,
+      "chunks": 1,
+      "chars": 1378,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 76,
+      "claims": 2
+    },
+    {
+      "source": "MarketWatch Top Stories",
+      "status": "added",
+      "title": "MarketWatch Top Stories — America’s renter generation is trying to build wealth by investing in stocks instead of owning a house",
+      "url": "https://www.marketwatch.com/story/americas-renter-generation-is-trying-to-build-wealth-by-investing-in-stocks-instead-of-owning-a-house-c2f91799?mod=mw_rss_topstories",
+      "doc_id": 2235,
+      "chunks": 1,
+      "chars": 1299,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 72,
+      "claims": 2
+    },
+    {
+      "source": "MarketWatch Top Stories",
+      "status": "added",
+      "title": "MarketWatch Top Stories — Which workers are using AI surprisingly often? Dry cleaners and construction workers.",
+      "url": "https://www.marketwatch.com/story/which-workers-are-using-ai-surprisingly-often-dry-cleaners-and-construction-workers-b0ea5655?mod=mw_rss_topstories",
+      "doc_id": 2236,
+      "chunks": 1,
+      "chars": 1255,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 76,
+      "claims": 2
+    },
+    {
+      "source": "NASA Breaking News",
+      "status": "skipped_existing",
+      "title": "NASA Selects Blue Origin as Mars Telecommunications Network Provider - NASA",
+      "url": "https://www.nasa.gov/news-release/nasa-selects-blue-origin-as-mars-telecommunications-network-provider/",
+      "chars": 8155
+    },
+    {
+      "source": "NASA Breaking News",
+      "status": "skipped_existing",
+      "title": "What’s Up: September 2026 Skywatching Tips from NASA",
+      "url": "https://science.nasa.gov/solar-system/skywatching/whats-up-september-2026-skywatching-tips-from-nasa/",
+      "chars": 9608
+    },
+    {
+      "source": "NASA Breaking News",
+      "status": "added",
+      "title": "NASA Breaking News — Historic Engines Take Their Place on Artemis III - NASA",
+      "url": "https://www.nasa.gov/image-article/historic-engines-take-their-place-on-artemis-iii/",
+      "doc_id": 2237,
+      "chunks": 6,
+      "chars": 7586,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "NASA Breaking News",
+      "status": "added",
+      "title": "NASA Breaking News — APOD: 2026 September 1 - A Plane Lunar Eclipse - NASA Science",
+      "url": "https://science.nasa.gov/image-article/apod-2026-september-1-a-plane-lunar-eclipse/",
+      "doc_id": 2238,
+      "chunks": 6,
+      "chars": 8095,
+      "source_quality": 92.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "NASA Breaking News",
+      "status": "skipped_low_quality",
+      "title": "Ice Island Survives Run-In With Joe Island - NASA Science",
+      "url": "https://science.nasa.gov/earth/earth-observatory/iceberg-from-petermann-glacier-speeds-away/",
+      "chars": 13566,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 346,
+        "unique_words": 742,
+        "char_count": 13566
+      }
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "skipped_low_quality",
+      "title": "A 13-meter rocket hit the Moon: Tasmanian researchers helped track it there",
+      "url": "https://phys.org/news/2026-09-meter-rocket-moon-tasmanian-track.html",
+      "chars": 327,
+      "content_quality_score": 42.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 2,
+        "unique_words": 43,
+        "char_count": 327
+      }
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "added",
+      "title": "Phys.org Latest Science News — Physicists test the weak equivalence principle in an orbiting space station",
+      "url": "https://phys.org/news/2026-09-physicists-weak-equivalence-principle-orbiting.html",
+      "doc_id": 2239,
+      "chunks": 2,
+      "chars": 1516,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 3
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "added",
+      "title": "Phys.org Latest Science News — A summer odyssey: Female dotterels seek multiple mates across Northern Europe",
+      "url": "https://phys.org/news/2026-09-summer-odyssey-female-dotterels-multiple.html",
+      "doc_id": 2240,
+      "chunks": 2,
+      "chars": 1590,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 3
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "skipped_short",
+      "title": "Floridians become more cautious as economic outlook weakens in August",
+      "url": "https://phys.org/news/2026-09-floridians-cautious-economic-outlook-weakens.html",
+      "chars": 217
+    },
+    {
+      "source": "Phys.org Latest Science News",
+      "status": "skipped_low_quality",
+      "title": "Despite years of rain, Blue Mountains forests still haven't recovered from the Black Summer megafires",
+      "url": "https://phys.org/news/2026-09-years-blue-mountains-forests-havent.html",
+      "chars": 287,
+      "content_quality_score": 42.0,
+      "content_quality_flags": {
+        "thin_content": true,
+        "boilerplate_heavy": false,
+        "sentence_count": 2,
+        "unique_words": 46,
+        "char_count": 287
+      }
+    },
+    {
       "source": "USGS Significant Earthquakes",
       "status": "skipped_short",
       "title": "M 5.2 Landslide - 55 km NW of Kodāri̇̄, Nepal",
@@ -162,16 +828,242 @@
       "chars": 157
     },
     {
-      "source": "Streamlit Release Notes",
+      "source": "USGS Significant Earthquakes",
+      "status": "skipped_short",
+      "title": "M 5.8 - 4 km N of Toride, Japan",
+      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tmta",
+      "chars": 157
+    },
+    {
+      "source": "USGS Significant Earthquakes",
+      "status": "skipped_short",
+      "title": "M 6.7 - 31 km NW of Aniso, Peru",
+      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tm81",
+      "chars": 157
+    },
+    {
+      "source": "USGS Significant Earthquakes",
+      "status": "skipped_short",
+      "title": "M 5.5 - 269 km SSE of Dunhuang, China",
+      "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000tlrj",
+      "chars": 157
+    },
+    {
+      "source": "ReliefWeb Updates",
+      "status": "added",
+      "title": "ReliefWeb Updates — Why continuity of care matters at Al-Bab Primary Health Care Centre - Syrian Arab Republic | ReliefWeb",
+      "url": "https://reliefweb.int/report/syrian-arab-republic/why-continuity-care-matters-al-bab-primary-health-care-centre",
+      "doc_id": 2241,
+      "chunks": 14,
+      "chars": 15101,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "ReliefWeb Updates",
+      "status": "added",
+      "title": "ReliefWeb Updates — Gender Alert #1: Critical Protection Needs of Women and Girls Following the Flores Earthquake Indonesia - Indonesia | ReliefWeb",
+      "url": "https://reliefweb.int/report/indonesia/gender-alert-1-critical-protection-needs-women-and-girls-following-flores-earthquake-indonesia",
+      "doc_id": 2242,
+      "chunks": 7,
+      "chars": 4761,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "ReliefWeb Updates",
+      "status": "added",
+      "title": "ReliefWeb Updates — WHO and Federal Ministry of Health step up Sudan’s preparedness for potential Ebola outbreak - Sudan | ReliefWeb",
+      "url": "https://reliefweb.int/report/sudan/who-and-federal-ministry-health-step-sudans-preparedness-potential-ebola-outbreak",
+      "doc_id": 2243,
+      "chunks": 13,
+      "chars": 12559,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "ReliefWeb Updates",
+      "status": "added",
+      "title": "ReliefWeb Updates — EU provides €12 million to WHO to sustain essential health services and support recovery across Syria - Syrian Arab Republic | ReliefWeb",
+      "url": "https://reliefweb.int/report/syrian-arab-republic/eu-provides-eur12-million-who-sustain-essential-health-services-and-support-recovery-across-syria",
+      "doc_id": 2244,
+      "chunks": 8,
+      "chars": 6712,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "ReliefWeb Updates",
+      "status": "added",
+      "title": "ReliefWeb Updates — IRC Italy Protection Monitoring Report: April - June 2026 - Italy | ReliefWeb",
+      "url": "https://reliefweb.int/report/italy/irc-italy-protection-monitoring-report-april-june-2026",
+      "doc_id": 2245,
+      "chunks": 3,
+      "chars": 2777,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 50,
+      "claims": 4
+    },
+    {
+      "source": "IEA News",
+      "status": "added",
+      "title": "IEA News — IEA – International Energy Agency",
+      "url": "https://www.iea.org",
+      "doc_id": 2246,
+      "chunks": 3,
+      "chars": 2804,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "IEA News",
+      "status": "added",
+      "title": "IEA News — About - IEA",
+      "url": "https://www.iea.org/about",
+      "doc_id": 2247,
+      "chunks": 3,
+      "chars": 2788,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "IEA News",
+      "status": "added",
+      "title": "IEA News — News - IEA",
+      "url": "https://www.iea.org/news",
+      "doc_id": 2248,
+      "chunks": 3,
+      "chars": 2786,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "IEA News",
+      "status": "added",
+      "title": "IEA News — Events - IEA",
+      "url": "https://www.iea.org/events",
+      "doc_id": 2249,
+      "chunks": 3,
+      "chars": 2790,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "IEA News",
+      "status": "added",
+      "title": "IEA News — Programmes – Analysis - IEA",
+      "url": "https://www.iea.org/programmes",
+      "doc_id": 2250,
+      "chunks": 3,
+      "chars": 2809,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 6
+    },
+    {
+      "source": "Energy.gov News",
+      "status": "skipped_low_quality",
+      "title": "Solar Achievements Timeline | Department of Energy",
+      "url": "https://www.energy.gov/cmei/systems/solar-achievements-timeline",
+      "chars": 5713,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 135,
+        "unique_words": 342,
+        "char_count": 5713
+      }
+    },
+    {
+      "source": "Energy.gov News",
+      "status": "skipped_low_quality",
+      "title": "A Timeline of RTG and RHU Space Missions | Department of Energy",
+      "url": "https://www.energy.gov/ne/timeline-rtg-and-rhu-space-missions",
+      "chars": 4715,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 128,
+        "unique_words": 288,
+        "char_count": 4715
+      }
+    },
+    {
+      "source": "Energy.gov News",
+      "status": "skipped_low_quality",
+      "title": "Savannah River Site History 1990-Present | Department of Energy",
+      "url": "https://www.energy.gov/srs/savannah-river-site-history-1990-present",
+      "chars": 5217,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 131,
+        "unique_words": 318,
+        "char_count": 5217
+      }
+    },
+    {
+      "source": "Energy.gov News",
+      "status": "skipped_low_quality",
+      "title": "Savannah River Site History 1950-1989 | Department of Energy",
+      "url": "https://www.energy.gov/srs/savannah-river-site-history-1950-1989",
+      "chars": 5211,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 131,
+        "unique_words": 318,
+        "char_count": 5211
+      }
+    },
+    {
+      "source": "Energy.gov News",
+      "status": "skipped_low_quality",
+      "title": "Secretary Rick Perry (January 2017-December 2019) | Department of Energy",
+      "url": "https://www.energy.gov/em/secretary-rick-perry-january-2017-december-2019",
+      "chars": 4743,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 128,
+        "unique_words": 290,
+        "char_count": 4743
+      }
+    },
+    {
+      "source": "MyQuran Jadwal Sholat Indonesia",
       "status": "skipped_existing",
-      "title": "Release notes - Streamlit Docs",
-      "url": "https://docs.streamlit.io/develop/quick-reference/release-notes",
-      "chars": 6454
+      "title": "Indeks Jadwal Sholat Seluruh Wilayah Indonesia",
+      "url": "https://api.myquran.com/v2/sholat/kota/semua",
+      "chars": 12897
     }
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 24,
+  "critical_claims_added": 172,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -186,11 +1078,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260902_121627_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_205505_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260901_105216_pre-update.db"
+          ".db_backups/adioranye_power.db_20260901_105711_pre-update.db"
         ]
       }
     },
@@ -226,11 +1118,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260902_121651_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260902_205724_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260901_105233_post-update.db"
+          ".db_backups/adioranye_power.db_20260901_105721_post-update.db"
         ]
       }
     }
@@ -831,8 +1723,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-09-02T05:16:51+00:00",
-  "finished_at_wib": "2026-09-02 12:16:51 WIB",
-  "elapsed_seconds": 23.93,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-02 12:16:51 WIB\nDokumen baru: 6 | Chunk baru: 34 | Error: 0\n\nTop update penting:\n1. BBC Technology — Autonomous aircraft: Pilot-free crop dusters lead the way - BBC News\n   Sumber: BBC Technology | kualitas: 76.0 | freshness: 100.0\n2. BBC World — Iran attacks US bases in Middle East after reports US strike killed five at wedding party - BBC News\n   Sumber: BBC World | kualitas: 76.0 | freshness: 100.0\n3. BBC World — Charlie Kirk murder suspect Tyler Robinson pleads not guilty as judge clears way for death penalty trial - BBC News\n   Sumber: BBC World | kualitas: 76.0 | freshness: 100.0\n4. BBC Technology — Which? says fake 10 Downing Street listing exposes 'unfit' Booking.com checks - BBC News\n   Sumber: BBC Technology | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — X akui banyak akun pengguna ditargetkan peretas usai X Money dirilis - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n6. ANTARA Terkini — BNPB: Petugas padamkan api karhutla yang kembali menyala di Kaltara - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-09-02T13:57:24+00:00",
+  "finished_at_wib": "2026-09-02 20:57:24 WIB",
+  "elapsed_seconds": 139.09,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-02 20:57:24 WIB\nDokumen baru: 41 | Chunk baru: 210 | Error: 4\n\nTop update penting:\n1. WHO News — Timor-Leste certified malaria-free by WHO\n   Sumber: WHO News | kualitas: 92.0 | freshness: 100.0\n2. WHO News — African Union and World Health Organization renew strategic partnership to drive impact and strengthen health systems in Africa\n   Sumber: WHO News | kualitas: 92.0 | freshness: 100.0\n3. WHO News — Paying tribute to David Nabarro\n   Sumber: WHO News | kualitas: 92.0 | freshness: 100.0\n4. NASA Breaking News — Historic Engines Take Their Place on Artemis III - NASA\n   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0\n5. NASA Breaking News — APOD: 2026 September 1 - A Plane Lunar Eclipse - NASA Science\n   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0\n6. BBC World — More than 900 killed in Gaza this year despite ceasefire, Hamas-run health ministry says - BBC News\n   Sumber: BBC World | kualitas: 76.0 | freshness: 100.0\n7. BBC World — EU and Nato vow to step up pressure on Russia after 'new escalation' in Leipzig - BBC News\n   Sumber: BBC World | kualitas: 76.0 | freshness: 100.0\n8. BBC World — USS Abraham Lincoln: US sailors arrive in Thailand's Pattaya after record 250 days at sea - BBC News\n   Sumber: BBC World | kualitas: 76.0 | freshness: 100.0\n9. BBC World — Zelensky says airlines should avoid Russian airspace as Ukraine escalates drone operations - BBC News\n   Sumber: BBC World | kualitas: 76.0 | freshness: 100.0\n10. BBC World — Rosenberg: Putin's veiled threat to UK part of Russia's campaign against West - BBC News\n   Sumber: BBC World | kualitas: 76.0 | freshness: 100.0\n11. BBC Technology — Criminals publish data of 8.7m people after Manchester Airports Group hack - BBC News\n   Sumber: BBC Technology | kualitas: 76.0 | freshness: 100.0\n12. BBC Technology — AI could cause global economic downturn, Andrew Bailey warns G20 - BBC News\n   Sumber: BBC Technology | kualitas: 76.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }
