@@ -873,6 +873,32 @@ def build_local_safe_fallback_answer(
     lower = text.lower()
     normalized = _normalize_short_greeting_text(text)
     tokens = normalized.split()
+    failure_lower = str(failure_reason or "").lower()
+
+    # Jangan samarkan konfigurasi provider sebagai gangguan model.
+    if any(
+        marker in failure_lower
+        for marker in (
+            "slashai_api_key belum diisi",
+            "slashai_api_url belum diisi",
+            "slashai_model belum diisi",
+            "set_in_streamlit_secrets",
+            "your-provider.example",
+            "your-model-name",
+        )
+    ):
+        return (
+            "Chat belum terhubung ke provider AI. Isi `SLASHAI_API_KEY`, "
+            "`SLASHAI_API_URL`, dan `SLASHAI_MODEL` di Streamlit Secrets, "
+            "lalu restart aplikasi.",
+            {
+                "local_safe_fallback_used": True,
+                "local_safe_fallback_type": "provider_configuration",
+                "model_skipped_after_failure": True,
+                "public_safe_message": True,
+                "failure_reason": failure_reason[:500],
+            },
+        )
 
     question_starters = {
         "apa",
