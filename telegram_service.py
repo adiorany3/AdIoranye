@@ -32,6 +32,7 @@ from ai_core import (
 from memory_store import MemoryStore, handle_local_memory_command
 from power_features import get_power_store, handle_power_command, generate_power_answer
 from daily_kb_scraper import run_daily_kb_update
+from reminder_skill import ReminderStore, parse_reminder_command
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
@@ -547,6 +548,7 @@ class TelegramService:
         self._config: Dict[str, Any] = {}
         self._lock = threading.Lock()
         self._chat_recent_messages: Dict[str, Deque[Dict[str, str]]] = {}
+        self._reminders = ReminderStore()
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -703,7 +705,10 @@ class TelegramService:
                 "/helpadmin - daftar command admin\n"
                 "/webstatus - lihat status web chat\n"
                 "/lockweb - kunci web chat\n"
-                "/unlockweb - buka web chat lagi"
+                "/unlockweb - buka web chat lagi\n"
+                "/ingat YYYY-MM-DD_HH:MM isi - buat pengingat (WIB)\n"
+                "/daftaringat - lihat pengingat\n"
+                "/hapusingat ID - hapus pengingat"
             )
 
         if command == "/webstatus":
@@ -756,6 +761,51 @@ class TelegramService:
             f"Updated: {state.get('updated_at') or '-'}"
         )
 
+    def _send_text(self, chat_id: Any, text: str, reply_to: Any = None) -> None:
+        payload = {"chat_id": chat_id, "text": str(text)[:4000]}
+        if reply_to:
+            payload["reply_to_message_id"] = reply_to
+        self._telegram_request(
+            "sendMessage",
+            payload,
+            timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
+        )
+
+    def _handle_reminder_command(self, chat_id: Any, text: str) -> Optional[str]:
+        command = str(text or "").strip().lower().split(maxsplit=1)[0]
+        if command in {"/ingat", "/reminder"}:
+            parsed = parse_reminder_command(text)
+            if not parsed:
+                return None
+            if parsed.get("error"):
+                return str(parsed["error"])
+            reminder_id = self._reminders.add(chat_id, str(parsed["due_at"]), str(parsed["text"]))
+            due = datetime.fromisoformat(str(parsed["due_at"])).astimezone(WIB_TZ)
+            return f"Pengingat #{reminder_id} dibuat: {due:%Y-%m-%d %H:%M WIB} — {parsed['text']}"
+        if command == "/daftaringat":
+            items = self._reminders.list(chat_id)
+            if not items:
+                return "Belum ada pengingat aktif."
+            lines = ["Pengingat aktif:"]
+            for item in items:
+                due = datetime.fromisoformat(str(item["due_at"])).astimezone(WIB_TZ)
+                lines.append(f"#{item['id']} — {due:%Y-%m-%d %H:%M WIB} — {item['text']}")
+            return "\n".join(lines)
+        if command == "/hapusingat":
+            parts = str(text or "").split()
+            if len(parts) != 2 or not parts[1].isdigit():
+                return "Format salah. Pakai: /hapusingat ID"
+            return "Pengingat dihapus." if self._reminders.delete(chat_id, int(parts[1])) else "ID pengingat tidak ditemukan."
+        return None
+
+    def _deliver_due_reminders(self) -> None:
+        for item in self._reminders.due():
+            try:
+                self._send_text(item["chat_id"], f"Pengingat #{item['id']}: {item['text']}")
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = str(exc)[:1200]
+
     def _handle_message(self, message: Dict[str, Any]) -> None:
         chat = message.get("chat") or {}
         chat_id = chat.get("id")
@@ -773,6 +823,18 @@ class TelegramService:
 
         with self._lock:
             self._last_update = f"update_id={update_id} chat_id={chat_id} text={text[:120]}"
+
+        reminder_reply = self._handle_reminder_command(chat_id, text)
+        if reminder_reply is not None:
+            try:
+                self._send_text(chat_id, reminder_reply, source_message_id)
+                with self._lock:
+                    self._processed += 1
+                    self._last_error = ""
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = str(exc)[:1200]
+            return
 
         admin_reply = self._handle_admin_command(chat_id, text)
         if admin_reply is not None:
@@ -841,6 +903,7 @@ class TelegramService:
     def _poll_loop(self) -> None:
         timeout_seconds = telegram_safe_int(self._config.get("telegram_poll_timeout_seconds"), 30)
         while not self._stop_event.is_set():
+            self._deliver_due_reminders()
             try:
                 payload = {
                     "timeout": timeout_seconds,
