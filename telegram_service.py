@@ -677,21 +677,41 @@ class TelegramService:
         return state
 
     def _handle_admin_command(self, chat_id: Any, text: str) -> Optional[str]:
-        command = str(text or "").strip().lower()
+        command = str(text or "").strip().lower().split()[0]
 
-        if command not in {"/webstatus", "/lockweb", "/unlockweb"}:
+        if command not in {"/helpadmin", "/webstatus", "/lockweb", "/unlockweb"}:
             return None
 
         if not self._is_admin_chat(chat_id):
             return "Perintah admin ditolak. Chat ID ini tidak terdaftar sebagai admin Telegram."
 
+        if command == "/helpadmin":
+            return (
+                "Command admin Telegram:\n"
+                "/helpadmin - daftar command admin\n"
+                "/webstatus - lihat status web chat\n"
+                "/lockweb - kunci web chat\n"
+                "/unlockweb - buka web chat lagi"
+            )
+
         if command == "/webstatus":
             state = self._read_maintenance_state()
+            bot_mode = str(
+                self._config.get("telegram_model_mode")
+                or self._config.get("model_mode")
+                or "auto"
+            ).strip() or "auto"
+            runtime_primary_model = str(self.status().get("runtime_primary_model") or self._config.get("slashai_model") or self._config.get("model") or "-").strip() or "-"
+            active_count = int(self.status().get("model_health_active_count") or 0)
             return (
                 f"Web chat: {'LOCKED' if state.get('locked') else 'UNLOCKED'}\n"
                 f"Updated: {state.get('updated_at') or '-'}\n"
                 f"By: {state.get('updated_by') or '-'}\n"
-                f"Reason: {state.get('reason') or '-'}"
+                f"Reason: {state.get('reason') or '-'}\n"
+                f"Telegram bot: {'RUNNING' if self.status().get('running') else 'STOPPED'}\n"
+                f"Telegram mode: {bot_mode}\n"
+                f"Primary model: {runtime_primary_model}\n"
+                f"Model aktif: {active_count}"
             )
 
         if command == "/lockweb":

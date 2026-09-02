@@ -11001,6 +11001,8 @@ def build_telegram_config_payload(
         "slashai_api_url": api_url,
         "slashai_model": route["primary_model"],
         "persona": persona_text,
+        "persona_text": persona_text,
+        "system_prompt": persona_text,
         "memory_file": memory_file,
         "fallback_models": route["cheap_fallback_models"],
         "expensive_fallback_models": route["expensive_fallback_models"],
