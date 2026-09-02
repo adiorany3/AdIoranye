@@ -13935,6 +13935,60 @@ st.markdown(
         background: var(--mac-green-soft);
     }
 
+    section[data-testid="stSidebar"] {
+        border-right: 1px solid var(--mac-border);
+        background: var(--mac-panel-soft);
+    }
+
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 1.2rem;
+    }
+
+    .chat-sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.62rem;
+        margin: 0.15rem 0 1.1rem;
+        color: var(--mac-text) !important;
+        font-size: 1.02rem;
+        font-weight: 850;
+    }
+
+    .chat-sidebar-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #0a84ff, #5856d6);
+        color: #fff !important;
+        font-size: 0.78rem;
+        font-weight: 900;
+        box-shadow: 0 6px 14px rgba(10, 132, 255, 0.24);
+    }
+
+    .chat-sidebar-section {
+        margin: 1.15rem 0 0.4rem;
+        color: var(--mac-muted) !important;
+        font-size: 0.7rem;
+        font-weight: 820;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .chat-sidebar-note {
+        color: var(--mac-muted) !important;
+        font-size: 0.78rem;
+        line-height: 1.5;
+    }
+
+    [data-testid="stMainBlockContainer"] {
+        max-width: 940px;
+        padding-top: 1.4rem;
+        padding-bottom: 2rem;
+    }
+
     .chat-toolbar-card {
         display: flex;
         align-items: center;
@@ -14134,6 +14188,27 @@ def render_public_page() -> None:
             "API key belum diisi atau konfigurasi provider masih memakai placeholder. Isi SLASHAI_API_KEY dan SLASHAI_API_URL di secrets/env agar chat dapat berjalan."
         )
 
+    with st.sidebar:
+        st.markdown(
+            '<div class="chat-sidebar-brand"><span class="chat-sidebar-mark">AI</span><span>Adioranye AI</span></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("＋ Chat baru", use_container_width=True, key="sidebar_new_chat"):
+            st.session_state.chat_messages = []
+            st.session_state.pending_prompt = ""
+            st.session_state.reply_target_index = None
+            st.session_state.reply_target_preview = ""
+            st.session_state.reply_composer_prefill = ""
+            st.session_state.chat_input = ""
+            st.rerun()
+        st.markdown('<div class="chat-sidebar-section">Tentang</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="chat-sidebar-note">Tanya, minta ringkasan, analisis, atau lanjutkan percakapan dengan reply.</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown('<div class="chat-sidebar-section">Status</div>', unsafe_allow_html=True)
+        st.caption(f"{public_status_label} · {len(st.session_state.chat_messages)} pesan")
+
     st.title("Adioranye AI")
     st.caption("Chat AI cepat untuk tanya jawab, ringkasan, analisis, dan bantuan harian.")
     st.markdown(
@@ -14147,15 +14222,6 @@ def render_public_page() -> None:
         ),
         unsafe_allow_html=True,
     )
-
-    if st.button("🧹 Chat baru", use_container_width=True, key="auto_btn_3209"):
-        st.session_state.chat_messages = []
-        st.session_state.pending_prompt = ""
-        st.session_state.reply_target_index = None
-        st.session_state.reply_target_preview = ""
-        st.session_state.reply_composer_prefill = ""
-        st.session_state.chat_input = ""
-        st.rerun()
 
     if st.session_state.reply_target_preview:
         reply_preview_text = _html_escape(str(st.session_state.reply_target_preview or ""))
