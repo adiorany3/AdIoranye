@@ -498,6 +498,77 @@ def _insert_document_v2(
     return doc_id, len(chunks)
 
 
+def enrich_v2_from_legacy_kb(db_path: str) -> Dict[str, int]:
+    """Copy existing local PowerStore KB into v2 summaries/chunks once.
+
+    No network call. Existing legacy content remains source of truth; migration
+    is idempotent by legacy document ID stored in metadata_json.
+    """
+    init_kb_manager_schema(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT metadata_json FROM kb_documents_v2 WHERE status='active'")
+        enriched_ids = set()
+        for row in cur.fetchall():
+            try:
+                legacy_id = json.loads(row["metadata_json"] or "{}").get("legacy_document_id")
+                if legacy_id is not None:
+                    enriched_ids.add(int(legacy_id))
+            except (AttributeError, TypeError, ValueError):
+                continue
+        cur.execute("SELECT id,title,source,collection,tags,metadata_json,pinned,source_quality,freshness_score,summary FROM documents ORDER BY id")
+        documents_added = 0
+        chunks_added = 0
+        for document in cur.fetchall():
+            if int(document["id"]) in enriched_ids:
+                continue
+            metadata = {}
+            try:
+                metadata = json.loads(document["metadata_json"] or "{}")
+            except (TypeError, ValueError):
+                metadata = {}
+            metadata["legacy_document_id"] = int(document["id"])
+
+            now = _utc_now()
+            source = str(document["source"] or "legacy://powerstore")
+            title = str(document["title"] or "Tanpa judul")
+            summary = str(document["summary"] or "").strip()
+            cur.execute(
+                """INSERT INTO kb_documents_v2
+                (source_id,title,url,source_type,collection,tags,content_hash,summary,status,version,confidence,freshness,created_at,updated_at,metadata_json)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (source, title, source, "legacy", document["collection"] or "Default", document["tags"] or "", _sha256(f"legacy:{document['id']}"), summary, "active", 1, "high" if float(document["source_quality"] or 0) >= 75 else "medium", "current" if float(document["freshness_score"] or 0) >= 75 else "recent", now, now, json.dumps(metadata, ensure_ascii=False)),
+            )
+            v2_id = int(cur.lastrowid)
+            cur.execute("SELECT chunk_index,content,heading,page_label FROM chunks WHERE doc_id=? ORDER BY chunk_index,id", (int(document["id"]),))
+            legacy_chunks = cur.fetchall()
+            for chunk in legacy_chunks:
+                content = str(chunk["content"] or "").strip()
+                if not content:
+                    continue
+                cur.execute(
+                    """INSERT INTO kb_chunks_v2
+                    (document_id,source_id,heading,chunk_index,content,char_count,content_hash,status,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (v2_id, source, chunk["heading"] or "", int(chunk["chunk_index"] or 0), content, len(content), _sha256(content), "active", now),
+                )
+                chunks_added += 1
+            key_points = [s.strip() for s in re.split(r"(?<=[.!?])\s+", summary)[:5] if s.strip()]
+            cur.execute(
+                """INSERT INTO kb_summaries_v2
+                (document_id,source_id,title,summary,key_points_json,created_at,updated_at)
+                VALUES (?,?,?,?,?,?,?)""",
+                (v2_id, source, title, summary, json.dumps(key_points, ensure_ascii=False), now, now),
+            )
+            documents_added += 1
+        conn.commit()
+        return {"documents_added": documents_added, "chunks_added": chunks_added}
+    finally:
+        conn.close()
+
+
 def advanced_incremental_kb_update(
     db_path: str,
     sources_path: str,
@@ -1023,7 +1094,6 @@ def search_kb_v2_context(
             JOIN kb_documents_v2 d ON d.id = c.document_id
             WHERE 1=1 {status_filter}
             ORDER BY d.updated_at DESC, c.id DESC
-            LIMIT 1200
             """
         )
 

@@ -110,6 +110,7 @@ from kb_manager import (
     archive_documents_by_source,
     clear_live_cache,
     delete_archived_documents,
+    enrich_v2_from_legacy_kb,
     ensure_kb_sources_file,
     export_kb_audit_log,
     init_kb_manager_schema,
@@ -2957,6 +2958,7 @@ service = get_telegram_service()
 power_store = get_power_store(power_db_path)
 try:
     init_kb_manager_schema(power_db_path)
+    enrich_v2_from_legacy_kb(power_db_path)
     ensure_kb_sources_file(
         kb_scraper_sources_file,
         json.loads(DEFAULT_RELEVANT_KB_SOURCES_JSON)["sources"]
@@ -6859,10 +6861,7 @@ def build_kb_v2_context_for_prompt(
         )
 
         context = str(result.get("context") or "").strip()
-        context = limit_context_for_token_saver(
-            context,
-            kb_context_max_chars,
-        )
+        context = context[: max(0, int(kb_context_max_chars or 0))]
         sources = (result.get("sources") or [])[: max(1, int(kb_max_chunks_token_saver or 3))]
 
         return context, {
