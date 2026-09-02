@@ -2068,6 +2068,14 @@ def render_math_test_panel() -> None:
         render_math_markdown(sample)
 
 
+def submit_public_chat() -> None:
+    """Pindahkan draft composer ke antrean sebelum widget dibuat ulang."""
+    submitted_text = str(st.session_state.get("chat_input", "") or "").strip()
+    if submitted_text:
+        st.session_state.pending_prompt = submitted_text
+    st.session_state.chat_input = ""
+
+
 def init_state() -> None:
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
@@ -14239,17 +14247,16 @@ def render_public_page() -> None:
     )
     send_col, info_col = st.columns([1, 2])
     with send_col:
-        send_clicked = st.button("Kirim", use_container_width=True, key="send_public_chat")
+        st.button(
+            "Kirim",
+            use_container_width=True,
+            key="send_public_chat",
+            on_click=submit_public_chat,
+        )
     with info_col:
         st.caption("Bisa tulis panjang. Cocok untuk reply dengan quote dan konteks lengkap.")
 
-    typed_input = ""
-    if send_clicked:
-        typed_input = str(st.session_state.get("chat_input", "") or "").strip()
-        if typed_input:
-            st.session_state.chat_input = ""
-
-    user_input = st.session_state.pending_prompt or typed_input
+    user_input = st.session_state.pending_prompt
     if st.session_state.pending_prompt:
         st.session_state.pending_prompt = ""
 
