@@ -2071,6 +2071,10 @@ def render_math_test_panel() -> None:
 def init_state() -> None:
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
+    if "reply_target_index" not in st.session_state:
+        st.session_state.reply_target_index = None
+    if "reply_target_preview" not in st.session_state:
+        st.session_state.reply_target_preview = ""
     if "session_memory" not in st.session_state:
         st.session_state.session_memory = []
     if "session_memory_updated_at" not in st.session_state:
@@ -14073,9 +14077,28 @@ def render_public_page() -> None:
         if st.button("🧹 Chat baru", use_container_width=True, key="auto_btn_3209"):
             st.session_state.chat_messages = []
             st.session_state.pending_prompt = ""
+            st.session_state.reply_target_index = None
+            st.session_state.reply_target_preview = ""
             st.rerun()
     with col_info:
         st.caption(f"💬 {len(st.session_state.chat_messages)} pesan")
+
+    if st.session_state.reply_target_preview:
+        reply_preview_text = _html_escape(str(st.session_state.reply_target_preview or ""))
+        st.markdown(
+            f'''
+            <div class="production-status-card">
+                <span class="production-pill ok">Reply</span>
+                <span>Membalas pesan sebelumnya</span>
+                <span>{reply_preview_text}</span>
+            </div>
+            ''',
+            unsafe_allow_html=True,
+        )
+        if st.button("Batal reply", use_container_width=True, key="cancel_reply_target"):
+            st.session_state.reply_target_index = None
+            st.session_state.reply_target_preview = ""
+            st.rerun()
 
     if st.session_state.chat_messages:
         transcript_parts = []
@@ -14097,7 +14120,20 @@ def render_public_page() -> None:
 
     for idx, msg in enumerate(st.session_state.chat_messages):
         with st.chat_message(msg["role"]):
+            if msg.get("reply_to_preview"):
+                st.caption(f"Reply ke: {msg.get('reply_to_preview', '')}")
             render_math_markdown(msg["content"])
+            if st.button(
+                "↩️ Reply",
+                key=f"reply_history_{idx}",
+                use_container_width=False,
+            ):
+                st.session_state.reply_target_index = idx
+                st.session_state.reply_target_preview = _compact_text_for_context(
+                    str(msg.get("content") or ""),
+                    max_chars=220,
+                )
+                st.rerun()
             if msg.get("role") == "assistant":
                 msg_meta = msg.get("meta") or {}
                 answer_pdf_download_button(
@@ -14124,11 +14160,25 @@ def render_public_page() -> None:
     if st.session_state.pending_prompt:
         st.session_state.pending_prompt = ""
 
+    reply_target_text = ""
+    reply_target_index = st.session_state.get("reply_target_index")
+    if isinstance(reply_target_index, int) and 0 <= reply_target_index < len(st.session_state.chat_messages):
+        reply_target_text = str(
+            (st.session_state.chat_messages[reply_target_index] or {}).get("content")
+            or ""
+        ).strip()
+
     if user_input:
+        raw_user_input = user_input
+        if reply_target_text:
+            user_input = (
+                f"Pertanyaan sebelumnya yang kamu balas:\n{reply_target_text}\n\n"
+                f"Pertanyaan baru:\n{raw_user_input}"
+            )
         note_user_activity_for_health_saver()
         trigger_question_quick_check_if_needed(
             source="web",
-            user_text=user_input,
+            user_text=raw_user_input,
         )
         maintenance_question_access_status: Dict[str, Any] = {}
         if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
@@ -14154,14 +14204,27 @@ def render_public_page() -> None:
         # Public chat: memory commands are disabled unless admin is logged in.
         # This prevents random visitors from changing global memory.
         with st.chat_message("user"):
-            render_math_markdown(user_input)
+            if reply_target_text:
+                st.caption("Membalas pesan sebelumnya")
+            render_math_markdown(raw_user_input)
 
         render_auto_scroll_script(
             target="latest",
             delay_ms=80,
         )
 
-        st.session_state.chat_messages.append({"role": "user", "content": user_input})
+        st.session_state.chat_messages.append(
+            {
+                "role": "user",
+                "content": raw_user_input,
+                "reply_to_index": reply_target_index if reply_target_text else None,
+                "reply_to_preview": (
+                    _compact_text_for_context(reply_target_text, max_chars=220)
+                    if reply_target_text
+                    else ""
+                ),
+            }
+        )
 
         if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
             if maintenance_question_access_status:
@@ -14836,8 +14899,20 @@ def render_public_page() -> None:
                 meta["frequent_question_cache_saved"] = True
 
         st.session_state.chat_messages.append(
-            {"role": "assistant", "content": answer, "meta": meta or {}}
+            {
+                "role": "assistant",
+                "content": answer,
+                "meta": meta or {},
+                "reply_to_index": reply_target_index if reply_target_text else None,
+                "reply_to_preview": (
+                    _compact_text_for_context(reply_target_text, max_chars=220)
+                    if reply_target_text
+                    else ""
+                ),
+            }
         )
+        st.session_state.reply_target_index = None
+        st.session_state.reply_target_preview = ""
 
         if (
             meta
