@@ -546,6 +546,7 @@ class TelegramService:
         self._token = ""
         self._config: Dict[str, Any] = {}
         self._lock = threading.Lock()
+        self._chat_recent_messages: Dict[str, Deque[Dict[str, str]]] = {}
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -583,7 +584,11 @@ class TelegramService:
             raise RuntimeError(str(data))
         return data
 
-    def _build_answer(self, text: str) -> tuple[str, Dict[str, Any]]:
+    def _build_answer(
+        self,
+        text: str,
+        recent_messages: Optional[List[Dict[str, str]]] = None,
+    ) -> tuple[str, Dict[str, Any]]:
         answer, meta = safe_generate_power_answer(
             api_url=str(self._config.get("slashai_api_url") or self._config.get("api_url") or ""),
             api_key=str(self._config.get("slashai_api_key") or self._config.get("api_key") or ""),
@@ -591,7 +596,7 @@ class TelegramService:
             system_prompt=str(self._config.get("persona_text") or self._config.get("system_prompt") or ""),
             user_text=text,
             memory_text="",
-            recent_messages=[],
+            recent_messages=recent_messages or [],
             fallback_models=list(self._config.get("fallback_models") or []),
             expensive_fallback_models=list(self._config.get("expensive_fallback_models") or []),
             allow_expensive_fallback=bool(self._config.get("allow_expensive_fallback", True)),
@@ -782,8 +787,11 @@ class TelegramService:
                     self._last_error = str(exc)[:1200]
             return
 
+        chat_key = str(chat_id)
+        recent_messages = list(self._chat_recent_messages.get(chat_key) or [])
+
         try:
-            answer, _meta = self._build_answer(text)
+            answer, _meta = self._build_answer(text, recent_messages=recent_messages)
             if not answer:
                 answer, _meta = build_telegram_local_safe_fallback_answer(text, failure_reason="empty_answer")
             self._telegram_request(
@@ -795,6 +803,9 @@ class TelegramService:
                 timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
             )
             with self._lock:
+                chat_history = self._chat_recent_messages.setdefault(chat_key, deque(maxlen=12))
+                chat_history.append({"role": "user", "content": text})
+                chat_history.append({"role": "assistant", "content": answer})
                 self._processed += 1
         except Exception as exc:
             fallback_answer, _ = build_telegram_local_safe_fallback_answer(text, failure_reason=str(exc))
@@ -812,6 +823,9 @@ class TelegramService:
                     self._last_error = str(send_exc)[:1200]
             else:
                 with self._lock:
+                    chat_history = self._chat_recent_messages.setdefault(chat_key, deque(maxlen=12))
+                    chat_history.append({"role": "user", "content": text})
+                    chat_history.append({"role": "assistant", "content": fallback_answer})
                     self._processed += 1
                     self._last_error = str(exc)[:1200]
 
