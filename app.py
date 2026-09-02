@@ -14233,29 +14233,6 @@ def render_public_page() -> None:
                     key_prefix=f"history_feedback_{idx}",
                 )
 
-    if st.session_state.reply_composer_prefill:
-        st.session_state.chat_input = st.session_state.reply_composer_prefill
-        st.session_state.reply_composer_prefill = ""
-
-    composer_label = "Tulis pertanyaan panjang, tambahkan konteks, atau lanjutkan reply di sini"
-    st.text_area(
-        composer_label,
-        key="chat_input",
-        height=180,
-        placeholder="Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode...",
-        label_visibility="collapsed",
-    )
-    send_col, info_col = st.columns([1, 2])
-    with send_col:
-        st.button(
-            "Kirim",
-            use_container_width=True,
-            key="send_public_chat",
-            on_click=submit_public_chat,
-        )
-    with info_col:
-        st.caption("Bisa tulis panjang. Cocok untuk reply dengan quote dan konteks lengkap.")
-
     user_input = st.session_state.pending_prompt
     if st.session_state.pending_prompt:
         st.session_state.pending_prompt = ""
@@ -15022,6 +14999,30 @@ def render_public_page() -> None:
         ):
             with st.expander("Debug response admin"):
                 st.json(meta)
+
+    # Composer berada setelah riwayat dan jawaban terbaru agar urutan chat tidak membingungkan.
+    if st.session_state.reply_composer_prefill:
+        st.session_state.chat_input = st.session_state.reply_composer_prefill
+        st.session_state.reply_composer_prefill = ""
+
+    composer_label = "Tulis pertanyaan panjang, tambahkan konteks, atau lanjutkan reply di sini"
+    st.text_area(
+        composer_label,
+        key="chat_input",
+        height=180,
+        placeholder="Tulis pertanyaan, minta ringkasan, analisis dokumen, atau perbaiki kode...",
+        label_visibility="collapsed",
+    )
+    send_col, info_col = st.columns([1, 2])
+    with send_col:
+        st.button(
+            "Kirim",
+            use_container_width=True,
+            key="send_public_chat",
+            on_click=submit_public_chat,
+        )
+    with info_col:
+        st.caption("Bisa tulis panjang. Cocok untuk reply dengan quote dan konteks lengkap.")
 
     # Ruang aman terakhir agar input floating tidak menutupi pesan terakhir, termasuk pesan yang baru dibuat.
     st.markdown(
