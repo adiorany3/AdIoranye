@@ -3014,9 +3014,7 @@ try:
     enrich_v2_from_legacy_kb(power_db_path)
     ensure_kb_sources_file(
         kb_scraper_sources_file,
-        json.loads(DEFAULT_RELEVANT_KB_SOURCES_JSON)["sources"]
-        if "DEFAULT_RELEVANT_KB_SOURCES_JSON" in globals()
-        else [],
+        load_kb_scraper_sources("kb_sources.example.json"),
     )
 except Exception:
     pass
@@ -10258,8 +10256,7 @@ def register_model_blocks_from_error_text(
 
     candidate_models.extend(detected_models)
 
-    reason,
-    seconds = classify_runtime_error_detail(detail)
+    reason, seconds = classify_runtime_error_detail(detail)
 
     for model_name in unique_models(candidate_models):
         if model_name and model_name in detail:
@@ -15744,7 +15741,7 @@ def render_power_features_admin_panel() -> None:
                         ):
                             created = ensure_kb_sources_file(
                                 kb_scraper_sources_file,
-                                json.loads(DEFAULT_RELEVANT_KB_SOURCES_JSON)["sources"],
+                                load_kb_scraper_sources("kb_sources.example.json"),
                             )
                             if created:
                                 st.success("kb_sources.json dibuat dari sumber relevan default.")

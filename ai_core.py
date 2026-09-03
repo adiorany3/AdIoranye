@@ -38,6 +38,10 @@ DEFAULT_EXPENSIVE_FALLBACK_MODELS = ["tamandata"]
 DEFAULT_FALLBACK_MODELS = ["tamandata"]
 
 
+def _unique_ordered(items: List[str]) -> List[str]:
+    return list(dict.fromkeys(items))
+
+
 def _tier_from_price(input_price: int, output_price: int) -> str:
     """Views a model as cheap/medium/expensive using a simple price-based heuristic."""
     input_price = int(input_price or 0)
@@ -1582,8 +1586,7 @@ def call_api_stream_once(
     for line in response.iter_lines(
         decode_unicode=True,
     ):
-        done,
-        chunk = _parse_stream_line(line)
+        done, chunk = _parse_stream_line(line)
 
         if done:
             break
@@ -1710,8 +1713,7 @@ class StreamingAnswer:
             self.meta["stream_error"] = str(exc)[:900]
             self.meta["realtime_streaming_used"] = False
 
-            fallback_answer,
-            fallback_meta = generate_answer(
+            fallback_answer, fallback_meta = generate_answer(
                 api_url=self.api_url,
                 api_key=self.api_key,
                 model=self.model,

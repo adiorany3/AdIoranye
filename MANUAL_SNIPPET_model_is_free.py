@@ -1,3 +1,6 @@
+from ai_core import MODEL_PRICE_IDR
+
+
 def model_is_free(model: str) -> bool:
     """True hanya untuk model yang benar-benar Rp0/Rp0.
 
