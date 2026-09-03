@@ -3014,7 +3014,7 @@ try:
     enrich_v2_from_legacy_kb(power_db_path)
     ensure_kb_sources_file(
         kb_scraper_sources_file,
-        load_kb_scraper_sources("kb_sources.example.json"),
+        load_kb_scraper_sources(KB_DEFAULT_SOURCES_FILE),
     )
 except Exception:
     pass
@@ -15741,7 +15741,7 @@ def render_power_features_admin_panel() -> None:
                         ):
                             created = ensure_kb_sources_file(
                                 kb_scraper_sources_file,
-                                load_kb_scraper_sources("kb_sources.example.json"),
+                                load_kb_scraper_sources(KB_DEFAULT_SOURCES_FILE),
                             )
                             if created:
                                 st.success("kb_sources.json dibuat dari sumber relevan default.")
