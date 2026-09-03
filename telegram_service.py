@@ -544,6 +544,7 @@ class TelegramService:
         self._model_health_active_count = 0
         self._poll_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._startup_notification_sent = False
         self._offset = 0
         self._token = ""
         self._config: Dict[str, Any] = {}
@@ -806,6 +807,23 @@ class TelegramService:
             timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
         )
 
+    def _notify_polling_started_once(self) -> None:
+        with self._lock:
+            if self._startup_notification_sent:
+                return
+            self._startup_notification_sent = True
+            worker_id = self._worker_id
+
+        for chat_id in self._admin_chat_ids():
+            try:
+                self._send_text(
+                    chat_id,
+                    f"BOT TELEGRAM AKTIF\n\nWorker: {worker_id}\nStatus: polling berjalan",
+                )
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = str(exc)[:1200]
+
     def _handle_reminder_command(self, chat_id: Any, text: str) -> Optional[str]:
         command = str(text or "").strip().lower().split(maxsplit=1)[0]
         if command in {"/ingat", "/reminder"}:
@@ -938,6 +956,7 @@ class TelegramService:
                     payload,
                     timeout=timeout_seconds + 10,
                 )
+                self._notify_polling_started_once()
                 for item in data.get("result") or []:
                     update_id = int(item.get("update_id") or 0)
                     self._offset = max(self._offset, update_id + 1)
@@ -978,6 +997,7 @@ class TelegramService:
             self._config = dict(config)
             self._token = token
             self._stop_event.clear()
+            self._startup_notification_sent = False
             self._running = True
             self._started_at = datetime.utcnow().isoformat()
             self._worker_id = f"local-{int(time.time())}"
