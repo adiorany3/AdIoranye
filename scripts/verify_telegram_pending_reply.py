@@ -16,7 +16,7 @@ def fake_send(chat_id: object, text: str, reply_to: object = None) -> int:
 
 service._send_text = fake_send
 service._delete_message = lambda chat_id, message_id: events.append(("delete", message_id))
-service._build_answer = lambda text, recent_messages=None: ("Jawaban selesai.", {})
+service._build_answer = lambda text, chat_id, recent_messages=None: ("Jawaban selesai.", {})
 service._handle_message({"message_id": 12, "chat": {"id": 34}, "text": "Pertanyaan"})
 
 assert events == [

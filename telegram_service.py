@@ -530,6 +530,23 @@ def safe_generate_power_answer(**kwargs: Any) -> tuple[str, Dict[str, Any]]:
         return fallback_answer, fallback_meta
 
 
+def build_telegram_local_fast_answer(user_text: str) -> tuple[str, Dict[str, Any]] | None:
+    """Answer only exact low-risk social messages without model latency."""
+    normalized = telegram_normalize_short_greeting_text(user_text)
+    if normalized in {
+        "halo", "hai", "hi", "hello", "pagi", "selamat pagi", "siang",
+        "selamat siang", "sore", "selamat sore", "malam", "selamat malam",
+    }:
+        return "Halo juga. Kirim pertanyaan Anda, saya bantu jawab singkat dan jelas.", {
+            "telegram_local_fast_path": "greeting",
+        }
+    if normalized in {"makasih", "terima kasih", "thanks", "thank you", "thx"}:
+        return "Sama-sama. Jika masih ada yang ingin ditanyakan, lanjutkan saja.", {
+            "telegram_local_fast_path": "thanks",
+        }
+    return None
+
+
 class TelegramService:
     def __init__(self) -> None:
         self._running = False
@@ -591,15 +608,19 @@ class TelegramService:
     def _build_answer(
         self,
         text: str,
+        chat_id: Any,
         recent_messages: Optional[List[Dict[str, str]]] = None,
     ) -> tuple[str, Dict[str, Any]]:
+        local_answer = build_telegram_local_fast_answer(text)
+        if local_answer is not None:
+            return local_answer
+
         answer, meta = safe_generate_power_answer(
             api_url=str(self._config.get("slashai_api_url") or self._config.get("api_url") or ""),
             api_key=str(self._config.get("slashai_api_key") or self._config.get("api_key") or ""),
             model=str(self._config.get("slashai_model") or self._config.get("model") or "tamandata"),
             system_prompt=str(self._config.get("persona_text") or self._config.get("system_prompt") or ""),
             user_text=text,
-            memory_text="",
             recent_messages=recent_messages or [],
             fallback_models=list(self._config.get("fallback_models") or []),
             expensive_fallback_models=list(self._config.get("expensive_fallback_models") or []),
@@ -607,9 +628,29 @@ class TelegramService:
             max_expensive_models=telegram_safe_int(self._config.get("max_expensive_models"), 1),
             temperature=float(self._config.get("temperature") or 0.3),
             max_completion_tokens=telegram_safe_int(self._config.get("max_completion_tokens"), 1200),
-            timeout=telegram_safe_int(self._config.get("timeout"), 90),
+            timeout=telegram_safe_int(self._config.get("timeout"), 60),
+            smart_model_router=bool(self._config.get("smart_model_router", True)),
             max_smart_models=telegram_safe_int(self._config.get("max_smart_models"), 1),
             return_to_primary=bool(self._config.get("return_to_primary", False)),
+            user_id=f"telegram:{chat_id}",
+            channel="telegram",
+            enable_rag=bool(self._config.get("power_rag_enabled", True)),
+            rag_top_k=telegram_safe_int(self._config.get("power_rag_top_k"), 5),
+            enable_persistent_memory=bool(self._config.get("power_persistent_memory_enabled", True)),
+            enable_prompt_templates=bool(self._config.get("power_prompt_templates_enabled", True)),
+            enable_self_verification=bool(self._config.get("power_self_verification_enabled", False)),
+            enable_response_cache=bool(self._config.get("power_response_cache_enabled", True)),
+            response_cache_ttl_seconds=telegram_safe_int(self._config.get("power_response_cache_ttl_seconds"), 1800),
+            quality_control_enabled=bool(self._config.get("power_quality_control_enabled", True)),
+            quality_verifier_enabled=bool(self._config.get("power_quality_verifier_enabled", True)),
+            quality_verifier_model=str(self._config.get("power_quality_verifier_model") or ""),
+            quality_min_score=float(self._config.get("power_quality_min_score") or 0.72),
+            answer_mode=str(self._config.get("power_default_answer_mode") or "auto"),
+            disable_rag_for_casual=bool(self._config.get("power_disable_rag_for_casual", True)),
+            semantic_cache_enabled=bool(self._config.get("power_semantic_cache_enabled", True)),
+            semantic_cache_threshold=float(self._config.get("power_semantic_cache_threshold") or 0.78),
+            semantic_cache_ttl_seconds=telegram_safe_int(self._config.get("power_semantic_cache_ttl_seconds"), 86400),
+            latency_budget_enabled=bool(self._config.get("power_latency_budget_enabled", True)),
         )
         return str(answer or "").strip(), meta if isinstance(meta, dict) else {}
 
@@ -940,7 +981,11 @@ class TelegramService:
                 self._last_error = str(exc)[:1200]
 
         try:
-            answer, _meta = self._build_answer(text, recent_messages=recent_messages)
+            answer, _meta = self._build_answer(
+                text,
+                chat_id=chat_id,
+                recent_messages=recent_messages,
+            )
             if not answer:
                 answer, _meta = build_telegram_local_safe_fallback_answer(text, failure_reason="empty_answer")
             self._delete_message_safely(chat_id, pending_message_id)
