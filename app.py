@@ -187,6 +187,14 @@ def safe_compare(left: Any, right: Any) -> bool:
     return hmac.compare_digest(str(left or ""), str(right or ""))
 
 
+def admin_credentials_configured(username: Any, password: Any) -> bool:
+    username_text = str(username or "").strip()
+    password_text = str(password or "").strip()
+    return bool(username_text and password_text) and not (
+        username_text.lower() == "admin" and password_text.lower() == "admin"
+    )
+
+
 def load_model_performance_stats_from_file() -> Dict[str, Dict[str, Any]]:
     """Load performance stats early, before init_state is executed."""
     path = str(globals().get("model_performance_state_file", ".adioranye_model_performance.json"))
@@ -251,6 +259,31 @@ def default_maintenance_state() -> Dict[str, Any]:
     }
 
 
+def maintenance_read_error_state() -> Dict[str, Any]:
+    return {
+        **default_maintenance_state(),
+        "locked": True,
+        "status": "locked",
+        "reason": "maintenance_state_read_error",
+        "updated_at": _maintenance_now_text(),
+        "updated_by": "system",
+        "channel": "maintenance-state",
+    }
+
+
+def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
+    tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 def read_maintenance_lock_state() -> Dict[str, Any]:
     try:
         if not maintenance_lock_file or not os.path.exists(maintenance_lock_file):
@@ -283,20 +316,15 @@ def read_maintenance_lock_state() -> Dict[str, Any]:
         state["status"] = "locked" if state.get("locked") else "unlocked"
         return state
     except Exception:
-        return default_maintenance_state()
+        return maintenance_read_error_state()
 
 def write_maintenance_lock_state(state: Dict[str, Any]) -> None:
-    try:
-        payload = default_maintenance_state()
-        payload.update(state or {})
-        payload["locked"] = bool(payload.get("locked"))
-        payload["status"] = "locked" if payload.get("locked") else "unlocked"
-        payload["updated_at"] = payload.get("updated_at") or _maintenance_now_text()
-
-        with open(maintenance_lock_file, "w", encoding="utf-8") as file:
-            json.dump(payload, file, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    payload = default_maintenance_state()
+    payload.update(state or {})
+    payload["locked"] = bool(payload.get("locked"))
+    payload["status"] = "locked" if payload.get("locked") else "unlocked"
+    payload["updated_at"] = payload.get("updated_at") or _maintenance_now_text()
+    _atomic_write_json(maintenance_lock_file, payload)
 
 
 def _auto_relock_when_due(expected_until_ts: float) -> None:
@@ -2580,8 +2608,8 @@ github_update_max_items = str(get_secret("GITHUB_UPDATE_MAX_ITEMS", "1") or "1")
 allow_unrestricted_model_commands = parse_bool(
     get_secret("ALLOW_UNRESTRICTED_MODEL_COMMANDS", False), default=False
 )
-admin_username = str(get_secret("ADMIN_USERNAME", "admin"))
-admin_password = str(get_secret("ADMIN_PASSWORD", "Admin"))
+admin_username = str(get_secret("ADMIN_USERNAME", "") or "").strip()
+admin_password = str(get_secret("ADMIN_PASSWORD", "") or "").strip()
 smart_model_router_default = parse_bool(
     get_secret("SMART_MODEL_ROUTER", True), default=True
 )
@@ -12607,6 +12635,19 @@ def render_admin_login() -> None:
         unsafe_allow_html=True,
     )
 
+    if not admin_credentials_configured(admin_username, admin_password):
+        st.error("Login admin dinonaktifkan. Isi ADMIN_USERNAME dan ADMIN_PASSWORD yang bukan nilai default, lalu reboot app.")
+        return
+
+    failed_attempts = int(st.session_state.get("admin_failed_attempts", 0) or 0)
+    locked_until = float(st.session_state.get("admin_login_locked_until", 0) or 0)
+    if failed_attempts >= 5 and time.time() < locked_until:
+        st.error(f"Terlalu banyak percobaan. Coba lagi dalam {max(1, int(locked_until - time.time()))} detik.")
+        return
+    if locked_until and time.time() >= locked_until:
+        st.session_state.admin_failed_attempts = 0
+        st.session_state.admin_login_locked_until = 0.0
+
     with st.form(
         "admin_login_form",
         clear_on_submit=False,
@@ -12643,11 +12684,19 @@ def render_admin_login() -> None:
 
         if valid_username and valid_password:
             st.session_state.admin_authenticated = True
+            st.session_state.admin_failed_attempts = 0
+            st.session_state.admin_login_locked_until = 0.0
             st.success("Login berhasil. Membuka panel admin...")
             st.rerun()
         else:
+            failed_attempts = int(st.session_state.get("admin_failed_attempts", 0) or 0) + 1
             st.session_state.admin_authenticated = False
-            st.error("Username atau password admin salah.")
+            st.session_state.admin_failed_attempts = failed_attempts
+            if failed_attempts >= 5:
+                st.session_state.admin_login_locked_until = time.time() + 60
+                st.error("Terlalu banyak percobaan. Login dikunci selama 60 detik.")
+            else:
+                st.error("Username atau password admin salah.")
 
     st.caption(
         "Jika lupa password, ubah ADMIN_USERNAME dan ADMIN_PASSWORD di Streamlit Secrets, lalu reboot app."

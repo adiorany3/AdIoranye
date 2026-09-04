@@ -3613,6 +3613,21 @@ def generate_power_answer(
                 meta.setdefault("kb_source_display_policy", "semantic_cache")
                 meta.setdefault("casual_rag_skipped", bool(casual_rag_skipped))
                 meta.setdefault("query_plan", query_plan.to_dict() if hasattr(query_plan, "to_dict") else {})
+                meta["usage"] = {}
+                meta["latency_seconds"] = 0
+                try:
+                    meta["power_interaction_id"] = store.log_interaction(
+                        user_id=user_id,
+                        channel=channel,
+                        intent=intent,
+                        model=str(meta.get("active_model_final") or selected_model),
+                        question=user_text,
+                        answer=answer,
+                        meta=meta,
+                        success=True,
+                    )
+                except Exception:
+                    pass
                 return answer, meta
 
     started = time.time()

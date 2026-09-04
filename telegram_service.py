@@ -698,9 +698,19 @@ class TelegramService:
                 data = json.load(file)
             if isinstance(data, dict):
                 state.update(data)
+            else:
+                raise ValueError("maintenance state must be a JSON object")
         except Exception as exc:
             with self._lock:
                 self._last_error = str(exc)[:1200]
+            state.update({
+                "locked": True,
+                "status": "locked",
+                "reason": "maintenance_state_read_error",
+                "updated_at": datetime.now(WIB_TZ).strftime("%Y-%m-%d %H:%M:%S WIB"),
+                "updated_by": "system",
+                "channel": "maintenance-state",
+            })
 
         state["locked"] = bool(state.get("locked"))
         if (
@@ -723,8 +733,17 @@ class TelegramService:
         return state
 
     def _write_maintenance_state_payload(self, state: Dict[str, Any]) -> None:
-        with open(self._maintenance_lock_file(), "w", encoding="utf-8") as file:
-            json.dump(state, file, ensure_ascii=False, indent=2)
+        path = self._maintenance_lock_file()
+        tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as file:
+                json.dump(state, file, ensure_ascii=False, indent=2)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(tmp_path, path)
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
     def _write_maintenance_state(self, locked: bool, updated_by: str, reason: str, unlock_minutes: int | None = None) -> Dict[str, Any]:
         state = self._read_maintenance_state()
@@ -927,6 +946,7 @@ class TelegramService:
                     item["chat_id"],
                     f"PENGINGAT #{item['id']}\n\n{item['text']}",
                 )
+                self._reminders.delete(item["chat_id"], int(item["id"]))
             except Exception as exc:
                 with self._lock:
                     self._last_error = str(exc)[:1200]

@@ -399,13 +399,13 @@ _RESPONSE_CACHE_MAX_ITEMS = 60
 _RESPONSE_CACHE_TTL_SECONDS = 300
 
 
-def _build_http_session(transport_retries: int = 3) -> requests.Session:
+def _build_http_session(transport_retries: int = 3, status_retries: int = 3) -> requests.Session:
     session = requests.Session()
     retry = Retry(
-        total=3,
+        total=max(transport_retries, status_retries),
         connect=transport_retries,
         read=transport_retries,
-        status=3,
+        status=status_retries,
         allowed_methods=None,
         status_forcelist=(429, 500, 502, 503, 504),
         backoff_factor=0.5,
@@ -419,7 +419,7 @@ def _build_http_session(transport_retries: int = 3) -> requests.Session:
 
 _HTTP_SESSION = _build_http_session()
 # ponytail: call_api_once owns three transport attempts; add jitter if synchronized failures appear.
-_CALL_API_SESSION = _build_http_session(transport_retries=0)
+_CALL_API_SESSION = _build_http_session(transport_retries=0, status_retries=0)
 
 
 class ContentFilterError(RuntimeError):

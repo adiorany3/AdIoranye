@@ -71,14 +71,12 @@ class ReminderStore:
     def due(self, now: Optional[datetime] = None) -> List[Dict[str, Any]]:
         current = now or datetime.now(WIB)
         with self._lock:
-            reminders = _load(self.path)
-            ready, pending = [], []
-            for item in reminders:
+            ready = []
+            for item in _load(self.path):
                 try:
                     is_due = datetime.fromisoformat(str(item["due_at"])) <= current
                 except (KeyError, ValueError, TypeError):
                     is_due = False
-                (ready if is_due else pending).append(item)
-            if ready:
-                _save(self.path, pending)
+                if is_due:
+                    ready.append(item)
             return ready
