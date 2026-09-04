@@ -11156,6 +11156,9 @@ def build_telegram_config_payload(
         "timeout": 60,
         "drop_pending_updates": drop_pending_updates,
         "send_processing_message": send_processing_message,
+        "telegram_message_workers": 3,
+        "telegram_send_timeout_seconds": 20,
+        "telegram_delete_timeout_seconds": 5,
         # File Telegram memaksa plain text, key ini tetap dikirim untuk kompatibilitas.
         "telegram_parse_mode": "",
         "lock_file": telegram_lock_file,

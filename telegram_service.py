@@ -567,6 +567,8 @@ class TelegramService:
         self._config: Dict[str, Any] = {}
         self._lock = threading.Lock()
         self._chat_recent_messages: Dict[str, Deque[Dict[str, str]]] = {}
+        self._chat_locks: Dict[str, threading.Lock] = {}
+        self._message_executor: ThreadPoolExecutor | None = None
         self._reminders = ReminderStore()
 
     def status(self) -> Dict[str, Any]:
@@ -874,7 +876,7 @@ class TelegramService:
         self._telegram_request(
             "deleteMessage",
             {"chat_id": chat_id, "message_id": message_id},
-            timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
+            timeout=telegram_safe_int(self._config.get("telegram_delete_timeout_seconds"), 5),
         )
 
     def _delete_message_safely(self, chat_id: Any, message_id: Any) -> None:
@@ -1011,9 +1013,9 @@ class TelegramService:
             )
             if not answer:
                 answer, _meta = build_telegram_local_safe_fallback_answer(text, failure_reason="empty_answer")
+            self._send_text(chat_id, answer, source_message_id)
             self._delete_message_safely(chat_id, pending_message_id)
             pending_message_id = None
-            self._send_text(chat_id, answer, source_message_id)
             with self._lock:
                 chat_history = self._chat_recent_messages.setdefault(chat_key, deque(maxlen=12))
                 chat_history.append({"role": "user", "content": text})
@@ -1034,6 +1036,23 @@ class TelegramService:
                     chat_history.append({"role": "assistant", "content": fallback_answer})
                     self._processed += 1
                     self._last_error = str(exc)[:1200]
+
+    def _handle_message_serialized(self, message: Dict[str, Any]) -> None:
+        chat_id = str((message.get("chat") or {}).get("id") or "").strip()
+        if not chat_id:
+            return
+        with self._lock:
+            chat_lock = self._chat_locks.setdefault(chat_id, threading.Lock())
+        with chat_lock:
+            self._handle_message(message)
+
+    def _submit_message(self, message: Dict[str, Any]) -> None:
+        with self._lock:
+            executor = self._message_executor
+        if executor is None:
+            self._handle_message_serialized(message)
+            return
+        executor.submit(self._handle_message_serialized, message)
 
     def _poll_loop(self) -> None:
         timeout_seconds = telegram_safe_int(self._config.get("telegram_poll_timeout_seconds"), 30)
@@ -1056,7 +1075,7 @@ class TelegramService:
                     self._offset = max(self._offset, update_id + 1)
                     message = dict(item.get("message") or {})
                     message["update_id"] = update_id
-                    self._handle_message(message)
+                    self._submit_message(message)
             except Exception as exc:
                 with self._lock:
                     self._last_error = str(exc)[:1200]
@@ -1098,6 +1117,11 @@ class TelegramService:
             self._runtime_primary_model = str(config.get("slashai_model") or config.get("model") or "")
             self._model_health_checked_at = datetime.utcnow().isoformat()
             self._model_health_active_count = len(config.get("active_cheap_models") or []) + len(config.get("active_expensive_models") or [])
+            message_workers = max(1, min(telegram_safe_int(config.get("telegram_message_workers"), 3), 6))
+            self._message_executor = ThreadPoolExecutor(
+                max_workers=message_workers,
+                thread_name_prefix="adioranye-telegram-message",
+            )
             self._last_error = ""
             self._last_update = "Telegram worker mulai polling."
             self._poll_thread = threading.Thread(target=self._poll_loop, name="adioranye-telegram-poll", daemon=True)
@@ -1106,13 +1130,19 @@ class TelegramService:
 
     def stop(self) -> None:
         thread = None
+        executor = None
         with self._lock:
             self._running = False
             self._stop_event.set()
             thread = self._poll_thread
+            executor = self._message_executor
+            self._message_executor = None
             self._last_update = "Telegram worker dihentikan."
         if thread and thread.is_alive():
             thread.join(timeout=2)
+        if executor is not None:
+            # Update sudah diakui lewat offset; tuntaskan antrean agar pesan tidak hilang.
+            executor.shutdown(wait=False)
 
     def diagnose(self, config: Dict[str, Any] | None = None) -> Dict[str, Any]:
         config = config or {}
