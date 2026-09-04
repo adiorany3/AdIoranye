@@ -8,6 +8,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import ai_core
+import power_features
 from power_features import PowerStore, build_power_context, generate_power_answer
 
 
@@ -77,4 +78,49 @@ with tempfile.TemporaryDirectory() as tmp:
     assert logged and logged[0] == 0 and logged[1] == 0 and logged[2] == 0
     assert "semantic_cache_hit" in logged[3]
 
-print("Retry, cache scope, logging cache hit, dan reuse hasil RAG terverifikasi.")
+with tempfile.TemporaryDirectory() as tmp:
+    store = PowerStore(str(Path(tmp) / "power.db"))
+    rag_calls = [0]
+    live_calls = [0]
+
+    def count_rag(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        rag_calls[0] += 1
+        return []
+
+    def reject_live(*args: object, **kwargs: object) -> object:
+        live_calls[0] += 1
+        raise AssertionError("Live search kedua tidak boleh berjalan.")
+
+    store.search_documents = count_rag  # type: ignore[method-assign]
+    with (
+        patch.object(power_features, "tavily_live_search", side_effect=reject_live),
+        patch.object(
+            ai_core,
+            "generate_answer",
+            return_value=("Jawaban dari konteks live.", {"usage": {}}),
+        ),
+    ):
+        answer, meta = generate_power_answer(
+            api_url="https://example.invalid",
+            api_key="test",
+            model="test-model",
+            system_prompt="test",
+            user_text="cek harga terbaru hari ini",
+            base_memory_text="Sumber live sudah tersedia.",
+            store=store,
+            enable_rag=False,
+            allow_policy_force_rag=False,
+            live_context_supplied=True,
+            enable_persistent_memory=False,
+            enable_response_cache=False,
+            semantic_cache_enabled=False,
+            anti_hallucination_enabled=False,
+            quality_control_enabled=False,
+            live_web_fallback_enabled=True,
+        )
+    assert answer == "Jawaban dari konteks live."
+    assert rag_calls[0] == 0
+    assert live_calls[0] == 0
+    assert (meta.get("live_web_fallback_decision") or {}).get("reason") == "context_already_supplied"
+
+print("Retry, cache, reuse RAG, policy KB, dan deduplikasi live terverifikasi.")

@@ -3252,6 +3252,8 @@ def generate_power_answer(
     live_web_fallback_ttl_hours: int = 24,
     live_web_fallback_force_for_current: bool = True,
     live_web_fallback_topic: str = "auto",
+    allow_policy_force_rag: bool = True,
+    live_context_supplied: bool = False,
     **compat_kwargs: Any,
 ) -> Tuple[str, Dict[str, Any]]:
     store = store or get_power_store()
@@ -3269,9 +3271,9 @@ def generate_power_answer(
     answer_mode_policy = mode_policy(effective_answer_mode)
     prefer_general_knowledge = bool(answer_mode_policy.get("prefer_general_knowledge"))
     kb_bias = str(answer_mode_policy.get("kb_bias") or "auto").strip().lower()
-    if bool(answer_mode_policy.get("force_rag")):
+    if allow_policy_force_rag and bool(answer_mode_policy.get("force_rag")):
         enable_rag = True
-    if bool(answer_mode_policy.get("strict_rag")):
+    if allow_policy_force_rag and bool(answer_mode_policy.get("strict_rag")):
         strict_rag_mode = True
         anti_hallucination_auto_strict = True
     if int(answer_mode_policy.get("min_sources") or 0) > 0:
@@ -3387,9 +3389,16 @@ def generate_power_answer(
 
 
     live_search_result = None
-    live_search_decision: Dict[str, Any] = {"use": False, "reason": "disabled"}
+    live_search_decision: Dict[str, Any] = {
+        "use": False,
+        "reason": "context_already_supplied" if live_context_supplied else "disabled",
+    }
     live_search_save_meta: Dict[str, Any] = {}
-    if bool(live_web_fallback_enabled) and str(live_web_fallback_provider or "tavily").lower() == "tavily":
+    if (
+        not live_context_supplied
+        and bool(live_web_fallback_enabled)
+        and str(live_web_fallback_provider or "tavily").lower() == "tavily"
+    ):
         try:
             live_min_sources = max(1, int(live_web_fallback_min_sources or 1))
             live_search_decision = should_trigger_live_fallback(

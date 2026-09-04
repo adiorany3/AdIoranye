@@ -6272,6 +6272,11 @@ def _question_profile_from_text(
     words = re.findall(r"\w+", lowered)
     word_count = len(words)
     live_profile = detect_auto_live_scraping_need(text)
+    intent = classify_intent_text(text)
+    source_worthy_intents = {
+        "research", "academic", "health", "livestock",
+        "critical_current", "document_question",
+    }
 
     deep_markers = [
         "analisis mendalam",
@@ -6344,6 +6349,8 @@ def _question_profile_from_text(
         or len(code_hits) >= 2
     ):
         profile = "deep"
+    elif intent in source_worthy_intents:
+        profile = "balanced"
     elif word_count <= 18 and casual_hits and not code_hits:
         profile = "fast"
     elif word_count <= 60 and not deep_hits and not code_hits:
@@ -6353,6 +6360,10 @@ def _question_profile_from_text(
 
     return {
         "profile": profile,
+        "intent": intent,
+        "kb_needed": bool(
+            intent in source_worthy_intents and not live_profile.get("needed")
+        ),
         "word_count": word_count,
         "live": live_profile,
         "deep_hits": deep_hits,
@@ -10793,10 +10804,19 @@ def build_current_info_memory_context(
     """Buat memory context khusus untuk pertanyaan info terkini."""
     if not runtime_options.get("current_info_mode"):
         base_memory = build_memory_text(limit=12)
-        kb_v2_context, kb_v2_meta = build_kb_v2_context_for_prompt(
-            user_query,
-            limit=int(kb_v2_retrieval_limit or 5),
-        )
+        if runtime_options.get("enable_rag"):
+            kb_v2_context, kb_v2_meta = build_kb_v2_context_for_prompt(
+                user_query,
+                limit=int(kb_v2_retrieval_limit or 5),
+            )
+        else:
+            kb_v2_context = ""
+            kb_v2_meta = {
+                "kb_v2_used": False,
+                "kb_v2_sources": [],
+                "kb_v2_error": "",
+                "kb_v2_skip_reason": "runtime_rag_disabled",
+            }
 
         merged_sections = [
             section
@@ -14787,10 +14807,12 @@ def render_public_chat() -> None:
                         ),
                         quality_verifier_model=power_quality_verifier_model,
                         quality_min_score=float(power_quality_min_score),
-                        answer_mode=(
-                            "current"
-                            if runtime_options.get("current_info_mode")
-                            else power_default_answer_mode
+                        answer_mode=power_default_answer_mode,
+                        allow_policy_force_rag=not bool(
+                            runtime_options.get("current_info_mode")
+                        ),
+                        live_context_supplied=bool(
+                            current_info_meta.get("live_context_used")
                         ),
                         append_quality_footer=bool(power_quality_append_footer),
                         hide_kb_sources_for_casual=bool(
