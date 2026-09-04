@@ -3779,7 +3779,7 @@ def generate_power_answer(
                 should_verify_quality = bool(quality_verifier_enabled) and (
                     bool(answer_mode_policy.get("verifier")) or bool(getattr(quality_result, "needs_verification", False))
                 ) and float(getattr(quality_result, "score", 1.0) or 1.0) < float(quality_min_score or 0.72)
-                if not should_verify_quality:
+                if bool(quality_verifier_enabled) and not should_verify_quality:
                     claim_risk = meta.get("hallucination_claim_risk") or {}
                     if int(claim_risk.get("claim_like_count") or 0) > 0 or float(claim_risk.get("risk_score") or 0.0) >= 0.2:
                         should_verify_quality = True

@@ -14415,10 +14415,7 @@ def render_public_chat() -> None:
                 f"Pertanyaan baru:\n{raw_user_input}"
             )
         note_user_activity_for_health_saver()
-        trigger_question_quick_check_if_needed(
-            source="web",
-            user_text=raw_user_input,
-        )
+        # Health refresh berkala tetap berjalan di luar jalur kritis pesan.
         maintenance_question_access_status: Dict[str, Any] = {}
         if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
             current_access = get_current_maintenance_access_key_status()

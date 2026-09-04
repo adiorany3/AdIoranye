@@ -859,6 +859,8 @@ class TelegramService:
         )
 
     def _delete_message_safely(self, chat_id: Any, message_id: Any) -> None:
+        if not message_id:
+            return
         try:
             self._delete_message(chat_id, message_id)
         except Exception as exc:
@@ -974,11 +976,12 @@ class TelegramService:
         chat_key = str(chat_id)
         recent_messages = list(self._chat_recent_messages.get(chat_key) or [])
         pending_message_id = None
-        try:
-            pending_message_id = self._send_text(chat_id, "OK siap...", source_message_id)
-        except Exception as exc:
-            with self._lock:
-                self._last_error = str(exc)[:1200]
+        if telegram_parse_bool(self._config.get("send_processing_message"), default=False):
+            try:
+                pending_message_id = self._send_text(chat_id, "OK siap...", source_message_id)
+            except Exception as exc:
+                with self._lock:
+                    self._last_error = str(exc)[:1200]
 
         try:
             answer, _meta = self._build_answer(
