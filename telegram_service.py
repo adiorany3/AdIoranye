@@ -797,15 +797,32 @@ class TelegramService:
             f"Terkunci otomatis: {until:%Y-%m-%d %H:%M:%S WIB}"
         )
 
-    def _send_text(self, chat_id: Any, text: str, reply_to: Any = None) -> None:
+    def _send_text(self, chat_id: Any, text: str, reply_to: Any = None) -> Any:
         payload = {"chat_id": chat_id, "text": format_telegram_message(text)}
         if reply_to:
             payload["reply_to_message_id"] = reply_to
-        self._telegram_request(
+        response = self._telegram_request(
             "sendMessage",
             payload,
             timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
         )
+        return (response.get("result") or {}).get("message_id")
+
+    def _delete_message(self, chat_id: Any, message_id: Any) -> None:
+        if not message_id:
+            return
+        self._telegram_request(
+            "deleteMessage",
+            {"chat_id": chat_id, "message_id": message_id},
+            timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
+        )
+
+    def _delete_message_safely(self, chat_id: Any, message_id: Any) -> None:
+        try:
+            self._delete_message(chat_id, message_id)
+        except Exception as exc:
+            with self._lock:
+                self._last_error = str(exc)[:1200]
 
     def _notify_polling_started_once(self) -> None:
         with self._lock:
@@ -915,11 +932,19 @@ class TelegramService:
 
         chat_key = str(chat_id)
         recent_messages = list(self._chat_recent_messages.get(chat_key) or [])
+        pending_message_id = None
+        try:
+            pending_message_id = self._send_text(chat_id, "OK siap...", source_message_id)
+        except Exception as exc:
+            with self._lock:
+                self._last_error = str(exc)[:1200]
 
         try:
             answer, _meta = self._build_answer(text, recent_messages=recent_messages)
             if not answer:
                 answer, _meta = build_telegram_local_safe_fallback_answer(text, failure_reason="empty_answer")
+            self._delete_message_safely(chat_id, pending_message_id)
+            pending_message_id = None
             self._send_text(chat_id, answer, source_message_id)
             with self._lock:
                 chat_history = self._chat_recent_messages.setdefault(chat_key, deque(maxlen=12))
@@ -927,6 +952,7 @@ class TelegramService:
                 chat_history.append({"role": "assistant", "content": answer})
                 self._processed += 1
         except Exception as exc:
+            self._delete_message_safely(chat_id, pending_message_id)
             fallback_answer, _ = build_telegram_local_safe_fallback_answer(text, failure_reason=str(exc))
             try:
                 self._send_text(chat_id, fallback_answer, source_message_id)
