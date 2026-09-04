@@ -96,6 +96,14 @@
       "title": "Google News Indonesia - Teknologi & AI — Microsoft Kebut Pembangunan Data Center JKT09 di Karawang - Good News From Indonesia",
       "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxQOE1SblVDUksyTW5IUVB4RTZZamJkNnVzeHZWWmJMOWlqWlNnVkhqRTJpaGpQcWFHTTdmSm00dktaeDM2aElnVVU2VDQ0RHE2ZWl5eXRScFBLZWRzZWV4eldxcDVPRmM0UEJ4VkVHMDM2a0hxcXpPMEUzTGhjM0ZSbmdNSVZ1QmtIeVEtQ01KRVA4SU9aOHNDUXQxM2FXX1gyWDF3MkwtMzY?oc=5"
     },
+    "0118b1c04a095ee2e7339739241a7c803de8c9437e4ff63dd48fde95aa987770": {
+      "chunks": 7,
+      "created_at": "2026-09-04T19:26:28+00:00",
+      "doc_id": 2327,
+      "source": "NASA Breaking News",
+      "title": "NASA Breaking News — APOD: 2026 September 4 - Na Uhane Mahoe Huki Pu i ke Ola - NASA Science",
+      "url": "https://science.nasa.gov/image-article/apod-2026-september-4-na-uhane-mahoe-huki-pu-i-ke-ola/"
+    },
     "0131de8f08b82fa998d7cae3d88dd1cecf1f9d94029f3eba923f6a6a608f60e1": {
       "chunks": 1,
       "created_at": "2026-05-22T02:40:41+00:00",
@@ -552,6 +560,14 @@
       "title": "Google News Top Headlines - South Korea — Trump's towering arch clears another federal hurdle, despite public pushback - NPR",
       "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1odUJkSWdzNWc5dnY1bFdaRGN1UVUtQWswQXVzYnJNYzYxR01sR2FVRFhhLW9PZV9aSUxCeG94dlhWMVRRWWJyNDFKc3V0dFhEX09EZ3otUXJJQjM5d3pVNnpFQnc3MnMwT2FZeHlaOUEzN21teFhxUlRmcTZ0MWM?oc=5"
     },
+    "0789335e94ee11f86c2bde63cf9f7aff2345e73b1f1c1e6549bf70ee8d28bbdd": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:28:19+00:00",
+      "doc_id": 2333,
+      "source": "CNN Indonesia Nasional",
+      "title": "CNN Indonesia Nasional — Puluhan Tenda untuk Sekolah Darurat Dibangun Pascagempa NTT",
+      "url": "https://www.cnnindonesia.com/nasional/20260904150030-20-1400073/puluhan-tenda-untuk-sekolah-darurat-dibangun-pascagempa-ntt"
+    },
     "07960d89c99e229260a771b6afcee89618839f6142affc178a70a15abb3a13d3": {
       "chunks": 1,
       "created_at": "2026-05-22T02:40:38+00:00",
@@ -703,6 +719,14 @@
       "source": "ANTARA News - Bursa",
       "title": "ANTARA News - Bursa — Analis: Saham BBTN masih tunjukkan kinerja resilien",
       "url": "https://www.antaranews.com/berita/5574621/analis-saham-bbtn-masih-tunjukkan-kinerja-resilien"
+    },
+    "096ae8bd5d1d3aa21897e7fda1779405d871cba10655c7f88cc29a182c643dbd": {
+      "chunks": 7,
+      "created_at": "2026-09-04T19:28:51+00:00",
+      "doc_id": 2343,
+      "source": "BPK Database Peraturan Indonesia",
+      "title": "BPK Database Peraturan Indonesia — Glosarium Peraturan",
+      "url": "https://peraturan.bpk.go.id/Glosarium"
     },
     "09a1f83fa8351457f75dcc4d05dfa4e8fd5b9f82e9974d820203ff28edc955ec": {
       "chunks": 2,
@@ -1872,6 +1896,14 @@
       "title": "ANTARA News - ASEAN — Kapal pembawa migran ilegal tenggelam lagi di perairan Malaysia",
       "url": "https://www.antaranews.com/berita/5571688/kapal-pembawa-migran-ilegal-tenggelam-lagi-di-perairan-malaysia"
     },
+    "1d2fbd3c2cad478e932892e9404ba95094776b6932f641b8dd3b5144fa5dd858": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:26:22+00:00",
+      "doc_id": 2324,
+      "source": "MarketWatch Top Stories",
+      "title": "MarketWatch Top Stories — Why the jobs report will actually be good for bonds",
+      "url": "https://www.marketwatch.com/story/why-the-jobs-report-will-actually-be-good-for-bonds-eb062fda?mod=mw_rss_topstories"
+    },
     "1d3813833b10a6c265c1ca95569a5c13ca1e82f873d67d78d025c26b5bcc6717": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:10+00:00",
@@ -1895,6 +1927,14 @@
       "source": "OpenAlex Natural Language Processing Indonesia",
       "title": "OpenAlex Natural Language Processing Indonesia — A Reproducible Indonesian NLP Pipeline for Multiclass Sentiment Classification of Hospitality Reviews",
       "url": "https://doi.org/10.5281/zenodo.20304412"
+    },
+    "1d6eb4b6252f4c1e3c2827f2ebdf380d6517ddaac30daafd5bfbb33dd1f00a72": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:25:31+00:00",
+      "doc_id": 2312,
+      "source": "BBC Technology",
+      "title": "BBC Technology — OpenAI agents hijacked German website before Hugging Face hack, report claims - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/ckg725z5kgzo?at_medium=RSS&at_campaign=rss"
     },
     "1d82653825b9e8bf9f1822a6f660b656f50872a3210c03e8455c5ae04da429ad": {
       "chunks": 1,
@@ -1991,6 +2031,14 @@
       "source": "OpenAI News",
       "title": "OpenAI News — Advancing the price-performance frontier with GPT-5.6",
       "url": "https://openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6"
+    },
+    "1eeabba1480321eebec3c0b0fd425bbc6076c79cf7cadb6e749836a162946794": {
+      "chunks": 9,
+      "created_at": "2026-09-04T19:26:53+00:00",
+      "doc_id": 2331,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — Latin America & The Caribbean Weekly Situation Update as of 4 September 2026 - El Salvador | ReliefWeb",
+      "url": "https://reliefweb.int/report/el-salvador/latin-america-caribbean-weekly-situation-update-4-september-2026"
     },
     "1f14aea642c1ef6dc654d88c514b1a73710be9901f29d8e5b167cb909986c0e0": {
       "chunks": 1,
@@ -2471,6 +2519,14 @@
       "source": "ANTARA News - Dunia",
       "title": "ANTARA News - Dunia — Deretan negara yang paling banyak dikunjungi, Prancis nomor satu",
       "url": "https://www.antaranews.com/berita/5241413/deretan-negara-yang-paling-banyak-dikunjungi-prancis-nomor-satu"
+    },
+    "24e2e34f5c3a51a3e567aab8761b89371f2f28bda1cd7eec756e3e5b84b5e063": {
+      "chunks": 2,
+      "created_at": "2026-09-04T19:26:22+00:00",
+      "doc_id": 2323,
+      "source": "MarketWatch Top Stories",
+      "title": "MarketWatch Top Stories — Trump’s latest threat — to stop trading with some countries unless there’s a rate cut — risks shock to U.S. economy",
+      "url": "https://www.marketwatch.com/story/trumps-threat-to-stop-trade-unless-theres-a-rate-cut-risks-shock-to-u-s-economy-2e6b9798?mod=mw_rss_topstories"
     },
     "250718255fabf204d971deab84268961d7d598ffcd5b3d6faf51940c5ec11019": {
       "chunks": 2,
@@ -2976,6 +3032,14 @@
       "title": "Google News Top Headlines - Indonesia — Kelalaian Berujung Sopir Taksi Green SM Tertemper KRL di Bekasi Jadi Tersangka - detikNews",
       "url": "https://news.google.com/rss/articles/CBMiugFBVV95cUxNakNKa2lRMmlld1o2WHgxcENxV3l0dTRkdXFlZWI4R2hKUVRINWJOQm9wNjNvNnpKRHJhMjY0Xy0yWERvVjcwc1hkQ0RsNEtkUDk3aVl2ZVlFSEd0WERiMG9NR0kxN19US2RtanJPcjgzaDhfajRINjZrWEU2V21RWG1OTHFrRnEyeWlxZ2FZdnplbnpJaDVBbTlvMGRBWDUyS2FXRWtMNFZES3V0N1dVTXhwby01LTBLZWfSAb8BQVVfeXFMT1NXTFcxSUtNWjd2U044dmVfMjlqTjByZUhmM0JsTzFnNkwtaTExQXc0MkY3Y1dKdEF2UE4yNDBQVEw1QTh4WlNnMDRPVkF0NjBXVEFiSXdNRHRpbFJCeVZqb1hFVjdvRFBoVDRseUVpZWxJVElOQnpaX3l6M0QxMldRTWt4WGxpSzVIbTdsTE5IMnkyUUoxZG5adDNLcHhSa3pPZTlfS05tYmJrZm5vcGhRMGpNS3ZnLUM1NUhUYnM?oc=5"
     },
+    "2f01f6a826b5815aeb1a4a37c97ccc287261381396237472a61d820ed478531d": {
+      "chunks": 4,
+      "created_at": "2026-09-04T19:26:53+00:00",
+      "doc_id": 2329,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — Yemen: Flash Update: Escalation of hostilities and mass displacement in Maqbanah and Jabal Habashi districts, Ta'iz governorate (As of 4 September) - Yemen | ReliefWeb",
+      "url": "https://reliefweb.int/report/yemen/yemen-flash-update-escalation-hostilities-and-mass-displacement-maqbanah-and-jabal-habashi-districts-taiz-governorate-4-september"
+    },
     "2f0dfbbaaccd23be9710f67ffbb5728b5d8cab41e84e680618e66e61a9d8eff3": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:51+00:00",
@@ -2999,6 +3063,14 @@
       "source": "Panduan Jurnal Q-Level Peternakan",
       "title": "Panduan Jurnal Q-Level Peternakan — Panduan cek jurnal Q-level bidang peternakan",
       "url": "https://www.scimagojr.com/journalrank.php"
+    },
+    "2f54f8c36527e47f51fbb17a00730c425c45139e97611e00b9257d2b961c9c6a": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:12+00:00",
+      "doc_id": 2350,
+      "source": "OpenAlex Research - Indonesia Agriculture Technology",
+      "title": "OpenAlex Research - Indonesia Agriculture Technology — Resource constraint effects on water smart agricultural practice retention in Guatemala’s Dry Corridor",
+      "url": "https://doi.org/10.1007/s44279-026-00752-8"
     },
     "2f78b9e61af5a94cb404988d24e432f2fdecdda1462099647a2acff1c2ccd009": {
       "chunks": 2,
@@ -3175,6 +3247,14 @@
       "source": "Catatan Kurasi - Teknologi Global, Indonesia, dan Riset Aktif",
       "title": "Catatan Kurasi - Teknologi Global, Indonesia, dan Riset Aktif — Panduan membaca update teknologi global, teknologi Indonesia, dan riset berjalan",
       "url": ""
+    },
+    "31f115816033e69551ec71a42267917ac878ae385a73a34ffb2053f3c2f6171a": {
+      "chunks": 4,
+      "created_at": "2026-09-04T19:29:14+00:00",
+      "doc_id": 2355,
+      "source": "OpenAlex Research - Indonesia Law Culture Social Impact",
+      "title": "OpenAlex Research - Indonesia Law Culture Social Impact — Plant Innovation Laws in a Planetary Age: Securing Space for Farmers’ Innovation (ToC & Biblio)",
+      "url": "https://orbi.uliege.be/handle/2268/346742"
     },
     "31f844736d99dae2998afdbe72b39f783a9f44aa431a7a79c4c2bfb934200017": {
       "chunks": 2,
@@ -3360,6 +3440,14 @@
       "title": "Google News Top Headlines - Brunei — D.N.C. 2024 Election Autopsy Reopens Wounds of Harris Loss - The New York Times",
       "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9YaGQ2V2NQU0ZqNGJDdGJwS3UzM2RzMC1BN3JzUXY1dmVTdWtwRjQ0cVpkWFBvR0UzVVRtaVFDc2NBVjJFcm1GaDBNdmVadVh1WkFXUl9SRXN4MTYwdUN6Sm9lNGNnT0FzV3h1R0pEU1U?oc=5"
     },
+    "353abf5e56d9b1a1566331692b672aeab845a171afbc86ce39c33885d0474d3a": {
+      "chunks": 5,
+      "created_at": "2026-09-04T19:25:11+00:00",
+      "doc_id": 2305,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Playco cut manual fixes 50% prototyping games with GPT-6 Astra | OpenAI",
+      "url": "https://openai.com/index/playco-game-prototyping-with-astra"
+    },
     "354cf930ec2eecdd9ef9a1907f912f3962cd1c53f8e1967b67b2980b3f88bf19": {
       "chunks": 1,
       "created_at": "2026-05-22T02:42:12+00:00",
@@ -3407,6 +3495,14 @@
       "source": "ANTARA Terkini",
       "title": "ANTARA Terkini — Serangan Israel di Gaza tewaskan dua anak dan seorang perempuan - ANTARA News",
       "url": "https://www.antaranews.com/video/5723201/serangan-israel-di-gaza-tewaskan-dua-anak-dan-seorang-perempuan"
+    },
+    "36377e3af0b5f642e0c64145a226b279098dfe926cbdb3c162c4d685a4266667": {
+      "chunks": 11,
+      "created_at": "2026-09-04T19:26:53+00:00",
+      "doc_id": 2330,
+      "source": "ReliefWeb Updates",
+      "title": "ReliefWeb Updates — Latinoamérica y El Caribe Resumen de Situación Semanal al 4 de septiembre 2026 - El Salvador | ReliefWeb",
+      "url": "https://reliefweb.int/report/el-salvador/latinoamerica-y-el-caribe-resumen-de-situacion-semanal-al-4-de-septiembre-2026"
     },
     "364d3135bed86b825e9e65a76e65a73a6fbd1da7f9d3ed70b580b421f3dd11c3": {
       "chunks": 1,
@@ -3463,6 +3559,14 @@
       "source": "Google News Top Headlines - Timor-Leste",
       "title": "Google News Top Headlines - Timor-Leste — Tennessee execution called off after failed lethal injection - BBC",
       "url": "https://news.google.com/rss/articles/CBMiWkFVX3lxTE9neUxuZkZsckNIVkVtWnFqUS1yQjdrdVNrV2Y2ZmxsVGwxc2FNb1g1Y1FrRXRxcTBmejhPTEdETUtLOGF3Q2dhZWIzbV9RTHVWLXBCU3BaMGZBZw?oc=5"
+    },
+    "37a0daec49188c0717fd1635519aec88cb6c157bbecc01248a6cfad606e90faa": {
+      "chunks": 11,
+      "created_at": "2026-09-04T19:29:09+00:00",
+      "doc_id": 2346,
+      "source": "UNESCO Newsroom",
+      "title": "UNESCO Newsroom — Все новости и истории | UNESCO",
+      "url": "https://www.unesco.org/ru/newsroom/news"
     },
     "37bf96fd6598bc24b62eeccc1e995df08c61f38b9b9f7f4c1be08aeb4a3b73e5": {
       "chunks": 2,
@@ -3664,6 +3768,14 @@
       "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Addressing global hotspots of drought-related crop production losses",
       "url": "https://doi.org/10.1038/s41467-026-72715-y"
     },
+    "3b3fd123da69d1d4d7481d66849c640376a6e1633e587d7eab95fdc464ea7db3": {
+      "chunks": 7,
+      "created_at": "2026-09-04T19:25:31+00:00",
+      "doc_id": 2315,
+      "source": "BBC Technology",
+      "title": "BBC Technology — Jobseekers warned over online interview and recruitment scams - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/crk3xd8j3k5o?at_medium=RSS&at_campaign=rss"
+    },
     "3b6242695dc4e1aa9dbd53936364ca9eb7e73cfae65a1d8045c6d3ffd83fa75e": {
       "chunks": 1,
       "created_at": "2026-05-22T02:42:16+00:00",
@@ -3711,6 +3823,14 @@
       "source": "Google News Indonesia - Nasional & Pemerintahan",
       "title": "Google News Indonesia - Nasional & Pemerintahan — Prabowo Wajibkan Ekspor CPO lewat BUMN, Mau Dibawa ke Mana Industri Sawit Indonesia? - Kompas.id",
       "url": "https://news.google.com/rss/articles/CBMisAFBVV95cUxObDdRQXVNNzN3TllrYWRVM21MRF9vcy1JMGVyOTNNNnF1SzQ5QkNkWDh4WHVmX1dUMUdyNk4yMmszMEo3NXhSVmNUeFZnZ0pfQTYzNDhOOV8wa3RQRUptWF8wTzQxTzNrQmN4OEhQMG9jN2pNc2VsclpGM0U4Skg1dmhsQVZnRTZIbkxHYkhPd0p6cW50NmdHS2pVQXpTMzdKeFRLQWFFZEJHNGsyZ01ucA?oc=5"
+    },
+    "3bf5c8ef88e65a8655a399b455d8b6941eb41f492120dfeb240fdb9f795c3951": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:12+00:00",
+      "doc_id": 2347,
+      "source": "OpenAlex Research - Indonesia Agriculture Technology",
+      "title": "OpenAlex Research - Indonesia Agriculture Technology — Financial sustainability of Georgian agribusiness: An empirical and policy analysis",
+      "url": "https://doi.org/10.14719/pst.14328"
     },
     "3c12c9fbbab39842cc432f760041ca092c0fc2a4ec400dda4b67e6cf99c03fbe": {
       "chunks": 1,
@@ -4240,6 +4360,14 @@
       "title": "BleepingComputer - Security News — Chinese hackers target telcos with new Linux, Windows malware",
       "url": "https://www.bleepingcomputer.com/news/security/chinese-hackers-target-telcos-with-new-linux-windows-malware/"
     },
+    "42df17e4df9300d0b369d34e69338f466b07b76f1f23920f930b99c76307a326": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:25:37+00:00",
+      "doc_id": 2321,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Menbud dukung sineas Indonesia produksi banyak film tema kepahlawanan - ANTARA News",
+      "url": "https://www.antaranews.com/video/5726952/menbud-dukung-sineas-indonesia-produksi-banyak-film-tema-kepahlawanan"
+    },
     "42e9dbbdd7b15bd32d78bf95d4d0b2f57ac0af8dfe8b97152536368e9cf897aa": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:08+00:00",
@@ -4624,6 +4752,14 @@
       "title": "Google News Asia - Japan Terkini — China and Japan, uneasy neighbors in East Asia, begin 2026 at odds again - Japan Today",
       "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxQU2h5S2tpeW04c0R2OTl1bGgwa2ZxVC00QnhsV1FyY3YydGZmdFRhMEFscjdJVDhlNXNoN1BReGRGaGc4TTV2bjd6eUZjQUM0ekNVbzVFX0VjS1ZwbjJrTS1LN2R5YkU3VFpQZEdtSWZBUmNiTGtqOC0zY1FDTGpqM0U4NXBtS25ZdlVSR0Q5VDVkWjBGV3VydmRzYnZKWWxLSnNPc2ZyN2c3NTZEVkJvZmhEZDg5Vm1HQW00WWhiZXVUM1VKVjFsSFpjM1MzQQ?oc=5"
     },
+    "477f18881500d42b00a210d0d7747e3ca123263ee2ca315aa3d576a65807ffe4": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:25:37+00:00",
+      "doc_id": 2317,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Tokoh adat Badui Jaro Saidi Putra meninggal dunia  ‎ - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5726964/tokoh-adat-badui-jaro-saidi-putra-meninggal-dunia"
+    },
     "47920b7523a675ef505ceff39a28795a120f511a5e0e3b50ddff85446ac4df5c": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:08+00:00",
@@ -4687,6 +4823,14 @@
       "source": "Google News Asia - Korea Utara Terkini",
       "title": "Google News Asia - Korea Utara Terkini — North Korea’s missile tests show ‘no possibility’ for diplomacy with US - South China Morning Post",
       "url": "https://news.google.com/rss/articles/CBMixwFBVV95cUxPVGRkaHItN2I3dnlWNGRHTHk5MVhNTHptMnh4bGQ0ZncxbXA1RlNpTGdlNXBSN1JyTFd6VTJocS1PeTVxOTAzQ0xqMFhQOXFlaUVKQlZ1UGVDOWFVQUo4WEp2dGlVRmtlRGxRbFA4bG5mZ1VuaGJEN1lqcGhsdk1UMGNBaGl2UGxXNUI1ZWVmUHRtS1NjVVBmcUZicjlSYXhsUl9iNVREM0JLeThhNGpxUjdUZHA4QkhHVUdVLXE4SjdlNVc5UzQ40gHHAUFVX3lxTE5xQUJmcW1fTC1FVTNBXzdKYnJzUFA2Z25KdXVOYnFUX3AzWU12Ti1tanYwVlNobHpDM3Z4WWk5VnR3c3lwamNHQUtEX29YeGdheTRkdlMyeHJoRzdiTzktZjNvWl95NmxkUlNUSmdkdnBJRjhzTnkzRHpKUURUZ3JyQTFKWjZyMzBXMWkxVkI3d0EzX3hyb3ZuTWI4MjJ2Y05jNTVPTjlfQ0s1alo3a3pWcEU5MmMtR3dVWG1QNHozbWh3R1d1aU0?oc=5"
+    },
+    "488a775dfbe586c41b48e1414340e901d177362a7c5e4ffe56cae4f1be096f41": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:12+00:00",
+      "doc_id": 2348,
+      "source": "OpenAlex Research - Indonesia Agriculture Technology",
+      "title": "OpenAlex Research - Indonesia Agriculture Technology — Socio-Cultural Dimensions Of Community Engagement And Flood Risk Awareness In Semi-Arid Ringim, Jigawa State, Nigeria",
+      "url": "https://doi.org/10.11113/ijbes.v13.n3.1462"
     },
     "48c5b8f0cf08a5b21c8ee7c229b285657fed500b7cfc7fc8541a49cabec1b5e4": {
       "chunks": 4,
@@ -5448,6 +5592,14 @@
       "title": "ANTARA News - Bisnis — Jumat pagi ini harga tiga jenama emas di Pegadaian serempak naik",
       "url": "https://www.antaranews.com/berita/5577569/jumat-pagi-ini-harga-tiga-jenama-emas-di-pegadaian-serempak-naik"
     },
+    "52644e6148c1adea67e047680c5febfe7d509f0e27333b90e8227673a89d6992": {
+      "chunks": 5,
+      "created_at": "2026-09-04T19:25:25+00:00",
+      "doc_id": 2311,
+      "source": "BBC World",
+      "title": "BBC World — Steve Irwin's family celebrates 'superhero' dad, 20 years after shock death - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cjrx75ldydwo?at_medium=RSS&at_campaign=rss"
+    },
     "527543ba52ebcf148deb2aacd0fd0ef1747da440d434729a9b9dacec3acd924c": {
       "chunks": 1,
       "created_at": "2026-06-16T20:18:59+00:00",
@@ -5671,6 +5823,14 @@
       "source": "Google News Global Tech - Space Technology Global",
       "title": "Google News Global Tech - Space Technology Global — Rocket Report: China launches with no advance warning; Europe’s drone ship - Ars Technica",
       "url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxOeXhtSkh5dUV2bVdiZEtfSnMwOURpMC1HT1AzbVBCa0ZyeDVkd01sVWZndHM2ZkJlTGV2YkpDLU1MN2VDeEFQV0xqYmk2VHpVTm5XOWZCN0tfbWw2eDEzc0NvRzJ6SUJHdDhhWmVWTGhOQnY0QXFzWWFkWXNSSU9mMmlWazdpTEhkTGNSQmVRZks2ODdnbHpFTzdOVDlpSF8yLVFWcXlWNnVkdWpDUGk0WUZR?oc=5"
+    },
+    "56f8aaad9c1b909dde54a5be274ef4ab23f5af829eb43a3616c4bda0ca1dca1c": {
+      "chunks": 4,
+      "created_at": "2026-09-04T19:25:31+00:00",
+      "doc_id": 2314,
+      "source": "BBC Technology",
+      "title": "BBC Technology — Are robots the future of entertainment? This South Korean theme park thinks so - BBC News",
+      "url": "https://www.bbc.co.uk/news/videos/cdr7g3vdl58o?at_medium=RSS&at_campaign=rss"
     },
     "573d81e120d51b394911035f60db813d4edb099884e30fbca2f8cf3ea5fe3e1e": {
       "chunks": 2,
@@ -7200,6 +7360,14 @@
       "title": "Google News Indonesia - Cek Fakta & Hoaks — DW Goes to Campus 2025: Cek Fakta AI bareng Universitas Brawijaya Malang - DW.com",
       "url": "https://news.google.com/rss/articles/CBMipwFBVV95cUxObFloTE91WndHbnNyM2xNRGFsbVc2LW5zRl9ZOElwRThlbXlnbnZlMEJncVhhWmc0dWxMQ2dLbjN5YzJCR1B4TlE4TzlVeXh1WF9zNlMtaGcyamI4NEE3cWR1U1l3Y2RtSy11SUd6dDFrWTFFdGFvcXZ4d182LUpPWlp1MjlTNG9iOWxvRkx5bklIN0JpaFJRQmhZWm1VMGU4eklaZnEzcw?oc=5"
     },
+    "708c76d4a223c0440d8508ed63bba71557087d8612ff698ad25c935acfac4245": {
+      "chunks": 10,
+      "created_at": "2026-09-04T19:25:25+00:00",
+      "doc_id": 2307,
+      "source": "BBC World",
+      "title": "BBC World — Europe targeted by spiralling campaign of sabotage and Russia is the chief suspect - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c5y4g6meekro?at_medium=RSS&at_campaign=rss"
+    },
     "708d9dae6753dd4097a4b006093c87d67ea2868c31faa5c334c2718f9027f41e": {
       "chunks": 1,
       "created_at": "2026-05-22T02:17:05+00:00",
@@ -7215,6 +7383,14 @@
       "source": "Google News Top Headlines - South Korea",
       "title": "Google News Top Headlines - South Korea — Indictment of former Cuban president includes 5 fighter jet pilots involved in 1996 plane downings - AP News",
       "url": "https://news.google.com/rss/articles/CBMiowFBVV95cUxOT1lqczIxVkVaUU1qOFlFakQtRUcyRzV3WGlDaWJFMUVJdXRkZUhtamhlVDJvbWlWRERLU01rVTcwOTU0V1lLd3lYTk50TjZUQ3I5OXAtYUtLczZhcDBMcllMTG9VanlqS1otZFVmTjdDbjhYTjQxWndDVEZ5aWJiczlWMzFfS2dRVmctNDVwMFBtZUR4YjdoeFQ2SXpuN3UxX1p3?oc=5"
+    },
+    "70c901f88ec97571b6b5ebd42ab5a737599d0a00077f13fc79e3af8876c3fbf7": {
+      "chunks": 5,
+      "created_at": "2026-09-04T19:25:11+00:00",
+      "doc_id": 2304,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Legora reviewed 41 documents in minutes with GPT-6 Astra | OpenAI",
+      "url": "https://openai.com/index/legora-financial-statement-review-with-astra"
     },
     "711e3faa30358f7e0da23a782f94b6a67205aed6ec17f404cde76c6d7dc7bb31": {
       "chunks": 1,
@@ -7864,6 +8040,14 @@
       "title": "Google News Indonesia Tech - Healthtech Indonesia — Startup Asal Indonesia Masuk Daftar Health Tech Global Paling Menjanjikan - detikHealth",
       "url": "https://news.google.com/rss/articles/CBMixgFBVV95cUxPd0UxS25NSGhXTGVhcm9tckdUNTQxd0g3ZTZjNHZfVkxYWHdVQTZBWTZxaDljMWhfREZtVjlYSHQwY3Z0TS0tdmk4emJpZmJxTmRZNmFjZ293X3gzVVJNS2lrSFp4azFKWHZEc0ZwWm1pQnp3SlRsVVp2OXZRejU2Y1VwTmROOW94b3M4OXZuZVpCaFpoZ2Y2LXh6ZXh6cUF2Wnk1SENGTTRPZEg0cThxOTVVRm01dzljSlVHQUE4RlJXVWNFLWc?oc=5"
     },
+    "7a81bc873f3bf57ad81998b8dd7758f9baa997c68080e4c1b2de98295fc8989f": {
+      "chunks": 10,
+      "created_at": "2026-09-04T19:25:11+00:00",
+      "doc_id": 2306,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Safety overview: GPT-6 Astra | OpenAI",
+      "url": "https://openai.com/index/safety-overview-gpt-6-astra"
+    },
     "7abefd525a66ae8a89021c80856ae376d49d9717790b55d34167a1c08bff5a9c": {
       "chunks": 4,
       "created_at": "2026-05-22T02:44:01+00:00",
@@ -8288,6 +8472,14 @@
       "title": "Google News Top Headlines - Nepal — D.N.C. 2024 Election Autopsy Reopens Wounds of Harris Loss - The New York Times",
       "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9YaGQ2V2NQU0ZqNGJDdGJwS3UzM2RzMC1BN3JzUXY1dmVTdWtwRjQ0cVpkWFBvR0UzVVRtaVFDc2NBVjJFcm1GaDBNdmVadVh1WkFXUl9SRXN4MTYwdUN6Sm9lNGNnT0FzV3h1R0pEU1U?oc=5"
     },
+    "81df385ed8cb513dad4ac6b5530e08c77c69aff2b7a6c1d26abdac39a682667a": {
+      "chunks": 7,
+      "created_at": "2026-09-04T19:26:28+00:00",
+      "doc_id": 2325,
+      "source": "NASA Breaking News",
+      "title": "NASA Breaking News — NASA Hosts Virtual Artemis Webinar for Blind, Low-Vision Community - NASA",
+      "url": "https://www.nasa.gov/general/nasa-hosts-virtual-artemis-webinar-for-blind-low-vision-community/"
+    },
     "81f3bd23126e6dabd69ec6a905cd836ba7881f96c29b72d969c54b3d42fe0ab9": {
       "chunks": 1,
       "created_at": "2026-05-23T14:49:16+00:00",
@@ -8624,6 +8816,14 @@
       "title": "arXiv cs.LG Machine Learning — Provably Learning Diffusion Models under the Manifold Hypothesis: Collapse and Refine",
       "url": "https://arxiv.org/abs/2605.20235"
     },
+    "867cae0207a763b23434ef740e46f5c06ca415fc52ba961024baf5acecc4bb4e": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:25:37+00:00",
+      "doc_id": 2319,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — ESDM dan BPH Migas inspeksi distribusi BBM subsidi di SPBU Muna Barat - ANTARA News",
+      "url": "https://www.antaranews.com/video/5726956/esdm-dan-bph-migas-inspeksi-distribusi-bbm-subsidi-di-spbu-muna-barat"
+    },
     "868684d0ac3984e0bc4e14c837603e46d1856042e445f3bc4091059dcb30b782": {
       "chunks": 2,
       "created_at": "2026-05-22T02:29:53+00:00",
@@ -8880,6 +9080,14 @@
       "title": "OpenAlex Livestock Technology Indonesia — <p>Assessing Broodstock Management Knowledge Among Fish Hatchery Operators: A Case Study of Rural Bangladesh</p>",
       "url": "https://doi.org/10.7759/s44497-026-00071-2"
     },
+    "8984734889fc83a8685786b414ab7aa4ccade4179dcbd2b0d131b05bc1ba4b38": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:13+00:00",
+      "doc_id": 2352,
+      "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
+      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Plasticulture as Climate Adaptation: How Knowledge Systems, Market Governance, and Environmental Trade‐Offs Shape Sustainable Livelihoods",
+      "url": "https://doi.org/10.1002/sd.71608"
+    },
     "899a159a9dde74a6371473f4106f9c86e2eacc2e5693fed5bc8ee5a7b37f76bf": {
       "chunks": 1,
       "created_at": "2026-05-22T02:29:41+00:00",
@@ -8935,6 +9143,14 @@
       "source": "Google News Top Headlines - Mongolia",
       "title": "Google News Top Headlines - Mongolia — 4 takeaways from the DNC's long-awaited 2024 election autopsy report - PBS",
       "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxPZjloSWRzMnE1YzZ1V29EbkpZa1hkR25MME1vdDNZVWV6SE5ReTd5TGNsa0xjSkFwWnBFaThMbjRycDlpUGpvSGN4WTNQeXlvcjVRT1pWcGFrTzBoZl9FZ2NidGc5Yk5nOU1ZaTYzalFpbVpFbWNoT1NCTk1zbzZCYkpidTU1RlcwOWV5NGl6MzlQUV9tSmgtVUJ0ZUFXQkVZd3huWWpiVTHSAa4BQVVfeXFMUFN1SFBld0JlYmd3U2xDdnVENENrTGZqN09sYTAzNlRJekU1VzJ4RkhfR3ZKVXdsMFMtb0tlbE9pYmpSbXcwTjdnbTAwYjlHSm11aS1uaDFKVTZHNGozTVFBOWhFU3owUlZZUDFDYU41OWdJRnZsaWlIcmFtR1EwamsxZ3g2RnhjWlJmZ25RT2tvZWNUMkZ1WnJsSWlnXzlRUk1TTHJoaFM2TUhSOVJR?oc=5"
+    },
+    "8aa1e0c6fb7e4680ce4976b52a3eca66347273962c6cab653a0522af90a764ba": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:13+00:00",
+      "doc_id": 2354,
+      "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
+      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Something looks fishy! A philosophical exploration of AI for marine conservation",
+      "url": "https://doi.org/10.1007/s43681-026-01312-y"
     },
     "8ab5ef76f10ba610b5e0f68e5ab56dcc8dfa2d714ebf26b9c5c6b9f0f4a35233": {
       "chunks": 5,
@@ -9248,6 +9464,22 @@
       "title": "Google News Indonesia - IKN & Pembangunan — Otorita Percepat Pembangunan IKN dengan Perkuat Kebijakan Investasi - MetroTVNews.com",
       "url": "https://news.google.com/rss/articles/CBMirgFBVV95cUxPcW5yVE13S2tQWXd0c2p1Z2FWRGFaZHVxV1FqTXkxal94ZFZueXBMNTFPVWZfRnhNOU5OZU56ZlZCY1h2NWFicDhvQThxZ2gzNWI4M1ptZVplWXRTQXRJYmFjZzFvd28tQXlLd21ySXIyZUJZYktwc2wxY1FnRTAtLXRxOWQ5R2FrNUpqR2NLalVOZjd0LVg0ZTkxMzVTc3ZOVXBFaVNtUE1YUUZVdUE?oc=5"
     },
+    "8f8706685c7371a485297acce7ddb3e23ed36b64cddf9eba10173f6263253a15": {
+      "chunks": 5,
+      "created_at": "2026-09-04T19:29:13+00:00",
+      "doc_id": 2353,
+      "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
+      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Coastal conflicts cause environmental and social harms to Indigenous Peoples worldwide",
+      "url": "https://doi.org/10.1038/s44458-026-00125-8"
+    },
+    "8f96c5a12244399f0bfd754791ccb5c1c4c0baeec0ca57e01173755291864117": {
+      "chunks": 12,
+      "created_at": "2026-09-04T19:25:31+00:00",
+      "doc_id": 2316,
+      "source": "BBC Technology",
+      "title": "BBC Technology — AI data centres are booming in Australia - but at what cost? - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cgl3we7wdr3o?at_medium=RSS&at_campaign=rss"
+    },
     "8fa42560ebf7517ab29720a78b51c1c8d3c4ac062b459770ce7bd311e9799529": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:26+00:00",
@@ -9359,6 +9591,14 @@
       "source": "Google News Top Headlines - Taiwan",
       "title": "Google News Top Headlines - Taiwan — D.N.C. 2024 Election Autopsy Reopens Wounds of Harris Loss - The New York Times",
       "url": "https://news.google.com/rss/articles/CBMicEFVX3lxTE9YaGQ2V2NQU0ZqNGJDdGJwS3UzM2RzMC1BN3JzUXY1dmVTdWtwRjQ0cVpkWFBvR0UzVVRtaVFDc2NBVjJFcm1GaDBNdmVadVh1WkFXUl9SRXN4MTYwdUN6Sm9lNGNnT0FzV3h1R0pEU1U?oc=5"
+    },
+    "914de80f9ae6df60c01ae04193d26b69959fa57ed5611eeb7870b94ff2dc5732": {
+      "chunks": 5,
+      "created_at": "2026-09-04T19:28:51+00:00",
+      "doc_id": 2339,
+      "source": "BPK Database Peraturan Indonesia",
+      "title": "BPK Database Peraturan Indonesia — Database Peraturan | JDIH BPK",
+      "url": "https://peraturan.bpk.go.id/"
     },
     "9153bdc2144d72de66b5c0f8fefd8c0c827c6fd172970cc7df0f86422e569cf5": {
       "chunks": 1,
@@ -9575,6 +9815,14 @@
       "source": "Google News Top Headlines - Thailand",
       "title": "Google News Top Headlines - Thailand — House Republicans scrap vote to rein in Trump's war in Iran - Axios",
       "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE9YVWdrMFN4WW5VQzdOT2ZyRHpsZHJlRkFFd1FFTUxieHQxdDdDTEZuWDNVV3ozR1FHOHdZc05CaHIxenhHOTdaeVh6Z2Z1V3VBM2NuOHJEcWFjTGpfU2psdHRta2JPSFBLWXhV?oc=5"
+    },
+    "9384c06c9d7394a787c9b0c5f2b12ecb8f4bccc215a92abeff601683171fa88c": {
+      "chunks": 2,
+      "created_at": "2026-09-04T19:28:19+00:00",
+      "doc_id": 2335,
+      "source": "CNN Indonesia Nasional",
+      "title": "CNN Indonesia Nasional — Polisi Belum Bidik Korporasi di Kasus Karhutla Sumatra dan Kalimantan",
+      "url": "https://www.cnnindonesia.com/nasional/20260904213051-12-1400263/polisi-belum-bidik-korporasi-di-kasus-karhutla-sumatra-dan-kalimantan"
     },
     "93b3cd4b0bc18321e4dd93276e0cf2432f44003ac9ad05ecfa6fd27609cba7d9": {
       "chunks": 3,
@@ -9832,6 +10080,14 @@
       "title": "Google News Indonesia - Kesehatan Publik — Wabah Ebola Kembali Melanda Kongo, Kemenkes Tingkatkan Kewaspadaan di Indonesia - Media Kampung",
       "url": "https://news.google.com/rss/articles/CBMizgFBVV95cUxQcl8zSHlQWEpyREZEVS1MWW9kNmw3NkNpdGJhRTlMN04wZzk0cTVOdU4tTDJLY2xQRFJpMzlDSnRmSDVwTDZ0RU04YVR5dlUxRW1zckl0YVRjRFV1X25Wclp3U1NYMlhWbERzOHpyTk1LN1dOamlWV0pib0Y2Y1JtLUVWT29ocW1XODk4QTJ5b2ViVzl1YzVmdUtpUUM4Q2RhdjNDSW03cVg3WlFqM3Q4R0lrYlpWeGs5bzZiaHZXdWwxOHN0Z1JXSmpjSWlZQQ?oc=5"
     },
+    "9782293357d89e429fbbfc1967971dbd3c67f1796a8d27ed0160abbdc24d61e3": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:12+00:00",
+      "doc_id": 2349,
+      "source": "OpenAlex Research - Indonesia Agriculture Technology",
+      "title": "OpenAlex Research - Indonesia Agriculture Technology — The role of indigenous knowledge and local wisdom in climate adaptation : Forest farmers group in Buton, Southeast Sulawesi, Indonesia",
+      "url": "https://doi.org/10.14719/pst.14361"
+    },
     "979d9316e823cac9644ea5552df2c7e0b9d3d6f3e23ce813c53948c46fbc6f66": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:18+00:00",
@@ -9951,6 +10207,14 @@
       "source": "GitHub Blog Releases and Security",
       "title": "GitHub Blog Releases and Security — Copilot usage metrics reports now use GitHub-owned download URLs - GitHub Changelog",
       "url": "https://github.blog/changelog/2026-05-20-copilot-usage-metrics-reports-now-use-github-owned-download-urls"
+    },
+    "995fde3d798659a2f12332a0f75f41e7a6871c7d363618513e9860852325ad27": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:26:28+00:00",
+      "doc_id": 2326,
+      "source": "NASA Breaking News",
+      "title": "NASA Breaking News — Lunar Occultation of Venus - NASA",
+      "url": "https://www.nasa.gov/image-article/lunar-occultation-of-venus/"
     },
     "9973a4f1326a7eb2954f5b15f57a62dbf4be4292c96456274e1e92ba1c0cdc1d": {
       "chunks": 1,
@@ -10504,6 +10768,14 @@
       "title": "Google News Indonesia Tech - Riset Kelautan Indonesia — BRIN Kembangkan Simulator Gelombang Laut Berbasis AI untuk Riset Maritim Lebih Efisien - Bisnis Tekno",
       "url": "https://news.google.com/rss/articles/CBMi1wFBVV95cUxOeExzNVlCY2NLaDlROVM4TDRBT0pGc1RLZGRSZ1hRVVBoU1UyNVRkVTFYZ3VMNFRBb3NmVFF0a2Z5NEk2Q0twUTYydG1MSmF6azNWLWpveXdKT0tOdUx5MksxQzNxellxaGo1NlVFMzBkbTAxUVZPUXM3NVhZTHNDVDhjb0I1LWwxM1RBcG5xTEg4dEpUUmdBUHRlUVp0NGoxcEVrSV9kUkdJTFBWdDk1UW1DZ1hUZFNCRXVEVkJpdTIwaXdraWxtaEpnWEpfQ01jdm0zZFkyZw?oc=5"
     },
+    "a20359677843962e680ae560a8869d29bda4986b11017066308e5587c2684866": {
+      "chunks": 11,
+      "created_at": "2026-09-04T19:25:11+00:00",
+      "doc_id": 2303,
+      "source": "OpenAI News",
+      "title": "OpenAI News — Daybreak for Frontline Defenders: $1B to protect essential services | OpenAI",
+      "url": "https://openai.com/index/daybreak-for-frontline-defenders"
+    },
     "a214939b3f3221ffc2bd75606f2680961af2cbcf0bb41a9c07b1509a67c04c9b": {
       "chunks": 1,
       "created_at": "2026-05-22T04:01:23+00:00",
@@ -10679,6 +10951,14 @@
       "source": "NASA - Technology",
       "title": "NASA - Technology — Picturing Earth in a New Light - NASA Science",
       "url": "https://science.nasa.gov/earth/earth-observatory/picturing-earth-in-a-new-light/"
+    },
+    "a3ba1ec71484ba54dc0175085c4102dbf44f292af9ab46e73d7c3c13b7801adb": {
+      "chunks": 3,
+      "created_at": "2026-09-04T19:28:43+00:00",
+      "doc_id": 2337,
+      "source": "Al Jazeera English",
+      "title": "Al Jazeera English — Moment two workers are pulled alive from Nepal tunnel | Newsfeed | Al Jazeera",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/4/moment-two-workers-are-pulled-alive-from-nepal-tunnel?traffic_source=rss"
     },
     "a3ce34f64efc9e1656733449b9d5da2c8a976132ff826d7c6e19b9710684038b": {
       "chunks": 1,
@@ -11600,6 +11880,14 @@
       "title": "ANTARA News - Humaniora — Pahami aturan foto untuk pendaftaran akun SNPMB 2026",
       "url": "https://www.antaranews.com/berita/5353529/pahami-aturan-foto-untuk-pendaftaran-akun-snpmb-2026"
     },
+    "b275365a46c7ca4718992ce26d8f2f3a1a483fddbde36239512beabef11b9488": {
+      "chunks": 9,
+      "created_at": "2026-09-04T19:28:51+00:00",
+      "doc_id": 2341,
+      "source": "BPK Database Peraturan Indonesia",
+      "title": "BPK Database Peraturan Indonesia — Jenis Peraturan",
+      "url": "https://peraturan.bpk.go.id/Jenis"
+    },
     "b28bd2ee50a69f26ee1aac56a91a2645d9cc0e4c49311728408f9f6f981dbcf5": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:08+00:00",
@@ -11608,6 +11896,14 @@
       "title": "Google News Indonesia - Transportasi & Infrastruktur — Kenapa Infrastruktur Malaysia Terlihat Lebih Maju daripada Indonesia? Ini 4 Alasannya - netralnews.com",
       "url": "https://news.google.com/rss/articles/CBMi3AFBVV95cUxNa2tUYmdGM2VBT3R3eUpPSnE4QzNwYXZudWFyRy10bl9QdGFndEo1WlhVZHJKbjNxR19UU1kyN3l1ZHEtYXowSkhUdjE3REZaQWUyb014NGt1Z0lsVWtoUVlWZVF0RjFGSXgtUFN0R0FOckJPUkd0R0hxeWw3YkVQUnVFNWVKbW9zVEp3OXhqTnJWaWxzanlzS21rd19QZFhUSUlLS21iY1kwcEJXVTBFNFlXN3JaNjVMbEZ2aW5nN3ZzcEwtc0lqQWEyTmJSZmgwcjFLSDRSUktFenhn?oc=5"
     },
+    "b2cccfa6b159a86a4c44f490a17dc587eb2821f69600917989965d0db25e851b": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:25:25+00:00",
+      "doc_id": 2310,
+      "source": "BBC World",
+      "title": "BBC World — Russian drone hits Ukranian security headquarters, Zelensky says - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/c5yep7y48x2o?at_medium=RSS&at_campaign=rss"
+    },
     "b2d987f97c58888c98e54ad7d03a973992853681806dbb10981657921a4215b6": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:01+00:00",
@@ -11615,6 +11911,14 @@
       "source": "Google News Indonesia - Nasional & Pemerintahan",
       "title": "Google News Indonesia - Nasional & Pemerintahan — Kementerian Koordinator Bidang Perekonomian Republik Indonesia - - Kementerian Koordinator Bidang Perekonomian Republik Indonesia",
       "url": "https://news.google.com/rss/articles/CBMi9AFBVV95cUxOc0RXdkhrZmVNeUJZUGtyeGs2Wmd4X000RmFZTUtGSVgtaFRPMFBVaW9tdHBWa1R0c0JhYjNvVzFIY20xVjFoR0F4bllURC1vVzVEcUl5RnE5elUzOERRN2dnem9XZm5WSUFoVWlNVFZ5S1Z0TGxlZXBVWHZIWk50d1ZNR2l1eTVyVTNjWlpmVzIxd0xMU1d6OFdKdDZMeHFRTkZvN0dnOERjWTNrMlVGeWswWTJrMWpoejFScmNaVWRsR0pPc3dHRWl1RU5YY1JRWVdvSlBpRDhsUlAxNzhucjVNVWQyeEloR3oweThYcG5DYk1i?oc=5"
+    },
+    "b2f8cfcc67b1f37640eee64b8d6b0df3be0303f3069bb6659239023c6e3720da": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:25:37+00:00",
+      "doc_id": 2320,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Menbud dorong revitalisasi Desa Adat Sade disertai mitigasi - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5726960/menbud-dorong-revitalisasi-desa-adat-sade-disertai-mitigasi"
     },
     "b30bb69704a43c346606cf8c2a9fbebe08125db90b962bcb61eea804820669ad": {
       "chunks": 1,
@@ -12136,6 +12440,14 @@
       "title": "ANTARA News - Ekonomi — Sosok Brigitte Bardot: Aktris legenda asal Prancis & aktivis hak hewan",
       "url": "https://www.antaranews.com/berita/5325640/sosok-brigitte-bardot-aktris-legenda-asal-prancis-aktivis-hak-hewan"
     },
+    "ba8ad7aa901320555518fa403f0a11faa627b3ba56a2ca9917f34c23589715ef": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:13+00:00",
+      "doc_id": 2351,
+      "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
+      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Shrimp aquaculture, soil degradation, and climate resilience: A comparative analysis of the Southwestern Coast of Bangladesh",
+      "url": "https://doi.org/10.1016/j.susgeo.2026.100033"
+    },
     "ba8d09bc8ecd7392e4b605cc58e88bc0d1805d068929e64eb648045eb7cb3c66": {
       "chunks": 7,
       "created_at": "2026-09-02T05:16:40+00:00",
@@ -12263,6 +12575,22 @@
       "source": "Google News Indonesia - Pengetahuan dan Sains",
       "title": "Google News Indonesia - Pengetahuan dan Sains — Wamenkes RI Kunjungi FK UNAIR, Dorong Kolaborasi dan Penguatan Riset Kesehatan - Universitas Airlangga Official Website",
       "url": "https://news.google.com/rss/articles/CBMinwFBVV95cUxOVzIxMEdaTS05STg3ZHVjM1llSm5KVWVRcW1aWEk1dXRUQUhINlYzTEhiemVtMWJXS3oxMmZ2YTNVcFFIV05xZVlpWVJhMEhrZ1kyeVhuc0tZbGhsRUZ3bjFzdURKOFpUaGMwYlFsaHduSHZFMGM3LUZXODNXMm1PejhRWUdHZkxhMmhXaW5DdjVWcW5UVVNZQ2ZNR2Nsb2c?oc=5"
+    },
+    "bd057146cdb6413bd8a92ca70d6d911a4429e969f23b64584161dda2c36a3e3f": {
+      "chunks": 6,
+      "created_at": "2026-09-04T19:29:14+00:00",
+      "doc_id": 2356,
+      "source": "OpenAlex Research - Indonesia Law Culture Social Impact",
+      "title": "OpenAlex Research - Indonesia Law Culture Social Impact — Determinants of intention to use AI for personal financial management among middle-aged and older adults: evidence from Vietnam and China",
+      "url": "https://doi.org/10.1108/cfri-07-2025-0470"
+    },
+    "bd6bc0bffbd091306c32c22344f77aeb23d0a7b5c7ed67ab6c8a316954b4d71a": {
+      "chunks": 3,
+      "created_at": "2026-09-04T19:28:43+00:00",
+      "doc_id": 2338,
+      "source": "Al Jazeera English",
+      "title": "Al Jazeera English — Indonesia wildfires send toxic haze across Southeast Asia | Climate Crisis | Al Jazeera",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/4/04-09-sv-indonesia-kalimantan-haze-borneo-wildfires-haze-id?traffic_source=rss"
     },
     "bd9b906be2939a03b1fd2419a1cc53770f99e385a998ed6a2138315961b2b0ab": {
       "chunks": 2,
@@ -12567,6 +12895,14 @@
       "source": "Google News Indonesia Tech - Semikonduktor Indonesia",
       "title": "Google News Indonesia Tech - Semikonduktor Indonesia — Layanan Perakitan dan Pengujian Semikonduktor - IBM",
       "url": "https://news.google.com/rss/articles/CBMib0FVX3lxTE8zZV9qVTU0QUlCLXlhRVViamFvb1Zvb1EyRXdvc2FudzVkbEdmLTQ4RS1nblcydVZubkJ1VmxSalJiR01rejlCTDBrcE10enpubXRMVzV5Q2V5LXVQc1A0RGxYOVYzQmhvMV9SX25kOA?oc=5"
+    },
+    "c25968bf924a91b6bf52d1e90ad50ed57c6c373dd2c41daaed2f9336a3ba1af1": {
+      "chunks": 2,
+      "created_at": "2026-09-04T19:28:19+00:00",
+      "doc_id": 2336,
+      "source": "CNN Indonesia Nasional",
+      "title": "CNN Indonesia Nasional — Gunung Sinabung Berstatus Siaga, Warga Masih Nekat Masuk Zona Merah",
+      "url": "https://www.cnnindonesia.com/nasional/20260904205710-20-1400255/gunung-sinabung-berstatus-siaga-warga-masih-nekat-masuk-zona-merah"
     },
     "c27356fa4d6ed1475a12a0c86bddf35d68c545ae4c9541f6fb995c1b69c8f191": {
       "chunks": 7,
@@ -14264,6 +14600,22 @@
       "title": "Google News Asia - Asia-Pacific Geopolitik — Indo-Pacific Security Dynamics & Taiwan Conflict Readiness 2025 - Beyond the Horizon ISSG",
       "url": "https://news.google.com/rss/articles/CBMieEFVX3lxTFBuaWc0SWFDa3I3cGdTMDZ5TTFpM3p5aWhnTkZwSVdjWUgyNHZYd2l6R0pqZm5WM1FGbFdzMzRWYzRqaHJzREhXQmdXVVRNNEJQY1d3TENkRU1MU3IxR2xqeEVlMWpPamJ1Skg2WS1FTGVtUzc4cmFMNw?oc=5"
     },
+    "df7b8684e182813a7456494daf96f2c589d508784a69ca5b2e1a728e52b4a70f": {
+      "chunks": 9,
+      "created_at": "2026-09-04T19:25:25+00:00",
+      "doc_id": 2309,
+      "source": "BBC World",
+      "title": "BBC World — Falkland Islands: UK support 'unwavering' after Argentina restates claims - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cn45jg3zlz4o?at_medium=RSS&at_campaign=rss"
+    },
+    "dfe7601d23de31ee3a79c2fdb5e51861d398714da489554521061357db068d2b": {
+      "chunks": 7,
+      "created_at": "2026-09-04T19:26:28+00:00",
+      "doc_id": 2328,
+      "source": "NASA Breaking News",
+      "title": "NASA Breaking News — NASA to Cover Progress 96 Spacecraft Launch, Docking - NASA",
+      "url": "https://www.nasa.gov/news-release/nasa-to-cover-progress-96-spacecraft-launch-docking/"
+    },
     "dfee2ec1fdfefd863deda9148ad5f1a0ada58520f0962493012c254044fe6d29": {
       "chunks": 7,
       "created_at": "2026-05-22T02:43:54+00:00",
@@ -14319,6 +14671,14 @@
       "source": "OpenAI News",
       "title": "OpenAI News — Codex is becoming a productivity tool for everyone",
       "url": "https://openai.com/index/codex-for-knowledge-work"
+    },
+    "e1c71bbed499f005b9e9b703f19daa84a48acdab76e11166698c0dd37d21247a": {
+      "chunks": 8,
+      "created_at": "2026-09-04T19:25:31+00:00",
+      "doc_id": 2313,
+      "source": "BBC Technology",
+      "title": "BBC Technology — Xbox to limit cloud gaming to 15 hours a month for Game Pass users - BBC News",
+      "url": "https://www.bbc.co.uk/news/articles/cj06zd4l99lo?at_medium=RSS&at_campaign=rss"
     },
     "e1db3cb67d7ada8493999d9a107b9b03bf35f370b84a513adfa92b741854f697": {
       "chunks": 1,
@@ -14439,6 +14799,14 @@
       "source": "Google News Top Headlines - Indonesia",
       "title": "Google News Top Headlines - Indonesia — Wanti-wanti 'Hukum Rimba' dari Putin-Xi untuk Dunia - detikNews",
       "url": "https://news.google.com/rss/articles/CBMinAFBVV95cUxQMXVlejFWZTRxU0NiY3h6TV9teU92RlliUEs1NzVsaHlEUEp6V3JUZDk5ZDNDWWpPVlV1aF8wbWZ5aWx1SWhDMzE0UHo5Rl9iVTNnaWhGRFdZNEp6MGNhbVU1dlZYZWtVLTBaT3QzVjVmaU01eTFZSWY5d2xGTGhwYlBmcUFJWThvWnFlTXpVcktQMEliTDBhTE4ycDHSAaIBQVVfeXFMTkdUZjZvRHU1RTVqTHhDMEg3aXBQODVDVWlCOEhJTmVhZWc0Q19pcmNTeGpMak5qdVZtVmk1UVNWNWNXeDdJN3lQc3dfZlA1V3A0dnVYTjdfc3ZLSjJ2U1JlcDhmUVFGalRZc19FbkJRRjREWGIwUkNwLVZSRUMtaGdkUEU1dkxwMWtsbG5IeGNtZkozdGhqV2lwdzVyWmJwR2RB?oc=5"
+    },
+    "e4221d8530ec23a96191fd66a1e3ab39dd1b9d024314cb924816b979187ee4f4": {
+      "chunks": 4,
+      "created_at": "2026-09-04T19:25:25+00:00",
+      "doc_id": 2308,
+      "source": "BBC World",
+      "title": "BBC World — Tunnel rescues bring hope that more flood survivors will be found - BBC News",
+      "url": "https://www.bbc.co.uk/news/videos/cd79vp91321o?at_medium=RSS&at_campaign=rss"
     },
     "e428c7c876daaef8bfae2001b30a4e569eff6501e0118a3c56a8c09e7b83b32b": {
       "chunks": 1,
@@ -14711,6 +15079,14 @@
       "source": "Google News Indonesia - Papua & Indonesia Timur",
       "title": "Google News Indonesia - Papua & Indonesia Timur — Akibat pendekatan keamanan berlebih, Indonesia Timur alami krisis kebebasan pers - Jubi Papua",
       "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxQanZDbmxGeHJuaVkyNklzQW55bVRMMTZHN2JWUmU0RUVtRm5EU2s3VlAzeE1zWFJXS1VMSlRNc3U1ZktzZ2VqNWFuVGpkaXVrZ180ejdyZVY0emtPNjBlRlZ0Q0o0LTlRZDNTeFJjaFA3NWRnQWx5U29rZmZJTzZaaDBEQUlaXzg1eGF0Q1JqdjQyYUFlTkZra2dPblEzejhQMmkzLWo5WDlvMUtMS1lz?oc=5"
+    },
+    "e7f07eaf47c21c361e536da0095956e2a1dabacf5caff08a11658c1adcf326fa": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:28:19+00:00",
+      "doc_id": 2332,
+      "source": "CNN Indonesia Nasional",
+      "title": "CNN Indonesia Nasional — Gus Ipul Catat 1,4 Juta Penerima Bansos Terindikasi Main Judol",
+      "url": "https://www.cnnindonesia.com/nasional/20260904203040-20-1400249/gus-ipul-catat-14-juta-penerima-bansos-terindikasi-main-judol"
     },
     "e801d92e95e2972d2ad84a0db7e5b30ea4af8aa87968025a444ef9350d5ad2ea": {
       "chunks": 1,
@@ -15128,6 +15504,14 @@
       "title": "Google News Top Headlines - China — RFK Jr. announces 'the largest autism fraud bust in American history' and it’s in Minnesota - Politico",
       "url": "https://news.google.com/rss/articles/CBMiiwFBVV95cUxNcjRPbmNyRlZGbHBRWmtBc1dXSVNNTl8tNFppT2xBYmd1WjhxS1BBQ19pRnNpX2VsM0syYm5PX0FZbG4zUzlQRGpXd3Bmbl9McFdET0l2NEttNVQxYXJlTC16YUNLeXVpNm5TZjZoLUJVQ1VVZTY5Rnd0emcxeHN1a2Vmd2d2cTFTaWpN?oc=5"
     },
+    "ed0850910d9c0732a2a0e47d3f899c659aa0f8726cb87fe8d227c0f1e0eb2b2b": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:25:42+00:00",
+      "doc_id": 2322,
+      "source": "ANTARA Tekno",
+      "title": "ANTARA Tekno — iPhone 18 Pro diprediksi rilis September 2026, ini bocorannya - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5724703/iphone-18-pro-diprediksi-rilis-september-2026-ini-bocorannya"
+    },
     "ed11f4788f0ead88622374df3721f1d1ecb600b46fd705623d0b1a23b6ec0a37": {
       "chunks": 3,
       "created_at": "2026-05-22T02:43:45+00:00",
@@ -15328,6 +15712,14 @@
       "title": "Google News Asia - Korea Selatan Terkini — Testing the Japan-South Korea-US Techno-Alliance - The Diplomat – Asia-Pacific Current Affairs Magazine",
       "url": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxNNDZpMW5VZkprcmlJS0szTHlfMWtrTkRqVk5BYVMzVDFPT3RpOXBCWm16UjFNZjF6U2xrNFpJckVhQXpKc1N0dXYwaEN4SnRuRmRaQ3BwcDBSSWFCam5oZzRWeF92VVNhOXo1Y1M0Z3FLZ21TZDVNRjRJZXBJY1JNQnE1WkJ1eGNf?oc=5"
     },
+    "efd062fa2f19dd67edee60d4d7f02c2918a4f92fb12abbd70be4d73d102ebba2": {
+      "chunks": 12,
+      "created_at": "2026-09-04T19:29:09+00:00",
+      "doc_id": 2345,
+      "source": "UNESCO Newsroom",
+      "title": "UNESCO Newsroom — Noticias e historias | UNESCO",
+      "url": "https://www.unesco.org/es/newsroom/news"
+    },
     "efd473876491991bd4b2171b9fe8ac793f247954d36dd7b8346787d5d5bde3de": {
       "chunks": 1,
       "created_at": "2026-05-22T02:40:46+00:00",
@@ -15391,6 +15783,14 @@
       "source": "Google News Top Headlines - Hong Kong",
       "title": "Google News Top Headlines - Hong Kong — Audit Immunity for Trump Family Puts I.R.S. in a Bind - The New York Times",
       "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE12MHZtNVBxaXVfQU9TWlRuWl9IUnZLQjNsc1JrQzRVSE1iVGlPeFlhU3Jab3ZBZGhmeUEtbHRaZ2xVZjJpa0c4U1F3TjBjM1hMZVFqV2J3bU1VbDZZUmhEWlIwdjl0SUZCUDJQMGxZdFFuRW9FUzNtbGZ0MzQtUQ?oc=5"
+    },
+    "f0a49bc3b09e09e81b01cf1702a07d0395bf684022d8a12fe9eb482b36b8b305": {
+      "chunks": 5,
+      "created_at": "2026-09-04T19:28:51+00:00",
+      "doc_id": 2340,
+      "source": "BPK Database Peraturan Indonesia",
+      "title": "BPK Database Peraturan Indonesia — Subjek Peraturan",
+      "url": "https://peraturan.bpk.go.id/Subjek"
     },
     "f0c836c10b6c69fc1b4fa6301d90653cbb8380bed3715a495f15d520dc81b978": {
       "chunks": 1,
@@ -15536,6 +15936,14 @@
       "title": "arXiv AI Latest — Position: Let's Develop Data Probes to Fundamentally Understand How Data Affects LLM Performance",
       "url": "https://arxiv.org/abs/2605.18801"
     },
+    "f26f5d3f327afab06a638edc6c66b6d1621322e9c4a95bf2c43c37a2da6f88df": {
+      "chunks": 3,
+      "created_at": "2026-09-04T19:28:51+00:00",
+      "doc_id": 2342,
+      "source": "BPK Database Peraturan Indonesia",
+      "title": "BPK Database Peraturan Indonesia — Tahun Peraturan",
+      "url": "https://peraturan.bpk.go.id/Tahun"
+    },
     "f2908f37bba6344d1a27794959372f6afb835504b48af7fe187593f97b5e1279": {
       "chunks": 1,
       "created_at": "2026-05-22T01:59:57+00:00",
@@ -15671,6 +16079,14 @@
       "source": "Google News Indonesia Tech - EV Battery Indonesia",
       "title": "Google News Indonesia Tech - EV Battery Indonesia — Subsidi EV Berbasis Nikel Perkuat Hilirisasi dan Tekan Impor BBM - InvestorTrust",
       "url": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxOWTVtcDZyb1dGRVVWRkhoV3lPeFJLejZzRHl1VFh0Ul9BRklOZkVBaFRjc0Y5ZXlFVV9KM2ZFOV9ueGFhcXllYUVJTmtwTVkwdEl5Y19WbzE2YkIxbDBiTFYtQjMxTVNhUGV6SlVIYmdRWG5GZTFsVUV0S2d4WmRkMnAzRzN4Uml2MzVzVUhaZUltZWxhNTRidTVzcHAyWVg0aGJOWVJyRGM?oc=5"
+    },
+    "f513b33c35ebfee73e1817a2c1a1d4827d2111036b903b601fe217e2df3e89a4": {
+      "chunks": 2,
+      "created_at": "2026-09-04T19:28:19+00:00",
+      "doc_id": 2334,
+      "source": "CNN Indonesia Nasional",
+      "title": "CNN Indonesia Nasional — Kasus Dugaan Keracunan MBG di Toraja Bertambah, Total Jadi 173 Siswa",
+      "url": "https://www.cnnindonesia.com/nasional/20260904225347-20-1400269/kasus-dugaan-keracunan-mbg-di-toraja-bertambah-total-jadi-173-siswa"
     },
     "f51bf5711988b9d4e63df438a793ce098c0e242e8311fdbd027271d2119c3059": {
       "chunks": 4,
@@ -15896,6 +16312,14 @@
       "title": "Google News Top Headlines - Thailand — Donald Trump abruptly postpones AI order after White House infighting - Financial Times",
       "url": "https://news.google.com/rss/articles/CBMihAFBVV95cUxPRnBqR1FLNk1odTBhSWVLQnpWUXJJdkNDRm1tbzBPZkVfb2R2dTdMekdINzJyMGl0dmszVzNoWDJ3SHZwU1BVVkd2Z0xaVGxVNDQ5Yk9BUnlQcG1rNG5paU5kMmZDdVJFVTZDMHJHNkJUNzFGaU4zRDB6VGN5RmJ5VDgwY0w?oc=5"
     },
+    "f914ef166fd8d7e25154a177e1701b38d401dfc27f11659d77cdb59018e82c83": {
+      "chunks": 12,
+      "created_at": "2026-09-04T19:29:09+00:00",
+      "doc_id": 2344,
+      "source": "UNESCO Newsroom",
+      "title": "UNESCO Newsroom — Toutes les actualités et histoires | UNESCO",
+      "url": "https://www.unesco.org/fr/newsroom/news"
+    },
     "f9356a2de8c5114005570a408cb02861879e9da07ecd9e1fe587f234bbe52d2e": {
       "chunks": 1,
       "created_at": "2026-05-23T14:49:15+00:00",
@@ -16007,6 +16431,14 @@
       "source": "Google News Research - Riset Peternakan BRIN",
       "title": "Google News Research - Riset Peternakan BRIN — BRIN Percepat Hilirisasi Riset dan Inovasi untuk Jawab Tantangan Peternakan - BRIN - Badan Riset dan Inovasi Nasional",
       "url": "https://news.google.com/rss/articles/CBMirwFBVV95cUxNcmhHN29kSkpNSm9rNXNKcVJwMlQ3ckxZM3J5TVNzdlFlVWx0ME5YS1E3d3FOUjJkN084MDczZ0ptMk5WX3NrbnVkYjVfRFNOZ2Z6c0s1eTAxWTFhOUlaV1h1X2hIMUtqbzBOdmZpcW91My05RTMwc2gwTTJiQjhsLU54cHdORUJOU2RXWUlGWWtHdVN3MHQwLTJCLUNFdzlDYV8wX1J0UWllTjdLRlZB?oc=5"
+    },
+    "fb2a51ec31cbfee6cdce84b30aa04cc83b8cb4627631117923d5d7dec9473e32": {
+      "chunks": 1,
+      "created_at": "2026-09-04T19:25:37+00:00",
+      "doc_id": 2318,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Carrick sebut Benjamin Sesko miliki peluang turun sejak menit pertama - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5726963/carrick-sebut-benjamin-sesko-miliki-peluang-turun-sejak-menit-pertama"
     },
     "fb957541720ea257521332413b001e66002b9a71efc06ed0a5724615299442e9": {
       "chunks": 1,
@@ -16266,13 +16698,6 @@
     }
   },
   "runs": [
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-07-22T12:45:59+00:00"
-    },
     {
       "added_chunks": 1,
       "added_documents": 1,
@@ -16685,6 +17110,13 @@
       "dry_run": false,
       "errors": 9,
       "finished_at": "2026-09-03T00:17:16+00:00"
+    },
+    {
+      "added_chunks": 297,
+      "added_documents": 54,
+      "dry_run": false,
+      "errors": 7,
+      "finished_at": "2026-09-04T19:29:14+00:00"
     }
   ],
   "source_cursor": 3,

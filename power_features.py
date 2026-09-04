@@ -2426,10 +2426,19 @@ class PowerStore:
                 """
                 SELECT id, question, answer, meta_json, expires_at, intent, user_id, channel
                 FROM semantic_response_cache
-                WHERE expires_at > ? AND (? = '' OR intent = ? OR intent = '')
+                WHERE expires_at > ?
+                  AND user_id = ?
+                  AND channel = ?
+                  AND (? = '' OR intent = ? OR intent = '')
                 ORDER BY ts DESC LIMIT 180
                 """,
-                (now, str(intent or "")[:80], str(intent or "")[:80]),
+                (
+                    now,
+                    str(user_id or "public")[:120],
+                    str(channel or "web")[:40],
+                    str(intent or "")[:80],
+                    str(intent or "")[:80],
+                ),
             ).fetchall()
         best: Optional[Tuple[float, Any]] = None
         for row in rows:
@@ -3024,9 +3033,7 @@ def build_power_context(
         pass
 
     if enable_rag:
-        docs = list(preselected_docs or [])
-        if not docs:
-            docs = store.search_documents(retrieval_q, limit=rag_top_k)
+        docs = list(preselected_docs) if preselected_docs is not None else store.search_documents(retrieval_q, limit=rag_top_k)
         if docs:
             lines = []
             for idx, doc in enumerate(docs, start=1):
