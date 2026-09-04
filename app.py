@@ -16373,6 +16373,7 @@ def run_adioranye_router() -> None:
     sehingga admin bisa dibuka langsung lewat /admin tanpa menampilkan menu sidebar.
     """
     apply_auto_akses_terbatas_on_boot()
+    start_telegram_if_needed()
 
     if hasattr(st, "Page") and hasattr(st, "navigation"):
         public_page = st.Page(

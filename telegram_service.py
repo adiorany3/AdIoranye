@@ -1015,8 +1015,8 @@ class TelegramService:
     def _poll_loop(self) -> None:
         timeout_seconds = telegram_safe_int(self._config.get("telegram_poll_timeout_seconds"), 30)
         while not self._stop_event.is_set():
-            self._deliver_due_reminders()
             try:
+                self._deliver_due_reminders()
                 payload = {
                     "timeout": timeout_seconds,
                     "offset": self._offset,

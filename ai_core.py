@@ -14,28 +14,61 @@ from urllib3.util.retry import Retry
 # =========================
 # Single-provider model catalog
 # =========================
-# Saat ini aplikasi tidak lagi memakai SlashAI multi-model. Semua routing dan
-# health check hanya perlu membahas satu model aktif: Tamandata.
+# Model diteruskan apa adanya ke gateway OpenAI-compatible yang dikonfigurasi.
 SINGLE_MODEL_CATALOG: List[Dict[str, Any]] = [
-    {"model": "tamandata", "aliases": ["tamandata"], "input": 0, "output": 0},
+    {"model": "tamandata", "aliases": ["tamandata"]},
+    {"model": "gemini/gemini-3.5-flash-lite", "aliases": []},
+    {"model": "gemini/gemini-3.6-flash", "aliases": []},
+    {"model": "gemini/gemini-3-flash-preview", "aliases": []},
+    {"model": "gemini/gemini-2.5-flash", "aliases": []},
+    {"model": "z/deepseek-v4-flash", "aliases": []},
+    {"model": "z/hy3", "aliases": []},
+    {"model": "z/qwen3.8-flash", "aliases": []},
+    {"model": "z/deepseek-v4-flash-vision-exp", "aliases": []},
+    {"model": "z/glm-5.3-flash", "aliases": []},
+    {"model": "z/mimo-v2.5", "aliases": []},
+    {"model": "cbai/glm-5.2", "aliases": []},
 ]
 
+# Harga absolut tetap terpisah. Multiplier bukan harga IDR per 1 juta token.
 MODEL_PRICE_IDR: Dict[str, Dict[str, int]] = {
     "tamandata": {"input": 0, "output": 0},
+}
+
+MODEL_COST_MULTIPLIERS: Dict[str, Dict[str, float]] = {
+    "gemini/gemini-3.5-flash-lite": {"input": 1.0, "output": 0.7},
+    "gemini/gemini-3.6-flash": {"input": 1.0, "output": 0.7},
+    "gemini/gemini-3-flash-preview": {"input": 1.0, "output": 0.7},
+    "gemini/gemini-2.5-flash": {"input": 1.0, "output": 0.7},
+    "z/deepseek-v4-flash": {"input": 1.0, "output": 0.7},
+    "z/hy3": {"input": 1.0, "output": 0.7},
+    "z/qwen3.8-flash": {"input": 1.0, "output": 0.7},
+    "z/deepseek-v4-flash-vision-exp": {"input": 1.0, "output": 0.7},
+    "z/glm-5.3-flash": {"input": 1.5, "output": 1.0},
+    "z/mimo-v2.5": {"input": 1.0, "output": 0.7},
+    "cbai/glm-5.2": {"input": 1.5, "output": 1.0},
 }
 
 # Legacy compatibility for older modules/scripts that still reference the old name.
 SLASHAI_MODEL_CATALOG: List[Dict[str, Any]] = SINGLE_MODEL_CATALOG
 
-TOP_USAGE_MODEL_CANDIDATES = ["tamandata"]
-ALL_SLASHAI_MODELS = ["tamandata"]
-ALL_CHEAP_MODELS = ["tamandata"]
-ALL_MEDIUM_MODELS = []
-ALL_EXPENSIVE_MODELS = []
-ALL_CAPABLE_MODELS = ["tamandata"]
-DEFAULT_CHEAP_FALLBACK_MODELS = ["tamandata"]
-DEFAULT_EXPENSIVE_FALLBACK_MODELS = ["tamandata"]
-DEFAULT_FALLBACK_MODELS = ["tamandata"]
+TOP_USAGE_MODEL_CANDIDATES = [item["model"] for item in SINGLE_MODEL_CATALOG]
+ALL_SLASHAI_MODELS = TOP_USAGE_MODEL_CANDIDATES.copy()
+ALL_CHEAP_MODELS = ["tamandata"] + [
+    model
+    for model, multiplier in MODEL_COST_MULTIPLIERS.items()
+    if max(multiplier.values()) <= 1.0
+]
+ALL_MEDIUM_MODELS = [
+    model
+    for model, multiplier in MODEL_COST_MULTIPLIERS.items()
+    if 1.0 < max(multiplier.values()) <= 1.5
+]
+ALL_EXPENSIVE_MODELS: List[str] = []
+ALL_CAPABLE_MODELS = ALL_SLASHAI_MODELS.copy()
+DEFAULT_CHEAP_FALLBACK_MODELS = ALL_CHEAP_MODELS.copy()
+DEFAULT_EXPENSIVE_FALLBACK_MODELS = ALL_MEDIUM_MODELS.copy()
+DEFAULT_FALLBACK_MODELS = ALL_CHEAP_MODELS + ALL_MEDIUM_MODELS
 
 
 def _unique_ordered(items: List[str]) -> List[str]:
@@ -78,6 +111,8 @@ def model_price(model: str) -> Dict[str, int]:
         for key, value in MODEL_PRICE_IDR.items():
             if str(key).lower().split(":", 1)[0] == lower_base:
                 return value
+    if model_name in MODEL_COST_MULTIPLIERS or lower_name in MODEL_COST_MULTIPLIERS:
+        return {"input": 0, "output": 0}
     if "deepseek-v4-flash" in lower_name:
         return {"input": 50, "output": 200}
     if "deepseek-v4-pro" in lower_name:
@@ -87,6 +122,10 @@ def model_price(model: str) -> Dict[str, int]:
     return {"input": 0, "output": 0}
 
 def model_cost_tier(model: str) -> str:
+    model_name = str(model or "").strip().lower()
+    multiplier = MODEL_COST_MULTIPLIERS.get(model_name)
+    if multiplier:
+        return "cheap" if max(multiplier.values()) <= 1.0 else "medium"
     price = model_price(model)
     return _tier_from_price(int(price.get("input", 0) or 0), int(price.get("output", 0) or 0))
 
@@ -261,6 +300,10 @@ def _profile_for_model(model: str) -> Dict[str, float]:
     else:
         speed, quality, cost = 0.50, 0.95, 999.0
 
+    multiplier = MODEL_COST_MULTIPLIERS.get(name)
+    if multiplier:
+        cost = max(multiplier.values())
+
     if ":fast" in name or "flash" in name or "instant" in name:
         speed += 0.08
     if ":slow" in name:
@@ -292,7 +335,9 @@ def _profile_for_model(model: str) -> Dict[str, float]:
 
 # Estimasi profil sederhana untuk menentukan fallback yang cepat dan kompeten.
 # speed: makin besar makin cepat, quality: makin besar makin kuat, cost: relatif makin kecil makin hemat.
-MODEL_PROFILES: Dict[str, Dict[str, float]] = {model: _profile_for_model(model) for model in MODEL_PRICE_IDR}
+MODEL_PROFILES: Dict[str, Dict[str, float]] = {
+    model: _profile_for_model(model) for model in ALL_SLASHAI_MODELS
+}
 
 SAFE_PERSONA_SUFFIX = (
     "\n\nAturan keamanan: bantu pengguna semaksimal mungkin untuk permintaan yang aman dan bermanfaat. "
