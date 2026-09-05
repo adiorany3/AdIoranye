@@ -91,8 +91,8 @@
     {
       "id": "arxiv_cs_ai",
       "name": "arXiv cs.AI Recent",
-      "type": "html",
-      "url": "https://arxiv.org/list/cs.AI/recent",
+      "type": "rss",
+      "url": "https://export.arxiv.org/rss/cs.AI",
       "enabled": true,
       "collection": "AI Research Papers",
       "tags": [
@@ -109,8 +109,8 @@
     {
       "id": "arxiv_cs_cl",
       "name": "arXiv cs.CL Recent",
-      "type": "html",
-      "url": "https://arxiv.org/list/cs.CL/recent",
+      "type": "rss",
+      "url": "https://export.arxiv.org/rss/cs.CL",
       "enabled": true,
       "collection": "NLP Research Papers",
       "tags": [
@@ -163,7 +163,7 @@
       "name": "AP World News",
       "type": "html",
       "url": "https://apnews.com/hub/world-news",
-      "enabled": true,
+      "enabled": false,
       "collection": "Berita Dunia Terkini",
       "tags": [
         "ap",
@@ -185,7 +185,7 @@
       "name": "AP Technology",
       "type": "html",
       "url": "https://apnews.com/hub/technology",
-      "enabled": true,
+      "enabled": false,
       "collection": "Teknologi Terkini",
       "tags": [
         "ap",
@@ -314,7 +314,7 @@
       "name": "FAO Newsroom",
       "type": "rss",
       "url": "https://www.fao.org/newsroom/rss/en/",
-      "enabled": true,
+      "enabled": false,
       "collection": "Pangan dan Pertanian Terkini",
       "tags": [
         "fao",
@@ -335,7 +335,7 @@
       "name": "Kemenkes RI Rilis",
       "type": "html_index",
       "url": "https://sehatnegeriku.kemkes.go.id/category/rilis-media/",
-      "enabled": true,
+      "enabled": false,
       "collection": "Kesehatan Indonesia Terkini",
       "tags": [
         "kemkes",
@@ -595,7 +595,7 @@
       "name": "BNPB Berita dan Informasi Bencana",
       "type": "html_index",
       "url": "https://bnpb.go.id/berita",
-      "enabled": true,
+      "enabled": false,
       "collection": "Bencana dan Krisis Indonesia Terkini",
       "tags": ["bnpb", "bencana", "indonesia", "official"],
       "max_items": 4,
@@ -613,7 +613,7 @@
       "name": "BPS Statistik Indonesia",
       "type": "html_index",
       "url": "https://www.bps.go.id/id/pressrelease.html",
-      "enabled": true,
+      "enabled": false,
       "collection": "Statistik Resmi Indonesia",
       "tags": ["bps", "statistik", "ekonomi", "sosial", "indonesia", "official"],
       "max_items": 4,
@@ -649,7 +649,7 @@
       "name": "OJK Siaran Pers",
       "type": "html_index",
       "url": "https://ojk.go.id/id/berita-dan-kegiatan/siaran-pers/Pages/default.aspx",
-      "enabled": true,
+      "enabled": false,
       "collection": "Regulasi dan Stabilitas Keuangan Indonesia",
       "tags": ["ojk", "keuangan", "perbankan", "regulasi", "indonesia", "official"],
       "max_items": 4,

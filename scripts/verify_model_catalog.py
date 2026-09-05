@@ -26,6 +26,11 @@ EXPECTED = {
     "z/glm-5.3-flash": {"input": 1.5, "output": 1.0},
     "z/mimo-v2.5": {"input": 1.0, "output": 0.7},
     "cbai/glm-5.2": {"input": 1.5, "output": 1.0},
+    "cx/gpt-5.6-sol": {"input": 2.0, "output": 1.4},
+    "cx/gpt-5.6-terra": {"input": 1.0, "output": 0.7},
+    "cx/gpt-5.6-luna": {"input": 1.0, "output": 0.7},
+    "cx/gpt-5.5": {"input": 1.0, "output": 0.7},
+    "cx/gpt-6-astra": {"input": 4.0, "output": 2.8},
 }
 
 catalog_models = [item["model"] for item in SINGLE_MODEL_CATALOG]

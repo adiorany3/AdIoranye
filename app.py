@@ -2793,7 +2793,8 @@ power_quality_verifier_enabled = parse_bool(
     get_secret("POWER_QUALITY_VERIFIER_ENABLED", True), default=True
 )
 power_quality_verifier_model = str(
-    get_secret("POWER_QUALITY_VERIFIER_MODEL", "") or ""
+    get_secret("POWER_QUALITY_VERIFIER_MODEL", "cx/gpt-5.6-terra")
+    or "cx/gpt-5.6-terra"
 ).strip()
 power_quality_min_score = float(get_secret("POWER_QUALITY_MIN_SCORE", 0.72) or 0.72)
 power_quality_append_footer = parse_bool(

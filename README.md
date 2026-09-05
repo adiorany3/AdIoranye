@@ -81,4 +81,6 @@ File yang dipublish script:
 
 ## Update: Quality Control & Verifier System
 
-Paket ini sudah dilengkapi `ai_quality_control.py`, mode jawaban `/mode`, dashboard `✅ Quality Control`, quality scoring, verifier model, export/import KB JSONL, dan evaluasi mingguan. Lihat `QUALITY_CONTROL_VERIFIER_SYSTEM.md`.
+Paket ini sudah dilengkapi `ai_quality_control.py`, mode jawaban `/mode`, dashboard `✅ Quality Control`, quality scoring, verifier model, export/import KB JSONL, dan evaluasi mingguan.
+
+Verifier kualitas default memakai `cx/gpt-5.6-terra` secara kondisional. Verifier hanya dipanggil saat skor kualitas rendah, mode berisiko, atau jawaban memuat klaim berisiko. Retrieval tetap memakai SQLite FTS5 dan reranker lokal. Override melalui `POWER_QUALITY_VERIFIER_MODEL` atau nonaktifkan dengan `POWER_QUALITY_VERIFIER_ENABLED=false`.

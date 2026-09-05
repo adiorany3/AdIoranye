@@ -28,6 +28,11 @@ SINGLE_MODEL_CATALOG: List[Dict[str, Any]] = [
     {"model": "z/glm-5.3-flash", "aliases": []},
     {"model": "z/mimo-v2.5", "aliases": []},
     {"model": "cbai/glm-5.2", "aliases": []},
+    {"model": "cx/gpt-5.6-sol", "aliases": []},
+    {"model": "cx/gpt-5.6-terra", "aliases": []},
+    {"model": "cx/gpt-5.6-luna", "aliases": []},
+    {"model": "cx/gpt-5.5", "aliases": []},
+    {"model": "cx/gpt-6-astra", "aliases": []},
 ]
 
 # Harga absolut tetap terpisah. Multiplier bukan harga IDR per 1 juta token.
@@ -47,6 +52,11 @@ MODEL_COST_MULTIPLIERS: Dict[str, Dict[str, float]] = {
     "z/glm-5.3-flash": {"input": 1.5, "output": 1.0},
     "z/mimo-v2.5": {"input": 1.0, "output": 0.7},
     "cbai/glm-5.2": {"input": 1.5, "output": 1.0},
+    "cx/gpt-5.6-sol": {"input": 2.0, "output": 1.4},
+    "cx/gpt-5.6-terra": {"input": 1.0, "output": 0.7},
+    "cx/gpt-5.6-luna": {"input": 1.0, "output": 0.7},
+    "cx/gpt-5.5": {"input": 1.0, "output": 0.7},
+    "cx/gpt-6-astra": {"input": 4.0, "output": 2.8},
 }
 
 # Legacy compatibility for older modules/scripts that still reference the old name.
@@ -64,11 +74,15 @@ ALL_MEDIUM_MODELS = [
     for model, multiplier in MODEL_COST_MULTIPLIERS.items()
     if 1.0 < max(multiplier.values()) <= 1.5
 ]
-ALL_EXPENSIVE_MODELS: List[str] = []
+ALL_EXPENSIVE_MODELS = [
+    model
+    for model, multiplier in MODEL_COST_MULTIPLIERS.items()
+    if max(multiplier.values()) > 1.5
+]
 ALL_CAPABLE_MODELS = ALL_SLASHAI_MODELS.copy()
 DEFAULT_CHEAP_FALLBACK_MODELS = ALL_CHEAP_MODELS.copy()
-DEFAULT_EXPENSIVE_FALLBACK_MODELS = ALL_MEDIUM_MODELS.copy()
-DEFAULT_FALLBACK_MODELS = ALL_CHEAP_MODELS + ALL_MEDIUM_MODELS
+DEFAULT_EXPENSIVE_FALLBACK_MODELS = ALL_MEDIUM_MODELS + ALL_EXPENSIVE_MODELS
+DEFAULT_FALLBACK_MODELS = ALL_CHEAP_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS
 
 
 def _unique_ordered(items: List[str]) -> List[str]:

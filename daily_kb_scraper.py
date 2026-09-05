@@ -530,10 +530,19 @@ def make_session(timeout: int = 20, user_agent: str = DEFAULT_USER_AGENT) -> req
 
 def fetch_text(session: requests.Session, url: str, timeout: Optional[int] = None) -> str:
     timeout_value = int(timeout or getattr(session, "request_timeout", 20) or 20)
-    resp = session.get(url, timeout=timeout_value)
-    resp.raise_for_status()
-    resp.encoding = resp.encoding or "utf-8"
-    return resp.text
+    last_error: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            resp = session.get(url, timeout=timeout_value)
+            resp.raise_for_status()
+            resp.encoding = resp.encoding or "utf-8"
+            return resp.text
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_error = exc
+            if attempt == 2:
+                raise
+            time.sleep(0.5 * (attempt + 1))
+    raise last_error or RuntimeError(f"Gagal mengambil URL: {url}")
 
 
 def url_allowed_by_patterns(url: str, source: SourceConfig) -> bool:
