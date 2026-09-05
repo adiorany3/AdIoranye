@@ -535,7 +535,9 @@ def fetch_text(session: requests.Session, url: str, timeout: Optional[int] = Non
         try:
             resp = session.get(url, timeout=timeout_value)
             resp.raise_for_status()
-            resp.encoding = resp.encoding or "utf-8"
+            content_type = str(resp.headers.get("Content-Type") or "").lower()
+            if "charset=" not in content_type:
+                resp.encoding = resp.apparent_encoding or "utf-8"
             return resp.text
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
             last_error = exc

@@ -677,6 +677,7 @@ def make_response_cache_key(
     memory_text: str,
     intent: str,
     route_signature: str = "",
+    recent_messages: Optional[List[Dict[str, str]]] = None,
 ) -> str:
     blob = json.dumps(
         {
@@ -686,6 +687,7 @@ def make_response_cache_key(
             "memory_hash": hashlib.sha256(str(memory_text or "").encode("utf-8")).hexdigest(),
             "intent": intent,
             "route": route_signature,
+            "recent_messages": recent_messages or [],
         },
         ensure_ascii=False,
         sort_keys=True,
@@ -838,6 +840,7 @@ class PowerStore:
             path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def _ensure_schema(self) -> None:
@@ -1175,6 +1178,7 @@ class PowerStore:
                     conn.execute(ddl)
                 except Exception:
                     pass
+            conn.execute("DELETE FROM current_claims WHERE doc_id IS NOT NULL AND doc_id NOT IN (SELECT id FROM documents)")
             try:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents(collection, created_at)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(doc_hash)")
@@ -3605,7 +3609,7 @@ def generate_power_answer(
     except Exception:
         pass
     route_signature = ",".join(ranked_all[:8]) + f"|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}|retrieval_query={hashlib.sha256(str(retrieval_query).encode('utf-8')).hexdigest()[:12]}"
-    kb_cache_version = store.get_kb_cache_version() if enable_rag and rag_sources else ""
+    kb_cache_version = store.get_kb_cache_version() if enable_rag and (rag_sources or base_memory_text) else ""
     kb_cache_ttl_seconds = max(int(response_cache_ttl_seconds or 1800), 31536000) if kb_cache_version else int(response_cache_ttl_seconds or 1800)
     kb_semantic_cache_ttl_seconds = max(int(semantic_cache_ttl_seconds or 86400), 31536000) if kb_cache_version else int(semantic_cache_ttl_seconds or 86400)
     cache_key = make_response_cache_key(
@@ -3614,7 +3618,8 @@ def generate_power_answer(
         user_text=user_text,
         memory_text=memory_text,
         intent=intent,
-        route_signature=f"{route_signature}|kb_version={kb_cache_version}",
+        route_signature=f"{route_signature}|mode={effective_answer_mode}|strict={int(bool(strict_rag_mode))}|kb_version={kb_cache_version}",
+        recent_messages=recent_messages,
     )
     if enable_response_cache and intent not in {"admin_command", "coding"}:
         cached = store.get_cached_response(cache_key)

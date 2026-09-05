@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-09-05T05:03:30+00:00",
-  "started_at_wib": "2026-09-05 12:03:30 WIB",
+  "started_at": "2026-09-05T05:29:14+00:00",
+  "started_at_wib": "2026-09-05 12:29:14 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources.json",
   "dry_run": false,
@@ -13,9 +13,9 @@
   "source_cursor_next": 3,
   "time_budget_seconds": 0,
   "stopped_by_time_budget": false,
-  "added_documents": 5,
-  "added_chunks": 5,
-  "skipped_existing": 89,
+  "added_documents": 3,
+  "added_chunks": 6,
+  "skipped_existing": 91,
   "skipped_short": 63,
   "errors": 1,
   "items": [
@@ -101,28 +101,28 @@
       "status": "skipped_existing",
       "title": "Judge declares mistrial in Lindsay Clancy murder case as jury deadlocks - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cpwlrj2je1po?at_medium=RSS&at_campaign=rss",
-      "chars": 9674
+      "chars": 9673
     },
     {
       "source": "BBC World",
       "status": "skipped_existing",
       "title": "Trump's peace envoys to visit Moscow and Kyiv over weekend - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c23x0z48x0no?at_medium=RSS&at_campaign=rss",
-      "chars": 5753
+      "chars": 5751
     },
     {
       "source": "BBC World",
       "status": "skipped_existing",
       "title": "Europe targeted by spiralling campaign of sabotage and Russia is the chief suspect - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c5y4g6meekro?at_medium=RSS&at_campaign=rss",
-      "chars": 11675
+      "chars": 11673
     },
     {
       "source": "BBC World",
       "status": "skipped_existing",
       "title": "UN votes to adopt new world map to reflect Africa's true size - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/ce30vp55dnlo?at_medium=RSS&at_campaign=rss",
-      "chars": 7528
+      "chars": 7526
     },
     {
       "source": "BBC World",
@@ -169,67 +169,43 @@
     {
       "source": "ANTARA Terkini",
       "status": "added",
-      "title": "ANTARA Terkini — 21 perusahaan terkait karhutla disegel - Infografik ANTARA News",
+      "title": "ANTARA Terkini — Kombes Andi Sinjaya raih doktor lewat riset transformasi digital STIK - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5727220/kombes-andi-sinjaya-raih-doktor-lewat-riset-transformasi-digital-stik",
+      "doc_id": 2421,
+      "chunks": 1,
+      "chars": 1017,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "skipped_existing",
+      "title": "21 perusahaan terkait karhutla disegel - Infografik ANTARA News",
       "url": "https://www.antaranews.com/infografik/5726991/21-perusahaan-terkait-karhutla-disegel",
-      "doc_id": 2416,
-      "chunks": 1,
-      "chars": 972,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "chars": 549
     },
     {
       "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Bank Sumut bersama Pemkab Taput perkuat KUR usaha mikro dan petani  - ANTARA News",
+      "status": "skipped_existing",
+      "title": "Bank Sumut bersama Pemkab Taput perkuat KUR usaha mikro dan petani  - ANTARA News",
       "url": "https://www.antaranews.com/berita/5727213/bank-sumut-bersama-pemkab-taput-perkuat-kur-usaha-mikro-dan-petani",
-      "doc_id": 2417,
-      "chunks": 1,
-      "chars": 1009,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "chars": 549
     },
     {
       "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Alcaraz lanjutkan misi pertahankan gelar dengan capai 16 besar US Open - ANTARA News",
+      "status": "skipped_existing",
+      "title": "Alcaraz lanjutkan misi pertahankan gelar dengan capai 16 besar US Open - ANTARA News",
       "url": "https://www.antaranews.com/berita/5727212/alcaraz-lanjutkan-misi-pertahankan-gelar-dengan-capai-16-besar-us-open",
-      "doc_id": 2418,
-      "chunks": 1,
-      "chars": 1015,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "chars": 549
     },
     {
       "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Mengintip \"Tembok Konstantinopel\" di sudut Istanbul - ANTARA News",
+      "status": "skipped_existing",
+      "title": "Mengintip \"Tembok Konstantinopel\" di sudut Istanbul - ANTARA News",
       "url": "https://www.antaranews.com/berita/5727211/mengintip-tembok-konstantinopel-di-sudut-istanbul",
-      "doc_id": 2419,
-      "chunks": 1,
-      "chars": 969,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — APHI dukung Inpres larangan pembukaan lahan dengan cara membakar - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5727207/aphi-dukung-inpres-larangan-pembukaan-lahan-dengan-cara-membakar",
-      "doc_id": 2420,
-      "chunks": 1,
-      "chars": 1001,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "chars": 549
     },
     {
       "source": "ANTARA Tekno",
@@ -518,7 +494,7 @@
       "status": "skipped_existing",
       "title": "NASA Ames Fire Department Aircraft Firefighting Training - NASA",
       "url": "https://www.nasa.gov/news-release/nasa-ames-fire-department-aircraft-firefighting-training/",
-      "chars": 6474
+      "chars": 6453
     },
     {
       "source": "NASA Breaking News",
@@ -532,7 +508,7 @@
       "status": "skipped_existing",
       "title": "Lunar Occultation of Venus - NASA",
       "url": "https://www.nasa.gov/image-article/lunar-occultation-of-venus/",
-      "chars": 6281
+      "chars": 6260
     },
     {
       "source": "NASA Breaking News",
@@ -994,6 +970,19 @@
     },
     {
       "source": "CNN Indonesia Nasional",
+      "status": "added",
+      "title": "CNN Indonesia Nasional — BMKG Sebut Dentuman Misterius Bandung Berasal dari Fenomena Skyquake",
+      "url": "https://www.cnnindonesia.com/nasional/20260820162240-20-1394531/bmkg-sebut-dentuman-misterius-bandung-berasal-dari-fenomena-skyquake",
+      "doc_id": 2422,
+      "chunks": 2,
+      "chars": 1415,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 82,
+      "claims": 6
+    },
+    {
+      "source": "CNN Indonesia Nasional",
       "status": "skipped_existing",
       "title": "Penampakan Lava Fountain Menjulang Tinggi dari Erupsi Anak Krakatau",
       "url": "https://www.cnnindonesia.com/nasional/20260905111919-24-1400340/penampakan-lava-fountain-menjulang-tinggi-dari-erupsi-anak-krakatau",
@@ -1018,28 +1007,21 @@
       "status": "skipped_existing",
       "title": "Detik-detik Erupsi Gunung Anak Krakatau, Semburkan Lava Air Mancur",
       "url": "https://www.cnnindonesia.com/nasional/20260905102958-24-1400324/detik-detik-erupsi-gunung-anak-krakatau-semburkan-lava-air-mancur",
-      "chars": 557
-    },
-    {
-      "source": "CNN Indonesia Nasional",
-      "status": "skipped_existing",
-      "title": "Gerak Jalan Tajemtra Jember Diikuti 25 Ribu, Pecah Rekor",
-      "url": "https://www.cnnindonesia.com/nasional/20260905104205-20-1400325/gerak-jalan-tajemtra-jember-diikuti-25-ribu-pecah-rekor",
-      "chars": 741
+      "chars": 704
     },
     {
       "source": "Tempo Nasional",
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/",
-      "chars": 3277,
+      "chars": 3276,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 79,
         "unique_words": 295,
-        "char_count": 3277
+        "char_count": 3276
       }
     },
     {
@@ -1047,14 +1029,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/harian",
-      "chars": 3277,
+      "chars": 3276,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 79,
         "unique_words": 295,
-        "char_count": 3277
+        "char_count": 3276
       }
     },
     {
@@ -1062,14 +1044,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/mingguan",
-      "chars": 3277,
+      "chars": 3276,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 79,
         "unique_words": 295,
-        "char_count": 3277
+        "char_count": 3276
       }
     },
     {
@@ -1077,14 +1059,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/plus",
-      "chars": 3277,
+      "chars": 3276,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 79,
         "unique_words": 295,
-        "char_count": 3277
+        "char_count": 3276
       }
     },
     {
@@ -1092,14 +1074,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/hiburan/ithaca-perang-troya-perjalanan-odysseus-yunani-2285594",
-      "chars": 3277,
+      "chars": 3276,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 79,
         "unique_words": 295,
-        "char_count": 3277
+        "char_count": 3276
       }
     },
     {
@@ -1107,7 +1089,7 @@
       "status": "skipped_existing",
       "title": "BERANDA",
       "url": "https://www.dw.com/id/beranda/s-11546",
-      "chars": 6093
+      "chars": 6039
     },
     {
       "source": "DW Indonesia",
@@ -1135,7 +1117,20 @@
       "status": "skipped_existing",
       "title": "JERMAN: Berita dan laporan dari Berlin dan sekitarnya",
       "url": "https://www.dw.com/id/jerman/s-45533459",
-      "chars": 4650
+      "chars": 4502
+    },
+    {
+      "source": "Al Jazeera English",
+      "status": "added",
+      "title": "Al Jazeera English — Families of missing Ecuadorian fishermen allege US involvement | Military | Al Jazeera",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/5/families-of-missing-ecuadorian-fishermen-allege-us-involvement?traffic_source=rss",
+      "doc_id": 2423,
+      "chunks": 3,
+      "chars": 3117,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 38,
+      "claims": 6
     },
     {
       "source": "Al Jazeera English",
@@ -1190,18 +1185,11 @@
       }
     },
     {
-      "source": "Al Jazeera English",
-      "status": "skipped_existing",
-      "title": "Did Israel’s destruction of Gaza worsen its water crisis? | Newsfeed | Al Jazeera",
-      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/5/did-israels-destruction-of-gaza-worsen-its-water-crisis?traffic_source=rss",
-      "chars": 2307
-    },
-    {
       "source": "BPK Database Peraturan Indonesia",
       "status": "skipped_existing",
       "title": "Database Peraturan | JDIH BPK",
       "url": "https://peraturan.bpk.go.id/",
-      "chars": 5276
+      "chars": 5250
     },
     {
       "source": "BPK Database Peraturan Indonesia",
@@ -1311,7 +1299,7 @@
       "status": "error_source",
       "title": "UNESCO Newsroom",
       "url": "https://www.unesco.org/en/newsroom/news",
-      "message": "('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))"
+      "message": "HTTPSConnectionPool(host='www.unesco.org', port=443): Max retries exceeded with url: /en/newsroom/news (Caused by ConnectTimeoutError(<HTTPSConnection(host='www.unesco.org', port=443) at 0x109809a90>, 'Connection to www.unesco.org timed out. (connect timeout=20)'))"
     },
     {
       "source": "World Bank Open Data",
@@ -1430,7 +1418,7 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 0,
+  "critical_claims_added": 12,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -1445,11 +1433,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260905_120330_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260905_122913_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260905_114126_pre-update.db"
+          ".db_backups/adioranye_power.db_20260905_114229_post-update.db"
         ]
       }
     },
@@ -1485,11 +1473,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260905_120657_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260905_123344_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260905_114214_pre-update.db"
+          ".db_backups/adioranye_power.db_20260905_114243_pre-update.db"
         ]
       }
     }
@@ -2090,8 +2078,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-09-05T05:06:57+00:00",
-  "finished_at_wib": "2026-09-05 12:06:57 WIB",
-  "elapsed_seconds": 207.32,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-05 12:06:57 WIB\nDokumen baru: 5 | Chunk baru: 5 | Error: 1\n\nTop update penting:\n1. ANTARA Terkini — 21 perusahaan terkait karhutla disegel - Infografik ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n2. ANTARA Terkini — Bank Sumut bersama Pemkab Taput perkuat KUR usaha mikro dan petani  - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n3. ANTARA Terkini — Alcaraz lanjutkan misi pertahankan gelar dengan capai 16 besar US Open - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n4. ANTARA Terkini — Mengintip \"Tembok Konstantinopel\" di sudut Istanbul - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — APHI dukung Inpres larangan pembukaan lahan dengan cara membakar - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-09-05T05:33:43+00:00",
+  "finished_at_wib": "2026-09-05 12:33:43 WIB",
+  "elapsed_seconds": 270.28,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-05 12:33:43 WIB\nDokumen baru: 3 | Chunk baru: 6 | Error: 1\n\nTop update penting:\n1. CNN Indonesia Nasional — BMKG Sebut Dentuman Misterius Bandung Berasal dari Fenomena Skyquake\n   Sumber: CNN Indonesia Nasional | kualitas: 76.0 | freshness: 100.0\n2. ANTARA Terkini — Kombes Andi Sinjaya raih doktor lewat riset transformasi digital STIK - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n3. Al Jazeera English — Families of missing Ecuadorian fishermen allege US involvement | Military | Al Jazeera\n   Sumber: Al Jazeera English | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }

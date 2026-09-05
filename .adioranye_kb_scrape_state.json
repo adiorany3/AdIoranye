@@ -4456,6 +4456,14 @@
       "title": "ANTARA Terkini — Menbud dukung sineas Indonesia produksi banyak film tema kepahlawanan - ANTARA News",
       "url": "https://www.antaranews.com/video/5726952/menbud-dukung-sineas-indonesia-produksi-banyak-film-tema-kepahlawanan"
     },
+    "42e88649a49bf49398284f618166d73c972806a1ebe83ac5b444eb3024467da9": {
+      "chunks": 3,
+      "created_at": "2026-09-05T05:32:22+00:00",
+      "doc_id": 2423,
+      "source": "Al Jazeera English",
+      "title": "Al Jazeera English — Families of missing Ecuadorian fishermen allege US involvement | Military | Al Jazeera",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/5/families-of-missing-ecuadorian-fishermen-allege-us-involvement?traffic_source=rss"
+    },
     "42e9dbbdd7b15bd32d78bf95d4d0b2f57ac0af8dfe8b97152536368e9cf897aa": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:08+00:00",
@@ -12512,6 +12520,14 @@
       "title": "Google News Asia - US-China Asia — Canada’s pragmatic turn towards China is not without strategic limits - East Asia Forum",
       "url": "https://news.google.com/rss/articles/CBMiqgFBVV95cUxOWHdaVjEzZnVOeFR0bmw1VU5iNkdKZ016SzJVRnRwbGwyRC1yWV8yNGo1eWRoODhxQmkwYUE1emw5TDFQVGxqN2FLOGxmdXFUSjEwRVNtRGJ6N2REVFFEbEJuUzdwTnBhRFhKamwwNXhLa3pqSWdTd2JMSTNVYkFPNW9YWGdNbDlQdWpoSFhudExFVEtqYjJBTTB0Qm0xOUVMZlAycXZIakh0QQ?oc=5"
     },
+    "b8bb534b3850c4be6fab920b4eea04b4b43da52505f7dc0a31ecf85ee825dd99": {
+      "chunks": 1,
+      "created_at": "2026-09-05T05:29:44+00:00",
+      "doc_id": 2421,
+      "source": "ANTARA Terkini",
+      "title": "ANTARA Terkini — Kombes Andi Sinjaya raih doktor lewat riset transformasi digital STIK - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5727220/kombes-andi-sinjaya-raih-doktor-lewat-riset-transformasi-digital-stik"
+    },
     "b8db22f992edc72ffdff0629d7efe6930a2780ca13c85818f626f0da253f4920": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:10+00:00",
@@ -16760,6 +16776,14 @@
       "title": "ANTARA Terkini — Carrick sebut Benjamin Sesko miliki peluang turun sejak menit pertama - ANTARA News",
       "url": "https://www.antaranews.com/berita/5726963/carrick-sebut-benjamin-sesko-miliki-peluang-turun-sejak-menit-pertama"
     },
+    "fb6dd7a99076efe02b206bb2efd839ef384699aed735a6b49dc63b8c9744edaa": {
+      "chunks": 2,
+      "created_at": "2026-09-05T05:32:00+00:00",
+      "doc_id": 2422,
+      "source": "CNN Indonesia Nasional",
+      "title": "CNN Indonesia Nasional — BMKG Sebut Dentuman Misterius Bandung Berasal dari Fenomena Skyquake",
+      "url": "https://www.cnnindonesia.com/nasional/20260820162240-20-1394531/bmkg-sebut-dentuman-misterius-bandung-berasal-dari-fenomena-skyquake"
+    },
     "fb957541720ea257521332413b001e66002b9a71efc06ed0a5724615299442e9": {
       "chunks": 1,
       "created_at": "2026-05-22T02:30:05+00:00",
@@ -17018,13 +17042,6 @@
     }
   },
   "runs": [
-    {
-      "added_chunks": 0,
-      "added_documents": 0,
-      "dry_run": false,
-      "errors": 0,
-      "finished_at": "2026-07-24T07:41:44+00:00"
-    },
     {
       "added_chunks": 0,
       "added_documents": 0,
@@ -17437,6 +17454,13 @@
       "dry_run": false,
       "errors": 1,
       "finished_at": "2026-09-05T05:06:57+00:00"
+    },
+    {
+      "added_chunks": 6,
+      "added_documents": 3,
+      "dry_run": false,
+      "errors": 1,
+      "finished_at": "2026-09-05T05:33:43+00:00"
     }
   ],
   "source_cursor": 3,
