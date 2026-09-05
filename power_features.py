@@ -922,6 +922,7 @@ class PowerStore:
                     user_id TEXT DEFAULT 'public',
                     channel TEXT DEFAULT 'web',
                     intent TEXT DEFAULT '',
+                    kb_version TEXT DEFAULT '',
                     question TEXT NOT NULL,
                     question_terms TEXT DEFAULT '',
                     answer TEXT NOT NULL,
@@ -1152,6 +1153,7 @@ class PowerStore:
                 pass
 
             for ddl in [
+                "ALTER TABLE semantic_response_cache ADD COLUMN kb_version TEXT DEFAULT ''",
                 "ALTER TABLE documents ADD COLUMN collection TEXT DEFAULT 'Default'",
                 "ALTER TABLE documents ADD COLUMN tags TEXT DEFAULT ''",
                 "ALTER TABLE documents ADD COLUMN doc_hash TEXT DEFAULT ''",
@@ -2330,7 +2332,26 @@ class PowerStore:
     def clear_response_cache(self) -> int:
         with self._connect() as conn:
             cur = conn.execute("DELETE FROM response_cache")
-            return int(cur.rowcount or 0)
+            semantic = conn.execute("DELETE FROM semantic_response_cache")
+            return int(cur.rowcount or 0) + int(semantic.rowcount or 0)
+
+    def get_kb_cache_version(self) -> str:
+        """Return stable namespace; any KB write changes cache namespace."""
+        with self._connect() as conn:
+            parts: List[str] = []
+            for table, query in (
+                ("documents", "SELECT COUNT(*), COALESCE(MAX(updated_at), MAX(created_at), 0) FROM documents"),
+                ("chunks", "SELECT COUNT(*), COALESCE(MAX(created_at), 0) FROM chunks"),
+                ("kb_documents_v2", "SELECT COUNT(*), COALESCE(MAX(updated_at), '') FROM kb_documents_v2"),
+                ("kb_update_log_v2", "SELECT COUNT(*), COALESCE(MAX(finished_at), '') FROM kb_update_log_v2"),
+            ):
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                ).fetchone()
+                if exists:
+                    row = conn.execute(query).fetchone()
+                    parts.append(f"{table}:{row[0]}:{row[1]}")
+            return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:24]
 
     def clear_memories_all(self) -> int:
         with self._connect() as conn:
@@ -2410,6 +2431,7 @@ class PowerStore:
         ttl_seconds: int = 86400,
         user_id: str = "public",
         channel: str = "web",
+        kb_version: str = "",
     ) -> Optional[Tuple[str, Dict[str, Any]]]:
         """Return a cached answer for semantically similar questions.
 
@@ -2429,6 +2451,7 @@ class PowerStore:
                 WHERE expires_at > ?
                   AND user_id = ?
                   AND channel = ?
+                  AND kb_version = ?
                   AND (? = '' OR intent = ? OR intent = '')
                 ORDER BY ts DESC LIMIT 180
                 """,
@@ -2436,6 +2459,7 @@ class PowerStore:
                     now,
                     str(user_id or "public")[:120],
                     str(channel or "web")[:40],
+                    str(kb_version or ""),
                     str(intent or "")[:80],
                     str(intent or "")[:80],
                 ),
@@ -2466,6 +2490,7 @@ class PowerStore:
         ttl_seconds: int = 86400,
         user_id: str = "public",
         channel: str = "web",
+        kb_version: str = "",
     ) -> None:
         q = str(question or "").strip()
         body = str(answer or "").strip()
@@ -2477,10 +2502,10 @@ class PowerStore:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO semantic_response_cache(ts, expires_at, user_id, channel, intent, question, question_terms, answer, meta_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO semantic_response_cache(ts, expires_at, user_id, channel, intent, kb_version, question, question_terms, answer, meta_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (now, expires_at, str(user_id or "public")[:120], str(channel or "web")[:40], str(intent or "")[:80], q[:2000], self._semantic_terms(q), body, _safe_json(meta)[:12000]),
+                (now, expires_at, str(user_id or "public")[:120], str(channel or "web")[:40], str(intent or "")[:80], str(kb_version or ""), q[:2000], self._semantic_terms(q), body, _safe_json(meta)[:12000]),
             )
             # Keep the table compact.
             conn.execute(
@@ -3580,13 +3605,16 @@ def generate_power_answer(
     except Exception:
         pass
     route_signature = ",".join(ranked_all[:8]) + f"|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}|retrieval_query={hashlib.sha256(str(retrieval_query).encode('utf-8')).hexdigest()[:12]}"
+    kb_cache_version = store.get_kb_cache_version() if enable_rag and rag_sources else ""
+    kb_cache_ttl_seconds = max(int(response_cache_ttl_seconds or 1800), 31536000) if kb_cache_version else int(response_cache_ttl_seconds or 1800)
+    kb_semantic_cache_ttl_seconds = max(int(semantic_cache_ttl_seconds or 86400), 31536000) if kb_cache_version else int(semantic_cache_ttl_seconds or 86400)
     cache_key = make_response_cache_key(
         model=selected_model,
         system_prompt=system_prompt,
         user_text=user_text,
         memory_text=memory_text,
         intent=intent,
-        route_signature=route_signature,
+        route_signature=f"{route_signature}|kb_version={kb_cache_version}",
     )
     if enable_response_cache and intent not in {"admin_command", "coding"}:
         cached = store.get_cached_response(cache_key)
@@ -3610,9 +3638,10 @@ def generate_power_answer(
                 user_text,
                 intent=intent,
                 threshold=float(semantic_cache_threshold or 0.78),
-                ttl_seconds=int(semantic_cache_ttl_seconds or 86400),
+                ttl_seconds=kb_semantic_cache_ttl_seconds,
                 user_id=user_id,
                 channel=channel,
+                kb_version=kb_cache_version,
             )
             if semantic_cached:
                 answer, meta = semantic_cached
@@ -3860,7 +3889,7 @@ def generate_power_answer(
             except Exception:
                 pass
         if enable_response_cache and intent not in {"admin_command", "coding"}:
-            store.set_cached_response(cache_key, answer, meta, ttl_seconds=response_cache_ttl_seconds)
+            store.set_cached_response(cache_key, answer, meta, ttl_seconds=kb_cache_ttl_seconds)
             if (
                 performance_optimizer_enabled
                 and semantic_cache_enabled
@@ -3874,9 +3903,10 @@ def generate_power_answer(
                         answer=answer,
                         meta=meta,
                         intent=intent,
-                        ttl_seconds=int(semantic_cache_ttl_seconds or 86400),
+                        ttl_seconds=kb_semantic_cache_ttl_seconds,
                         user_id=user_id,
                         channel=channel,
+                        kb_version=kb_cache_version,
                     )
                 except Exception:
                     pass
