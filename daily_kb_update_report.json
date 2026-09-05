@@ -1,6 +1,6 @@
 {
-  "started_at": "2026-09-04T19:24:57+00:00",
-  "started_at_wib": "2026-09-05 02:24:57 WIB",
+  "started_at": "2026-09-04T21:58:46+00:00",
+  "started_at_wib": "2026-09-05 04:58:46 WIB",
   "db_path": ".adioranye_power.db",
   "sources_path": "kb_sources.json",
   "dry_run": false,
@@ -13,63 +13,39 @@
   "source_cursor_next": 3,
   "time_budget_seconds": 0,
   "stopped_by_time_budget": false,
-  "added_documents": 54,
-  "added_chunks": 297,
-  "skipped_existing": 37,
-  "skipped_short": 73,
-  "errors": 7,
+  "added_documents": 14,
+  "added_chunks": 30,
+  "skipped_existing": 80,
+  "skipped_short": 65,
+  "errors": 8,
   "items": [
     {
       "source": "OpenAI News",
-      "status": "added",
-      "title": "OpenAI News — Daybreak for Frontline Defenders: $1B to protect essential services | OpenAI",
+      "status": "skipped_existing",
+      "title": "Daybreak for Frontline Defenders: $1B to protect essential services | OpenAI",
       "url": "https://openai.com/index/daybreak-for-frontline-defenders",
-      "doc_id": 2303,
-      "chunks": 11,
-      "chars": 12747,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 8
+      "chars": 10699
     },
     {
       "source": "OpenAI News",
-      "status": "added",
-      "title": "OpenAI News — Legora reviewed 41 documents in minutes with GPT-6 Astra | OpenAI",
-      "url": "https://openai.com/index/legora-financial-statement-review-with-astra",
-      "doc_id": 2304,
-      "chunks": 5,
-      "chars": 6519,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 8
-    },
-    {
-      "source": "OpenAI News",
-      "status": "added",
-      "title": "OpenAI News — Playco cut manual fixes 50% prototyping games with GPT-6 Astra | OpenAI",
+      "status": "skipped_existing",
+      "title": "Playco cut manual fixes 50% prototyping games with GPT-6 Astra | OpenAI",
       "url": "https://openai.com/index/playco-game-prototyping-with-astra",
-      "doc_id": 2305,
-      "chunks": 5,
-      "chars": 5861,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 84,
-      "claims": 8
+      "chars": 4648
     },
     {
       "source": "OpenAI News",
-      "status": "added",
-      "title": "OpenAI News — Safety overview: GPT-6 Astra | OpenAI",
+      "status": "skipped_existing",
+      "title": "Legora reviewed 41 documents in minutes with GPT-6 Astra | OpenAI",
+      "url": "https://openai.com/index/legora-financial-statement-review-with-astra",
+      "chars": 4966
+    },
+    {
+      "source": "OpenAI News",
+      "status": "skipped_existing",
+      "title": "Safety overview: GPT-6 Astra | OpenAI",
       "url": "https://openai.com/index/safety-overview-gpt-6-astra",
-      "doc_id": 2306,
-      "chunks": 10,
-      "chars": 10087,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 8
+      "chars": 7782
     },
     {
       "source": "OpenAI News",
@@ -104,7 +80,7 @@
       "status": "skipped_existing",
       "title": "Hugging Face – Blog",
       "url": "https://huggingface.co/blog",
-      "chars": 5128
+      "chars": 5068
     },
     {
       "source": "arXiv cs.AI Recent",
@@ -132,7 +108,7 @@
       "status": "skipped_existing",
       "title": "Changelog - Vercel",
       "url": "https://vercel.com/changelog",
-      "chars": 3360
+      "chars": 3344
     },
     {
       "source": "AP World News",
@@ -150,142 +126,102 @@
     },
     {
       "source": "BBC World",
-      "status": "added",
-      "title": "BBC World — Europe targeted by spiralling campaign of sabotage and Russia is the chief suspect - BBC News",
+      "status": "skipped_existing",
+      "title": "Europe targeted by spiralling campaign of sabotage and Russia is the chief suspect - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c5y4g6meekro?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2307,
-      "chunks": 10,
-      "chars": 13170,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 6
+      "chars": 11752
     },
     {
       "source": "BBC World",
-      "status": "added",
-      "title": "BBC World — Tunnel rescues bring hope that more flood survivors will be found - BBC News",
+      "status": "skipped_existing",
+      "title": "Tunnel rescues bring hope that more flood survivors will be found - BBC News",
       "url": "https://www.bbc.co.uk/news/videos/cd79vp91321o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2308,
-      "chunks": 4,
-      "chars": 5132,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 6
+      "chars": 4277
     },
     {
       "source": "BBC World",
-      "status": "added",
-      "title": "BBC World — Falkland Islands: UK support 'unwavering' after Argentina restates claims - BBC News",
+      "status": "skipped_existing",
+      "title": "Falkland Islands: UK support 'unwavering' after Argentina restates claims - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cn45jg3zlz4o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2309,
-      "chunks": 9,
-      "chars": 10692,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 6
+      "chars": 9123
     },
     {
       "source": "BBC World",
-      "status": "added",
-      "title": "BBC World — Russian drone hits Ukranian security headquarters, Zelensky says - BBC News",
+      "status": "skipped_existing",
+      "title": "Russian drone hits Ukranian security headquarters, Zelensky says - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/c5yep7y48x2o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2310,
-      "chunks": 6,
-      "chars": 7804,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 6
+      "chars": 6635
     },
     {
       "source": "BBC World",
-      "status": "added",
-      "title": "BBC World — Steve Irwin's family celebrates 'superhero' dad, 20 years after shock death - BBC News",
+      "status": "skipped_existing",
+      "title": "Steve Irwin's family celebrates 'superhero' dad, 20 years after shock death - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cjrx75ldydwo?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2311,
-      "chunks": 5,
-      "chars": 6820,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
+      "chars": 5686
     },
     {
       "source": "BBC Technology",
-      "status": "added",
-      "title": "BBC Technology — OpenAI agents hijacked German website before Hugging Face hack, report claims - BBC News",
+      "status": "skipped_existing",
+      "title": "OpenAI agents hijacked German website before Hugging Face hack, report claims - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/ckg725z5kgzo?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2312,
-      "chunks": 6,
-      "chars": 7007,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
+      "chars": 5574
     },
     {
       "source": "BBC Technology",
-      "status": "added",
-      "title": "BBC Technology — Xbox to limit cloud gaming to 15 hours a month for Game Pass users - BBC News",
+      "status": "skipped_existing",
+      "title": "Xbox to limit cloud gaming to 15 hours a month for Game Pass users - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cj06zd4l99lo?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2313,
-      "chunks": 8,
-      "chars": 9607,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
+      "chars": 8176
     },
     {
       "source": "BBC Technology",
-      "status": "added",
-      "title": "BBC Technology — Are robots the future of entertainment? This South Korean theme park thinks so - BBC News",
+      "status": "skipped_existing",
+      "title": "Are robots the future of entertainment? This South Korean theme park thinks so - BBC News",
       "url": "https://www.bbc.co.uk/news/videos/cdr7g3vdl58o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2314,
-      "chunks": 4,
-      "chars": 5086,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 70,
-      "claims": 6
+      "chars": 4266
     },
     {
       "source": "BBC Technology",
-      "status": "added",
-      "title": "BBC Technology — Jobseekers warned over online interview and recruitment scams - BBC News",
+      "status": "skipped_existing",
+      "title": "Jobseekers warned over online interview and recruitment scams - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/crk3xd8j3k5o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2315,
-      "chunks": 7,
-      "chars": 8845,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
+      "chars": 7159
     },
     {
       "source": "BBC Technology",
-      "status": "added",
-      "title": "BBC Technology — AI data centres are booming in Australia - but at what cost? - BBC News",
+      "status": "skipped_existing",
+      "title": "AI data centres are booming in Australia - but at what cost? - BBC News",
       "url": "https://www.bbc.co.uk/news/articles/cgl3we7wdr3o?at_medium=RSS&at_campaign=rss",
-      "doc_id": 2316,
-      "chunks": 12,
-      "chars": 14825,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 6
+      "chars": 13207
     },
     {
       "source": "ANTARA Terkini",
       "status": "added",
-      "title": "ANTARA Terkini — Tokoh adat Badui Jaro Saidi Putra meninggal dunia  ‎ - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5726964/tokoh-adat-badui-jaro-saidi-putra-meninggal-dunia",
-      "doc_id": 2317,
+      "title": "ANTARA Terkini — Como puncaki Liga Italia setelah bekuk Genoa 4-1 - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5726980/como-puncaki-liga-italia-setelah-bekuk-genoa-4-1",
+      "doc_id": 2357,
       "chunks": 1,
-      "chars": 969,
+      "chars": 975,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 100,
+      "claims": 0
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "skipped_short",
+      "title": "Xiaomi siap masuk pasar Eropa melalui delapan dealer resminya",
+      "url": "https://otomotif.antaranews.com/berita/5726979/xiaomi-siap-masuk-pasar-eropa-melalui-delapan-dealer-resminya",
+      "chars": 146
+    },
+    {
+      "source": "ANTARA Terkini",
+      "status": "added",
+      "title": "ANTARA Terkini — VfB Stuttgart cetak kemenangan perdana setelah hantam Koln 4-1 - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5726977/vfb-stuttgart-cetak-kemenangan-perdana-setelah-hantam-koln-4-1",
+      "doc_id": 2358,
+      "chunks": 1,
+      "chars": 1002,
       "source_quality": 76.0,
       "freshness_score": 100.0,
       "criticality_score": 100,
@@ -294,11 +230,11 @@
     {
       "source": "ANTARA Terkini",
       "status": "added",
-      "title": "ANTARA Terkini — Carrick sebut Benjamin Sesko miliki peluang turun sejak menit pertama - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5726963/carrick-sebut-benjamin-sesko-miliki-peluang-turun-sejak-menit-pertama",
-      "doc_id": 2318,
+      "title": "ANTARA Terkini — Sparta Rotterdam bermain imbang 2-2 kontra PEC Zwolle - ANTARA News",
+      "url": "https://www.antaranews.com/berita/5726976/sparta-rotterdam-bermain-imbang-2-2-kontra-pec-zwolle",
+      "doc_id": 2359,
       "chunks": 1,
-      "chars": 1013,
+      "chars": 983,
       "source_quality": 76.0,
       "freshness_score": 100.0,
       "criticality_score": 100,
@@ -306,55 +242,17 @@
     },
     {
       "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — ESDM dan BPH Migas inspeksi distribusi BBM subsidi di SPBU Muna Barat - ANTARA News",
-      "url": "https://www.antaranews.com/video/5726956/esdm-dan-bph-migas-inspeksi-distribusi-bbm-subsidi-di-spbu-muna-barat",
-      "doc_id": 2319,
-      "chunks": 1,
-      "chars": 1018,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Menbud dorong revitalisasi Desa Adat Sade disertai mitigasi - ANTARA News",
-      "url": "https://www.antaranews.com/berita/5726960/menbud-dorong-revitalisasi-desa-adat-sade-disertai-mitigasi",
-      "doc_id": 2320,
-      "chunks": 1,
-      "chars": 995,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
-    },
-    {
-      "source": "ANTARA Terkini",
-      "status": "added",
-      "title": "ANTARA Terkini — Menbud dukung sineas Indonesia produksi banyak film tema kepahlawanan - ANTARA News",
-      "url": "https://www.antaranews.com/video/5726952/menbud-dukung-sineas-indonesia-produksi-banyak-film-tema-kepahlawanan",
-      "doc_id": 2321,
-      "chunks": 1,
-      "chars": 1017,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "status": "skipped_short",
+      "title": "Geely dan Renault kembangkan sistem penggerak melalui Horse Powertrain",
+      "url": "https://otomotif.antaranews.com/berita/5726972/geely-dan-renault-kembangkan-sistem-penggerak-melalui-horse-powertrain",
+      "chars": 146
     },
     {
       "source": "ANTARA Tekno",
-      "status": "added",
-      "title": "ANTARA Tekno — iPhone 18 Pro diprediksi rilis September 2026, ini bocorannya - ANTARA News",
+      "status": "skipped_existing",
+      "title": "iPhone 18 Pro diprediksi rilis September 2026, ini bocorannya - ANTARA News",
       "url": "https://www.antaranews.com/berita/5724703/iphone-18-pro-diprediksi-rilis-september-2026-ini-bocorannya",
-      "doc_id": 2322,
-      "chunks": 1,
-      "chars": 989,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 100,
-      "claims": 0
+      "chars": 549
     },
     {
       "source": "ANTARA Tekno",
@@ -435,38 +333,10 @@
     },
     {
       "source": "Kementan Berita",
-      "status": "skipped_short",
-      "title": "Kementerian Pertanian Republik Indonesia",
-      "url": "https://pertanian.go.id/home/?lang=id",
-      "chars": 41
-    },
-    {
-      "source": "Kementan Berita",
-      "status": "skipped_short",
-      "title": "Kementerian Pertanian Republik Indonesia",
-      "url": "https://pertanian.go.id/home/?lang=eng",
-      "chars": 41
-    },
-    {
-      "source": "Kementan Berita",
-      "status": "skipped_short",
-      "title": "Kementerian Pertanian Republik Indonesia",
+      "status": "error_source",
+      "title": "Kementan Berita",
       "url": "https://pertanian.go.id/home/?show=page&act=view&id=61",
-      "chars": 41
-    },
-    {
-      "source": "Kementan Berita",
-      "status": "skipped_short",
-      "title": "Kementerian Pertanian Republik Indonesia",
-      "url": "https://pertanian.go.id/",
-      "chars": 41
-    },
-    {
-      "source": "Kementan Berita",
-      "status": "skipped_short",
-      "title": "Kementerian Pertanian Republik Indonesia",
-      "url": "https://pertanian.go.id/home/?show=page&act=view&id=4",
-      "chars": 41
+      "message": "502 Server Error: Bad Gateway for url: https://www.pertanian.go.id"
     },
     {
       "source": "MarketWatch Markets",
@@ -522,16 +392,46 @@
     {
       "source": "CNBC Markets",
       "status": "skipped_low_quality",
+      "title": "Reflecting Pool vandalism case set for dismissal against Olympian",
+      "url": "https://www.cnbc.com/2026/09/04/reflecting-pool-hearn-doj-trump-pirro.html",
+      "chars": 8936,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 199,
+        "unique_words": 562,
+        "char_count": 8936
+      }
+    },
+    {
+      "source": "CNBC Markets",
+      "status": "skipped_low_quality",
+      "title": "Trump says MAGA Inc. will spend up to $500 million on 2026 midterms",
+      "url": "https://www.cnbc.com/2026/09/04/trump-maga-inc-500-million-republicans-midterm-elections.html",
+      "chars": 5843,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 173,
+        "unique_words": 417,
+        "char_count": 5843
+      }
+    },
+    {
+      "source": "CNBC Markets",
+      "status": "skipped_low_quality",
       "title": "Jobs report: Women accounted for almost all of August payroll gains",
       "url": "https://www.cnbc.com/2026/09/04/jobs-report-women-payrolls.html",
-      "chars": 5923,
+      "chars": 5924,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 177,
         "unique_words": 457,
-        "char_count": 5923
+        "char_count": 5924
       }
     },
     {
@@ -539,14 +439,14 @@
       "status": "skipped_low_quality",
       "title": "Tesla's stock drops as Cybercab update 'underwhelms,' NHTSA probe",
       "url": "https://www.cnbc.com/2026/09/04/teslas-stock-drops-as-cybercab-update-underwhelms-nhtsa-probe.html",
-      "chars": 4956,
+      "chars": 4974,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
-        "sentence_count": 165,
-        "unique_words": 382,
-        "char_count": 4956
+        "sentence_count": 166,
+        "unique_words": 383,
+        "char_count": 4974
       }
     },
     {
@@ -554,138 +454,93 @@
       "status": "skipped_low_quality",
       "title": "U.S. sanctions Turkish bank accused of enabling Iran",
       "url": "https://www.cnbc.com/2026/09/04/iran-turkey-sanctions-economy-bessent.html",
-      "chars": 6298,
+      "chars": 6385,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
-        "sentence_count": 174,
+        "sentence_count": 176,
         "unique_words": 456,
-        "char_count": 6298
-      }
-    },
-    {
-      "source": "CNBC Markets",
-      "status": "skipped_low_quality",
-      "title": "Fox News host Maria Bartiromo disputes termination",
-      "url": "https://www.cnbc.com/2026/09/04/maria-bartiromo-fox-news-termination.html",
-      "chars": 4983,
-      "content_quality_score": 76.0,
-      "content_quality_flags": {
-        "thin_content": false,
-        "boilerplate_heavy": true,
-        "sentence_count": 160,
-        "unique_words": 377,
-        "char_count": 4983
-      }
-    },
-    {
-      "source": "CNBC Markets",
-      "status": "skipped_low_quality",
-      "title": "White House has vetted candidates for key CFTC vacancies, sources tell CNBC",
-      "url": "https://www.cnbc.com/2026/09/04/white-house-has-vetted-candidates-for-key-cftc-vacancies-sources-tell-cnbc.html",
-      "chars": 8483,
-      "content_quality_score": 76.0,
-      "content_quality_flags": {
-        "thin_content": false,
-        "boilerplate_heavy": true,
-        "sentence_count": 188,
-        "unique_words": 550,
-        "char_count": 8483
+        "char_count": 6385
       }
     },
     {
       "source": "MarketWatch Top Stories",
-      "status": "skipped_low_quality",
-      "title": "We’re in our 60s. We earn $345,000 and have $1 million in 403(b)s. Is it too late for Roth conversions?",
-      "url": "https://www.marketwatch.com/story/were-in-our-60s-my-wife-and-i-have-345-000-in-annual-pensions-and-1-million-in-403-b-s-is-it-too-late-for-roth-conversions-5df35d42?mod=mw_rss_topstories",
-      "chars": 350,
-      "content_quality_score": 42.0,
-      "content_quality_flags": {
-        "thin_content": true,
-        "boilerplate_heavy": false,
-        "sentence_count": 2,
-        "unique_words": 41,
-        "char_count": 350
-      }
+      "status": "added",
+      "title": "MarketWatch Top Stories — Bloom Energy was just named to the S&P 500. These other stocks are joining the index as well.",
+      "url": "https://www.marketwatch.com/story/s-p-500-changes-are-coming-soon-these-stocks-could-be-named-to-the-index-today-2d0d7c14?mod=mw_rss_topstories",
+      "doc_id": 2360,
+      "chunks": 1,
+      "chars": 1239,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 72,
+      "claims": 2
     },
     {
       "source": "MarketWatch Top Stories",
       "status": "skipped_low_quality",
-      "title": "‘I feel tricked’: My contractor handed my $42,000 pool upgrade to a subcontractor I had already rejected. What can I do?",
-      "url": "https://www.marketwatch.com/story/my-contractor-handed-my-42-000-pool-upgrade-to-a-subcontractor-i-had-already-rejected-what-can-i-do-dce41b2b?mod=mw_rss_topstories",
-      "chars": 323,
+      "title": "Tesla’s stock falls as Cybercab launch lands with a thud",
+      "url": "https://www.marketwatch.com/story/teslas-stock-falls-as-cybercab-launch-lands-with-a-thud-1108376b?mod=mw_rss_topstories",
+      "chars": 291,
       "content_quality_score": 42.0,
       "content_quality_flags": {
         "thin_content": true,
         "boilerplate_heavy": false,
         "sentence_count": 2,
         "unique_words": 38,
-        "char_count": 323
+        "char_count": 291
       }
     },
     {
       "source": "MarketWatch Top Stories",
-      "status": "added",
-      "title": "MarketWatch Top Stories — Trump’s latest threat — to stop trading with some countries unless there’s a rate cut — risks shock to U.S. economy",
-      "url": "https://www.marketwatch.com/story/trumps-threat-to-stop-trade-unless-theres-a-rate-cut-risks-shock-to-u-s-economy-2e6b9798?mod=mw_rss_topstories",
-      "doc_id": 2323,
-      "chunks": 2,
-      "chars": 1618,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 72,
-      "claims": 3
-    },
-    {
-      "source": "MarketWatch Top Stories",
       "status": "skipped_low_quality",
-      "title": "‘I currently give him $1,000 a month’: My grandson has severe mental illness. How do I protect him after I’m gone?",
-      "url": "https://www.marketwatch.com/story/im-desperately-trying-to-plan-ahead-im-leaving-everything-to-my-grandson-who-has-severe-mental-illness-how-can-i-protect-him-d8df2646?mod=mw_rss_topstories",
-      "chars": 343,
+      "title": "Micron is doubling down on AI memory chips. That could pay off big time for investors.",
+      "url": "https://www.marketwatch.com/story/micron-is-doubling-down-on-ai-memory-chips-that-could-pay-off-big-time-for-investors-da9e7f5e?mod=mw_rss_topstories",
+      "chars": 364,
       "content_quality_score": 42.0,
       "content_quality_flags": {
         "thin_content": true,
         "boilerplate_heavy": false,
         "sentence_count": 2,
-        "unique_words": 42,
-        "char_count": 343
+        "unique_words": 43,
+        "char_count": 364
       }
     },
     {
       "source": "MarketWatch Top Stories",
       "status": "added",
-      "title": "MarketWatch Top Stories — Why the jobs report will actually be good for bonds",
-      "url": "https://www.marketwatch.com/story/why-the-jobs-report-will-actually-be-good-for-bonds-eb062fda?mod=mw_rss_topstories",
-      "doc_id": 2324,
+      "title": "MarketWatch Top Stories — Will a data center hurt your home’s value? Research says no. Sellers disagree.",
+      "url": "https://www.marketwatch.com/story/will-a-data-center-hurt-your-homes-value-research-says-no-sellers-disagree-7017ace4?mod=mw_rss_topstories",
+      "doc_id": 2361,
       "chunks": 1,
-      "chars": 1209,
+      "chars": 1296,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 76,
+      "claims": 2
+    },
+    {
+      "source": "MarketWatch Top Stories",
+      "status": "added",
+      "title": "MarketWatch Top Stories — Here’s what’s worth streaming in September 2026 on Netflix, Hulu, HBO Max and more",
+      "url": "https://www.marketwatch.com/story/heres-whats-worth-streaming-in-september-2026-on-netflix-hulu-hbo-max-and-more-a702e7dd?mod=mw_rss_topstories",
+      "doc_id": 2362,
+      "chunks": 2,
+      "chars": 1429,
       "source_quality": 55.0,
       "freshness_score": 100.0,
       "criticality_score": 72,
-      "claims": 3
+      "claims": 2
     },
     {
       "source": "NASA Breaking News",
       "status": "added",
-      "title": "NASA Breaking News — NASA Hosts Virtual Artemis Webinar for Blind, Low-Vision Community - NASA",
-      "url": "https://www.nasa.gov/general/nasa-hosts-virtual-artemis-webinar-for-blind-low-vision-community/",
-      "doc_id": 2325,
-      "chunks": 7,
-      "chars": 8985,
-      "source_quality": 92.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
-    },
-    {
-      "source": "NASA Breaking News",
-      "status": "added",
-      "title": "NASA Breaking News — Lunar Occultation of Venus - NASA",
-      "url": "https://www.nasa.gov/image-article/lunar-occultation-of-venus/",
-      "doc_id": 2326,
+      "title": "NASA Breaking News — NASA Ames Fire Department Aircraft Firefighting Training - NASA",
+      "url": "https://www.nasa.gov/news-release/nasa-ames-fire-department-aircraft-firefighting-training/",
+      "doc_id": 2363,
       "chunks": 6,
-      "chars": 7364,
+      "chars": 7672,
       "source_quality": 92.0,
       "freshness_score": 100.0,
       "criticality_score": 34,
@@ -693,119 +548,98 @@
     },
     {
       "source": "NASA Breaking News",
-      "status": "added",
-      "title": "NASA Breaking News — APOD: 2026 September 4 - Na Uhane Mahoe Huki Pu i ke Ola - NASA Science",
+      "status": "skipped_existing",
+      "title": "NASA Hosts Virtual Artemis Webinar for Blind, Low-Vision Community - NASA",
+      "url": "https://www.nasa.gov/general/nasa-hosts-virtual-artemis-webinar-for-blind-low-vision-community/",
+      "chars": 7516
+    },
+    {
+      "source": "NASA Breaking News",
+      "status": "skipped_existing",
+      "title": "Lunar Occultation of Venus - NASA",
+      "url": "https://www.nasa.gov/image-article/lunar-occultation-of-venus/",
+      "chars": 6279
+    },
+    {
+      "source": "NASA Breaking News",
+      "status": "skipped_existing",
+      "title": "APOD: 2026 September 4 - Na Uhane Mahoe Huki Pu i ke Ola - NASA Science",
       "url": "https://science.nasa.gov/image-article/apod-2026-september-4-na-uhane-mahoe-huki-pu-i-ke-ola/",
-      "doc_id": 2327,
-      "chunks": 7,
-      "chars": 8608,
-      "source_quality": 92.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
+      "chars": 7284
     },
     {
       "source": "NASA Breaking News",
       "status": "skipped_low_quality",
       "title": "A Trio of Tropical Cyclones in the Pacific - NASA Science",
       "url": "https://science.nasa.gov/earth/earth-observatory/a-trio-of-tropical-cyclones-in-the-pacific/",
-      "chars": 11309,
+      "chars": 11292,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 319,
-        "unique_words": 682,
-        "char_count": 11309
+        "unique_words": 693,
+        "char_count": 11292
       }
     },
     {
-      "source": "NASA Breaking News",
+      "source": "Phys.org Latest Science News",
       "status": "added",
-      "title": "NASA Breaking News — NASA to Cover Progress 96 Spacecraft Launch, Docking - NASA",
-      "url": "https://www.nasa.gov/news-release/nasa-to-cover-progress-96-spacecraft-launch-docking/",
-      "doc_id": 2328,
-      "chunks": 7,
-      "chars": 9369,
-      "source_quality": 92.0,
+      "title": "Phys.org Latest Science News — A new type of LED light could bring significant efficiency gains",
+      "url": "https://phys.org/news/2026-09-significant-efficiency-gains.html",
+      "doc_id": 2364,
+      "chunks": 2,
+      "chars": 1649,
+      "source_quality": 55.0,
       "freshness_score": 100.0,
       "criticality_score": 34,
-      "claims": 6
+      "claims": 3
     },
     {
       "source": "Phys.org Latest Science News",
-      "status": "skipped_low_quality",
-      "title": "Food and water stations for wild birds are contributing to spread of deadly diseases, study finds",
-      "url": "https://phys.org/news/2026-09-food-stations-wild-birds-contributing.html",
-      "chars": 238,
-      "content_quality_score": 42.0,
-      "content_quality_flags": {
-        "thin_content": true,
-        "boilerplate_heavy": false,
-        "sentence_count": 1,
-        "unique_words": 34,
-        "char_count": 238
-      }
+      "status": "added",
+      "title": "Phys.org Latest Science News — In ant nervous systems, gene expression may drive rescue behavior",
+      "url": "https://phys.org/news/2026-09-ant-nervous-gene-behavior.html",
+      "doc_id": 2365,
+      "chunks": 2,
+      "chars": 1953,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 38,
+      "claims": 4
     },
     {
       "source": "Phys.org Latest Science News",
-      "status": "skipped_low_quality",
-      "title": "Students with lower grades earn degrees more often when they belong to an academic major's majority group",
-      "url": "https://phys.org/news/2026-09-students-grades-degrees-academic-major.html",
-      "chars": 243,
-      "content_quality_score": 42.0,
-      "content_quality_flags": {
-        "thin_content": true,
-        "boilerplate_heavy": false,
-        "sentence_count": 1,
-        "unique_words": 36,
-        "char_count": 243
-      }
+      "status": "skipped_short",
+      "title": "Magic-angle graphene provides evidence for unconventional superconductivity",
+      "url": "https://phys.org/news/2026-09-magic-angle-graphene-evidence-unconventional.html",
+      "chars": 199
     },
     {
       "source": "Phys.org Latest Science News",
-      "status": "skipped_low_quality",
-      "title": "Same-sex marriages surged before Bolsonaro took office, Brazil data reveal",
-      "url": "https://phys.org/news/2026-09-sex-marriages-surged-bolsonaro-office.html",
-      "chars": 313,
-      "content_quality_score": 42.0,
-      "content_quality_flags": {
-        "thin_content": true,
-        "boilerplate_heavy": false,
-        "sentence_count": 2,
-        "unique_words": 41,
-        "char_count": 313
-      }
+      "status": "added",
+      "title": "Phys.org Latest Science News — New AI tool maps the hidden universe of small molecules",
+      "url": "https://phys.org/news/2026-09-ai-tool-hidden-universe-small.html",
+      "doc_id": 2366,
+      "chunks": 2,
+      "chars": 1524,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 3
     },
     {
       "source": "Phys.org Latest Science News",
-      "status": "skipped_low_quality",
-      "title": "Virus-like particles enable gene activity tracking over time in the same cells",
-      "url": "https://phys.org/news/2026-09-virus-particles-enable-gene-tracking.html",
-      "chars": 288,
-      "content_quality_score": 42.0,
-      "content_quality_flags": {
-        "thin_content": true,
-        "boilerplate_heavy": false,
-        "sentence_count": 2,
-        "unique_words": 38,
-        "char_count": 288
-      }
-    },
-    {
-      "source": "Phys.org Latest Science News",
-      "status": "skipped_low_quality",
-      "title": "Sound waves and water droplets transform paper waste into higher-value chemical compound",
-      "url": "https://phys.org/news/2026-09-droplets-paper-higher-chemical-compound.html",
-      "chars": 223,
-      "content_quality_score": 42.0,
-      "content_quality_flags": {
-        "thin_content": true,
-        "boilerplate_heavy": false,
-        "sentence_count": 1,
-        "unique_words": 34,
-        "char_count": 223
-      }
+      "status": "added",
+      "title": "Phys.org Latest Science News — Shoreline scavenger shows biological effects after eating plastic foam",
+      "url": "https://phys.org/news/2026-09-shoreline-scavenger-biological-effects-plastic.html",
+      "doc_id": 2367,
+      "chunks": 2,
+      "chars": 1895,
+      "source_quality": 55.0,
+      "freshness_score": 100.0,
+      "criticality_score": 34,
+      "claims": 3
     },
     {
       "source": "USGS Significant Earthquakes",
@@ -845,41 +679,36 @@
     {
       "source": "ReliefWeb Updates",
       "status": "added",
-      "title": "ReliefWeb Updates — Yemen: Flash Update: Escalation of hostilities and mass displacement in Maqbanah and Jabal Habashi districts, Ta'iz governorate (As of 4 September) - Yemen | ReliefWeb",
-      "url": "https://reliefweb.int/report/yemen/yemen-flash-update-escalation-hostilities-and-mass-displacement-maqbanah-and-jabal-habashi-districts-taiz-governorate-4-september",
-      "doc_id": 2329,
+      "title": "ReliefWeb Updates — Sudan Protection Cluster Alert: Blue Nile - Escalating Hostilities and Humanitarian Access Constraints - Sudan | ReliefWeb",
+      "url": "https://reliefweb.int/report/sudan/sudan-protection-cluster-alert-blue-nile-escalating-hostilities-and-humanitarian-access-constraints",
+      "doc_id": 2368,
       "chunks": 4,
-      "chars": 3502,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 6
-    },
-    {
-      "source": "ReliefWeb Updates",
-      "status": "added",
-      "title": "ReliefWeb Updates — Latinoamérica y El Caribe Resumen de Situación Semanal al 4 de septiembre 2026 - El Salvador | ReliefWeb",
-      "url": "https://reliefweb.int/report/el-salvador/latinoamerica-y-el-caribe-resumen-de-situacion-semanal-al-4-de-septiembre-2026",
-      "doc_id": 2330,
-      "chunks": 11,
-      "chars": 9128,
+      "chars": 4318,
       "source_quality": 55.0,
       "freshness_score": 100.0,
       "criticality_score": 34,
-      "claims": 6
+      "claims": 5
     },
     {
       "source": "ReliefWeb Updates",
-      "status": "added",
-      "title": "ReliefWeb Updates — Latin America & The Caribbean Weekly Situation Update as of 4 September 2026 - El Salvador | ReliefWeb",
+      "status": "skipped_existing",
+      "title": "Yemen: Flash Update: Escalation of hostilities and mass displacement in Maqbanah and Jabal Habashi districts, Ta'iz governorate (As of 4 September) - Yemen | ReliefWeb",
+      "url": "https://reliefweb.int/report/yemen/yemen-flash-update-escalation-hostilities-and-mass-displacement-maqbanah-and-jabal-habashi-districts-taiz-governorate-4-september",
+      "chars": 1033
+    },
+    {
+      "source": "ReliefWeb Updates",
+      "status": "skipped_existing",
+      "title": "Latinoamérica y El Caribe Resumen de Situación Semanal al 4 de septiembre 2026 - El Salvador | ReliefWeb",
+      "url": "https://reliefweb.int/report/el-salvador/latinoamerica-y-el-caribe-resumen-de-situacion-semanal-al-4-de-septiembre-2026",
+      "chars": 3934
+    },
+    {
+      "source": "ReliefWeb Updates",
+      "status": "skipped_existing",
+      "title": "Latin America & The Caribbean Weekly Situation Update as of 4 September 2026 - El Salvador | ReliefWeb",
       "url": "https://reliefweb.int/report/el-salvador/latin-america-caribbean-weekly-situation-update-4-september-2026",
-      "doc_id": 2331,
-      "chunks": 9,
-      "chars": 8559,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 50,
-      "claims": 6
+      "chars": 3688
     },
     {
       "source": "ReliefWeb Updates",
@@ -887,13 +716,6 @@
       "title": "Philippines | Southwest Monsoon and recent tropical cyclone activity - DG ECHO Daily Map | 04/09/2026 - Philippines | ReliefWeb",
       "url": "https://reliefweb.int/map/philippines/philippines-southwest-monsoon-and-recent-tropical-cyclone-activity-dg-echo-daily-map-04092026",
       "chars": 169
-    },
-    {
-      "source": "ReliefWeb Updates",
-      "status": "skipped_short",
-      "title": "Lebanon: Inter-Sector Coordination Group Meeting - 4 September 2026 - Lebanon | ReliefWeb",
-      "url": "https://reliefweb.int/report/lebanon/lebanon-inter-sector-coordination-group-meeting-4-september-2026",
-      "chars": 96
     },
     {
       "source": "IEA News",
@@ -1242,81 +1064,57 @@
     {
       "source": "CNN Indonesia Nasional",
       "status": "added",
-      "title": "CNN Indonesia Nasional — Gus Ipul Catat 1,4 Juta Penerima Bansos Terindikasi Main Judol",
+      "title": "CNN Indonesia Nasional — FOTO: Kebakaran Apartemen di Jakarta Pusat, Petugas Evakuasi Penghuni",
+      "url": "https://www.cnnindonesia.com/nasional/20260904162948-22-1400129/foto-kebakaran-apartemen-di-jakarta-pusat-petugas-evakuasi-penghuni",
+      "doc_id": 2369,
+      "chunks": 2,
+      "chars": 1606,
+      "source_quality": 76.0,
+      "freshness_score": 100.0,
+      "criticality_score": 66,
+      "claims": 5
+    },
+    {
+      "source": "CNN Indonesia Nasional",
+      "status": "skipped_existing",
+      "title": "Gus Ipul Catat 1,4 Juta Penerima Bansos Terindikasi Main Judol",
       "url": "https://www.cnnindonesia.com/nasional/20260904203040-20-1400249/gus-ipul-catat-14-juta-penerima-bansos-terindikasi-main-judol",
-      "doc_id": 2332,
-      "chunks": 1,
-      "chars": 1384,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 82,
-      "claims": 6
+      "chars": 741
     },
     {
       "source": "CNN Indonesia Nasional",
-      "status": "added",
-      "title": "CNN Indonesia Nasional — Puluhan Tenda untuk Sekolah Darurat Dibangun Pascagempa NTT",
+      "status": "skipped_existing",
+      "title": "Puluhan Tenda untuk Sekolah Darurat Dibangun Pascagempa NTT",
       "url": "https://www.cnnindonesia.com/nasional/20260904150030-20-1400073/puluhan-tenda-untuk-sekolah-darurat-dibangun-pascagempa-ntt",
-      "doc_id": 2333,
-      "chunks": 1,
-      "chars": 1354,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 82,
-      "claims": 6
+      "chars": 741
     },
     {
       "source": "CNN Indonesia Nasional",
-      "status": "added",
-      "title": "CNN Indonesia Nasional — Kasus Dugaan Keracunan MBG di Toraja Bertambah, Total Jadi 173 Siswa",
+      "status": "skipped_existing",
+      "title": "Kasus Dugaan Keracunan MBG di Toraja Bertambah, Total Jadi 173 Siswa",
       "url": "https://www.cnnindonesia.com/nasional/20260904225347-20-1400269/kasus-dugaan-keracunan-mbg-di-toraja-bertambah-total-jadi-173-siswa",
-      "doc_id": 2334,
-      "chunks": 2,
-      "chars": 1404,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 82,
-      "claims": 6
+      "chars": 741
     },
     {
       "source": "CNN Indonesia Nasional",
-      "status": "added",
-      "title": "CNN Indonesia Nasional — Polisi Belum Bidik Korporasi di Kasus Karhutla Sumatra dan Kalimantan",
+      "status": "skipped_existing",
+      "title": "Polisi Belum Bidik Korporasi di Kasus Karhutla Sumatra dan Kalimantan",
       "url": "https://www.cnnindonesia.com/nasional/20260904213051-12-1400263/polisi-belum-bidik-korporasi-di-kasus-karhutla-sumatra-dan-kalimantan",
-      "doc_id": 2335,
-      "chunks": 2,
-      "chars": 1636,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 66,
-      "claims": 5
-    },
-    {
-      "source": "CNN Indonesia Nasional",
-      "status": "added",
-      "title": "CNN Indonesia Nasional — Gunung Sinabung Berstatus Siaga, Warga Masih Nekat Masuk Zona Merah",
-      "url": "https://www.cnnindonesia.com/nasional/20260904205710-20-1400255/gunung-sinabung-berstatus-siaga-warga-masih-nekat-masuk-zona-merah",
-      "doc_id": 2336,
-      "chunks": 2,
-      "chars": 1618,
-      "source_quality": 76.0,
-      "freshness_score": 100.0,
-      "criticality_score": 66,
-      "claims": 5
+      "chars": 741
     },
     {
       "source": "Tempo Nasional",
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/",
-      "chars": 3710,
+      "chars": 3706,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 80,
-        "unique_words": 332,
-        "char_count": 3710
+        "unique_words": 331,
+        "char_count": 3706
       }
     },
     {
@@ -1324,14 +1122,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/harian",
-      "chars": 3710,
+      "chars": 3706,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 80,
-        "unique_words": 332,
-        "char_count": 3710
+        "unique_words": 331,
+        "char_count": 3706
       }
     },
     {
@@ -1339,14 +1137,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/mingguan",
-      "chars": 3710,
+      "chars": 3706,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 80,
-        "unique_words": 332,
-        "char_count": 3710
+        "unique_words": 331,
+        "char_count": 3706
       }
     },
     {
@@ -1354,14 +1152,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/plus",
-      "chars": 3710,
+      "chars": 3706,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 80,
-        "unique_words": 332,
-        "char_count": 3710
+        "unique_words": 331,
+        "char_count": 3706
       }
     },
     {
@@ -1369,14 +1167,14 @@
       "status": "skipped_low_quality",
       "title": "Berita Terkini, Berita Hari Ini Indonesia dan Dunia | tempo.co",
       "url": "https://nasional.tempo.co/internasional/manuver-trump-di-danau-ontario-2285374",
-      "chars": 3710,
+      "chars": 3706,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
         "sentence_count": 80,
-        "unique_words": 332,
-        "char_count": 3710
+        "unique_words": 331,
+        "char_count": 3706
       }
     },
     {
@@ -1384,7 +1182,7 @@
       "status": "skipped_existing",
       "title": "BERANDA",
       "url": "https://www.dw.com/id/beranda/s-11546",
-      "chars": 6112
+      "chars": 6099
     },
     {
       "source": "DW Indonesia",
@@ -1398,14 +1196,14 @@
       "status": "skipped_existing",
       "title": "INDONESIA: Laporan topik-topik yang menjadi berita utama",
       "url": "https://www.dw.com/id/indonesia/s-13896",
-      "chars": 3864
+      "chars": 3880
     },
     {
       "source": "DW Indonesia",
       "status": "skipped_existing",
       "title": "Asia",
       "url": "https://www.dw.com/id/asia/s-60194081",
-      "chars": 4765
+      "chars": 4764
     },
     {
       "source": "DW Indonesia",
@@ -1417,56 +1215,41 @@
     {
       "source": "Al Jazeera English",
       "status": "skipped_low_quality",
-      "title": "Five EU nations inch towards deal on migrant ‘return hubs’ by 2027 | Migration News | Al Jazeera",
-      "url": "https://www.aljazeera.com/news/2026/9/4/five-eu-nations-inch-towards-deal-on-migrant-return-hubs-by-2027?traffic_source=rss",
-      "chars": 3989,
+      "title": "Costa Rican president signals openness to domestic US military operations | Crime News | Al Jazeera",
+      "url": "https://www.aljazeera.com/news/2026/9/4/costa-rican-president-signals-openness-to-domestic-us-military-operations?traffic_source=rss",
+      "chars": 6060,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
-        "sentence_count": 91,
-        "unique_words": 310,
-        "char_count": 3989
+        "sentence_count": 112,
+        "unique_words": 446,
+        "char_count": 6060
       }
     },
     {
       "source": "Al Jazeera English",
       "status": "skipped_low_quality",
-      "title": "Brazilian Supreme Court roiled by dispute between justices | Courts News | Al Jazeera",
-      "url": "https://www.aljazeera.com/news/2026/9/4/brazilian-supreme-court-roiled-by-dispute-between-justices?traffic_source=rss",
-      "chars": 6075,
+      "title": "Betis beat Real Madrid as Mbappe misses penalty in first La Liga defeat | Football | Al Jazeera",
+      "url": "https://www.aljazeera.com/sports/2026/9/4/real-madrid-beaten-by-betis-as-mourinho-suffers-first-defeat-on-return?traffic_source=rss",
+      "chars": 3201,
       "content_quality_score": 76.0,
       "content_quality_flags": {
         "thin_content": false,
         "boilerplate_heavy": true,
-        "sentence_count": 115,
-        "unique_words": 419,
-        "char_count": 6075
-      }
-    },
-    {
-      "source": "Al Jazeera English",
-      "status": "skipped_low_quality",
-      "title": "Villagers vow to rebuild despite devastating mass demolition in West Bank | Israel-Palestine conflict News | Al Jazeera",
-      "url": "https://www.aljazeera.com/news/2026/9/4/villagers-vow-rebuild-despite-devastating-mass-demolition-west-bank?traffic_source=rss",
-      "chars": 6845,
-      "content_quality_score": 76.0,
-      "content_quality_flags": {
-        "thin_content": false,
-        "boilerplate_heavy": true,
-        "sentence_count": 126,
-        "unique_words": 445,
-        "char_count": 6845
+        "sentence_count": 87,
+        "unique_words": 281,
+        "char_count": 3201
       }
     },
     {
       "source": "Al Jazeera English",
       "status": "added",
-      "title": "Al Jazeera English — Moment two workers are pulled alive from Nepal tunnel | Newsfeed | Al Jazeera",
-      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/4/moment-two-workers-are-pulled-alive-from-nepal-tunnel?traffic_source=rss",
-      "doc_id": 2337,
+      "title": "Al Jazeera English — US regulator opens safety investigation as Tesla launches driverless taxis | Elon Musk | Al Jazeera",
+      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/4/us-regulator-opens-safety-investigation-as-tesla-launches-driverless-taxis?traffic_source=rss",
+      "doc_id": 2370,
       "chunks": 3,
-      "chars": 3219,
+      "chars": 3157,
       "source_quality": 55.0,
       "freshness_score": 100.0,
       "criticality_score": 34,
@@ -1474,81 +1257,68 @@
     },
     {
       "source": "Al Jazeera English",
-      "status": "added",
-      "title": "Al Jazeera English — Indonesia wildfires send toxic haze across Southeast Asia | Climate Crisis | Al Jazeera",
-      "url": "https://www.aljazeera.com/video/newsfeed/2026/9/4/04-09-sv-indonesia-kalimantan-haze-borneo-wildfires-haze-id?traffic_source=rss",
-      "doc_id": 2338,
-      "chunks": 3,
-      "chars": 3145,
-      "source_quality": 55.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 6
+      "status": "skipped_low_quality",
+      "title": "Witkoff and Kushner will travel to ‘end’ Russia’s war in Ukraine: Trump | Russia-Ukraine war News | Al Jazeera",
+      "url": "https://www.aljazeera.com/news/2026/9/4/witkoff-and-kushner-will-travel-to-end-russias-war-in-ukraine-trump?traffic_source=rss",
+      "chars": 4170,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 102,
+        "unique_words": 316,
+        "char_count": 4170
+      }
+    },
+    {
+      "source": "Al Jazeera English",
+      "status": "skipped_low_quality",
+      "title": "Sabalenka interrupts US Open match against Rakhimova over cannabis smell | Tennis News | Al Jazeera",
+      "url": "https://www.aljazeera.com/sports/2026/9/4/sabalenka-interrupts-us-open-match-against-rakhimova-over-cannabis-smell?traffic_source=rss",
+      "chars": 3861,
+      "content_quality_score": 76.0,
+      "content_quality_flags": {
+        "thin_content": false,
+        "boilerplate_heavy": true,
+        "sentence_count": 98,
+        "unique_words": 305,
+        "char_count": 3861
+      }
     },
     {
       "source": "BPK Database Peraturan Indonesia",
-      "status": "added",
-      "title": "BPK Database Peraturan Indonesia — Database Peraturan | JDIH BPK",
+      "status": "skipped_existing",
+      "title": "Database Peraturan | JDIH BPK",
       "url": "https://peraturan.bpk.go.id/",
-      "doc_id": 2339,
-      "chunks": 5,
-      "chars": 6698,
-      "source_quality": 96.0,
-      "freshness_score": 100.0,
-      "criticality_score": 16,
-      "claims": 8
+      "chars": 5249
     },
     {
       "source": "BPK Database Peraturan Indonesia",
-      "status": "added",
-      "title": "BPK Database Peraturan Indonesia — Subjek Peraturan",
+      "status": "skipped_existing",
+      "title": "Subjek Peraturan",
       "url": "https://peraturan.bpk.go.id/Subjek",
-      "doc_id": 2340,
-      "chunks": 5,
-      "chars": 6311,
-      "source_quality": 96.0,
-      "freshness_score": 100.0,
-      "criticality_score": 64,
-      "claims": 8
+      "chars": 5374
     },
     {
       "source": "BPK Database Peraturan Indonesia",
-      "status": "added",
-      "title": "BPK Database Peraturan Indonesia — Jenis Peraturan",
+      "status": "skipped_existing",
+      "title": "Jenis Peraturan",
       "url": "https://peraturan.bpk.go.id/Jenis",
-      "doc_id": 2341,
-      "chunks": 9,
-      "chars": 11414,
-      "source_quality": 96.0,
-      "freshness_score": 100.0,
-      "criticality_score": 82,
-      "claims": 8
+      "chars": 10553
     },
     {
       "source": "BPK Database Peraturan Indonesia",
-      "status": "added",
-      "title": "BPK Database Peraturan Indonesia — Tahun Peraturan",
+      "status": "skipped_existing",
+      "title": "Tahun Peraturan",
       "url": "https://peraturan.bpk.go.id/Tahun",
-      "doc_id": 2342,
-      "chunks": 3,
-      "chars": 2833,
-      "source_quality": 96.0,
-      "freshness_score": 100.0,
-      "criticality_score": 16,
-      "claims": 4
+      "chars": 2019
     },
     {
       "source": "BPK Database Peraturan Indonesia",
-      "status": "added",
-      "title": "BPK Database Peraturan Indonesia — Glosarium Peraturan",
+      "status": "skipped_existing",
+      "title": "Glosarium Peraturan",
       "url": "https://peraturan.bpk.go.id/Glosarium",
-      "doc_id": 2343,
-      "chunks": 7,
-      "chars": 7590,
-      "source_quality": 96.0,
-      "freshness_score": 100.0,
-      "criticality_score": 16,
-      "claims": 8
+      "chars": 5312
     },
     {
       "source": "UNEP Official Environment News",
@@ -1642,42 +1412,24 @@
     },
     {
       "source": "UNESCO Newsroom",
-      "status": "added",
-      "title": "UNESCO Newsroom — Toutes les actualités et histoires | UNESCO",
+      "status": "skipped_existing",
+      "title": "Toutes les actualités et histoires | UNESCO",
       "url": "https://www.unesco.org/fr/newsroom/news",
-      "doc_id": 2344,
-      "chunks": 12,
-      "chars": 15306,
-      "source_quality": 95.0,
-      "freshness_score": 100.0,
-      "criticality_score": 0,
-      "claims": 8
+      "chars": 14018
     },
     {
       "source": "UNESCO Newsroom",
-      "status": "added",
-      "title": "UNESCO Newsroom — Noticias e historias | UNESCO",
+      "status": "skipped_existing",
+      "title": "Noticias e historias | UNESCO",
       "url": "https://www.unesco.org/es/newsroom/news",
-      "doc_id": 2345,
-      "chunks": 12,
-      "chars": 15786,
-      "source_quality": 95.0,
-      "freshness_score": 100.0,
-      "criticality_score": 0,
-      "claims": 8
+      "chars": 14495
     },
     {
       "source": "UNESCO Newsroom",
-      "status": "added",
-      "title": "UNESCO Newsroom — Все новости и истории | UNESCO",
+      "status": "skipped_existing",
+      "title": "Все новости и истории | UNESCO",
       "url": "https://www.unesco.org/ru/newsroom/news",
-      "doc_id": 2346,
-      "chunks": 11,
-      "chars": 14508,
-      "source_quality": 95.0,
-      "freshness_score": 100.0,
-      "criticality_score": 0,
-      "claims": 8
+      "chars": 13389
     },
     {
       "source": "UNESCO Newsroom",
@@ -1711,107 +1463,59 @@
     },
     {
       "source": "OpenAlex Research - Indonesia Agriculture Technology",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Agriculture Technology — Financial sustainability of Georgian agribusiness: An empirical and policy analysis",
+      "status": "skipped_existing",
+      "title": "Financial sustainability of Georgian agribusiness: An empirical and policy analysis",
       "url": "https://doi.org/10.14719/pst.14328",
-      "doc_id": 2347,
-      "chunks": 6,
-      "chars": 5019,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 34,
-      "claims": 10
+      "chars": 1972
     },
     {
       "source": "OpenAlex Research - Indonesia Agriculture Technology",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Agriculture Technology — Socio-Cultural Dimensions Of Community Engagement And Flood Risk Awareness In Semi-Arid Ringim, Jigawa State, Nigeria",
+      "status": "skipped_existing",
+      "title": "Socio-Cultural Dimensions Of Community Engagement And Flood Risk Awareness In Semi-Arid Ringim, Jigawa State, Nigeria",
       "url": "https://doi.org/10.11113/ijbes.v13.n3.1462",
-      "doc_id": 2348,
-      "chunks": 6,
-      "chars": 5970,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 34,
-      "claims": 10
+      "chars": 2751
     },
     {
       "source": "OpenAlex Research - Indonesia Agriculture Technology",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Agriculture Technology — The role of indigenous knowledge and local wisdom in climate adaptation : Forest farmers group in Buton, Southeast Sulawesi, Indonesia",
+      "status": "skipped_existing",
+      "title": "The role of indigenous knowledge and local wisdom in climate adaptation : Forest farmers group in Buton, Southeast Sulawesi, Indonesia",
       "url": "https://doi.org/10.14719/pst.14361",
-      "doc_id": 2349,
-      "chunks": 6,
-      "chars": 5148,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 34,
-      "claims": 8
+      "chars": 2264
     },
     {
       "source": "OpenAlex Research - Indonesia Agriculture Technology",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Agriculture Technology — Resource constraint effects on water smart agricultural practice retention in Guatemala’s Dry Corridor",
+      "status": "skipped_existing",
+      "title": "Resource constraint effects on water smart agricultural practice retention in Guatemala’s Dry Corridor",
       "url": "https://doi.org/10.1007/s44279-026-00752-8",
-      "doc_id": 2350,
-      "chunks": 6,
-      "chars": 5455,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 50,
-      "claims": 9
+      "chars": 2210
     },
     {
       "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Shrimp aquaculture, soil degradation, and climate resilience: A comparative analysis of the Southwestern Coast of Bangladesh",
+      "status": "skipped_existing",
+      "title": "Shrimp aquaculture, soil degradation, and climate resilience: A comparative analysis of the Southwestern Coast of Bangladesh",
       "url": "https://doi.org/10.1016/j.susgeo.2026.100033",
-      "doc_id": 2351,
-      "chunks": 6,
-      "chars": 6071,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 34,
-      "claims": 10
+      "chars": 2715
     },
     {
       "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Plasticulture as Climate Adaptation: How Knowledge Systems, Market Governance, and Environmental Trade‐Offs Shape Sustainable Livelihoods",
+      "status": "skipped_existing",
+      "title": "Plasticulture as Climate Adaptation: How Knowledge Systems, Market Governance, and Environmental Trade‐Offs Shape Sustainable Livelihoods",
       "url": "https://doi.org/10.1002/sd.71608",
-      "doc_id": 2352,
-      "chunks": 6,
-      "chars": 5925,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 34,
-      "claims": 10
+      "chars": 2651
     },
     {
       "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Coastal conflicts cause environmental and social harms to Indigenous Peoples worldwide",
+      "status": "skipped_existing",
+      "title": "Coastal conflicts cause environmental and social harms to Indigenous Peoples worldwide",
       "url": "https://doi.org/10.1038/s44458-026-00125-8",
-      "doc_id": 2353,
-      "chunks": 5,
-      "chars": 4662,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 34,
-      "claims": 10
+      "chars": 2046
     },
     {
       "source": "OpenAlex Research - Indonesia Livestock Aquaculture Environment",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Livestock Aquaculture Environment — Something looks fishy! A philosophical exploration of AI for marine conservation",
+      "status": "skipped_existing",
+      "title": "Something looks fishy! A philosophical exploration of AI for marine conservation",
       "url": "https://doi.org/10.1007/s43681-026-01312-y",
-      "doc_id": 2354,
-      "chunks": 6,
-      "chars": 5069,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 38,
-      "claims": 10
+      "chars": 2236
     },
     {
       "source": "OpenAlex Research - Indonesia Law Culture Social Impact",
@@ -1837,29 +1541,17 @@
     },
     {
       "source": "OpenAlex Research - Indonesia Law Culture Social Impact",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Law Culture Social Impact — Plant Innovation Laws in a Planetary Age: Securing Space for Farmers’ Innovation (ToC & Biblio)",
+      "status": "skipped_existing",
+      "title": "Plant Innovation Laws in a Planetary Age: Securing Space for Farmers’ Innovation (ToC & Biblio)",
       "url": "https://orbi.uliege.be/handle/2268/346742",
-      "doc_id": 2355,
-      "chunks": 4,
-      "chars": 3115,
-      "source_quality": 95.0,
-      "freshness_score": 100.0,
-      "criticality_score": 34,
-      "claims": 3
+      "chars": 1618
     },
     {
       "source": "OpenAlex Research - Indonesia Law Culture Social Impact",
-      "status": "added",
-      "title": "OpenAlex Research - Indonesia Law Culture Social Impact — Determinants of intention to use AI for personal financial management among middle-aged and older adults: evidence from Vietnam and China",
+      "status": "skipped_existing",
+      "title": "Determinants of intention to use AI for personal financial management among middle-aged and older adults: evidence from Vietnam and China",
       "url": "https://doi.org/10.1108/cfri-07-2025-0470",
-      "doc_id": 2356,
-      "chunks": 6,
-      "chars": 5406,
-      "source_quality": 95.0,
-      "freshness_score": 92.0,
-      "criticality_score": 34,
-      "claims": 10
+      "chars": 2211
     },
     {
       "source": "MyQuran Jadwal Sholat Indonesia",
@@ -1871,7 +1563,7 @@
   ],
   "watchlist_path": "critical_watchlist.json",
   "briefing_file": "daily_intelligence_briefing.md",
-  "critical_claims_added": 330,
+  "critical_claims_added": 41,
   "db_guard": {
     "enabled": true,
     "precheck": {
@@ -1886,11 +1578,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260905_022457_pre-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260905_045846_pre-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260902_205505_pre-update.db"
+          ".db_backups/adioranye_power.db_20260902_211605_pre-update.db"
         ]
       }
     },
@@ -1926,11 +1618,11 @@
       "ok": true,
       "action": "backup_created",
       "db_path": ".adioranye_power.db",
-      "backup_path": ".db_backups/adioranye_power.db_20260905_022915_post-update.db",
+      "backup_path": ".db_backups/adioranye_power.db_20260905_050245_post-update.db",
       "message": "Backup database berhasil dibuat.",
       "details": {
         "removed": [
-          ".db_backups/adioranye_power.db_20260902_205724_post-update.db"
+          ".db_backups/adioranye_power.db_20260902_211815_post-update.db"
         ]
       }
     }
@@ -2531,8 +2223,8 @@
       "tags": "critical-current,global,agro,environment,law,culture,social-impact"
     }
   ],
-  "finished_at": "2026-09-04T19:29:14+00:00",
-  "finished_at_wib": "2026-09-05 02:29:14 WIB",
-  "elapsed_seconds": 257.8,
-  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-05 02:29:14 WIB\nDokumen baru: 54 | Chunk baru: 297 | Error: 7\n\nTop update penting:\n1. BPK Database Peraturan Indonesia — Jenis Peraturan\n   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0\n2. BPK Database Peraturan Indonesia — Glosarium Peraturan\n   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0\n3. BPK Database Peraturan Indonesia — Database Peraturan | JDIH BPK\n   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0\n4. BPK Database Peraturan Indonesia — Subjek Peraturan\n   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0\n5. BPK Database Peraturan Indonesia — Tahun Peraturan\n   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0\n6. UNESCO Newsroom — Toutes les actualités et histoires | UNESCO\n   Sumber: UNESCO Newsroom | kualitas: 95.0 | freshness: 100.0\n7. UNESCO Newsroom — Noticias e historias | UNESCO\n   Sumber: UNESCO Newsroom | kualitas: 95.0 | freshness: 100.0\n8. UNESCO Newsroom — Все новости и истории | UNESCO\n   Sumber: UNESCO Newsroom | kualitas: 95.0 | freshness: 100.0\n9. OpenAlex Research - Indonesia Law Culture Social Impact — Plant Innovation Laws in a Planetary Age: Securing Space for Farmers’ Innovation (ToC & Biblio)\n   Sumber: OpenAlex Research - Indonesia Law Culture Social Impact | kualitas: 95.0 | freshness: 100.0\n10. OpenAlex Research - Indonesia Agriculture Technology — Financial sustainability of Georgian agribusiness: An empirical and policy analysis\n   Sumber: OpenAlex Research - Indonesia Agriculture Technology | kualitas: 95.0 | freshness: 92.0\n11. OpenAlex Research - Indonesia Agriculture Technology — Socio-Cultural Dimensions Of Community Engagement And Flood Risk Awareness In Semi-Arid Ringim, Jigawa St\n   Sumber: OpenAlex Research - Indonesia Agriculture Technology | kualitas: 95.0 | freshness: 92.0\n12. OpenAlex Research - Indonesia Agriculture Technology — The role of indigenous knowledge and local wisdom in climate adaptation : Forest farmers group in Buton, \n   Sumber: OpenAlex Research - Indonesia Agriculture Technology | kualitas: 95.0 | freshness: 92.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
+  "finished_at": "2026-09-04T22:02:45+00:00",
+  "finished_at_wib": "2026-09-05 05:02:45 WIB",
+  "elapsed_seconds": 239.34,
+  "briefing_text": "📌 Daily Intelligence Briefing Adioranye\nWaktu: 2026-09-05 05:02:45 WIB\nDokumen baru: 14 | Chunk baru: 30 | Error: 8\n\nTop update penting:\n1. NASA Breaking News — NASA Ames Fire Department Aircraft Firefighting Training - NASA\n   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0\n2. CNN Indonesia Nasional — FOTO: Kebakaran Apartemen di Jakarta Pusat, Petugas Evakuasi Penghuni\n   Sumber: CNN Indonesia Nasional | kualitas: 76.0 | freshness: 100.0\n3. ANTARA Terkini — Como puncaki Liga Italia setelah bekuk Genoa 4-1 - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n4. ANTARA Terkini — VfB Stuttgart cetak kemenangan perdana setelah hantam Koln 4-1 - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n5. ANTARA Terkini — Sparta Rotterdam bermain imbang 2-2 kontra PEC Zwolle - ANTARA News\n   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0\n6. ReliefWeb Updates — Sudan Protection Cluster Alert: Blue Nile - Escalating Hostilities and Humanitarian Access Constraints - Sudan | ReliefWeb\n   Sumber: ReliefWeb Updates | kualitas: 55.0 | freshness: 100.0\n7. Al Jazeera English — US regulator opens safety investigation as Tesla launches driverless taxis | Elon Musk | Al Jazeera\n   Sumber: Al Jazeera English | kualitas: 55.0 | freshness: 100.0\n8. MarketWatch Top Stories — Here’s what’s worth streaming in September 2026 on Netflix, Hulu, HBO Max and more\n   Sumber: MarketWatch Top Stories | kualitas: 55.0 | freshness: 100.0\n9. Phys.org Latest Science News — A new type of LED light could bring significant efficiency gains\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n10. Phys.org Latest Science News — In ant nervous systems, gene expression may drive rescue behavior\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n11. Phys.org Latest Science News — New AI tool maps the hidden universe of small molecules\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n12. Phys.org Latest Science News — Shoreline scavenger shows biological effects after eating plastic foam\n   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0\n\nRekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis."
 }

@@ -1,31 +1,31 @@
 📌 Daily Intelligence Briefing Adioranye
-Waktu: 2026-09-05 02:29:14 WIB
-Dokumen baru: 54 | Chunk baru: 297 | Error: 7
+Waktu: 2026-09-05 05:02:45 WIB
+Dokumen baru: 14 | Chunk baru: 30 | Error: 8
 
 Top update penting:
-1. BPK Database Peraturan Indonesia — Jenis Peraturan
-   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0
-2. BPK Database Peraturan Indonesia — Glosarium Peraturan
-   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0
-3. BPK Database Peraturan Indonesia — Database Peraturan | JDIH BPK
-   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0
-4. BPK Database Peraturan Indonesia — Subjek Peraturan
-   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0
-5. BPK Database Peraturan Indonesia — Tahun Peraturan
-   Sumber: BPK Database Peraturan Indonesia | kualitas: 96.0 | freshness: 100.0
-6. UNESCO Newsroom — Toutes les actualités et histoires | UNESCO
-   Sumber: UNESCO Newsroom | kualitas: 95.0 | freshness: 100.0
-7. UNESCO Newsroom — Noticias e historias | UNESCO
-   Sumber: UNESCO Newsroom | kualitas: 95.0 | freshness: 100.0
-8. UNESCO Newsroom — Все новости и истории | UNESCO
-   Sumber: UNESCO Newsroom | kualitas: 95.0 | freshness: 100.0
-9. OpenAlex Research - Indonesia Law Culture Social Impact — Plant Innovation Laws in a Planetary Age: Securing Space for Farmers’ Innovation (ToC & Biblio)
-   Sumber: OpenAlex Research - Indonesia Law Culture Social Impact | kualitas: 95.0 | freshness: 100.0
-10. OpenAlex Research - Indonesia Agriculture Technology — Financial sustainability of Georgian agribusiness: An empirical and policy analysis
-   Sumber: OpenAlex Research - Indonesia Agriculture Technology | kualitas: 95.0 | freshness: 92.0
-11. OpenAlex Research - Indonesia Agriculture Technology — Socio-Cultural Dimensions Of Community Engagement And Flood Risk Awareness In Semi-Arid Ringim, Jigawa St
-   Sumber: OpenAlex Research - Indonesia Agriculture Technology | kualitas: 95.0 | freshness: 92.0
-12. OpenAlex Research - Indonesia Agriculture Technology — The role of indigenous knowledge and local wisdom in climate adaptation : Forest farmers group in Buton, 
-   Sumber: OpenAlex Research - Indonesia Agriculture Technology | kualitas: 95.0 | freshness: 92.0
+1. NASA Breaking News — NASA Ames Fire Department Aircraft Firefighting Training - NASA
+   Sumber: NASA Breaking News | kualitas: 92.0 | freshness: 100.0
+2. CNN Indonesia Nasional — FOTO: Kebakaran Apartemen di Jakarta Pusat, Petugas Evakuasi Penghuni
+   Sumber: CNN Indonesia Nasional | kualitas: 76.0 | freshness: 100.0
+3. ANTARA Terkini — Como puncaki Liga Italia setelah bekuk Genoa 4-1 - ANTARA News
+   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0
+4. ANTARA Terkini — VfB Stuttgart cetak kemenangan perdana setelah hantam Koln 4-1 - ANTARA News
+   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0
+5. ANTARA Terkini — Sparta Rotterdam bermain imbang 2-2 kontra PEC Zwolle - ANTARA News
+   Sumber: ANTARA Terkini | kualitas: 76.0 | freshness: 100.0
+6. ReliefWeb Updates — Sudan Protection Cluster Alert: Blue Nile - Escalating Hostilities and Humanitarian Access Constraints - Sudan | ReliefWeb
+   Sumber: ReliefWeb Updates | kualitas: 55.0 | freshness: 100.0
+7. Al Jazeera English — US regulator opens safety investigation as Tesla launches driverless taxis | Elon Musk | Al Jazeera
+   Sumber: Al Jazeera English | kualitas: 55.0 | freshness: 100.0
+8. MarketWatch Top Stories — Here’s what’s worth streaming in September 2026 on Netflix, Hulu, HBO Max and more
+   Sumber: MarketWatch Top Stories | kualitas: 55.0 | freshness: 100.0
+9. Phys.org Latest Science News — A new type of LED light could bring significant efficiency gains
+   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0
+10. Phys.org Latest Science News — In ant nervous systems, gene expression may drive rescue behavior
+   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0
+11. Phys.org Latest Science News — New AI tool maps the hidden universe of small molecules
+   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0
+12. Phys.org Latest Science News — Shoreline scavenger shows biological effects after eating plastic foam
+   Sumber: Phys.org Latest Science News | kualitas: 55.0 | freshness: 100.0
 
 Rekomendasi admin: cek /briefing dan /cek isu <topik> jika ada isu yang perlu dijawab secara kritis.
