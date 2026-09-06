@@ -36,7 +36,7 @@ from ai_core import (
     model_price_label,
 )
 from memory_store import MemoryStore, handle_local_memory_command
-from web_vouchers import save_voucher_state, get_saved_voucher, claim_saved_voucher, voucher_access
+from web_vouchers import get_saved_voucher, claim_saved_voucher, voucher_access
 from power_features import (
     get_power_store,
     handle_power_command,
@@ -14283,8 +14283,6 @@ def render_public_sidebar() -> None:
 def web_voucher_status(action="status", code=None):
     if "web_voucher_owner" not in st.session_state:
         st.session_state.web_voucher_owner = secrets.token_hex(32)
-    if "web_voucher_persistent_token" not in st.session_state:
-        st.session_state.web_voucher_persistent_token = secrets.token_hex(16)
     return voucher_access(
         str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3")),
         code if code is not None else st.session_state.get("web_voucher_code", ""),
@@ -14468,26 +14466,6 @@ def _render_public_chat() -> None:
             st.warning(f"Kuota habis. Kolom pertanyaan ditutup. Chat ditutup dalam {seconds} detik.")
         else:
             st.caption(f"Voucher: sisa {voucher['remaining']} pertanyaan.")
-            # Pastikan persistent token ada (stabil di browser yang sama)
-            if "web_voucher_persistent_token" not in st.session_state:
-                st.session_state.web_voucher_persistent_token = secrets.token_hex(16)
-            if st.button("💾 Simpan Sisa Voucher", use_container_width=True, key="save_voucher_btn"):
-                try:
-                    db_path = str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3"))
-                    saved = save_voucher_state(
-                        db_path, st.session_state.web_voucher_persistent_token,
-                        st.session_state.web_voucher_owner)
-                except (OSError, sqlite3.Error):
-                    st.error("Penyimpanan voucher tidak tersedia.")
-                    saved = False
-                if saved:
-                    # Simpan token di query params agar bertahan saat reload
-                    st.session_state.web_voucher_code = None
-                    st.session_state.web_voucher_owner = secrets.token_hex(32)
-                    st.query_params["voucher_token"] = st.session_state.web_voucher_persistent_token
-                    st.rerun()
-                else:
-                    st.error("Sisa voucher gagal disimpan. Pastikan masih ada kuota.")
 
     if not api_key:
         st.warning(
