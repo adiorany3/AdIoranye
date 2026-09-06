@@ -5577,39 +5577,17 @@ def get_prioritized_fallback_models() -> Tuple[List[str], List[str]]:
         + EXPENSIVE_MODEL_OPTIONS
     )
 
-    active_cheap = sort_health_models_for_simple_chat(
-        cheap_candidates,
-        health_cache,
-    )
-    active_higher = sort_health_models_for_simple_chat(
-        higher_candidates,
-        health_cache,
-    )
-
-    # Jika belum ada health cache, jangan kosongkan routing. Pakai daftar fallback lokal
-    # agar halaman admin tetap hidup dan chat masih bisa mencoba model default/fallback.
-    if not active_cheap:
-        active_cheap = prioritize_free_nano_for_simple_questions(
-            [
-                model
-                for model in cheap_candidates
-                if _tier_rank(model) == 0
-            ],
-            health_cache,
-            require_active=False,
-        )
-
-    if not active_higher:
-        active_higher = unique_models(
-            [
-                model
-                for model in higher_candidates
-                if _tier_rank(model) >= 1
-            ]
-        )
-
-    active_cheap = filter_runtime_blocked_models(active_cheap)
-    active_higher = filter_runtime_blocked_models(active_higher)
+    # Quick probes are partial: absent means untested, not unavailable.
+    active_cheap = filter_runtime_blocked_models([
+        model for model in cheap_candidates
+        if _tier_rank(model) == 0
+        and (model not in health_cache or (health_cache.get(model) or {}).get("active"))
+    ])
+    active_higher = filter_runtime_blocked_models([
+        model for model in higher_candidates
+        if _tier_rank(model) >= 1
+        and (model not in health_cache or (health_cache.get(model) or {}).get("active"))
+    ])
 
     return active_cheap, active_higher
 
@@ -5649,12 +5627,7 @@ def ensure_minimum_primary_model_pool(
     active_expensive_models: List[str],
     health_cache: Dict[str, Dict[str, Any]],
 ) -> Tuple[str, List[str], Dict[str, Any]]:
-    """Pastikan routing selalu membawa minimal 1 model utama aktif.
-
-    Kondisi saat ini hanya ada satu model AI yang dipakai, jadi fallback dan
-    routing harus tetap berjalan dengan satu model utama yang valid. Jika health
-    cache sudah tersedia, kandidat yang dipakai harus berstatus active=True.
-    """
+    """Pad only from eligible cheap candidates; untested IDs remain unverified."""
     minimum = max(1, int(globals().get("min_primary_active_models", 1) or 1))
     required_models = unique_models(
         list(globals().get("required_primary_models", []) or [])
@@ -5663,13 +5636,9 @@ def ensure_minimum_primary_model_pool(
     fallback = unique_models(cheap_fallback_models or [])
 
     candidate_pool = unique_models(
-        required_models
-        + [primary_model]
+        [primary_model]
         + fallback
         + (active_cheap_models or [])
-        + TOP_USAGE_MODEL_CANDIDATES
-        + DEFAULT_CHEAP_FALLBACK_MODELS
-        + (active_expensive_models or [])
     )
 
     def candidate_is_usable(model_name: str) -> bool:
@@ -5678,7 +5647,7 @@ def ensure_minimum_primary_model_pool(
             return False
         if is_model_runtime_blocked(model_name):
             return False
-        if not health_cache:
+        if model_name not in health_cache:
             return True
         return bool((health_cache.get(model_name) or {}).get("active"))
 
@@ -5807,7 +5776,7 @@ def build_model_routing_plan(
         active_cheap_models = prioritize_free_nano_for_simple_questions(
             active_cheap_models,
             health_cache,
-            require_active=bool(health_cache),
+            require_active=False,
         )
         fastest_cheap_models = prioritize_free_nano_for_simple_questions(
             fastest_cheap_models or active_cheap_models,
@@ -5871,9 +5840,9 @@ def build_model_routing_plan(
         routing_reason = "fallback-terakhir-belum-terverifikasi"
 
     if bool(st.session_state.get("active_smart_router", True)):
-        tier_candidates = filter_runtime_blocked_models(unique_models(active_cheap_models + active_higher_models))
+        tier_candidates = filter_runtime_blocked_models(unique_models(active_cheap_models + active_expensive_models))
         if health_cache:
-            tier_candidates = [m for m in tier_candidates if (health_cache.get(m) or {}).get("active")]
+            tier_candidates = [m for m in tier_candidates if m not in health_cache or (health_cache.get(m) or {}).get("active")]
         tier_candidates = rank_tier_models(
             user_text, tier_candidates,
             allow_expensive=operation_mode != "Hemat" and bool(st.session_state.get("allow_expensive_fallback", True)),
@@ -5967,7 +5936,7 @@ def build_model_routing_plan(
     fastest_cheap_models = filter_runtime_blocked_models(fastest_cheap_models)
 
     if not bool(st.session_state.get("active_smart_router", True)):
-        if is_model_runtime_blocked(selected_model) or (health_cache and not (health_cache.get(selected_model) or {}).get("active")):
+        if not selected_model or is_model_runtime_blocked(selected_model) or (selected_model in health_cache and not (health_cache.get(selected_model) or {}).get("active")):
             raise RuntimeError("Model pilihan manual tidak tersedia; pilih model lain atau aktifkan smart router.")
         primary_model = selected_model
         cheap_fallback_models = []
@@ -5977,7 +5946,7 @@ def build_model_routing_plan(
     primary_model, cheap_fallback_models, min_primary_meta = ensure_minimum_primary_model_pool(
         primary_model=primary_model,
         cheap_fallback_models=cheap_fallback_models,
-        active_cheap_models=active_cheap_models,
+        active_cheap_models=active_cheap_models if bool(st.session_state.get("active_smart_router", True)) else [],
         active_expensive_models=active_expensive_models,
         health_cache=health_cache,
     )
@@ -7094,9 +7063,7 @@ def get_model_readiness_state(
         if isinstance(item, dict) and item.get("health_status") == "transient"
     ]
 
-    cheap_count = len(route.get("active_cheap_models") or [])
-    expensive_count = len(route.get("active_expensive_models") or [])
-    active_total = len(active_models) or cheap_count + expensive_count
+    active_total = len(active_models)
 
     if not api_key:
         return {
@@ -14279,7 +14246,12 @@ st.markdown(
 # =========================
 def render_public_sidebar() -> None:
     """Render static sidebar outside chat refresh fragment."""
-    route_preview = build_model_routing_plan(user_text="halo")
+    try:
+        route_preview = build_model_routing_plan(user_text="halo")
+    except RuntimeError:
+        with st.sidebar:
+            st.warning("Routing belum tersedia. Periksa konfigurasi model di panel admin.")
+        return
     readiness = get_model_readiness_state(route_preview)
     status_label = sanitize_model_readiness_text(
         readiness.get("label") or "Perlu cek model"
@@ -14345,7 +14317,21 @@ def _render_public_chat() -> None:
             reason="public-page-load",
         )
 
-    public_route_preview = build_model_routing_plan(user_text="halo")
+    try:
+        public_route_preview = build_model_routing_plan(user_text="halo")
+    except RuntimeError:
+        st.session_state.pending_prompt = ""
+        st.warning(
+            "Chat belum tersedia: tidak ada model yang dapat dirutekan. "
+            "Admin: periksa SLASHAI_API_KEY, SLASHAI_API_URL, SLASHAI_MODEL, "
+            "mode Hemat/izin fallback, daftar blokir, dan hasil health check provider; "
+            "jalankan ulang cek model setelah konfigurasi diperbaiki."
+        )
+        return
+    if not api_key or not api_url:
+        st.session_state.pending_prompt = ""
+        st.warning("Chat belum tersedia. Admin: isi SLASHAI_API_KEY dan SLASHAI_API_URL yang valid di secrets/env.")
+        return
     cheap_active = public_route_preview.get("active_cheap_models") or []
     expensive_active = public_route_preview.get("active_expensive_models") or []
     public_readiness = get_model_readiness_state(public_route_preview)
@@ -14376,7 +14362,7 @@ def _render_public_chat() -> None:
             </div>
             <div class="mac-window-actions online-status status-{_html_escape(public_status_class)}" aria-label="Status AI">
                 <span class="online-dot" aria-hidden="true"></span>
-                <span class="online-text">Siap digunakan</span>
+                <span class="online-text">{_html_escape(public_status_label)}</span>
                 <span class="online-wave" aria-hidden="true">
                     <span></span>
                     <span></span>
@@ -14393,7 +14379,7 @@ def _render_public_chat() -> None:
                 </div>
             </div>
             <div class="adioranye-hero-content">
-                <div class="adioranye-hero-kicker status-{_html_escape(public_status_class)}">Siap membantu</div>
+                <div class="adioranye-hero-kicker status-{_html_escape(public_status_class)}">{_html_escape(public_status_kicker)}</div>
                 <h3 class="app-title adioranye-hero-title">
                     <span class="adioranye-hero-word">Adioranye</span>
                     <span class="adioranye-ai-chip-large">AI</span>
