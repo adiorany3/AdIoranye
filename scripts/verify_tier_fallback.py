@@ -13,7 +13,7 @@ def respond(**kwargs):
 
 base = dict(api_url="https://example.invalid/v1", api_key="test", model="tamandata",
             system_prompt="", user_text="Bandingkan metode", return_to_primary=False,
-            fallback_models=[], expensive_fallback_models=[])
+            fallback_models=[], expensive_fallback_models=[], consultation_enabled=False)
 with patch.object(core, "should_use_cache", return_value=False), \
      patch.object(core, "call_api_once", side_effect=respond), \
      patch.object(core, "answer_quality_score", return_value=(0.1, [])):

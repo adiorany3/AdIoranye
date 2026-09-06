@@ -5889,7 +5889,7 @@ def build_model_routing_plan(
         routing_reason = "model-admin-explicit"
 
     if thinking_direct_to_capable:
-        cheap_fallback_models = []
+        cheap_fallback_models = [m for m in active_cheap_models if m != primary_model]
     else:
         cheap_pool = (
             fastest_cheap_models

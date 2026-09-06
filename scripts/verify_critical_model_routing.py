@@ -30,9 +30,10 @@ class Store:
 def check(*, current=False, risk="normal", critical=False, mode="normal", blocked=(), adaptive=True,
           text="question", smart=True, expensive=True):
     context = dict(
-        model="default", fallback_models=["fallback"], expensive_fallback_models=[],
+        model="default", fallback_models=["fallback", TIER_ROUTING["standard_model"], "tamandata"], expensive_fallback_models=[ASTRA],
         user_text=text, effective_answer_mode=mode, intent="general",
         smart_model_router=smart, allow_expensive_fallback=expensive,
+        semantic_cache_enabled=True,
         rank_tier_models=rank_tier_models, TIER_ROUTING=TIER_ROUTING,
         enable_circuit_breaker=True, enable_adaptive_scoring=adaptive,
         store=Store(blocked),

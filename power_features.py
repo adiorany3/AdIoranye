@@ -3641,7 +3641,7 @@ def generate_power_answer(
     all_candidates = list(dict.fromkeys([model] + cheap_candidates + expensive_candidates + (
         [TIER_ROUTING["standard_model"], TIER_ROUTING["reasoning_model"]]
         + ([TIER_ROUTING["advanced_model"]] if allow_expensive_fallback else [])
-        if smart_model_router else []
+        if smart_model_router and fallback_models is None and expensive_fallback_models is None else []
     )))
     question_context = classify_question_context(user_text)
     advanced_task = (
@@ -3649,6 +3649,12 @@ def generate_power_answer(
         or question_context["risk_level"] == "high"
         or detect_critical_question(user_text).get("is_critical", False)
     )
+    # Semantic cache cannot enforce exact peer availability/manual routing policy.
+    if not smart_model_router or advanced_task or len(user_text.split()) > 120 or any(
+        marker in user_text.lower()
+        for marker in TIER_ROUTING["reasoning_markers"] + TIER_ROUTING["advanced_markers"]
+    ):
+        semantic_cache_enabled = False
     if enable_circuit_breaker:
         all_candidates = store.filter_blocked_models(all_candidates)
     if enable_adaptive_scoring:
@@ -3673,7 +3679,7 @@ def generate_power_answer(
         adjusted_max_tokens = int(max(500, min(6000, adjusted_max_tokens * float(answer_mode_policy.get("token_multiplier") or 1.0))))
     except Exception:
         pass
-    route_signature = ",".join(ranked_all[:8]) + f"|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}|retrieval_query={hashlib.sha256(str(retrieval_query).encode('utf-8')).hexdigest()[:12]}"
+    route_signature = ",".join(ranked_all[:8]) + f"|consultation=v1|smart={smart_model_router}|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}|retrieval_query={hashlib.sha256(str(retrieval_query).encode('utf-8')).hexdigest()[:12]}"
     kb_cache_version = store.get_kb_cache_version() if enable_rag and (rag_sources or base_memory_text) else ""
     kb_cache_ttl_seconds = max(int(response_cache_ttl_seconds or 1800), 31536000) if kb_cache_version else int(response_cache_ttl_seconds or 1800)
     kb_semantic_cache_ttl_seconds = max(int(semantic_cache_ttl_seconds or 86400), 31536000) if kb_cache_version else int(semantic_cache_ttl_seconds or 86400)
@@ -3764,6 +3770,10 @@ def generate_power_answer(
             smart_model_router=smart_model_router,
             return_to_primary=return_to_primary,
             max_smart_models=max_smart_models,
+            consultation_text=user_text,
+            consultation_advanced=advanced_task,
+            # Hard daily caps lack per-call reservations: do not spend extra under caps.
+            consultation_enabled=not (daily_cost_limit_idr > 0 or max_expensive_calls_per_day > 0),
         )
 
     try:
@@ -3849,7 +3859,7 @@ def generate_power_answer(
         if ignored_compat_kwargs:
             meta["ignored_compat_kwargs"] = ignored_compat_kwargs
 
-        if should_self_verify(intent, user_text, enabled=enable_self_verification):
+        if not meta.get("consultation_managed") and should_self_verify(intent, user_text, enabled=enable_self_verification):
             verifier = ""
             if ranked_expensive:
                 verifier = ranked_expensive[0]
@@ -3906,7 +3916,7 @@ def generate_power_answer(
                     claim_risk = meta.get("hallucination_claim_risk") or {}
                     if int(claim_risk.get("claim_like_count") or 0) > 0 or float(claim_risk.get("risk_score") or 0.0) >= 0.2:
                         should_verify_quality = True
-                if should_verify_quality:
+                if should_verify_quality and not meta.get("consultation_managed"):
                     verifier = str(quality_verifier_model or "").strip()
                     if not verifier:
                         if ranked_expensive:
