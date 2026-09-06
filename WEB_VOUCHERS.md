@@ -6,6 +6,7 @@
 - Batas: 1–10000 pertanyaan; jeda 1–3600 detik. Admin harus tercantum dalam `TELEGRAM_ADMIN_CHAT_IDS`.
 - Jalankan `/lockweb` agar halaman publik meminta voucher. `/unlockweb MENIT` tetap membuka akses publik tanpa voucher; sesi yang sudah memakai voucher tetap dibatasi kuotanya.
 - Voucher terikat ke satu sesi browser saat pertama digunakan. Sesi baru/reload penuh dapat memerlukan voucher baru; kode bukan login lintas perangkat.
+- Sesi aktif bisa menyimpan sisa kuota: klik **Simpan Sisa Voucher** → kode pulih 8 karakter ditampilkan. Gunakan kode itu di form **Pulihkan** pada layar login voucher untuk mengikat sisa kuota ke sesi baru. Kode pulih hanya dapat dipakai sekali. Kuota tersimpan ditampilkan per sesi di halaman login.
 - Setiap pertanyaan yang diterima mengurangi kuota, termasuk respons pembatasan laju/error. Kuota tidak dikembalikan otomatis.
 - Pertanyaan terakhir tetap dijawab. Composer hilang setelah kuota habis; jeda dimulai setelah pemrosesan jawaban selesai. Pemeriksaan setiap 2 detik menutup riwayat ketika jeda habis. Salinan/download yang sudah dibuat pengguna tidak dapat ditarik kembali.
 - Web dan Telegram harus memakai file SQLite yang sama pada penyimpanan lokal persisten. Opsional: `WEB_VOUCHER_DB_PATH` (default `.adioranye_web_vouchers.sqlite3`). Jangan memakai database terpisah antar replika atau filesystem jaringan.

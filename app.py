@@ -36,7 +36,7 @@ from ai_core import (
     model_price_label,
 )
 from memory_store import MemoryStore, handle_local_memory_command
-from web_vouchers import voucher_access
+from web_vouchers import save_voucher_state, restore_voucher_state, list_saved_states, voucher_access
 from power_features import (
     get_power_store,
     handle_power_command,
@@ -14413,6 +14413,39 @@ def _render_public_chat() -> None:
                 st.session_state.web_voucher_code = code.strip().upper()
                 st.rerun()
             st.error("Voucher tidak valid, sudah dipakai sesi lain, atau kuota habis.")
+
+        # Tampilkan kode pulih jika baru saja disimpan
+        if st.session_state.get("web_voucher_saved_code"):
+            saved_code = st.session_state.pop("web_voucher_saved_code")
+            st.success(f"Sisa voucher disimpan. Kode pulih: **{saved_code}**. Simpan kode ini untuk dipakai nanti.")
+            try:
+                db_path = str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3"))
+                saved = list_saved_states(db_path, st.session_state.web_voucher_owner)
+                if saved:
+                    st.caption(f"Kuota tersimpan aktif: {len(saved)} ({', '.join(s['recovery_code'] for s in saved)})")
+            except (OSError, sqlite3.Error):
+                pass
+
+        # Form pulihkan kuota tersimpan
+        with st.form("restore_voucher"):
+            st.caption("Pulihkan sisa voucher dengan kode pulih")
+            restore_code = st.text_input("Kode pulih", max_chars=20, key="restore_code_input").strip().upper()
+            restored = st.form_submit_button("Pulihkan")
+        if restored and restore_code:
+            try:
+                db_path = str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3"))
+                new_code = restore_voucher_state(db_path, st.session_state.web_voucher_owner, restore_code)
+            except (OSError, sqlite3.Error):
+                st.error("Penyimpanan voucher tidak tersedia.")
+                new_code = None
+            if new_code:
+                st.session_state.web_voucher_code = new_code
+                st.rerun()
+            else:
+                st.error("Kode pulih tidak valid atau sudah digunakan.")
+        elif restored:
+            st.error("Masukkan kode pulih terlebih dahulu.")
+
         st.markdown(
             '<div class="auto-scroll-anchor"></div>'
             '<div class="chat-input-safe-space"></div>',
@@ -14427,6 +14460,20 @@ def _render_public_chat() -> None:
             st.warning(f"Kuota habis. Kolom pertanyaan ditutup. Chat ditutup dalam {seconds} detik.")
         else:
             st.caption(f"Voucher: sisa {voucher['remaining']} pertanyaan.")
+            if st.button("💾 Simpan Sisa Voucher", use_container_width=True, key="save_voucher_btn"):
+                try:
+                    db_path = str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3"))
+                    recovery_code = save_voucher_state(db_path, st.session_state.web_voucher_owner)
+                except (OSError, sqlite3.Error):
+                    st.error("Penyimpanan voucher tidak tersedia.")
+                    recovery_code = None
+                if recovery_code:
+                    st.session_state.web_voucher_code = None
+                    st.session_state.web_voucher_saved_code = recovery_code
+                    st.session_state.web_voucher_owner = secrets.token_hex(32)
+                    st.rerun()
+                else:
+                    st.error("Sisa voucher gagal disimpan. Pastikan masih ada kuota.")
 
     if not api_key:
         st.warning(

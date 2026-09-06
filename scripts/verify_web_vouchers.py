@@ -8,7 +8,7 @@ import tempfile
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from web_vouchers import create_voucher, voucher_access, list_active_vouchers, _hash
+from web_vouchers import create_voucher, save_voucher_state, restore_voucher_state, list_saved_states, voucher_access, list_active_vouchers, _hash
 
 
 with tempfile.TemporaryDirectory() as directory:
@@ -22,6 +22,28 @@ with tempfile.TemporaryDirectory() as directory:
         results = list(pool.map(lambda _: voucher_access(path, code, "owner", "consume"), range(20)))
     assert sum(result["allowed"] for result in results) == 5
     assert list_active_vouchers(path) == []
+    # Simpan / pulihkan sisa kuota
+    code2 = create_voucher(path, 5, 60)
+    voucher_access(path, code2, "owner2", "claim")
+    voucher_access(path, code2, "owner2", "consume")
+    assert save_voucher_state(path, None) is None
+    saved = save_voucher_state(path, "owner2")
+    assert saved is not None and len(saved) == 8
+    assert list_saved_states(path, "owner2")[0]["remaining"] == 4
+    assert list_saved_states(path, "stranger") == []
+    new_code = restore_voucher_state(path, "owner2", saved)
+    assert new_code is not None and new_code.startswith("VC-")
+    voucher_access(path, new_code, "owner2", "claim")
+    assert voucher_access(path, new_code, "owner2", "status")["remaining"] == 4
+    # Habiskan new_code agar /cekvoucher kosong untuk tes berikutnya
+    for _ in range(4):
+        voucher_access(path, new_code, "owner2", "consume")
+    assert list_saved_states(path, "owner2") == []
+    assert restore_voucher_state(path, "owner2", "XXXX") is None
+    assert restore_voucher_state(path, "owner2", "") is None
+    assert restore_voucher_state(path, None, saved) is None
+    # Simpan dengan owner salah / voucher aktif tidak ada → None
+    assert save_voucher_state(path, "no-such-owner") is None
     assert not voucher_access(path, code, "owner")["readable"]
     with patch("web_vouchers.time.time", return_value=1000):
         final = voucher_access(path, code, "owner", "finish")
@@ -45,6 +67,8 @@ with tempfile.TemporaryDirectory() as directory:
     handler = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "_handle_admin_command")
     namespace = {"Any": object, "Optional": __import__("typing").Optional,
                  "create_voucher": create_voucher, "list_active_vouchers": list_active_vouchers,
+                 "save_voucher_state": save_voucher_state, "restore_voucher_state": restore_voucher_state,
+                 "list_saved_states": list_saved_states,
                  "_hash": _hash, "sqlite3": sqlite3, "os": __import__("os")}
     exec(compile(ast.Module(body=[handler], type_ignores=[]), str(source), "exec"), namespace)
     class Service:
@@ -77,4 +101,4 @@ with tempfile.TemporaryDirectory() as directory:
     assert "tidak dibuat" in command(Service(), 123, "/voucher 0")
     assert "Format:" in command(Service(), 123, "/voucher")
 
-print("PASS: atomic quota, session ownership, grace expiry, validation, Telegram authorization")
+print("PASS: atomic quota, session ownership, grace expiry, save/restore, validation, Telegram authorization")
