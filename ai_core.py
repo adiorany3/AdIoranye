@@ -1,4 +1,5 @@
 import copy
+from pathlib import Path
 import hashlib
 import json
 import re
@@ -84,6 +85,32 @@ ALL_CAPABLE_MODELS = ALL_SLASHAI_MODELS.copy()
 DEFAULT_CHEAP_FALLBACK_MODELS = ALL_CHEAP_MODELS.copy()
 DEFAULT_EXPENSIVE_FALLBACK_MODELS = ALL_MEDIUM_MODELS + ALL_EXPENSIVE_MODELS
 DEFAULT_FALLBACK_MODELS = ALL_CHEAP_MODELS + DEFAULT_EXPENSIVE_FALLBACK_MODELS
+
+
+TIER_ROUTING = json.loads(
+    (Path(__file__).resolve().parent / "config/adioranye_runtime_policy.json").read_text()
+)["model_routing"]
+
+
+def rank_tier_models(user_text: str, candidates: List[str], *, advanced: bool = False,
+                     allow_expensive: bool = True) -> List[str]:
+    """Rank usable IDs, without claiming provider availability or capability."""
+    text = str(user_text or "").lower()
+    # ponytail: lexical tiers; replace with evaluated classifier if routing errors grow.
+    hard = advanced or len(text.split()) > 120 or any(
+        marker in text for marker in TIER_ROUTING["advanced_markers"]
+    )
+    reasoning = any(marker in text for marker in TIER_ROUTING["reasoning_markers"])
+    preferred = TIER_ROUTING["advanced_model"] if hard and allow_expensive else (
+        TIER_ROUTING["reasoning_model"] if reasoning or hard else TIER_ROUTING["standard_model"]
+    )
+    usable = list(dict.fromkeys(m for m in candidates if m and (
+        allow_expensive or model_cost_tier(m) == "cheap"
+    )))
+    return sorted(usable, key=lambda m: (
+        m != preferred, model_cost_tier(m) != "cheap",
+        m == TIER_ROUTING["reasoning_model"] if not (reasoning or hard) else False,
+    ))
 
 
 def _unique_ordered(items: List[str]) -> List[str]:
@@ -911,7 +938,7 @@ Susun jawaban akhir dalam bahasa Indonesia yang natural, jelas, praktis, dan aku
 
 def rank_fallback_models(primary_model: str, fallback_models: Optional[List[str]], user_text: str) -> List[str]:
     raw = []
-    for m in (fallback_models or DEFAULT_FALLBACK_MODELS):
+    for m in (DEFAULT_FALLBACK_MODELS if fallback_models is None else fallback_models):
         if m and m not in raw and m != primary_model:
             raw.append(m)
 
@@ -1327,7 +1354,7 @@ def generate_answer(
     )
     # 2a) Jalur hemat dulu. Model mahal tidak dipanggil jika jawaban hemat sudah memadai.
     cheap_pool = filter_models_by_tier(
-        rank_fallback_models(primary_model, fallback_models or DEFAULT_CHEAP_FALLBACK_MODELS, user_text),
+        rank_fallback_models(primary_model, DEFAULT_CHEAP_FALLBACK_MODELS if fallback_models is None else fallback_models, user_text),
         tiers={"cheap"},
         exclude={primary_model},
     )
@@ -1349,10 +1376,11 @@ def generate_answer(
     # 2b) Jalur mahal hanya jika jalur murah belum cukup kompeten.
     if allow_expensive_fallback and should_try_expensive(primary_answer, assistant_references, user_text):
         expensive_pool = filter_models_by_tier(
-            rank_fallback_models(primary_model, expensive_fallback_models or DEFAULT_EXPENSIVE_FALLBACK_MODELS, user_text),
+            rank_fallback_models(primary_model, DEFAULT_EXPENSIVE_FALLBACK_MODELS if expensive_fallback_models is None else expensive_fallback_models, user_text),
             tiers={"medium", "expensive"},
             exclude={primary_model, *set(cheap_pool), *set(cheap_models_consulted)},
         )
+        expensive_pool = rank_tier_models(user_text, expensive_pool, advanced=True)
         expensive_pool = expensive_pool[:max(1, min(int(max_expensive_models or 1), 2))]
         expensive_refs, expensive_errors = consult_fallbacks_fast(
             api_url=api_url,

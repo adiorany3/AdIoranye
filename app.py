@@ -31,6 +31,7 @@ from ai_core import (
     DEFAULT_FALLBACK_MODELS,
     MODEL_PRICE_IDR,
     generate_answer,
+    rank_tier_models,
     model_cost_tier,
     model_price,
     model_price_label,
@@ -5751,7 +5752,7 @@ def build_model_routing_plan(
     )
     selected_model = str(st.session_state.get("active_model") or default_model).strip()
     health_cache = st.session_state.get("model_health_cache") or {}
-    if bool(auto_replace_inactive_primary_model) and health_cache:
+    if bool(auto_replace_inactive_primary_model) and health_cache and bool(st.session_state.get("active_smart_router", True)):
         healthy_primary_result = choose_healthy_primary_model(
             selected_model=selected_model,
             active_cheap_models=st.session_state.get("active_cheap_fallback_models")
@@ -5869,6 +5870,24 @@ def build_model_routing_plan(
         primary_model = selected_model or default_model
         routing_reason = "fallback-terakhir-belum-terverifikasi"
 
+    if bool(st.session_state.get("active_smart_router", True)):
+        tier_candidates = filter_runtime_blocked_models(unique_models(active_cheap_models + active_higher_models))
+        if health_cache:
+            tier_candidates = [m for m in tier_candidates if (health_cache.get(m) or {}).get("active")]
+        tier_candidates = rank_tier_models(
+            user_text, tier_candidates,
+            allow_expensive=operation_mode != "Hemat" and bool(st.session_state.get("allow_expensive_fallback", True)),
+        )
+        if not tier_candidates:
+            raise RuntimeError("Tidak ada model aktif yang diizinkan untuk routing.")
+        primary_model = tier_candidates[0]
+        direct_to_expensive = model_cost_tier(primary_model) != "cheap"
+        thinking_direct_to_capable = direct_to_expensive
+        routing_reason = "tier-standard-reasoning-advanced"
+    else:
+        primary_model = selected_model
+        routing_reason = "model-admin-explicit"
+
     if thinking_direct_to_capable:
         cheap_fallback_models = []
     else:
@@ -5900,7 +5919,7 @@ def build_model_routing_plan(
             thinking_direct_to_capable = False
             routing_reason = "mode-hemat-model-hemat"
     elif operation_mode == "Maksimal" and active_expensive_models:
-        allow_expensive = True
+        allow_expensive = bool(st.session_state.get("allow_expensive_fallback", True))
 
     max_expensive = int(st.session_state.get("max_expensive_models", 1) or 1)
     if expensive_fallback_models:
@@ -5946,6 +5965,14 @@ def build_model_routing_plan(
     active_high_cost_models = filter_runtime_blocked_models(active_high_cost_models)
     active_higher_models = filter_runtime_blocked_models(active_higher_models)
     fastest_cheap_models = filter_runtime_blocked_models(fastest_cheap_models)
+
+    if not bool(st.session_state.get("active_smart_router", True)):
+        if is_model_runtime_blocked(selected_model) or (health_cache and not (health_cache.get(selected_model) or {}).get("active")):
+            raise RuntimeError("Model pilihan manual tidak tersedia; pilih model lain atau aktifkan smart router.")
+        primary_model = selected_model
+        cheap_fallback_models = []
+        expensive_fallback_models = []
+        allow_expensive = False
 
     primary_model, cheap_fallback_models, min_primary_meta = ensure_minimum_primary_model_pool(
         primary_model=primary_model,

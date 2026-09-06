@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from ai_core import call_api_once, model_cost_tier, model_price
+from ai_core import call_api_once, model_cost_tier, model_price, rank_tier_models, TIER_ROUTING
 
 try:
     from db_guard import ensure_database_ready, maybe_create_periodic_backup, default_backup_dir, default_max_backups
@@ -3638,31 +3638,35 @@ def generate_power_answer(
     # Adaptive policy: rank candidate models using historical success, quality, latency, cost, and circuit breaker.
     cheap_candidates = list(dict.fromkeys([m for m in (fallback_models or []) if m]))
     expensive_candidates = list(dict.fromkeys([m for m in (expensive_fallback_models or []) if m]))
-    all_candidates = list(dict.fromkeys([model] + cheap_candidates + expensive_candidates))
+    all_candidates = list(dict.fromkeys([model] + cheap_candidates + expensive_candidates + (
+        [TIER_ROUTING["standard_model"], TIER_ROUTING["reasoning_model"]]
+        + ([TIER_ROUTING["advanced_model"]] if allow_expensive_fallback else [])
+        if smart_model_router else []
+    )))
     question_context = classify_question_context(user_text)
-    priority_model = "cx/gpt-6-astra" if (
+    advanced_task = (
         effective_answer_mode == "kritis"
         or question_context["risk_level"] == "high"
-        or question_context["needs_current_data"]
         or detect_critical_question(user_text).get("is_critical", False)
-    ) else None
-    if priority_model:
-        all_candidates = list(dict.fromkeys([priority_model] + all_candidates))
+    )
     if enable_circuit_breaker:
         all_candidates = store.filter_blocked_models(all_candidates)
     if enable_adaptive_scoring:
         ranked_all = store.rank_models_for_intent(all_candidates, intent)
     else:
         ranked_all = all_candidates
-    if priority_model in all_candidates:
-        ranked_all = [priority_model] + [m for m in ranked_all if m != priority_model]
-    selected_model = ranked_all[0] if ranked_all else model
+    if smart_model_router:
+        ranked_all = rank_tier_models(user_text, ranked_all, advanced=advanced_task,
+                                      allow_expensive=allow_expensive_fallback)
+    else:
+        ranked_all = [model] if model in all_candidates else []
+    if not ranked_all:
+        raise RuntimeError("Tidak ada model yang diizinkan dan tidak diblokir untuk permintaan ini.")
+    selected_model = ranked_all[0]
 
     ranked_cheap = [m for m in ranked_all if m != selected_model and model_cost_tier(m) == "cheap"]
     ranked_expensive = [m for m in ranked_all if m != selected_model and model_cost_tier(m) in {"medium", "expensive", "ultra"}]
-    # Preserve any still unranked fallback if all candidates were filtered weirdly.
-    ranked_cheap.extend([m for m in cheap_candidates if m != selected_model and m not in ranked_cheap])
-    ranked_expensive.extend([m for m in expensive_candidates if m != selected_model and m not in ranked_expensive])
+    # Never restore candidates removed by circuit breaker or spending policy.
 
     adjusted_max_tokens = adaptive_token_budget_for_intent(intent, user_text, base=max_completion_tokens)
     try:

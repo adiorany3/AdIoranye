@@ -1,5 +1,21 @@
 # Tamandata API
 
+## Tier chat otomatis
+
+`config/adioranye_runtime_policy.json` mengatur preferensi standar
+`gemini/gemini-2.5-flash`, reasoning menengah `tamandata`, dan tugas berat
+`cx/gpt-6-astra`. Penanda leksikal atau input lebih dari 120 kata memicu tier berat;
+mode kritis dan risiko tinggi juga memprioritaskan Astra pada jalur power.
+Pertanyaan current saja tidak memaksa Astra; pemeriksaan sumber tetap berlaku.
+Model mahal masih boleh menjadi fallback jika jawaban murah tidak memadai dan
+admin mengizinkan. Matikan smart router untuk mempertahankan pilihan model manual.
+
+`tamandata.py` hanya transport API: tidak ada mesin reasoning deterministik lokal.
+Nama `tamandata` diteruskan melalui jalur chat provider yang sudah ada, bukan
+dianggap kalkulator lokal atau LLM yang kemampuannya sudah teruji. ID model berasal
+dari katalog konfigurasi; ketersediaan, kemampuan, dan biaya inference belum
+diverifikasi melalui panggilan live. Kandidat yang diblokir tidak dipulihkan.
+
 Konfigurasi backend memakai `SLASHAI_API_URL=https://ai.tamandata.com/v1` dan
 `SLASHAI_API_KEY` pada secrets yang sudah dipakai aplikasi. Jangan masukkan key ke chat.
 

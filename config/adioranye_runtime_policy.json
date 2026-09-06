@@ -1,4 +1,12 @@
 {
+  "model_routing": {
+    "standard_model": "gemini/gemini-2.5-flash",
+    "reasoning_model": "tamandata",
+    "advanced_model": "cx/gpt-6-astra",
+    "reasoning_markers": ["hitung", "rumus", "bandingkan", "analisis", "mengapa", "kenapa", "reasoning", "compare", "calculate", "debug", "perbaiki"],
+    "advanced_markers": ["buktikan", "pembuktian", "prove", "proof", "arsitektur", "architecture", "analisis mendalam", "analisis kompleks", "multi-step", "multilangkah", "optimasi kompleks", "debug kompleks"],
+    "availability": "Configured IDs, not verified inference capabilities. Tamandata is a provider route, not a local deterministic engine."
+  },
   "answer_profiles": {
     "balanced": {
       "description": "Pertanyaan normal: RAG ringan dan sumber terbaik.",
