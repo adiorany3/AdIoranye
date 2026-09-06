@@ -34,7 +34,7 @@ from power_features import get_power_store, handle_power_command, generate_power
 from daily_kb_scraper import run_daily_kb_update
 from reminder_skill import ReminderStore, parse_reminder_command
 from telegram_formatting import format_telegram_message
-from web_vouchers import create_voucher
+from web_vouchers import create_voucher, list_active_vouchers, _hash
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
@@ -781,7 +781,7 @@ class TelegramService:
         if "@" in command:
             command = command.split("@", 1)[0]
 
-        if command not in {"/helpadmin", "/webstatus", "/lockweb", "/unlockweb", "/voucher"}:
+        if command not in {"/helpadmin", "/webstatus", "/lockweb", "/unlockweb", "/voucher", "/cekvoucher"}:
             return "Command admin tidak dikenal. Pakai /helpadmin untuk daftar command."
 
         if not self._is_admin_chat(chat_id):
@@ -794,12 +794,48 @@ class TelegramService:
                 "/webstatus - lihat status web chat\n"
                 "/lockweb - kunci web chat\n"
                 "/voucher JUMLAH [JEDA_DETIK] - voucher web, default jeda 60 detik\n"
+                "/cekvoucher [HALAMAN] - sisa kuota dan pemakaian voucher aktif\n"
                 "/unlockweb MENIT - buka web chat sementara\n"
                 "Contoh: /unlockweb 30\n"
                 "/ingat YYYY-MM-DD_HH:MM isi - buat pengingat (WIB)\n"
                 "/daftaringat - lihat pengingat\n"
                 "/hapusingat ID - hapus pengingat"
             )
+
+        if command == "/cekvoucher":
+            if not str(chat_id).isdigit() or int(chat_id) <= 0:
+                return "Cek voucher lewat chat pribadi admin, bukan grup."
+            parts = raw_text.split()
+            if len(parts) > 2 or (len(parts) == 2 and (not parts[1].isascii() or not parts[1].isdigit() or len(parts[1]) > 9)):
+                return "Format: /cekvoucher [HALAMAN]. Contoh: /cekvoucher 1"
+            page = int(parts[1]) if len(parts) == 2 else 1
+            if page < 1:
+                return "Halaman harus minimal 1."
+            try:
+                rows = list_active_vouchers(
+                    str(self._config.get("web_voucher_db_path") or ".adioranye_web_vouchers.sqlite3")
+                )
+            except (OSError, sqlite3.Error):
+                return "Daftar voucher gagal dibaca. Periksa penyimpanan server."
+            if not rows:
+                return "Tidak ada voucher dengan kuota tersisa."
+            pages = (len(rows) + 19) // 20
+            if page > pages:
+                return f"Halaman tidak tersedia. Pilih 1-{pages}."
+            lines = [
+                f"Voucher aktif: {len(rows)} | Halaman {page}/{pages}",
+                f"Total sisa: {sum(row['remaining'] for row in rows)} pertanyaan",
+                f"Terpakai pada voucher aktif: {sum(row['used'] for row in rows)} pertanyaan",
+                "ID | terpakai/kuota | sisa",
+            ]
+            lines.extend(
+                f"{row['id']} | {row['used']}/{row['quota']} | {row['remaining']}"
+                for row in rows[(page - 1) * 20:page * 20]
+            )
+            lines.append("Voucher habis tidak ditampilkan. ID bukan kode penukaran.")
+            if page < pages:
+                lines.append(f"Berikutnya: /cekvoucher {page + 1}")
+            return "\n".join(lines)
 
         if command == "/voucher":
             if not str(chat_id).isdigit() or int(chat_id) <= 0:
@@ -820,6 +856,7 @@ class TelegramService:
                 return "Voucher gagal disimpan. Periksa penyimpanan server."
             return (
                 f"Voucher: {code}\nKuota: {quota} pertanyaan\n"
+                f"ID pemantauan: {_hash(code)[:12]}\n"
                 f"Jeda baca setelah jawaban terakhir: {grace} detik.\n"
                 "Berlaku untuk satu sesi browser saat web dikunci (/lockweb)."
             )

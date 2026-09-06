@@ -1,5 +1,7 @@
 # Voucher web
 
+- Admin Telegram, chat pribadi: `/cekvoucher` menampilkan jumlah voucher aktif, total pertanyaan terpakai pada voucher aktif, total sisa pertanyaan, dan rincian tiap voucher. Daftar berisi 20 voucher per halaman; lanjut dengan `/cekvoucher 2`.
+- Voucher habis otomatis hilang dari daftar, bukan dihapus dari database, agar jeda baca terakhir tetap aman. ID pemantauan adalah awalan hash, bukan kode penukaran; ID juga disertakan saat membuat voucher baru.
 - Admin Telegram, chat pribadi: `/voucher 5 60` membuat voucher 5 pertanyaan dengan jeda baca 60 detik. `/voucher 5` memakai jeda default 60 detik.
 - Batas: 1–10000 pertanyaan; jeda 1–3600 detik. Admin harus tercantum dalam `TELEGRAM_ADMIN_CHAT_IDS`.
 - Jalankan `/lockweb` agar halaman publik meminta voucher. `/unlockweb MENIT` tetap membuka akses publik tanpa voucher; sesi yang sudah memakai voucher tetap dibatasi kuotanya.

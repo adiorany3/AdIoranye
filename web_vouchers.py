@@ -19,6 +19,16 @@ def _hash(code):
     return hashlib.sha256(str(code).strip().upper().encode()).hexdigest()
 
 
+def list_active_vouchers(path):
+    db = _connect(path)
+    try:
+        return [dict(row) for row in db.execute(
+            "SELECT substr(code_hash, 1, 12) AS id, quota, used, quota - used AS remaining "
+            "FROM web_vouchers WHERE used < quota ORDER BY rowid DESC"
+        )]
+    finally:
+        db.close()
+
 def create_voucher(path, quota, grace=60, created_by="telegram-admin"):
     if type(quota) is not int or not 1 <= quota <= 10000:
         raise ValueError("Jumlah pertanyaan harus 1-10000.")
