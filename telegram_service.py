@@ -990,6 +990,16 @@ class TelegramService:
         if not chat_id or not text:
             return
 
+        if text.split()[0].split("@", 1)[0].lower() == "/tamandata":
+            from tamandata import telegram_command
+            reply = telegram_command(
+                text, authorized=self._is_admin_chat(chat_id) and int(chat_id) > 0,
+                api_url=str(self._config.get("slashai_api_url") or self._config.get("api_url") or ""),
+                api_key=str(self._config.get("slashai_api_key") or self._config.get("api_key") or ""),
+            )
+            self._send_text(chat_id, reply, source_message_id)
+            return
+
         if replied_text:
             text = f"Pertanyaan sebelumnya yang kamu balas:\n{replied_text}\n\nPertanyaan baru:\n{text}"
 

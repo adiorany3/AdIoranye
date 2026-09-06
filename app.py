@@ -16457,6 +16457,8 @@ def render_admin_page() -> None:
     st.caption("Panel admin ringkas untuk kontrol inti dan fitur lanjutan saat perlu.")
 
     if st.session_state.admin_authenticated:
+        from tamandata import render_admin_explorer
+        render_admin_explorer(api_url, api_key)
         render_admin_settings()
         render_power_features_admin_panel()
     else:

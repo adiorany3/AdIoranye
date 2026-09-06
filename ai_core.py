@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import time
+from urllib.parse import urlsplit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple, Optional
 
@@ -207,6 +208,8 @@ def normalize_api_url(api_url: str) -> str:
     if not url:
         return url
     cleaned = url.split("?", 1)[0].rstrip("/")
+    if urlsplit(cleaned).hostname == "ai.tamandata.com":
+        return "https://ai.tamandata.com/v1/chat/completions"
     if cleaned.endswith("/chat/completions"):
         return cleaned
     if cleaned.endswith("/v1"):
@@ -223,6 +226,8 @@ def _candidate_models_api_urls(api_url: str, models_api_url: str = "") -> List[s
     if explicit:
         urls.append(explicit)
     base = str(api_url or "").strip()
+    if urlsplit(base).hostname == "ai.tamandata.com":
+        return _unique_ordered(urls + ["https://ai.tamandata.com/v1/models"])
     if base:
         no_query = base.split("?", 1)[0].rstrip("/")
         if no_query.endswith("/chat/completions"):
@@ -244,7 +249,7 @@ def _extract_model_ids_from_any(payload: Any) -> List[str]:
             return
         if isinstance(value, str):
             candidate = value.strip()
-            if "/" in candidate and len(candidate) <= 120 and not candidate.lower().startswith("http"):
+            if candidate and len(candidate) <= 256 and not any(c.isspace() for c in candidate) and not candidate.lower().startswith("http"):
                 found.append(candidate)
             return
         if isinstance(value, list):
@@ -252,6 +257,8 @@ def _extract_model_ids_from_any(payload: Any) -> List[str]:
                 walk(item, depth + 1)
             return
         if isinstance(value, dict):
+            if value.get("maintenance") is True:
+                return
             for key in ("id", "model", "name"):
                 item = value.get(key)
                 if isinstance(item, str):
@@ -285,8 +292,8 @@ def discover_available_models_from_api(api_url: str, api_key: str, models_api_ur
                 errors.append(f"{url} -> respons bukan JSON: {response.text[:220]}")
                 continue
             models = _extract_model_ids_from_any(payload)
-            if models:
-                return {"ok": True, "models": _unique_ordered(models + TOP_USAGE_MODEL_CANDIDATES), "source_url": url, "error": "", "raw_count": len(models)}
+            if models or (isinstance(payload, dict) and isinstance(payload.get("data"), list)):
+                return {"ok": True, "models": models, "source_url": url, "error": "", "raw_count": len(models)}
             errors.append(f"{url} -> JSON valid tetapi tidak ada model id terbaca")
         except Exception as exc:
             errors.append(f"{url} -> {str(exc)[:220]}")
