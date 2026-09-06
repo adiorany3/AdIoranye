@@ -6638,10 +6638,7 @@ def render_answer_model_caption(
     data = meta or {}
     caption_text = ""
 
-    kb_sources = data.get("power_kb_sources") or data.get("power_rag_sources") or []
-    show_kb_sources = bool(data.get("show_kb_sources", False))
-    if kb_sources and (show_kb_sources or admin_detail):
-        caption_text += f" • KB: {len(kb_sources)} sumber"
+    # Sumber KB dipakai internal untuk grounding, bukan ditampilkan pada jawaban.
 
     # Detail jalur routing hanya untuk admin agar tampilan publik tetap bersih.
     if admin_detail:
@@ -6652,14 +6649,6 @@ def render_answer_model_caption(
             )
         if data.get("expensive_fallback_used"):
             caption_text += " • model menengah/mahal dipakai"
-        if kb_sources:
-            source_titles = []
-            for item in kb_sources[:3]:
-                label = str(item.get("citation") or item.get("title") or "").strip()
-                if label:
-                    source_titles.append(label[:80])
-            if source_titles:
-                caption_text += " • sumber: " + "; ".join(source_titles)
 
     st.caption(caption_text)
 
@@ -15047,24 +15036,7 @@ def render_public_chat() -> None:
                         caption_text += (
                             f" • retry model: {(meta or {}).get('auto_model_retry_final_model')}"
                         )
-                    if (meta or {}).get("power_kb_sources") and (
-                        bool((meta or {}).get("show_kb_sources", False))
-                        or st.session_state.admin_authenticated
-                    ):
-                        kb_sources = (meta or {}).get("power_kb_sources") or []
-                        caption_text += f" • KB: {len(kb_sources)} sumber"
-                        if st.session_state.admin_authenticated:
-                            titles = [
-                                str(item.get("citation") or item.get("title") or "")[
-                                    :70
-                                ]
-                                for item in kb_sources[:3]
-                                if str(
-                                    item.get("citation") or item.get("title") or ""
-                                ).strip()
-                            ]
-                            if titles:
-                                caption_text += " • sumber: " + "; ".join(titles)
+                    # Sumber KB tetap tersedia di metadata internal, tanpa ditampilkan.
                     if st.session_state.admin_authenticated:
                         consulted = (meta or {}).get("consulted_models") or []
                         expensive_used = (meta or {}).get(

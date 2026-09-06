@@ -251,15 +251,12 @@ def append_guard_note(
     note_parts: List[str] = []
     if guard.is_high_risk:
         note_parts.append("Catatan: jawaban ini memakai mode kehati-hatian karena pertanyaan terdeteksi sebagai topik kritis/terkini.")
-    if append_sources and rag_sources:
-        src_note = format_source_note(rag_sources, limit=4)
-        if src_note:
-            note_parts.append("Sumber KB yang dipakai:\n" + src_note)
+    # Sumber KB tetap dipakai untuk grounding, tetapi tidak ditampilkan pada jawaban.
     if not note_parts:
         return text
     # Avoid duplicating notes if a verifier/model already appended them.
     lowered = text.lower()
-    if "sumber kb yang dipakai" in lowered or "mode kehati-hatian" in lowered:
+    if "mode kehati-hatian" in lowered:
         return text
     return text + "\n\n---\n" + "\n\n".join(note_parts)
 

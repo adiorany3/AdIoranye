@@ -2943,6 +2943,49 @@ def get_power_store(db_path: str = DEFAULT_POWER_DB) -> PowerStore:
 # Intent & prompt policy
 # =========================
 
+def classify_question_context(text: str) -> Dict[str, Any]:
+    """Extract intent, goal, output shape, risk, and freshness needs locally."""
+    raw = re.sub(r"\s+", " ", str(text or "")).strip()
+    lower = raw.lower()
+    intent = classify_intent_text(raw)
+    wants_steps = any(term in lower for term in ("cara", "langkah", "tutorial", "bagaimana", "perbaiki"))
+    wants_compare = any(term in lower for term in ("bandingkan", "perbedaan", "vs", "mana lebih", "kelebihan"))
+    wants_create = any(term in lower for term in ("buatkan", "susun", "tulis", "rancang", "generate"))
+    wants_current = any(term in lower for term in ("terbaru", "terkini", "hari ini", "saat ini", "update", "sekarang"))
+    high_risk = intent in {"health", "livestock", "critical_current"}
+
+    if wants_compare:
+        goal = "compare_options"
+    elif wants_steps:
+        goal = "solve_step_by_step"
+    elif wants_create:
+        goal = "create_output"
+    elif intent in {"research", "academic", "document_question", "critical_current"}:
+        goal = "understand_and_verify"
+    else:
+        goal = "answer_question"
+
+    if wants_compare:
+        output_format = "comparison"
+    elif wants_steps:
+        output_format = "steps"
+    elif wants_create:
+        output_format = "ready_to_use"
+    elif intent == "calculation":
+        output_format = "calculation"
+    else:
+        output_format = "direct_answer"
+
+    return {
+        "intent": intent,
+        "goal": goal,
+        "output_format": output_format,
+        "risk_level": "high" if high_risk else "normal",
+        "needs_current_data": wants_current or intent == "critical_current",
+        "needs_source_check": intent in {"research", "academic", "document_question", "critical_current"},
+        "word_count": len(re.findall(r"\w+", raw)),
+    }
+
 def classify_intent_text(text: str) -> str:
     t = str(text or "").lower().strip()
     wc = len(t.split())
@@ -3003,9 +3046,15 @@ def enhance_prompt_for_intent(user_text: str, intent: str, enable_templates: boo
         return user_text
     template = PROMPT_TEMPLATES.get(intent)
     critical_instruction = build_critical_answer_instruction(user_text)
-    if not template and not critical_instruction:
-        return user_text
+    question_context = classify_question_context(user_text)
     parts = [str(user_text or "")]
+    parts.append(
+        "KONTEKS TUGAS TERSTRUKTUR (ikuti sebagai panduan output): "
+        + json.dumps(
+            {key: question_context[key] for key in ("goal", "output_format", "risk_level", "needs_current_data", "needs_source_check")},
+            ensure_ascii=False,
+        )
+    )
     if template:
         parts.append(f"Instruksi mode {intent}: {template}")
     if critical_instruction:
