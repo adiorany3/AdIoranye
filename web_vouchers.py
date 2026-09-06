@@ -13,7 +13,7 @@ def _connect(path):
         used INTEGER NOT NULL DEFAULT 0, grace INTEGER NOT NULL,
         owner TEXT, close_at REAL, created_by TEXT NOT NULL)""")
     db.execute("""CREATE TABLE IF NOT EXISTS web_voucher_saves (
-        recovery_code TEXT PRIMARY KEY, owner TEXT NOT NULL,
+        persistent_token TEXT PRIMARY KEY,
         remaining INTEGER NOT NULL, grace INTEGER NOT NULL,
         created_at REAL NOT NULL)""")
     return db
@@ -79,10 +79,12 @@ def voucher_access(path, code, owner, action="status"):
         db.close()
 
 
-def save_voucher_state(path, owner):
-    """Simpan sisa kuota voucher aktif user. Kembalikan kode pulih atau None."""
-    if not owner:
-        return None
+def save_voucher_state(path, persistent_token, owner):
+    """Simpan sisa kuota voucher aktif ke persistent token browser.
+    Menghapus voucher aktif dan menyimpan sisanya.
+    Returns True if saved, False otherwise."""
+    if not persistent_token or not owner:
+        return False
     db = _connect(path)
     try:
         with db:
@@ -91,62 +93,54 @@ def save_voucher_state(path, owner):
                 "SELECT * FROM web_vouchers WHERE owner = ? AND used < quota AND close_at IS NULL",
                 (owner,)).fetchone()
             if not row:
-                return None
-            if row["quota"] - row["used"] < 1:
-                return None
-            # Hapus sesi aktif; simpan sisanya
+                return False
+            remaining = row["quota"] - row["used"]
+            if remaining < 1:
+                return False
             db.execute("DELETE FROM web_vouchers WHERE code_hash = ?", (row["code_hash"],))
-            recovery_code = _make_recovery_code()
             db.execute(
-                "INSERT INTO web_voucher_saves(recovery_code, owner, remaining, grace, created_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (recovery_code, owner, row["quota"] - row["used"], row["grace"], time.time()))
-            return recovery_code
+                "INSERT OR REPLACE INTO web_voucher_saves(persistent_token, remaining, grace, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (persistent_token, remaining, row["grace"], time.time()))
+            return True
     finally:
         db.close()
 
 
-def restore_voucher_state(path, owner, recovery_code):
-    """Pulihkan kuota tersimpan ke sesi baru. Kembalikan kode voucher baru atau None."""
-    if not owner or not recovery_code:
+def get_saved_voucher(path, persistent_token):
+    """Ambil info kuota tersimpan untuk persistent token."""
+    if not persistent_token:
         return None
-    code = str(recovery_code).strip().upper()
-    if len(code) < 4 or len(code) > 20:
+    db = _connect(path)
+    try:
+        row = db.execute(
+            "SELECT remaining, grace, created_at FROM web_voucher_saves WHERE persistent_token = ?",
+            (persistent_token,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        db.close()
+
+
+def claim_saved_voucher(path, persistent_token, new_owner):
+    """Atomik: pulihkan kuota tersimpan ke sesi baru, hapus rekam tersimpan.
+    Mengembalikan kode voucher baru atau None."""
+    if not persistent_token or not new_owner:
         return None
     db = _connect(path)
     try:
         with db:
             db.execute("BEGIN IMMEDIATE")
             saved = db.execute(
-                "SELECT * FROM web_voucher_saves WHERE recovery_code = ?",
-                (code,)).fetchone()
+                "SELECT * FROM web_voucher_saves WHERE persistent_token = ?",
+                (persistent_token,)).fetchone()
             if not saved:
                 return None
-            db.execute("DELETE FROM web_voucher_saves WHERE recovery_code = ?", (code,))
-            # Buat voucher baru terikat sesi owner
+            db.execute("DELETE FROM web_voucher_saves WHERE persistent_token = ?", (persistent_token,))
             new_code = "VC-" + secrets.token_hex(16).upper()
             db.execute(
                 "INSERT INTO web_vouchers(code_hash, quota, grace, owner, created_by) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (_hash(new_code), saved["remaining"], saved["grace"], owner, "web-restore"))
+                (_hash(new_code), saved["remaining"], saved["grace"], new_owner, "web-restore"))
             return new_code
     finally:
         db.close()
-
-
-def list_saved_states(path, owner):
-    """Daftar kuota tersimpan untuk owner."""
-    if not owner:
-        return []
-    db = _connect(path)
-    try:
-        return [dict(row) for row in db.execute(
-            "SELECT recovery_code, remaining, grace, created_at "
-            "FROM web_voucher_saves WHERE owner = ? ORDER BY created_at DESC", (owner,))]
-    finally:
-        db.close()
-
-
-def _make_recovery_code():
-    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    return "".join(secrets.choice(chars) for _ in range(8))
