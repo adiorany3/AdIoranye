@@ -14383,8 +14383,19 @@ def _render_public_chat() -> None:
 
     maintenance_state = read_maintenance_lock_state()
     public_locked = bool(maintenance_state.get("locked"))
+    # Auto-restore via query param (persistent browser token) - check both code and saved token
+    auto_token = st.query_params.get("voucher_token", "")
+    auto_saved = None
+    if auto_token:
+        try:
+            db_path = str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3"))
+            auto_saved = get_saved_voucher(db_path, auto_token)
+        except (OSError, sqlite3.Error):
+            auto_saved = None
+
     voucher = {}
-    voucher_required = public_locked or bool(st.session_state.get("web_voucher_code"))
+    # Voucher required if: public is locked, has active code, OR has saved token to restore
+    voucher_required = public_locked or bool(st.session_state.get("web_voucher_code") or auto_token)
     if voucher_required and not st.session_state.get("admin_authenticated", False):
         try:
             voucher = web_voucher_status()
@@ -14403,15 +14414,6 @@ def _render_public_chat() -> None:
         st.session_state.reply_composer_prefill = ""
         st.warning(maintenance_public_message())
 
-        # Auto-restore via query param (persistent browser token)
-        auto_token = st.query_params.get("voucher_token", "")
-        auto_saved = None
-        if auto_token:
-            try:
-                db_path = str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3"))
-                auto_saved = get_saved_voucher(db_path, auto_token)
-            except (OSError, sqlite3.Error):
-                auto_saved = None
         if auto_saved:
             st.success(f"Ada kuota tersimpan: **{auto_saved['remaining']}** pertanyaan. Tekan 'Pulihkan' untuk melanjutkan.")
 
