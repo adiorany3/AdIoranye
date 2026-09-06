@@ -17,7 +17,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -93,15 +93,15 @@ def _score_source_quality(url: str, title: str = "") -> float:
 def _published_to_freshness(published: Any) -> float:
     if not published:
         return 75.0
-    text = str(published)
+    text = str(published).strip()
     formats = [
-        "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
-        "%a, %d %b %Y %H:%M:%S %Z", "%a, %d %b %Y %H:%M:%S %z",
+        "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d", "%a, %d %b %Y %H:%M:%S GMT", "%a, %d %b %Y %H:%M:%S %z",
     ]
     dt = None
     for fmt in formats:
         try:
-            value = text.replace("Z", "+0000") if fmt.endswith("%z") else text
+            value = text.replace("Z", "+0000") if "%z" in fmt and text.endswith("Z") else text
             dt = datetime.strptime(value, fmt)
             break
         except Exception:
@@ -110,7 +110,7 @@ def _published_to_freshness(published: Any) -> float:
         return 75.0
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=WIB_TZ)
-    age_days = max(0.0, (datetime.now(WIB_TZ) - dt.astimezone(WIB_TZ)).total_seconds() / 86400.0)
+    age_days = max(0.0, (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 86400.0)
     if age_days <= 1:
         return 100.0
     if age_days <= 7:

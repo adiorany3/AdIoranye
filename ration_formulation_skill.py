@@ -8,6 +8,7 @@ before using a ration commercially.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 from typing import Dict, Iterable, Mapping
 
 
@@ -44,15 +45,15 @@ class FeedAnalysis:
     def __post_init__(self) -> None:
         for field in ("dry_matter_pct", "crude_protein_pct_dm", "tdn_pct_dm", "calcium_pct_dm", "phosphorus_pct_dm"):
             value = float(getattr(self, field))
-            if value < 0 or (field == "dry_matter_pct" and value > 100):
+            if not isfinite(value) or value < 0 or (field == "dry_matter_pct" and value > 100):
                 raise ValueError(f"{field} di luar rentang: {value}")
 
 
 def calculate_nutrients(feed: FeedAnalysis, as_fed_kg: float) -> Dict[str, float]:
     """Return deterministic nutrient contributions for one feed quantity."""
     quantity = float(as_fed_kg)
-    if quantity < 0:
-        raise ValueError("Jumlah bahan pakan tidak boleh negatif.")
+    if not isfinite(quantity) or quantity < 0:
+        raise ValueError("Jumlah bahan pakan harus berupa angka hingga dan tidak boleh negatif.")
     dm_kg = quantity * feed.dry_matter_pct / 100.0
     return {
         "as_fed_kg": quantity,
@@ -80,8 +81,9 @@ def validate_targets(targets: Mapping[str, float]) -> None:
     if missing:
         raise ValueError(f"Target nutrien wajib belum ada: {', '.join(missing)}")
     for key, value in targets.items():
-        if float(value) < 0:
-            raise ValueError(f"Target {key} tidak boleh negatif.")
+        numeric = float(value)
+        if not isfinite(numeric) or numeric < 0:
+            raise ValueError(f"Target {key} harus berupa angka hingga dan tidak boleh negatif.")
 
 
 def ration_check(totals: Mapping[str, float], targets: Mapping[str, float], tolerance: float = 0.02) -> Dict[str, float]:
@@ -106,4 +108,10 @@ if __name__ == "__main__":
     assert round(hasil["dm_kg"], 2) == 8.5
     assert round(hasil["crude_protein_kg"], 2) == 0.85
     assert ration_check(hasil, {"dm_kg": 8.5, "crude_protein_kg": 0.85, "tdn_kg": 4.25})["dm_kg_within_tolerance"] == 1.0
+    try:
+        FeedAnalysis("invalid", float("nan"), 10, 50)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("non-finite feed analysis must be rejected")
     print("ration_formulation_skill self-check: OK")

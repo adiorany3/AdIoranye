@@ -149,9 +149,19 @@ def evaluate(args: argparse.Namespace) -> Dict[str, Any]:
         warnings.append("Runtime policy belum lengkap: " + ", ".join(missing_policy))
         recommendations.append("Gunakan config/adioranye_runtime_policy.json sebagai acuan secrets/env Streamlit.")
 
-    if not isinstance(test_set, list) or len(test_set) < 6:
+    if not isinstance(test_set, list) or len(test_set) < 10:
         warnings.append("performance_test_set.json terlalu sedikit; evaluasi kualitas belum representatif.")
         recommendations.append("Tambahkan minimal 10 pertanyaan: casual, technical, current, RAG, dan long-form.")
+    required_profiles = {"fast", "balanced", "current", "deep"}
+    actual_profiles = {
+        str(item.get("expected_profile"))
+        for item in test_set
+        if isinstance(item, dict) and item.get("expected_profile")
+    } if isinstance(test_set, list) else set()
+    missing_profiles = sorted(required_profiles - actual_profiles)
+    if missing_profiles:
+        warnings.append("Profil evaluasi belum tercakup: " + ", ".join(missing_profiles))
+        recommendations.append("Tambahkan kasus uji untuk setiap profil runtime yang hilang.")
 
     score = 100
     score -= min(40, len(warnings) * 8)
@@ -184,6 +194,8 @@ def evaluate(args: argparse.Namespace) -> Dict[str, Any]:
             "sources_with_repeated_failures": failure_count,
         },
         "test_set_items": len(test_set) if isinstance(test_set, list) else 0,
+        "test_set_profiles": sorted(actual_profiles),
+        "missing_test_set_profiles": missing_profiles,
     }
 
 
