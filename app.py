@@ -9,6 +9,8 @@ import re
 import subprocess
 import threading
 import time
+import secrets
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -34,6 +36,7 @@ from ai_core import (
     model_price_label,
 )
 from memory_store import MemoryStore, handle_local_memory_command
+from web_vouchers import voucher_access
 from power_features import (
     get_power_store,
     handle_power_command,
@@ -2178,6 +2181,16 @@ def render_math_test_panel() -> None:
 
 def submit_public_chat() -> None:
     """Pindahkan draft composer ke antrean sebelum widget dibuat ulang."""
+    if st.session_state.get("web_voucher_code") and not st.session_state.get("admin_authenticated", False):
+        try:
+            status = web_voucher_status()
+        except (OSError, sqlite3.Error):
+            st.session_state.pending_prompt = ""
+            return
+        if status.get("remaining", 0) <= 0:
+            st.session_state.pending_prompt = ""
+            st.session_state.chat_input = ""
+            return
     submitted_text = str(st.session_state.get("chat_input", "") or "").strip()
     if submitted_text:
         st.session_state.pending_prompt = submitted_text
@@ -11398,6 +11411,7 @@ def get_runtime_config() -> Dict[str, Any]:
             or "Seimbang"
         ),
         "maintenance_lock_file": maintenance_lock_file,
+        "web_voucher_db_path": str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3")),
         "maintenance_access_key_file": maintenance_access_key_file,
         "maintenance_access_key_max_questions": maintenance_access_key_max_questions,
         "akses_terbatas_auto_on_boot": bool(akses_terbatas_auto_on_boot),
@@ -14266,7 +14280,29 @@ def render_public_sidebar() -> None:
         st.caption(f"{status_label} · {len(st.session_state.chat_messages)} pesan")
 
 
+def web_voucher_status(action="status", code=None):
+    if "web_voucher_owner" not in st.session_state:
+        st.session_state.web_voucher_owner = secrets.token_hex(32)
+    return voucher_access(
+        str(get_secret("WEB_VOUCHER_DB_PATH", ".adioranye_web_vouchers.sqlite3")),
+        code if code is not None else st.session_state.get("web_voucher_code", ""),
+        st.session_state.web_voucher_owner, action,
+    )
+
+
 def render_public_chat() -> None:
+    try:
+        _render_public_chat()
+    finally:
+        if st.session_state.pop("web_voucher_final_pending", False):
+            try:
+                web_voucher_status("finish")
+            except (OSError, sqlite3.Error):
+                st.session_state.pop("web_voucher_code", None)
+            st.rerun()
+
+
+def _render_public_chat() -> None:
     # =========================
     # Public Chat UI
     # =========================
@@ -14345,22 +14381,52 @@ def render_public_chat() -> None:
 
     maintenance_state = read_maintenance_lock_state()
     public_locked = bool(maintenance_state.get("locked"))
-    maintenance_access_status = get_current_maintenance_access_key_status()
-    maintenance_access_allowed = False
+    voucher = {}
+    voucher_required = public_locked or bool(st.session_state.get("web_voucher_code"))
+    if voucher_required and not st.session_state.get("admin_authenticated", False):
+        try:
+            voucher = web_voucher_status()
+        except (OSError, sqlite3.Error):
+            st.error("Penyimpanan voucher tidak tersedia. Akses ditutup sementara.")
+            return
 
     if st.session_state.get("admin_authenticated", False):
         render_public_status_summary()
 
-    if public_locked and not st.session_state.get("admin_authenticated", False):
-        render_maintenance_realtime_status(maintenance_state)
-        render_maintenance_locked_public_guard(maintenance_state)
+    if voucher_required and not voucher.get("readable") and not st.session_state.get("admin_authenticated", False):
+        st.session_state.chat_messages = []
+        st.session_state.pending_prompt = ""
+        st.session_state.reply_target_index = None
+        st.session_state.reply_target_preview = ""
+        st.session_state.reply_composer_prefill = ""
         st.warning(maintenance_public_message())
+        with st.form("web_voucher_login"):
+            code = st.text_input("Kode voucher", type="password")
+            submitted = st.form_submit_button("Gunakan voucher")
+        if submitted:
+            try:
+                claimed = web_voucher_status("claim", code)
+            except (OSError, sqlite3.Error):
+                st.error("Penyimpanan voucher tidak tersedia.")
+                return
+            if claimed.get("remaining", 0) > 0:
+                st.session_state.web_voucher_code = code.strip().upper()
+                st.rerun()
+            st.error("Voucher tidak valid, sudah dipakai sesi lain, atau kuota habis.")
         st.markdown(
             '<div class="auto-scroll-anchor"></div>'
             '<div class="chat-input-safe-space"></div>',
             unsafe_allow_html=True,
         )
         return
+
+    if voucher:
+        if voucher["remaining"] == 0:
+            st.session_state.pending_prompt = ""
+            seconds = max(0, int(voucher["close_at"] - time.time()) + 1)
+            st.warning(f"Kuota habis. Kolom pertanyaan ditutup. Chat ditutup dalam {seconds} detik.")
+        else:
+            st.caption(f"Voucher: sisa {voucher['remaining']} pertanyaan.")
 
     if not api_key:
         st.warning(
@@ -14479,25 +14545,16 @@ def render_public_chat() -> None:
         note_user_activity_for_health_saver()
         # Health refresh berkala tetap berjalan di luar jalur kritis pesan.
         maintenance_question_access_status: Dict[str, Any] = {}
-        if is_maintenance_locked() and not st.session_state.get("admin_authenticated", False):
-            current_access = get_current_maintenance_access_key_status()
-            if not current_access.get("valid"):
-                with st.chat_message("assistant"):
-                    st.warning("Akses terbatas sedang aktif. Masukkan access key valid untuk tetap chat.")
+        if (voucher_required or is_maintenance_locked()) and not st.session_state.get("admin_authenticated", False):
+            try:
+                voucher = web_voucher_status("consume")
+            except (OSError, sqlite3.Error):
+                st.error("Kuota tidak dapat dicatat. Pertanyaan tidak dikirim.")
                 return
-
-            consumed_access = consume_maintenance_access_question(
-                current_access.get("key"),
-                used_by="web-public",
-            )
-            if not consumed_access.get("allowed"):
-                st.session_state.maintenance_access_key = ""
-                with st.chat_message("assistant"):
-                    st.warning("Access key sudah habis atau tidak aktif. Minta key baru ke admin.")
+            if not voucher.get("allowed"):
+                st.warning("Voucher tidak aktif atau kuota habis.")
                 return
-
-            maintenance_question_access_status = consumed_access
-            st.session_state.maintenance_access_key_status = consumed_access
+            st.session_state.web_voucher_final_pending = voucher["remaining"] == 0
 
         # Public chat: memory commands are disabled unless admin is logged in.
         # This prevents random visitors from changing global memory.
@@ -15207,6 +15264,8 @@ def render_public_chat() -> None:
                 st.json(meta)
 
     # Composer berada setelah riwayat dan jawaban terbaru agar urutan chat tidak membingungkan.
+    if voucher and voucher.get("remaining") == 0:
+        return
     if st.session_state.reply_composer_prefill:
         st.session_state.chat_input = st.session_state.reply_composer_prefill
         st.session_state.reply_composer_prefill = ""

@@ -34,6 +34,7 @@ from power_features import get_power_store, handle_power_command, generate_power
 from daily_kb_scraper import run_daily_kb_update
 from reminder_skill import ReminderStore, parse_reminder_command
 from telegram_formatting import format_telegram_message
+from web_vouchers import create_voucher
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
@@ -780,7 +781,7 @@ class TelegramService:
         if "@" in command:
             command = command.split("@", 1)[0]
 
-        if command not in {"/helpadmin", "/webstatus", "/lockweb", "/unlockweb"}:
+        if command not in {"/helpadmin", "/webstatus", "/lockweb", "/unlockweb", "/voucher"}:
             return "Command admin tidak dikenal. Pakai /helpadmin untuk daftar command."
 
         if not self._is_admin_chat(chat_id):
@@ -792,11 +793,35 @@ class TelegramService:
                 "/helpadmin - daftar command admin\n"
                 "/webstatus - lihat status web chat\n"
                 "/lockweb - kunci web chat\n"
+                "/voucher JUMLAH [JEDA_DETIK] - voucher web, default jeda 60 detik\n"
                 "/unlockweb MENIT - buka web chat sementara\n"
                 "Contoh: /unlockweb 30\n"
                 "/ingat YYYY-MM-DD_HH:MM isi - buat pengingat (WIB)\n"
                 "/daftaringat - lihat pengingat\n"
                 "/hapusingat ID - hapus pengingat"
+            )
+
+        if command == "/voucher":
+            if not str(chat_id).isdigit() or int(chat_id) <= 0:
+                return "Buat voucher lewat chat pribadi admin, bukan grup."
+            parts = raw_text.split()
+            if len(parts) not in (2, 3):
+                return "Format: /voucher JUMLAH [JEDA_DETIK]. Contoh: /voucher 5 60"
+            try:
+                quota = int(parts[1])
+                grace = int(parts[2]) if len(parts) == 3 else 60
+                code = create_voucher(
+                    str(self._config.get("web_voucher_db_path") or ".adioranye_web_vouchers.sqlite3"),
+                    quota, grace, created_by=str(chat_id),
+                )
+            except ValueError as exc:
+                return f"Voucher tidak dibuat: {exc}"
+            except (OSError, sqlite3.Error):
+                return "Voucher gagal disimpan. Periksa penyimpanan server."
+            return (
+                f"Voucher: {code}\nKuota: {quota} pertanyaan\n"
+                f"Jeda baca setelah jawaban terakhir: {grace} detik.\n"
+                "Berlaku untuk satu sesi browser saat web dikunci (/lockweb)."
             )
 
         if command == "/webstatus":
