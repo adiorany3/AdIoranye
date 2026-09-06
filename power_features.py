@@ -3377,7 +3377,8 @@ def generate_power_answer(
 
     query_plan = rewrite_query(user_text, intent=intent, answer_mode=effective_answer_mode) if (performance_optimizer_enabled and query_rewriter_enabled) else QueryPlan(user_text, user_text, [], False, True, "disabled")
     retrieval_query = str(getattr(query_plan, "rewritten_query", "") or user_text)
-    if performance_optimizer_enabled and latency_budget_enabled:
+    # Telegram waits for a final answer; a latency target is not a thinking deadline.
+    if performance_optimizer_enabled and latency_budget_enabled and channel != "telegram":
         try:
             timeout = max(4, min(int(timeout or 60), int(latency_budget_seconds(effective_answer_mode, intent, user_text))))
         except Exception:

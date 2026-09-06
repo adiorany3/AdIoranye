@@ -14,7 +14,7 @@ events: list[tuple[str, object]] = []
 
 def fake_send(chat_id: object, text: str, reply_to: object = None) -> int:
     events.append(("send", text))
-    return 900 if text == "OK siap..." else 901
+    return 900 if text == "Sedang memproses jawaban, mohon tunggu…" else 901
 
 
 service._send_text = fake_send
@@ -24,7 +24,7 @@ service._build_answer = lambda text, chat_id, recent_messages=None: ("Jawaban se
 service._config = {"send_processing_message": True}
 service._handle_message({"message_id": 12, "chat": {"id": 34}, "text": "Pertanyaan"})
 assert events == [
-    ("send", "OK siap..."),
+    ("send", "Sedang memproses jawaban, mohon tunggu…"),
     ("send", "Jawaban selesai."),
     ("delete", 900),
 ]

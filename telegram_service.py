@@ -1072,7 +1072,7 @@ class TelegramService:
         pending_message_id = None
         if telegram_parse_bool(self._config.get("send_processing_message"), default=False):
             try:
-                pending_message_id = self._send_text(chat_id, "OK siap...", source_message_id)
+                pending_message_id = self._send_text(chat_id, "Sedang memproses jawaban, mohon tunggu…", source_message_id)
             except Exception as exc:
                 with self._lock:
                     self._last_error = str(exc)[:1200]

@@ -1,3 +1,4 @@
+import ast
 import sys
 from pathlib import Path
 
@@ -36,5 +37,23 @@ assert captured["channel"] == "telegram"
 assert captured["enable_rag"] is False
 assert captured["enable_response_cache"] is True
 assert captured["latency_budget_enabled"] is True
+
+# Execute the production timeout guard without network, RAG, or database work.
+tree = ast.parse((Path(__file__).resolve().parents[1] / "power_features.py").read_text())
+guard = next(
+    node for node in ast.walk(tree)
+    if isinstance(node, ast.If)
+    and "performance_optimizer_enabled" in ast.unparse(node.test)
+    and "latency_budget_enabled" in ast.unparse(node.test)
+)
+compiled = compile(ast.Module(body=[guard], type_ignores=[]), "timeout_guard", "exec")
+for channel, expected in [("telegram", 60), ("web", 8)]:
+    scope = dict(
+        performance_optimizer_enabled=True, latency_budget_enabled=True,
+        channel=channel, timeout=60, effective_answer_mode="auto",
+        intent="general", user_text="Pertanyaan", latency_budget_seconds=lambda *args: 8,
+    )
+    exec(compiled, scope)
+    assert scope["timeout"] == expected, scope["timeout"]
 
 print("Fast path lokal dan identitas/config Telegram diteruskan dengan benar.")
