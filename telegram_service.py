@@ -1013,7 +1013,9 @@ class TelegramService:
             )
             if not answer:
                 answer, _meta = build_telegram_local_safe_fallback_answer(text, failure_reason="empty_answer")
-            self._send_text(chat_id, answer, source_message_id)
+            used_model = str(_meta.get("active_model_final") or _meta.get("model_requested") or _meta.get("model") or "").strip()
+            telegram_answer = f"{answer}\n\nModel: {used_model}" if used_model else answer
+            self._send_text(chat_id, telegram_answer, source_message_id)
             self._delete_message_safely(chat_id, pending_message_id)
             pending_message_id = None
             with self._lock:

@@ -34,6 +34,18 @@ service._config = {"send_processing_message": False}
 service._handle_message({"message_id": 13, "chat": {"id": 34}, "text": "Pertanyaan"})
 assert events == [("send", "Jawaban selesai.")], events
 
+for metadata, expected_model in [
+    ({"active_model_final": "cx/gpt-6-astra", "model_requested": "other"}, "cx/gpt-6-astra"),
+    ({"active_model_final": "fallback-model", "model_requested": "cx/gpt-6-astra"}, "fallback-model"),
+    ({"model_requested": "requested-model"}, "requested-model"),
+    ({"model": "provider-model"}, "provider-model"),
+]:
+    events.clear()
+    service._build_answer = lambda text, chat_id, recent_messages=None: ("Jawaban selesai.", metadata)
+    service._handle_message({"message_id": 14, "chat": {"id": 34}, "text": "Pertanyaan"})
+    assert events == [("send", f"Jawaban selesai.\n\nModel: {expected_model}")], events
+    assert service._chat_recent_messages["34"][-1]["content"] == "Jawaban selesai."
+
 concurrency_service = TelegramService()
 concurrency_service._message_executor = ThreadPoolExecutor(max_workers=3)
 execution_events: list[tuple[str, str]] = []

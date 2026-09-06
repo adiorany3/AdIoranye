@@ -3638,12 +3638,23 @@ def generate_power_answer(
     cheap_candidates = list(dict.fromkeys([m for m in (fallback_models or []) if m]))
     expensive_candidates = list(dict.fromkeys([m for m in (expensive_fallback_models or []) if m]))
     all_candidates = list(dict.fromkeys([model] + cheap_candidates + expensive_candidates))
+    question_context = classify_question_context(user_text)
+    priority_model = "cx/gpt-6-astra" if (
+        effective_answer_mode == "kritis"
+        or question_context["risk_level"] == "high"
+        or question_context["needs_current_data"]
+        or detect_critical_question(user_text).get("is_critical", False)
+    ) else None
+    if priority_model:
+        all_candidates = list(dict.fromkeys([priority_model] + all_candidates))
     if enable_circuit_breaker:
         all_candidates = store.filter_blocked_models(all_candidates)
     if enable_adaptive_scoring:
         ranked_all = store.rank_models_for_intent(all_candidates, intent)
     else:
         ranked_all = all_candidates
+    if priority_model in all_candidates:
+        ranked_all = [priority_model] + [m for m in ranked_all if m != priority_model]
     selected_model = ranked_all[0] if ranked_all else model
 
     ranked_cheap = [m for m in ranked_all if m != selected_model and model_cost_tier(m) == "cheap"]
