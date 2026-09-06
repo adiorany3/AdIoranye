@@ -15921,6 +15921,34 @@ def render_power_features_admin_panel() -> None:
                                 "Belum ada sumber. Buat file kb_sources.json di root repo. Contohnya sudah tersedia di paket ZIP."
                             )
 
+                        with st.form("kb_single_article_form"):
+                            article_url = st.text_input("URL artikel publik (HTTPS)")
+                            st.caption("Satu artikel ke KB lokal, bukan embed. Maksimal 2 MiB/20 detik; challenge/paywall ditolak. Tidak otomatis publish GitHub.")
+                            article_submit = st.form_submit_button("Tambahkan artikel ke KB")
+                        if article_submit:
+                            try:
+                                from public_article import public_article_source
+
+                                with st.spinner("Mengambil artikel dan memperbarui KB..."):
+                                    article_source = public_article_source(article_url)
+                                    article_report = run_daily_kb_update(
+                                        db_path=power_db_path,
+                                        sources_path=kb_scraper_sources_file,
+                                        state_path=kb_scraper_state_file,
+                                        sources=[article_source],
+                                        auto_rotate_sources=False,
+                                        briefing_file="",
+                                    )
+                                if article_report.get("errors"):
+                                    st.error("Pembaruan artikel gagal. Periksa laporan.")
+                                elif article_report.get("added_documents"):
+                                    st.success("Artikel ditambahkan ke KB.")
+                                else:
+                                    st.warning("Tidak ada dokumen baru: duplikat atau kualitas konten tidak memenuhi syarat.")
+                                st.dataframe(article_report.get("items") or [], use_container_width=True, hide_index=True)
+                            except Exception as exc:
+                                st.error(f"Artikel gagal ditambahkan: {exc}")
+
                         col_auto1, col_auto2, col_auto3, col_auto4 = st.columns(4)
                         with col_auto1:
                             auto_max_items = st.number_input(

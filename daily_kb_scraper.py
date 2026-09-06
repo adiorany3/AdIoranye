@@ -972,6 +972,7 @@ def run_daily_kb_update(
     source_limit: int = 0,
     source_offset: Optional[int] = None,
     auto_rotate_sources: bool = True,
+    sources: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Run the daily update and return a serializable report."""
     started_monotonic = time.monotonic()
@@ -981,9 +982,9 @@ def run_daily_kb_update(
     def budget_exceeded() -> bool:
         return bool(deadline_monotonic and time.monotonic() >= deadline_monotonic)
 
-    raw_sources = load_sources(sources_path)
-    sources = [normalize_source(item) for item in raw_sources]
-    enabled_sources_all = [s for s in sources if s.enabled and s.url]
+    raw_sources = load_sources(sources_path) if sources is None else sources
+    normalized_sources = [normalize_source(item) for item in raw_sources]
+    enabled_sources_all = [s for s in normalized_sources if s.enabled and s.url]
     state = load_state(state_path)
     processed: Dict[str, Any] = state.setdefault("processed", {})
 
