@@ -7092,8 +7092,8 @@ def get_model_readiness_state(
     if is_model_readiness_stale(checked_at_ts):
         return {
             "class": "checking",
-            "label": "Perlu cek ulang",
-            "kicker": "status model sudah basi",
+            "label": "Status AI",
+            "kicker": "Indikator AI",
             "subtitle": (
                 f"Health check terakhir sudah lewat dari {int(model_readiness_stale_seconds or 1800)} detik. "
                 "Klik Cek model di admin untuk memastikan model masih siap."
@@ -13759,8 +13759,31 @@ st.markdown(
 
     .online-status.status-checking,
     .adioranye-hero-kicker.status-checking {
-        border-color: rgba(255,204,0,0.38);
-        background: rgba(255,204,0,0.12);
+        border-color: rgba(10,132,255,0.34);
+        background: rgba(10,132,255,0.10);
+    }
+
+    .online-status.status-checking .online-text {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .adioranye-hero-kicker.status-checking {
+        font-size: 0;
+        gap: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .online-status.status-checking *,
+        .online-status.status-checking::before,
+        .online-status.status-checking::after,
+        .adioranye-hero-kicker.status-checking::before {
+            animation: none !important;
+        }
     }
 
     .online-status.status-warning,
@@ -13783,8 +13806,8 @@ st.markdown(
 
     .online-status.status-checking .online-dot,
     .adioranye-hero-kicker.status-checking::before {
-        background: #ffcc00;
-        box-shadow: 0 0 12px rgba(255,204,0,0.72);
+        background: #0a84ff;
+        box-shadow: 0 0 12px rgba(10,132,255,0.72);
     }
 
     .online-status.status-warning .online-dot,
