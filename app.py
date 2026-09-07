@@ -9361,7 +9361,7 @@ st.markdown(
 )
 
 # =========================
-# Cute loading animation style
+# AI processing animation style
 # =========================
 st.markdown(
     """
@@ -9581,6 +9581,53 @@ st.markdown(
         z-index: 2;
     }
 
+    .ai-loading-core {
+        position: relative;
+        flex: 0 0 44px;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #38bdf8 0 12%, rgba(56,189,248,0.18) 15% 36%, transparent 40%);
+        box-shadow: inset 0 0 18px rgba(56,189,248,0.15);
+    }
+
+    .ai-loading-core::before,
+    .ai-loading-core::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 2px solid transparent;
+        border-top-color: #38bdf8;
+        border-bottom-color: #818cf8;
+        border-radius: 50%;
+        animation: aiCoreOrbit 2.4s linear infinite;
+    }
+
+    .ai-loading-core::after {
+        inset: 7px;
+        border-top-color: #818cf8;
+        border-bottom-color: #38bdf8;
+        animation-direction: reverse;
+        animation-duration: 1.8s;
+    }
+
+    @keyframes aiCoreOrbit {
+        to { transform: rotate(360deg); }
+    }
+
+    .ai-loading-card:has(.ai-loading-core) {
+        border-color: rgba(56,189,248,0.32);
+        background:
+            linear-gradient(rgba(56,189,248,0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(56,189,248,0.05) 1px, transparent 1px),
+            var(--mac-panel);
+        background-size: 18px 18px;
+    }
+
+    .ai-loading-card:not(:has(.ai-loading-core))::before {
+        animation: none;
+    }
+
     .ai-loading-title {
         display: inline-flex;
         align-items: center;
@@ -9640,9 +9687,9 @@ st.markdown(
             linear-gradient(
                 90deg,
                 transparent,
-                rgba(48, 209, 88, 0.96),
+                #38bdf8,
                 var(--mac-blue),
-                rgba(255, 159, 10, 0.92),
+                #818cf8,
                 transparent
             );
         animation: aiLoadingBar 1.35s ease-in-out infinite;
@@ -9847,6 +9894,8 @@ st.markdown(
     }
 
     @media (prefers-reduced-motion: reduce) {
+        .ai-loading-core::before,
+        .ai-loading-core::after,
         .ai-loading-card::before,
         .ai-loading-mascot,
         .ai-robot-antenna,
@@ -9866,8 +9915,8 @@ st.markdown(
 
 
 def render_loading_animation_html(
-    title: str = "Adioranye sedang mengetik jawaban",
-    subtitle: str = "Sebentar ya, robot kecilnya sedang berpikir dan merapikan respons.",
+    title: str = "Adioranye sedang berpikir",
+    subtitle: str = "Memproses permintaan dan menyusun respons.",
 ) -> str:
     safe_title = _html_escape(title)
     safe_subtitle = _html_escape(subtitle)
@@ -9888,6 +9937,7 @@ def render_loading_animation_html(
 
     return f"""
     <div class="ai-loading-card" role="status" aria-live="polite">
+        <div class="ai-loading-core" aria-hidden="true"></div>
         <div class="ai-loading-copy">
             <div class="ai-loading-title">
                 <span>{safe_title}</span>
@@ -9900,6 +9950,7 @@ def render_loading_animation_html(
             <div class="ai-loading-subtitle">
                 {safe_subtitle}
             </div>
+            <div class="ai-loading-bar" aria-hidden="true"></div>
         </div>
     </div>
     """
