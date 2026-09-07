@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ai_core import rank_tier_models, TIER_ROUTING
+from ai_core import rank_tier_models, TIER_ROUTING, is_complex_question
 
 
 source = (Path(__file__).resolve().parents[1] / "power_features.py").read_text()
@@ -34,7 +34,7 @@ def check(*, current=False, risk="normal", critical=False, mode="normal", blocke
         user_text=text, effective_answer_mode=mode, intent="general",
         smart_model_router=smart, allow_expensive_fallback=expensive,
         semantic_cache_enabled=True,
-        rank_tier_models=rank_tier_models, TIER_ROUTING=TIER_ROUTING,
+        rank_tier_models=rank_tier_models, TIER_ROUTING=TIER_ROUTING, is_complex_question=is_complex_question,
         enable_circuit_breaker=True, enable_adaptive_scoring=adaptive,
         store=Store(blocked),
         classify_question_context=lambda _: {"risk_level": risk, "needs_current_data": current},
@@ -46,7 +46,7 @@ def check(*, current=False, risk="normal", critical=False, mode="normal", blocke
 
 assert check()[0] == TIER_ROUTING["standard_model"]
 assert check(current=True)[0] == TIER_ROUTING["standard_model"]
-assert check(text="Bandingkan dua metode")[0] == "tamandata"
+assert check(text="Bandingkan dua metode")[0] == TIER_ROUTING["standard_model"]
 assert check(text="Buktikan teorema ini")[0] == ASTRA
 assert check(text="Buktikan teorema ini", expensive=False)[0] == "tamandata"
 assert check(smart=False, critical=True)[0] == "default"

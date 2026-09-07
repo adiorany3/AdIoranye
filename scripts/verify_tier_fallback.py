@@ -21,7 +21,7 @@ with patch.object(core, "should_use_cache", return_value=False), \
     assert calls == ["tamandata"], calls
     calls.clear()
     core.generate_answer(**{**base, "expensive_fallback_models": ["cbai/glm-5.2", "cx/gpt-6-astra"]})
-    assert calls == ["tamandata", "cx/gpt-6-astra"], calls
+    assert calls == ["tamandata"], calls
     calls.clear()
     core.generate_answer(**{**base, "smart_model_router": False})
     assert calls == ["tamandata"]
@@ -32,4 +32,8 @@ with patch.object(core, "should_use_cache", return_value=False), \
     assert meta["local_content_filter_message"]
     assert api.call_count == 2
     assert all(call.kwargs["model"] == "tamandata" for call in api.call_args_list)
-print("PASS: empty pools, Astra escalation, manual selection, content-filter isolation")
+with patch.object(core, "should_use_cache", return_value=False), \
+     patch.object(core, "call_api_once", side_effect=[RuntimeError("offline"), ("Jawaban", {})]) as api:
+    answer, meta = core.generate_answer(**{**base, "fallback_models": [core.TIER_ROUTING["standard_model"]]})
+    assert api.call_count == 2 and answer == "Jawaban" and not meta["returned_to_primary"]
+print("PASS: empty pools, no low-score escalation, error-only fallback, manual selection, content-filter isolation")

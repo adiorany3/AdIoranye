@@ -6,7 +6,7 @@
     "reasoning_markers": ["hitung", "rumus", "bandingkan", "analisis", "mengapa", "kenapa", "reasoning", "compare", "calculate", "debug", "perbaiki"],
     "advanced_markers": ["buktikan", "pembuktian", "prove", "proof", "arsitektur", "architecture", "analisis mendalam", "analisis kompleks", "multi-step", "multilangkah", "optimasi kompleks", "debug kompleks"],
     "availability": "Configured IDs, not verified inference capabilities. Tamandata is a provider route, not a local deterministic engine.",
-    "consultation": "Selective reasoning/advanced only; one distinct configured allowed peer, optional primary synthesis. At most two extra calls without retries; shared remaining timeout; extra output tokens together capped at request max_completion_tokens. Manual router-off skips. Hard daily caps disable extra consultation. Peer agreement is not factual verification."
+    "consultation": "Complex only: explicit advanced/high-risk flag, advanced markers, >120 words, multiple engineering signals or linked multi-step operations. Ordinary why/arithmetic/comparison uses standard primary with no routine LLM verifier or low-score escalation; error-only fallback remains. Complex tasks use one distinct allowed peer and optional primary synthesis. At most two extra calls without retries; shared remaining timeout; extra output tokens capped at request max_completion_tokens. Manual router-off skips. Hard daily caps disable extra consultation. Peer agreement is not factual verification."
   },
   "answer_profiles": {
     "balanced": {

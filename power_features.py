@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from ai_core import call_api_once, model_cost_tier, model_price, rank_tier_models, TIER_ROUTING, normalize_system_prompt
+from ai_core import call_api_once, model_cost_tier, model_price, rank_tier_models, TIER_ROUTING, normalize_system_prompt, is_complex_question
 
 try:
     from db_guard import ensure_database_ready, maybe_create_periodic_backup, default_backup_dir, default_max_backups
@@ -3650,10 +3650,8 @@ def generate_power_answer(
         or detect_critical_question(user_text).get("is_critical", False)
     )
     # Semantic cache cannot enforce exact peer availability/manual routing policy.
-    if not smart_model_router or advanced_task or len(user_text.split()) > 120 or any(
-        marker in user_text.lower()
-        for marker in TIER_ROUTING["reasoning_markers"] + TIER_ROUTING["advanced_markers"]
-    ):
+    complex_task = is_complex_question(user_text, advanced=advanced_task)
+    if not smart_model_router or complex_task:
         semantic_cache_enabled = False
     if enable_circuit_breaker:
         all_candidates = store.filter_blocked_models(all_candidates)
@@ -3679,12 +3677,12 @@ def generate_power_answer(
         adjusted_max_tokens = int(max(500, min(6000, adjusted_max_tokens * float(answer_mode_policy.get("token_multiplier") or 1.0))))
     except Exception:
         pass
-    route_signature = ",".join(ranked_all[:8]) + f"|consultation=v1|smart={smart_model_router}|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}|retrieval_query={hashlib.sha256(str(retrieval_query).encode('utf-8')).hexdigest()[:12]}"
+    route_signature = ",".join(ranked_all[:8]) + f"|consultation=v2|smart={smart_model_router}|show_kb_sources={int(bool(show_kb_sources))}|casual_rag_skipped={int(bool(casual_rag_skipped))}|retrieval_query={hashlib.sha256(str(retrieval_query).encode('utf-8')).hexdigest()[:12]}"
     kb_cache_version = store.get_kb_cache_version() if enable_rag and (rag_sources or base_memory_text) else ""
     kb_cache_ttl_seconds = max(int(response_cache_ttl_seconds or 1800), 31536000) if kb_cache_version else int(response_cache_ttl_seconds or 1800)
     kb_semantic_cache_ttl_seconds = max(int(semantic_cache_ttl_seconds or 86400), 31536000) if kb_cache_version else int(semantic_cache_ttl_seconds or 86400)
     # Persona namespace also invalidates legacy semantic entries without a persona.
-    semantic_cache_version = kb_cache_version + "|persona=" + hashlib.sha256(
+    semantic_cache_version = kb_cache_version + "|consultation=v2|persona=" + hashlib.sha256(
         normalize_system_prompt(system_prompt).encode("utf-8")
     ).hexdigest()
     cache_key = make_response_cache_key(
@@ -3863,7 +3861,7 @@ def generate_power_answer(
         if ignored_compat_kwargs:
             meta["ignored_compat_kwargs"] = ignored_compat_kwargs
 
-        if not meta.get("consultation_managed") and should_self_verify(intent, user_text, enabled=enable_self_verification):
+        if complex_task and not meta.get("consultation_managed") and should_self_verify(intent, user_text, enabled=enable_self_verification):
             verifier = ""
             if ranked_expensive:
                 verifier = ranked_expensive[0]
@@ -3920,7 +3918,7 @@ def generate_power_answer(
                     claim_risk = meta.get("hallucination_claim_risk") or {}
                     if int(claim_risk.get("claim_like_count") or 0) > 0 or float(claim_risk.get("risk_score") or 0.0) >= 0.2:
                         should_verify_quality = True
-                if should_verify_quality and not meta.get("consultation_managed"):
+                if complex_task and should_verify_quality and not meta.get("consultation_managed"):
                     verifier = str(quality_verifier_model or "").strip()
                     if not verifier:
                         if ranked_expensive:

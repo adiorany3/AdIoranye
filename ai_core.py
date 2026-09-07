@@ -92,24 +92,34 @@ TIER_ROUTING = json.loads(
 )["model_routing"]
 
 
+def is_complex_question(user_text: str, *, advanced: bool = False) -> bool:
+    """Shared lexical policy; isolated why/math/comparison words are not complexity."""
+    text = str(user_text or "").lower()
+    # ponytail: lexical signals; replace with evaluated classifier if routing errors grow.
+    engineering_signals = ("analisis", "analyze", "strategi", "debug", "perbaiki kode",
+                           "kode", "python", "javascript", "sql", "traceback", "exception")
+    return bool(advanced or len(text.split()) > 120 or any(
+        marker in text for marker in TIER_ROUTING["advanced_markers"]
+    ) or sum(marker in text for marker in engineering_signals) >= 3 or re.search(
+        r"\b(hitung|calculate|analisis|analyze|bandingkan|compare)\b.+"
+        r"\b(kemudian|lalu|selanjutnya|then)\b.+"
+        r"\b(hitung|calculate|analisis|analyze|optimalkan|optimize|evaluasi|evaluate|bandingkan|compare)\b",
+        text, re.DOTALL,
+    ))
+
 def rank_tier_models(user_text: str, candidates: List[str], *, advanced: bool = False,
                      allow_expensive: bool = True) -> List[str]:
     """Rank usable IDs, without claiming provider availability or capability."""
-    text = str(user_text or "").lower()
-    # ponytail: lexical tiers; replace with evaluated classifier if routing errors grow.
-    hard = advanced or len(text.split()) > 120 or any(
-        marker in text for marker in TIER_ROUTING["advanced_markers"]
-    )
-    reasoning = any(marker in text for marker in TIER_ROUTING["reasoning_markers"])
+    hard = is_complex_question(user_text, advanced=advanced)
     preferred = TIER_ROUTING["advanced_model"] if hard and allow_expensive else (
-        TIER_ROUTING["reasoning_model"] if reasoning or hard else TIER_ROUTING["standard_model"]
+        TIER_ROUTING["reasoning_model"] if hard else TIER_ROUTING["standard_model"]
     )
     usable = list(dict.fromkeys(m for m in candidates if m and (
         allow_expensive or model_cost_tier(m) == "cheap"
     )))
     return sorted(usable, key=lambda m: (
         m != preferred, model_cost_tier(m) != "cheap",
-        m == TIER_ROUTING["reasoning_model"] if not (reasoning or hard) else False,
+        m == TIER_ROUTING["reasoning_model"] if not hard else False,
     ))
 
 
@@ -1258,8 +1268,9 @@ def generate_answer(
     Algoritma:
     1. Pakai model utama dulu dengan konteks ringkas.
     2. Skor kualitas jawaban secara lokal.
-    3. Jika skor cukup, langsung return agar cepat dan hemat.
-    4. Jika kosong/tidak yakin/error, konsultasi 1-2 model hemat secara paralel terbatas.
+     3. Pertanyaan biasa langsung return; skor rendah tidak menambah panggilan.
+     4. Pertanyaan biasa kosong/error memakai fallback berurutan tanpa sintesis;
+         pertanyaan kompleks memakai konsultasi terbatas.
     5. Jika model hemat masih tidak cukup, baru konsultasi model mahal/lebih kuat sesuai batas admin.
     6. Jika ada referensi bagus, kembalikan ke model utama untuk menyusun jawaban akhir.
     7. Jika model utama gagal menyusun, gunakan jawaban fallback terbaik.
@@ -1277,13 +1288,8 @@ def generate_answer(
     start_time = time.time()
     consultation_deadline = time.monotonic() + max(0, float(timeout))
     consultation_query = user_text if consultation_text is None else consultation_text
-    consultation_hard = consultation_advanced or len(consultation_query.split()) > 120 or any(
-        marker in consultation_query.lower() for marker in TIER_ROUTING["advanced_markers"]
-    )
-    consultation_task = consultation_hard or any(
-        marker in consultation_query.lower() for marker in TIER_ROUTING["reasoning_markers"]
-    )
-    consultation_managed = bool(consultation_enabled and smart_model_router and consultation_task)
+    consultation_hard = is_complex_question(consultation_query, advanced=consultation_advanced)
+    consultation_managed = bool(consultation_enabled and smart_model_router and consultation_hard)
     primary_model = model
     task = classify_task(user_text)
     max_context_messages = 2 if task["simple_chat"] else 4
@@ -1300,7 +1306,7 @@ def generate_answer(
     if should_use_cache(user_text, recent_messages):
         cache_key = make_cache_key(api_url, primary_model, system_prompt, user_text, memory_text, recent_messages, smart_model_router)
         cache_key += hashlib.sha256(json.dumps([
-            "consultation-v1", consultation_managed, consultation_hard, fallback_models,
+            "consultation-v2", consultation_managed, consultation_hard, fallback_models,
             expensive_fallback_models, allow_expensive_fallback, max_smart_models,
             max_expensive_models, max_completion_tokens, timeout,
         ], sort_keys=True).encode()).hexdigest()
@@ -1375,7 +1381,7 @@ def generate_answer(
 
         # Jika jawaban sudah cukup baik atau pertanyaan sederhana, langsung return.
         threshold = 0.68 if task["simple_chat"] else 0.72
-        if not smart_model_router or primary_score >= threshold:
+        if primary_answer.strip() and (not consultation_hard or is_safety_refusal(primary_answer) or not smart_model_router or primary_score >= threshold):
             primary_meta["router_decision"] = "primary_answer_good_enough"
             primary_meta["latency_seconds"] = round(time.time() - start_time, 3)
             if cache_key:
@@ -1464,7 +1470,7 @@ def generate_answer(
                         "algorithm": "fast_accurate_router_v2",
                     }
                 )
-                if not smart_model_router or primary_score >= 0.72:
+                if primary_answer.strip() and (not consultation_hard or not smart_model_router or primary_score >= 0.72):
                     primary_meta["latency_seconds"] = round(time.time() - start_time, 3)
                     if cache_key:
                         set_cached_answer(cache_key, primary_answer, primary_meta)
@@ -1487,6 +1493,33 @@ def generate_answer(
             return primary_answer, primary_meta
         detail = "\n\n".join([f"{m}: {e}" for m, e in errors.items()])
         raise AllModelsFailedError(f"Model utama gagal.\n\n{detail}")
+
+    # Ordinary requests retry only failed/empty answers, sequentially, without synthesis.
+    if not consultation_hard:
+        candidates = list(DEFAULT_CHEAP_FALLBACK_MODELS if fallback_models is None else fallback_models)
+        if allow_expensive_fallback and max_expensive_models > 0:
+            candidates += list(DEFAULT_EXPENSIVE_FALLBACK_MODELS if expensive_fallback_models is None else expensive_fallback_models)[:max_expensive_models]
+        for alternate in rank_tier_models(consultation_query, candidates, allow_expensive=allow_expensive_fallback):
+            if alternate in tried:
+                continue
+            tried.append(alternate)
+            try:
+                answer, meta = call_api_once(
+                    api_url=api_url, api_key=api_key, model=alternate, messages=messages,
+                    temperature=temperature, max_completion_tokens=primary_budget, timeout=timeout,
+                )
+                if not answer.strip():
+                    raise ValueError("Empty fallback answer")
+                meta.update(primary_model=primary_model, active_model_final=alternate,
+                            tried_models=tried.copy(), errors=errors, fallback_answer_used=alternate,
+                            returned_to_primary=False, latency_seconds=round(time.time() - start_time, 3))
+                return answer, meta
+            except ContentFilterError:
+                return "Maaf, prompt ini ditolak oleh filter keamanan dari provider AI.", {
+                    "local_content_filter_message": True, "tried_models": tried, "errors": errors}
+            except Exception as exc:
+                errors[alternate] = str(exc)
+        raise AllModelsFailedError("Semua model gagal.\n\n" + "\n\n".join(f"{m}: {e}" for m, e in errors.items()))
 
     probe_messages = build_competence_probe_messages(
         system_prompt=system_prompt,
