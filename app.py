@@ -2586,8 +2586,8 @@ typewriter_enabled = parse_bool(
     default=False,
 )
 animated_loading_enabled = parse_bool(
-    get_secret("ANIMATED_LOADING_ENABLED", False),
-    default=False,
+    get_secret("ANIMATED_LOADING_ENABLED", True),
+    default=True,
 )
 telegram_show_model_info = parse_bool(
     get_secret("TELEGRAM_SHOW_MODEL_INFO", False), default=False
@@ -3509,8 +3509,8 @@ def build_memory_text(limit: int = 12) -> str:
     return "\n\n".join(sections)
 
 
-def persona_with_default_memory(persona: str) -> str:
-    """Dipakai untuk Bot Telegram agar memory default/cache tetap masuk ke instruksi bot."""
+def telegram_memory_context() -> str:
+    """Konteks Telegram non-instruksi; jangan gabungkan dengan persona tepercaya."""
     default_context = str(
         st.session_state.get("active_default_memory")
         or default_memory_context_from_secret
@@ -3535,9 +3535,7 @@ def persona_with_default_memory(persona: str) -> str:
     if local_context:
         context_sections.append("Memory lokal aktif:\n" + local_context)
 
-    if not context_sections:
-        return persona
-    return f"{persona}\n\n" + "\n\n".join(context_sections)
+    return "\n\n".join(context_sections)
 
 
 
@@ -3955,6 +3953,11 @@ def frequent_question_cache_key(
     user_text: str,
 ) -> str:
     normalized = normalize_frequent_question_key(user_text)
+    from ai_core import normalize_system_prompt
+    normalized = json.dumps([
+        normalize_system_prompt(st.session_state.get("active_persona") or persona_from_secret),
+        normalized,
+    ], ensure_ascii=False)
     return hmac.new(
         b"adioranye-frequent-question-cache",
         normalized.encode("utf-8", "ignore"),
@@ -9921,7 +9924,8 @@ def render_loading_animation_html(
     safe_title = _html_escape(title)
     safe_subtitle = _html_escape(subtitle)
 
-    if bool(frontend_ultra_safe_mode) or not bool(animated_loading_enabled):
+    # Native CSS needs no JavaScript or custom components, including in safe mode.
+    if not bool(animated_loading_enabled):
         return f"""
         <div class="ai-loading-card" role="status" aria-live="polite">
             <div class="ai-loading-copy">
@@ -11213,6 +11217,7 @@ def build_telegram_config_payload(
         "persona": persona_text,
         "persona_text": persona_text,
         "system_prompt": persona_text,
+        "base_memory_text": telegram_memory_context(),
         "memory_file": memory_file,
         "fallback_models": route["cheap_fallback_models"],
         "expensive_fallback_models": route["expensive_fallback_models"],
@@ -11493,7 +11498,7 @@ def start_telegram_if_needed() -> None:
         bot_config = build_telegram_config_payload(
             route=route,
             cfg=cfg,
-            persona_text=persona_with_default_memory(cfg["persona"]),
+            persona_text=cfg["persona"],
         )
         service.start(bot_config)
         restore_active_model_to_cheap(route.get("primary_model"))
@@ -13157,9 +13162,7 @@ def render_admin_settings() -> None:
         bot_config = build_telegram_config_payload(
             route=route,
             cfg=cfg,
-            persona_text=persona_with_default_memory(
-                st.session_state.active_persona
-            ),
+            persona_text=st.session_state.active_persona,
         )
 
         st.markdown("#### Mode routing bot")
@@ -14835,9 +14838,9 @@ def _render_public_chat() -> None:
                             "Mode thinking aktif. Adioranye sedang menganalisis konteks lebih teliti sebelum menyusun jawaban."
                         )
                     elif route.get("normal_fast_mode"):
-                        loading_title = "Adioranye sedang mengetik jawaban cepat"
+                        loading_title = "Adioranye sedang merangkai ide"
                         loading_subtitle = (
-                            "Mode cepat aktif. Robot kecilnya sedang mengetik jawaban ringkas."
+                            "Sejenak, ya… menghubungkan konteks, menata ide, lalu merangkainya jadi jawaban."
                         )
                     else:
                         loading_title = "Adioranye sedang mengetik jawaban"

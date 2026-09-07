@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from ai_core import call_api_once, model_cost_tier, model_price, rank_tier_models, TIER_ROUTING
+from ai_core import call_api_once, model_cost_tier, model_price, rank_tier_models, TIER_ROUTING, normalize_system_prompt
 
 try:
     from db_guard import ensure_database_ready, maybe_create_periodic_backup, default_backup_dir, default_max_backups
@@ -682,7 +682,7 @@ def make_response_cache_key(
     blob = json.dumps(
         {
             "model": model,
-            "system": str(system_prompt or "")[:800],
+            "system": normalize_system_prompt(system_prompt),
             "user": str(user_text or ""),
             "memory_hash": hashlib.sha256(str(memory_text or "").encode("utf-8")).hexdigest(),
             "intent": intent,
@@ -3226,7 +3226,7 @@ def verify_answer_with_model(
     if not verifier_model:
         return answer, {"self_verification_skipped": "no_verifier_model"}
     messages = [
-        {"role": "system", "content": (system_prompt or "Kamu adalah pemeriksa jawaban yang teliti.")[:2200]},
+        {"role": "system", "content": normalize_system_prompt(system_prompt)},
         {
             "role": "user",
             "content": (
@@ -3683,6 +3683,10 @@ def generate_power_answer(
     kb_cache_version = store.get_kb_cache_version() if enable_rag and (rag_sources or base_memory_text) else ""
     kb_cache_ttl_seconds = max(int(response_cache_ttl_seconds or 1800), 31536000) if kb_cache_version else int(response_cache_ttl_seconds or 1800)
     kb_semantic_cache_ttl_seconds = max(int(semantic_cache_ttl_seconds or 86400), 31536000) if kb_cache_version else int(semantic_cache_ttl_seconds or 86400)
+    # Persona namespace also invalidates legacy semantic entries without a persona.
+    semantic_cache_version = kb_cache_version + "|persona=" + hashlib.sha256(
+        normalize_system_prompt(system_prompt).encode("utf-8")
+    ).hexdigest()
     cache_key = make_response_cache_key(
         model=selected_model,
         system_prompt=system_prompt,
@@ -3717,7 +3721,7 @@ def generate_power_answer(
                 ttl_seconds=kb_semantic_cache_ttl_seconds,
                 user_id=user_id,
                 channel=channel,
-                kb_version=kb_cache_version,
+                kb_version=semantic_cache_version,
             )
             if semantic_cached:
                 answer, meta = semantic_cached
@@ -3986,7 +3990,7 @@ def generate_power_answer(
                         ttl_seconds=kb_semantic_cache_ttl_seconds,
                         user_id=user_id,
                         channel=channel,
-                        kb_version=kb_cache_version,
+                        kb_version=semantic_cache_version,
                     )
                 except Exception:
                     pass

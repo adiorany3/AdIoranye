@@ -623,6 +623,7 @@ class TelegramService:
             api_key=str(self._config.get("slashai_api_key") or self._config.get("api_key") or ""),
             model=str(self._config.get("slashai_model") or self._config.get("model") or "tamandata"),
             system_prompt=str(self._config.get("persona_text") or self._config.get("system_prompt") or ""),
+            base_memory_text=str(self._config.get("base_memory_text") or ""),
             user_text=text,
             recent_messages=recent_messages or [],
             fallback_models=list(self._config.get("fallback_models") or []),

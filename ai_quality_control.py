@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover
         return {"claim_like_count": 0, "examples": [], "overconfident": False}
 
 try:
-    from ai_core import call_api_once, model_cost_tier
+    from ai_core import call_api_once, model_cost_tier, normalize_system_prompt
 except Exception:  # pragma: no cover
     call_api_once = None  # type: ignore
     def model_cost_tier(model: str) -> str:  # type: ignore
@@ -389,7 +389,7 @@ def verify_and_repair_answer(
         "Jangan menambahkan sumber atau fakta baru yang tidak tersedia di konteks. Jawab hanya dengan versi final yang sudah diperbaiki."
     )
     messages = [
-        {"role": "system", "content": verifier_system + "\n\n" + str(system_prompt or "")[:1500]},
+        {"role": "system", "content": normalize_system_prompt(system_prompt) + "\n\n" + verifier_system},
         {
             "role": "user",
             "content": (
