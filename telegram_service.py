@@ -1178,8 +1178,15 @@ class TelegramService:
                     message["update_id"] = update_id
                     self._submit_message(message)
             except Exception as exc:
+                error_text = str(exc)[:1200]
+                if "409" in error_text or "Conflict" in error_text:
+                    error_text = (
+                        "Telegram 409 Conflict: token sedang dipakai polling instance lain. "
+                        "Stop/redeploy instance lain, atau revoke token di BotFather lalu isi token baru."
+                    )
                 with self._lock:
-                    self._last_error = str(exc)[:1200]
+                    self._last_error = error_text
+                    self._last_update = f"Polling gagal: {error_text[:240]}"
                 if self._stop_event.wait(3):
                     break
 
