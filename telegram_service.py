@@ -1199,11 +1199,6 @@ class TelegramService:
                 self._last_error = "TELEGRAM_BOT_TOKEN kosong."
             return False
 
-        if not api_key or not api_url:
-            with self._lock:
-                self._last_error = "Konfigurasi AI belum lengkap. Isi API key dan API URL."
-            return False
-
         with self._lock:
             if self._poll_thread and self._poll_thread.is_alive():
                 self._running = True

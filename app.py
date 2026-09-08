@@ -11493,7 +11493,7 @@ def start_telegram_if_needed() -> None:
     if TELEGRAM_SERVICE_IMPORT_ERROR:
         return
 
-    if auto_start and telegram_token and api_key and not service.status()["running"]:
+    if auto_start and telegram_token and not service.status()["running"]:
         route = build_model_routing_plan(advance_rotation=True)
         bot_config = build_telegram_config_payload(
             route=route,
