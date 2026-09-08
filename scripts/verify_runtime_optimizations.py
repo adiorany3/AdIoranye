@@ -46,6 +46,13 @@ with tempfile.TemporaryDirectory() as tmp:
     cached = store.get_semantic_cached_response("apa manfaat cahaya matahari", user_id="user-a", channel="telegram")
     assert cached and cached[0] == "jawaban-a"
     assert store.get_semantic_cached_response("apa manfaat cahaya matahari", user_id="user-a", channel="web") is None
+    persona_version = "|consultation=v2|persona=" + ai_core.hashlib.sha256(
+        ai_core.normalize_system_prompt("test").encode("utf-8")
+    ).hexdigest()
+    store.set_semantic_cached_response(
+        "apa manfaat cahaya matahari", "jawaban-a", user_id="user-a",
+        channel="telegram", kb_version=persona_version,
+    )
 
     rag_calls = [0]
 

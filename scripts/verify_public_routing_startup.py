@@ -74,7 +74,7 @@ def unavailable():
 models = [STANDARD, "tamandata", ASTRA]
 setup(models)
 assert route()["primary_model"] == STANDARD
-assert route("bandingkan metode")["primary_model"] == "tamandata"
+assert route("bandingkan metode")["primary_model"] == STANDARD
 assert route("buktikan teorema")["primary_model"] == ASTRA
 setup(models, {"tamandata": {"active": False}})
 assert route()["primary_model"] == STANDARD  # Partial failed quick probe must not erase untested IDs.

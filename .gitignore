@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local runtime sidecars and secrets
+*.db-shm
+*.db-wal
+*.db-journal
+.streamlit/secrets.toml
+.env
+.DS_Store
