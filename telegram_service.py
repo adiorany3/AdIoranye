@@ -33,7 +33,7 @@ from memory_store import MemoryStore, handle_local_memory_command
 from power_features import get_power_store, handle_power_command, generate_power_answer
 from daily_kb_scraper import run_daily_kb_update
 from reminder_skill import ReminderStore, parse_reminder_command
-from telegram_formatting import format_telegram_message
+from telegram_formatting import split_telegram_message
 from web_vouchers import create_voucher, list_active_vouchers, _hash
 from realtime_news import build_news_answer
 
@@ -933,15 +933,19 @@ class TelegramService:
         )
 
     def _send_text(self, chat_id: Any, text: str, reply_to: Any = None) -> Any:
-        payload = {"chat_id": chat_id, "text": format_telegram_message(text)}
-        if reply_to:
-            payload["reply_to_message_id"] = reply_to
-        response = self._telegram_request(
-            "sendMessage",
-            payload,
-            timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
-        )
-        return (response.get("result") or {}).get("message_id")
+        message_id = None
+        chunks = split_telegram_message(text)
+        for index, chunk in enumerate(chunks):
+            payload = {"chat_id": chat_id, "text": chunk, "disable_web_page_preview": True}
+            if reply_to and index == 0:
+                payload["reply_to_message_id"] = reply_to
+            response = self._telegram_request(
+                "sendMessage",
+                payload,
+                timeout=telegram_safe_int(self._config.get("telegram_send_timeout_seconds"), 60),
+            )
+            message_id = (response.get("result") or {}).get("message_id") or message_id
+        return message_id
 
     def _delete_message(self, chat_id: Any, message_id: Any) -> None:
         if not message_id:
