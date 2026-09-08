@@ -11500,7 +11500,14 @@ def start_telegram_if_needed() -> None:
             cfg=cfg,
             persona_text=cfg["persona"],
         )
-        service.start(bot_config)
+        started = service.start(bot_config)
+        if not started:
+            status = service.status()
+            st.session_state["telegram_start_error"] = str(
+                status.get("last_error") or "Telegram worker gagal start."
+            )[:3000]
+        else:
+            st.session_state.pop("telegram_start_error", None)
         restore_active_model_to_cheap(route.get("primary_model"))
 
 
@@ -13139,6 +13146,9 @@ def render_admin_settings() -> None:
                 st.warning("Token bot atau API key belum lengkap.")
             else:
                 st.success("Token bot dan API key terdeteksi.")
+            if st.session_state.get("telegram_start_error"):
+                st.error("Telegram gagal start.")
+                st.code(str(st.session_state["telegram_start_error"])[:3000])
             st.caption(
                 f"Perintah cek cepat Telegram: /speed {telegram_speed_update_code}"
             )
