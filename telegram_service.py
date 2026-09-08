@@ -1131,8 +1131,24 @@ class TelegramService:
 
     def _poll_loop(self) -> None:
         timeout_seconds = telegram_safe_int(self._config.get("telegram_poll_timeout_seconds"), 30)
+        polling_initialized = False
         while not self._stop_event.is_set():
             try:
+                if not polling_initialized:
+                    self._telegram_request(
+                        "deleteWebhook",
+                        {
+                            "drop_pending_updates": telegram_parse_bool(
+                                self._config.get("drop_pending_updates"),
+                                default=False,
+                            )
+                        },
+                        timeout=telegram_safe_int(
+                            self._config.get("telegram_status_test_timeout_seconds"),
+                            12,
+                        ),
+                    )
+                    polling_initialized = True
                 self._deliver_due_reminders()
                 payload = {
                     "timeout": timeout_seconds,

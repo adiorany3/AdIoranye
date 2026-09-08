@@ -2451,7 +2451,7 @@ default_memory_context_from_secret = str(
 )
 auto_start = parse_bool(get_secret("TELEGRAM_AUTO_START", True), default=True)
 drop_pending_updates = parse_bool(
-    get_secret("TELEGRAM_DROP_PENDING_UPDATES", True), default=True
+    get_secret("TELEGRAM_DROP_PENDING_UPDATES", False), default=False
 )
 send_processing_message = parse_bool(
     get_secret("TELEGRAM_SEND_PROCESSING_MESSAGE", False), default=False

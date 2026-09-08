@@ -26,6 +26,7 @@ service._config = {"telegram_poll_timeout_seconds": 1}
 service._token = "test-token"
 reminder_calls = 0
 poll_calls = 0
+webhook_calls = 0
 
 
 def flaky_reminders() -> None:
@@ -36,7 +37,11 @@ def flaky_reminders() -> None:
 
 
 def stop_after_poll(method: str, payload=None, timeout: int = 60) -> dict[str, object]:
-    global poll_calls
+    global poll_calls, webhook_calls
+    if method == "deleteWebhook":
+        webhook_calls += 1
+        assert payload == {"drop_pending_updates": False}
+        return {"ok": True, "result": True}
     assert method == "getUpdates"
     poll_calls += 1
     service._stop_event.set()
@@ -49,6 +54,7 @@ service._stop_event.wait = lambda timeout=None: False  # type: ignore[method-ass
 service._poll_loop()
 
 assert reminder_calls == 2
+assert webhook_calls == 1, "Worker harus menghapus webhook sebelum polling."
 assert poll_calls == 1, "Worker harus lanjut polling setelah reminder gagal."
 assert "simulated reminder failure" in service.status()["last_error"]
 print("Auto-start dan ketahanan loop worker Telegram terverifikasi.")

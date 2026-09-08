@@ -17,6 +17,9 @@ sent: list[tuple[str, str]] = []
 
 
 def fake_request(method: str, payload=None, timeout: int = 60):
+    if method == "deleteWebhook":
+        assert payload == {"drop_pending_updates": False}
+        return {"ok": True, "result": True}
     assert method == "getUpdates"
     service._stop_event.set()
     return {"ok": True, "result": []}
