@@ -35,6 +35,7 @@ from daily_kb_scraper import run_daily_kb_update
 from reminder_skill import ReminderStore, parse_reminder_command
 from telegram_formatting import format_telegram_message
 from web_vouchers import create_voucher, list_active_vouchers, _hash
+from realtime_news import build_news_answer
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/{method}"
 DEFAULT_LOCK_FILE = "/tmp/adioranye_telegram_bot_worker.lock"
@@ -617,6 +618,15 @@ class TelegramService:
         local_answer = build_telegram_local_fast_answer(text)
         if local_answer is not None:
             return local_answer
+
+        if any(marker in text.lower() for marker in ("berita", "news", "terbaru", "terkini", "hari ini")):
+            try:
+                return build_news_answer(
+                    text,
+                    timeout=telegram_safe_int(self._config.get("realtime_news_timeout_seconds"), 8),
+                )
+            except Exception as exc:
+                raise RuntimeError(f"realtime news unavailable: {exc}") from exc
 
         answer, meta = safe_generate_power_answer(
             api_url=str(self._config.get("slashai_api_url") or self._config.get("api_url") or ""),
