@@ -7,7 +7,13 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Update KB manual:
+Update KB otomatis:
+
+- GitHub Actions menjalankan agregasi setiap hari pukul 02:17 WIB.
+- Workflow: `.github/workflows/daily-kb-update.yml`.
+- Jalankan manual dari tab **Actions** bila perlu.
+
+Update KB lokal:
 
 ```bash
 python daily_kb_scraper.py --db .adioranye_power.db --sources kb_sources.json --max-items 5

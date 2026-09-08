@@ -1,6 +1,9 @@
 name: Daily Knowledge Base Optimized Update
           
 on:
+  # Setiap hari 02:17 WIB (19:17 UTC), plus trigger manual/Telegram.
+  schedule:
+    - cron: "17 19 * * *"
   workflow_dispatch:
     inputs:
       source:
