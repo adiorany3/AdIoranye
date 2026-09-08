@@ -457,6 +457,35 @@ _RESPONSE_CACHE_MAX_ITEMS = 60
 _RESPONSE_CACHE_TTL_SECONDS = 300
 
 
+_FREQUENT_LOCAL_ANSWERS = {
+    "halo": "Halo. Ada yang perlu dibantu?",
+    "hai": "Halo. Ada yang perlu dibantu?",
+    "hi": "Halo. Ada yang perlu dibantu?",
+    "selamat pagi": "Selamat pagi. Ada yang perlu dibantu?",
+    "selamat siang": "Selamat siang. Ada yang perlu dibantu?",
+    "selamat sore": "Selamat sore. Ada yang perlu dibantu?",
+    "selamat malam": "Selamat malam. Ada yang perlu dibantu?",
+    "terima kasih": "Sama-sama. Silakan lanjutkan pertanyaan Anda.",
+    "makasih": "Sama-sama. Silakan lanjutkan pertanyaan Anda.",
+    "apa kabar": "Baik. Siap membantu Anda.",
+    "bagaimana kabarmu": "Baik. Siap membantu Anda.",
+    "siapa kamu": "Saya Adioranye, asisten AI untuk tanya jawab, menulis, analisis, dan coding.",
+    "apa yang bisa kamu lakukan": "Saya bisa membantu menulis, merangkum, menerjemahkan, menganalisis, menjelaskan konsep, dan coding.",
+    "apa yang bisa kamu kerjakan": "Saya bisa membantu menulis, merangkum, menerjemahkan, menganalisis, menjelaskan konsep, dan coding.",
+    "bisa bantu apa": "Saya bisa membantu menulis, merangkum, menerjemahkan, menganalisis, menjelaskan konsep, dan coding.",
+}
+
+
+def get_frequent_local_answer(user_text: str) -> tuple[str, Dict[str, Any]]:
+    """Jawab frasa umum tanpa request model; hanya exact match normalisasi ringan."""
+    normalized = re.sub(r"[^\w\s]", " ", str(user_text or "").lower(), flags=re.UNICODE)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    answer = _FREQUENT_LOCAL_ANSWERS.get(normalized, "")
+    if not answer:
+        return "", {}
+    return answer, {"frequent_local_answer": True, "model_skipped": True, "tokens_saved": True}
+
+
 def _build_http_session(transport_retries: int = 3, status_retries: int = 3) -> requests.Session:
     session = requests.Session()
     retry = Retry(
@@ -1278,6 +1307,10 @@ def generate_answer(
     Catatan: router tidak dipakai untuk membypass content filter. Jika provider menolak prompt,
     sistem hanya melakukan retry dengan konteks bersih lalu memberi pesan aman.
     """
+    local_answer, local_meta = get_frequent_local_answer(user_text)
+    if local_answer:
+        return local_answer, local_meta
+
     if not api_key:
         raise RuntimeError("SLASHAI_API_KEY belum diisi.")
     if not api_url:
