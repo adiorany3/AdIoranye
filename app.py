@@ -1907,19 +1907,8 @@ def _wrap_pdf_text(text: str, max_chars: int = 92) -> List[str]:
                 if not is_table_rule(source_lines[index]):
                     table_rows.append([cell.strip() for cell in source_lines[index].strip().strip("|").split("|")])
                 index += 1
-            for row_number, cells in enumerate(table_rows):
-                row = "  |  ".join(cells)
-                if row_number == 0:
-                    lines.append(row[:max_chars])
-                    lines.append("-" * min(max_chars, max(12, len(row))))
-                else:
-                    while len(row) > max_chars:
-                        split_at = row.rfind(" ", 0, max_chars + 1)
-                        if split_at <= 20:
-                            split_at = max_chars
-                        lines.append(row[:split_at].strip())
-                        row = row[split_at:].strip()
-                    lines.append(row)
+            # Marker interno: renderer PDF desenha células, bordas e header.
+            lines.append("\x00TABLE:" + json.dumps(table_rows, ensure_ascii=False))
             lines.append("")
             continue
 
@@ -1986,28 +1975,54 @@ def make_answer_pdf_bytes(
     for idx, page_lines in enumerate(pages, start=1):
         stream_lines: List[str] = [
             "BT",
-            f"/F1 16 Tf {left} {top} Td ({_pdf_escape(title_clean)}) Tj",
-            f"/F1 9 Tf 0 -18 Td ({_pdf_escape('Dibuat: ' + _wib_now_text())}) Tj",
+            f"/F1 16 Tf 1 0 0 1 {left} {top} Tm ({_pdf_escape(title_clean)}) Tj",
+            f"/F1 9 Tf 1 0 0 1 {left} {top - 18} Tm ({_pdf_escape('Dibuat: ' + _wib_now_text())}) Tj",
         ]
+        body_y = top - 55
         if meta_clean:
-            stream_lines.append(f"0 -13 Td ({_pdf_escape(meta_clean[:120])}) Tj")
-        stream_lines.append(
-            f"/F1 11 Tf 0 -24 Td ({_pdf_escape(page_lines[0] if page_lines else '')}) Tj"
-        )
-        for line in page_lines[1:]:
-            if line == "":
-                stream_lines.append(f"0 -{line_height} Td ( ) Tj")
-            else:
-                stream_lines.append(f"0 -{line_height} Td ({_pdf_escape(line)}) Tj")
+            stream_lines.append(f"1 0 0 1 {left} {top - 31} Tm ({_pdf_escape(meta_clean[:120])}) Tj")
+            body_y -= 13
+
+        for line in page_lines:
+            if line.startswith("\x00TABLE:"):
+                try:
+                    table_rows = json.loads(line[7:])
+                except (TypeError, ValueError):
+                    table_rows = []
+                column_count = max((len(row) for row in table_rows), default=0)
+                if not column_count:
+                    continue
+                column_width = (page_width - (left * 2)) / column_count
+                normalized_rows = [row + [""] * (column_count - len(row)) for row in table_rows]
+                for row_number, row in enumerate(normalized_rows):
+                    cell_lines = [_wrap_pdf_text(cell, max(12, int((column_width - 10) / 5.2))) for cell in row]
+                    row_height = max(22, 8 + max(len(cell) for cell in cell_lines) * 11)
+                    body_y -= row_height
+                    stream_lines.append("ET")
+                    if row_number == 0:
+                        stream_lines.append("0.12 0.28 0.48 rg")
+                    else:
+                        stream_lines.append("0.96 0.98 1 rg")
+                    stream_lines.append(f"{left} {body_y} {page_width - (left * 2)} {row_height} re f")
+                    stream_lines.append("0.45 0.55 0.65 RG 0.5 w")
+                    stream_lines.append(f"{left} {body_y} {page_width - (left * 2)} {row_height} re S")
+                    for column in range(1, column_count):
+                        x = left + (column * column_width)
+                        stream_lines.append(f"{x} {body_y} m {x} {body_y + row_height} l S")
+                    stream_lines.append("BT")
+                    for column, cell in enumerate(cell_lines):
+                        x = left + (column * column_width) + 5
+                        for text_row, cell_line in enumerate(cell):
+                            color = "1 1 1 rg" if row_number == 0 else "0.08 0.12 0.16 rg"
+                            stream_lines.append(color)
+                            stream_lines.append(f"/F1 {'9' if row_number == 0 else '8.5'} Tf 1 0 0 1 {x} {body_y + row_height - 13 - (text_row * 11)} Tm ({_pdf_escape(cell_line)}) Tj")
+                body_y -= 7
+                continue
+            if line:
+                stream_lines.append(f"/F1 11 Tf 1 0 0 1 {left} {body_y} Tm ({_pdf_escape(line)}) Tj")
+            body_y -= line_height
         footer = f"Halaman {idx} dari {len(pages)}"
-        stream_lines.extend(
-            [
-                "ET",
-                "BT",
-                f"/F1 9 Tf {left} 30 Td ({_pdf_escape(footer)}) Tj",
-                "ET",
-            ]
-        )
+        stream_lines.extend(["ET", "BT", f"/F1 9 Tf 1 0 0 1 {left} 30 Tm ({_pdf_escape(footer)}) Tj", "ET"])
         stream = "\n".join(stream_lines).encode("latin-1", "replace")
         content_id = add_obj(
             b"<< /Length "
@@ -2056,16 +2071,12 @@ def answer_pdf_download_button(
     if not str(answer_text or "").strip():
         return
 
-    meta_text = f"Model: {model_name}" if model_name else ""
     filename = (
         "jawaban-adioranye-"
         f"{datetime.now(WIB_TZ).strftime('%Y%m%d-%H%M%S')}"
         ".pdf"
     )
-    pdf_bytes = make_answer_pdf_bytes(
-        answer_text,
-        meta_text=meta_text,
-    )
+    pdf_bytes = make_answer_pdf_bytes(answer_text)
     pdf_base64 = base64.b64encode(pdf_bytes).decode("ascii")
     safe_filename = html.escape(
         filename,
