@@ -1869,6 +1869,8 @@ def _pdf_escape(text: str) -> str:
 def _clean_text_for_pdf(text: str) -> str:
     """Bersihkan markdown ringan agar nyaman dibaca di PDF."""
     clean = str(text or "")
+    # Model/provider kadang mengirim tanda `?` akibat normalisasi encoding untuk rentang angka.
+    clean = re.sub(r"(?<=\d)\?(?=\d)", "-", clean)
     clean = re.sub(r"```([a-zA-Z0-9_+-]*)\n", "", clean)
     clean = clean.replace("```", "")
     clean = re.sub(r"`([^`]*)`", r"\1", clean)
@@ -2021,8 +2023,8 @@ def make_answer_pdf_bytes(
             if line:
                 stream_lines.append(f"/F1 11 Tf 1 0 0 1 {left} {body_y} Tm ({_pdf_escape(line)}) Tj")
             body_y -= line_height
-        footer = f"Halaman {idx} dari {len(pages)}"
-        stream_lines.extend(["ET", "BT", f"/F1 9 Tf 1 0 0 1 {left} 30 Tm ({_pdf_escape(footer)}) Tj", "ET"])
+        footer = f"Halaman {idx} dari {len(pages)}  |  Developed by Galuh Adi Insani"
+        stream_lines.extend(["ET", "BT", f"/F1 8 Tf 1 0 0 1 {left} 30 Tm ({_pdf_escape(footer)}) Tj", "ET"])
         stream = "\n".join(stream_lines).encode("latin-1", "replace")
         content_id = add_obj(
             b"<< /Length "
