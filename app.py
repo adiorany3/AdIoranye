@@ -1909,7 +1909,19 @@ def _wrap_pdf_text(text: str, max_chars: int = 92) -> List[str]:
                 if not is_table_rule(source_lines[index]):
                     table_rows.append([cell.strip() for cell in source_lines[index].strip().strip("|").split("|")])
                 index += 1
-            # Marker interno: renderer PDF desenha células, bordas e header.
+            # Masukkan sumber ke tabel sebagai baris penuh, bukan teks di luar tabel.
+            source_cells: List[str] = []
+            while index < len(source_lines):
+                candidate = source_lines[index].strip()
+                if not re.match(r"^(sumber|source|referensi|reference)\s*:", candidate, flags=re.I):
+                    break
+                source_cells.append(candidate)
+                index += 1
+            if source_cells and table_rows:
+                column_count = max(len(row) for row in table_rows)
+                source_text = " ".join(source_cells)
+                table_rows.append(["Sumber", source_text] + [""] * max(0, column_count - 2))
+            # Marker internal: renderer PDF menggambar sel, border dan header.
             lines.append("\x00TABLE:" + json.dumps(table_rows, ensure_ascii=False))
             lines.append("")
             continue
