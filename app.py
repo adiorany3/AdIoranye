@@ -1885,10 +1885,46 @@ def _clean_text_for_pdf(text: str) -> str:
 
 
 def _wrap_pdf_text(text: str, max_chars: int = 92) -> List[str]:
-    """Wrap teks tanpa dependency eksternal."""
+    """Wrap teks, tabel markdown, serta diagram teks agar tetap terbaca."""
+    source_lines = _clean_text_for_pdf(text).split("\n")
     lines: List[str] = []
-    for paragraph in _clean_text_for_pdf(text).split("\n"):
+    index = 0
+
+    def is_table_row(value: str) -> bool:
+        return value.strip().startswith("|") and value.strip().endswith("|")
+
+    def is_table_rule(value: str) -> bool:
+        cells = [cell.strip().replace(":", "") for cell in value.strip().strip("|").split("|")]
+        return bool(cells) and all(cell and set(cell) <= {"-"} for cell in cells)
+
+    while index < len(source_lines):
+        paragraph = source_lines[index]
+        if is_table_row(paragraph) and index + 1 < len(source_lines) and (
+            is_table_row(source_lines[index + 1]) and is_table_rule(source_lines[index + 1])
+        ):
+            table_rows: List[List[str]] = []
+            while index < len(source_lines) and is_table_row(source_lines[index]):
+                if not is_table_rule(source_lines[index]):
+                    table_rows.append([cell.strip() for cell in source_lines[index].strip().strip("|").split("|")])
+                index += 1
+            for row_number, cells in enumerate(table_rows):
+                row = "  |  ".join(cells)
+                if row_number == 0:
+                    lines.append(row[:max_chars])
+                    lines.append("-" * min(max_chars, max(12, len(row))))
+                else:
+                    while len(row) > max_chars:
+                        split_at = row.rfind(" ", 0, max_chars + 1)
+                        if split_at <= 20:
+                            split_at = max_chars
+                        lines.append(row[:split_at].strip())
+                        row = row[split_at:].strip()
+                    lines.append(row)
+            lines.append("")
+            continue
+
         raw = paragraph.strip()
+        index += 1
         if not raw:
             lines.append("")
             continue
